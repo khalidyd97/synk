@@ -5,13 +5,13 @@ using UnityEngine.UI;
 
 namespace Synk
 {
-    public sealed class SynkGame : MonoBehaviour
+    public sealed partial class SynkGame : MonoBehaviour
     {
         public Beatmap beatmap;
         public float timingOffsetMs;
         public const float Approach = 2.6f;
         public const double Window = .16;
-        public enum Phase { Menu, Playing, Paused, Results }
+        public enum Phase { Menu, Playing, Paused, Results, Recording, ChartReview, Editing }
         public Phase State { get; private set; }
         public double SongTime { get; private set; }
         public int Score { get; private set; }
@@ -40,6 +40,7 @@ namespace Synk
         double origin, pausedAt, endTime, resumeGrace;
         float earned;
         int judged, perfect, great, good, misses;
+        string scoreKey = "SynkBestScore";
         RectTransform surface;
         Text songLabel, scoreLabel, judgementLabel, centerTitle, centerBody, buttonLabel;
         GameObject panel;
@@ -76,6 +77,8 @@ namespace Synk
                 audioSource.clip = generatedAudio;
             }
             BuildUI();
+            BuildChartMaker();
+            BuildChartEditor();
             ShowMenu();
         }
 
@@ -166,24 +169,32 @@ namespace Synk
         {
             State = Phase.Menu; panel.SetActive(true); pauseButton.gameObject.SetActive(false);
             centerTitle.text = "S Y N K";
-            centerBody.text = "ECLIPSE  /  128 BPM\n\n13 lanes. Follow the light.\nTAP on arrival  •  HOLD to the end\nSLIDE along the ribbon  •  FLICK in the arrow direction\n\nTouch near the glowing line. Mouse works in the editor.";
-            buttonLabel.text = "PLAY ECLIPSE";
+            centerBody.text = beatmap.songTitle + "  /  " + beatmap.bpm + " BPM\n\n13 lanes. Follow the light.\nTAP on arrival  •  HOLD to the end\nSLIDE along the ribbon  •  FLICK in the arrow direction\n\nOpen CHART STUDIO to import audio and edit notes.";
+            buttonLabel.text = selectedChart == null ? "PLAY ORIGINAL" : "PLAY MY CHART";
+            UpdateMakerUI();
         }
-        void PrimaryAction() { if (State == Phase.Paused) Resume(); else StartSong(); }
+        void PrimaryAction() { if (State == Phase.Paused) Resume(); else if (State == Phase.ChartReview) SaveRecording(); else StartSong(); }
         void StartSong()
         {
+            audioSource.pitch = 1;
             Notes.Clear(); pointers.Clear();
-            foreach (var note in beatmap.notes) Notes.Add(new LiveNote { data = note });
+            foreach (var note in PlaybackNotes) Notes.Add(new LiveNote { data = note });
             Notes.Sort((a, b) => a.data.time.CompareTo(b.data.time));
+            endTime = Math.Max(1, audioSource.clip.length - beatmap.audioOffset + 1);
+            foreach (var note in Notes) endTime = Math.Max(endTime, note.data.time + note.data.duration + 2);
+            scoreKey = "SynkBestScore_" + songKey + "_" + Hash(JsonUtility.ToJson(new SavedChart { songKey = songKey, notes = new List<ChartNote>(PlaybackNotes) }));
             Score = Combo = BestCombo = judged = perfect = great = good = misses = 0; earned = 0;
             SongTime = -1; Judgement = "READY"; Flash = 1;
             origin = AudioSettings.dspTime + 1;
             audioSource.Stop(); audioSource.time = 0; audioSource.PlayScheduled(origin);
             State = Phase.Playing; panel.SetActive(false); pauseButton.gameObject.SetActive(true);
+            UpdateMakerUI();
         }
-        void TogglePause() { if (State == Phase.Playing) Pause(); else if (State == Phase.Paused) Resume(); }
+        void TogglePause() { if (State == Phase.Playing || State == Phase.Recording) Pause(); else if (State == Phase.Paused) Resume(); }
         void Pause()
         {
+            pausedFrom = State;
+            capture.CancelActive();
             pausedAt = AudioSettings.dspTime; audioSource.Pause(); State = Phase.Paused;
             pointers.Clear();
             // Releasing a sustained gesture on pause cannot earn an automatic completion.
@@ -191,23 +202,32 @@ namespace Synk
             panel.SetActive(true); centerTitle.text = "PAUSED";
             centerBody.text = "Take a breath.\n\nResume and touch active ribbons to continue.";
             buttonLabel.text = "RESUME";
+            if (pausedFrom == Phase.Recording) centerBody.text = "Recording paused.\nCompleted notes are kept; unfinished gestures are discarded.\n\nResume to continue recording.";
+            UpdateMakerUI();
         }
         void Resume()
         {
             double now = AudioSettings.dspTime;
             origin += now - pausedAt;
-            if (now < origin) { audioSource.Stop(); audioSource.PlayScheduled(origin); } else audioSource.UnPause();
+            if (pausedFrom == Phase.Recording) scheduledStart += now - pausedAt;
+            if (pausedFrom == Phase.Recording && now < scheduledStart)
+            { audioSource.Stop(); audioSource.time = (float)recordingAudioStart; audioSource.PlayScheduled(scheduledStart); }
+            else if (pausedFrom != Phase.Recording && now < origin) { audioSource.Stop(); audioSource.PlayScheduled(origin); }
+            else audioSource.UnPause();
             resumeGrace = now + .3;
-            State = Phase.Playing; panel.SetActive(false);
+            State = pausedFrom; panel.SetActive(false);
+            UpdateMakerUI();
         }
-        void OnApplicationPause(bool paused) { if (paused && State == Phase.Playing) Pause(); }
-        void OnApplicationFocus(bool focus) { if (!focus && State == Phase.Playing) Pause(); }
-        void OnDestroy() { if (generatedAudio != null) Destroy(generatedAudio); }
+        void OnApplicationPause(bool paused) { if (paused && (State == Phase.Playing || State == Phase.Recording)) Pause(); if (paused && State == Phase.Editing) StopAudition(); }
+        void OnApplicationFocus(bool focus) { if (!focus && (State == Phase.Playing || State == Phase.Recording)) Pause(); if (!focus && State == Phase.Editing) StopAudition(); }
+        void OnDestroy() { if (generatedAudio != null) Destroy(generatedAudio); if (importedClip != null) Destroy(importedClip); }
 
         void Update()
         {
             Flash = Mathf.Max(0, Flash - Time.unscaledDeltaTime * 2.5f);
             if (Input.GetKeyDown(KeyCode.Escape)) TogglePause();
+            if (State == Phase.Editing) UpdateEditor();
+            if (State == Phase.Recording) UpdateRecording();
             if (State == Phase.Playing)
             {
                 SongTime = AudioSettings.dspTime - origin - beatmap.audioOffset + timingOffsetMs / 1000.0;
@@ -236,6 +256,7 @@ namespace Synk
                 if (SongTime > endTime) Finish();
             }
             scoreLabel.text = Score.ToString("N0") + "   <color=#B873FF>" + Rank + "</color>\n<size=22>COMBO  " + Combo + "   /   " + Accuracy.ToString("F2") + "%</size>";
+            if (State == Phase.Recording) scoreLabel.text = "<color=#FF66DF>● RECORDING</color>\n<size=22>" + capture.notes.Count + " NOTES   /   " + Math.Max(0, SongTime).ToString("F1") + " s</size>";
             judgementLabel.text = Judgement;
             judgementLabel.color = new Color(.85f, .65f, 1, Flash);
         }
@@ -248,9 +269,7 @@ namespace Synk
         public static float LaneAt(float x) => (x - .07f) / .86f * 13 - .5f;
         public float ExpectedLane(LiveNote note)
         {
-            if (note.data.kind != NoteKind.Slide) return note.data.lane;
-            float t = Mathf.Clamp01((float)((SongTime - note.data.time) / Math.Max(.01, note.data.duration)));
-            return Mathf.Lerp(note.data.lane, note.data.endLane, t * t * (3 - 2 * t));
+            return note.data.LaneAt(SongTime);
         }
         void ReadInput()
         {
@@ -322,12 +341,13 @@ namespace Synk
         void Finish()
         {
             State = Phase.Results; audioSource.Stop(); panel.SetActive(true); pauseButton.gameObject.SetActive(false);
-            int best = Mathf.Max(PlayerPrefs.GetInt("SynkBestScore", 0), Score);
-            PlayerPrefs.SetInt("SynkBestScore", best); PlayerPrefs.Save();
+            int best = Mathf.Max(PlayerPrefs.GetInt(scoreKey, 0), Score);
+            PlayerPrefs.SetInt(scoreKey, best); PlayerPrefs.Save();
             centerTitle.text = Rank + "  /  " + Score.ToString("N0");
             centerBody.text = "TRACK COMPLETE\n\n" + Accuracy.ToString("F2") + "% ACCURACY    •    " + BestCombo + " MAX COMBO\n" +
                 perfect + " PERFECT    " + great + " GREAT    " + good + " GOOD    " + misses + " MISS\n\nPERSONAL BEST  " + best.ToString("N0");
             buttonLabel.text = "PLAY AGAIN";
+            UpdateMakerUI();
         }
     }
 }

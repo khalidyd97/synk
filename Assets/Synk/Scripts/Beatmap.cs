@@ -4,20 +4,6 @@ using UnityEngine;
 
 namespace Synk
 {
-    public enum NoteKind { Tap, Hold, Slide, Flick }
-    public enum FlickDirection { Up, Right, Down, Left }
-
-    [Serializable]
-    public sealed class ChartNote
-    {
-        public double time;
-        [Range(0, 12)] public int lane;
-        public NoteKind kind;
-        public float duration;
-        [Range(0, 12)] public int endLane;
-        public FlickDirection direction;
-    }
-
     [CreateAssetMenu(menuName = "SYNK/Beatmap")]
     public sealed class Beatmap : ScriptableObject
     {

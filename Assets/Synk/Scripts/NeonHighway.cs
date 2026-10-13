@@ -60,7 +60,7 @@ namespace Synk
             for (int i = 0; i <= 13; i++)
             {
                 Color c = i % 2 == 0 ? purple : blue;
-                GlowLine(Project(i - .5f, -.12f), Project(i - .5f, 1), i == 0 || i == 13 ? 2 : .65f, Alpha(c, i == 0 || i == 13 ? .85f : .25f));
+                GlowLine(Project(i - .5f, -.12f), Project(i - .5f, 1), i == 0 || i == 13 ? 2 : .65f, Alpha(c, i == 0 || i == 13 ? .85f : game.State == SynkGame.Phase.Recording ? .65f : .25f));
             }
             double visualTime = game.State == SynkGame.Phase.Menu ? Time.unscaledTime * .4 : game.SongTime;
             for (int i = 0; i < 15; i++)
@@ -84,6 +84,16 @@ namespace Synk
                     if (note.done || note.data.time - game.SongTime > SynkGame.Approach) continue;
                     DrawNote(note);
                 }
+            }
+            if (game.State == SynkGame.Phase.Recording)
+            {
+                foreach (var note in game.OverdubNotes)
+                {
+                    if (note.time + note.duration < game.SongTime || note.time - game.SongTime > SynkGame.Approach) continue;
+                    DrawNote(new SynkGame.LiveNote { data = note, started = note.time <= game.SongTime });
+                }
+                foreach (var note in game.RecordingNotes)
+                    DrawNote(new SynkGame.LiveNote { data = note, started = true });
             }
             GlowLine(Project(-1, 0), Project(13, 0), 3, pink);
             for (int lane = 0; lane < 13; lane++)
@@ -115,8 +125,8 @@ namespace Synk
                 for (int segment = 0; segment < 24; segment++)
                 {
                     float t0 = Mathf.Lerp(startT, 1, segment / 24f), t1 = Mathf.Lerp(startT, 1, (segment + 1) / 24f);
-                    float l0 = n.kind == NoteKind.Slide ? Mathf.Lerp(n.lane, n.endLane, Mathf.SmoothStep(0, 1, t0)) : n.lane;
-                    float l1 = n.kind == NoteKind.Slide ? Mathf.Lerp(n.lane, n.endLane, Mathf.SmoothStep(0, 1, t1)) : n.lane;
+                    float l0 = n.LaneAt(n.time + n.duration * t0);
+                    float l1 = n.LaneAt(n.time + n.duration * t1);
                     float d0 = Mathf.Clamp01(Depth(n.time + n.duration * t0)), d1 = Mathf.Clamp01(Depth(n.time + n.duration * t1));
                     if (n.time + n.duration * t0 - game.SongTime > SynkGame.Approach) continue;
                     Quad(Project(l0 - .3f, d0), Project(l1 - .3f, d1), Project(l1 + .3f, d1), Project(l0 + .3f, d0), Alpha(color, .33f));
