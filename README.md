@@ -1,69 +1,55 @@
-# SYNK
+# SYNK — Godot rhythm game
 
-A playable Unity rhythm-game prototype for Android and iOS, inspired by the supplied neon highway reference. All visuals are procedural; the reference image is a design guide and is not bundled as game art.
+SYNK now runs entirely in **Godot 4.5.1+**, using GDScript and the Compatibility renderer. Unity, C#, Unity Hub and external file-picker packages are no longer required.
 
-## Open and play
+## Play
 
-1. Install Unity **6000.0.62f1** through Unity Hub with Android Build Support (SDK, NDK, OpenJDK), and iOS Build Support on a Mac.
-2. Add this directory as a project in Unity Hub and open it. On first import, the editor creates `Assets/Synk/Scenes/Main.unity` and configures mobile settings.
-3. Open Main and press Play. Select **PLAY ECLIPSE**. The original procedural demo runs for approximately 94 seconds.
-4. Use landscape orientation. Tap near the glowing judgement line when a note arrives. Hold a ribbon through its tail; follow slide ribbons horizontally; swipe in the direction of a flick arrow. Multitouch is supported. Mouse clicks and drags also work in the editor.
+On this development computer, double-click **Play-SYNK.cmd**. It uses the official portable Godot executable downloaded to the ignored `.tools` folder. **Open-SYNK.cmd** opens the editor.
 
-The pause button and Escape pause/resume. Focus loss also pauses. Resume sustained ribbons by touching their current lane. Timing offset is adjustable from -200 to +200 ms; a positive value advances the chart relative to audio. Prefer wired audio when calibrating. Scores and the timing offset persist locally.
+For a fresh GitHub checkout, install standard (non-.NET) [Godot 4.5.1](https://godotengine.org/download/archive/4.5.1-stable/), import **project.godot**, and press **F5**. No project package downloads are required. Launchers also work when `godot` or `godot4` is on PATH.
 
-## Included
+Choose **PLAY ORIGINAL** for Eclipse, the original synthesized demo. Touch or click near the glowing line when notes arrive. Tap on arrival, hold until the tail ends, follow slide ribbons, and swipe in a flick arrow's direction. Multitouch is supported on phones; mouse input works on desktop. Escape and the pause button pause. Focus loss pauses gameplay and stops editor auditioning. Timing offset and per-chart best scores persist locally.
 
-- 13-lane perspective highway, cyan/magenta notes, layered glow, animated background, hit flashes.
-- Tap, hold, curved slide and four-direction flick notes.
-- DSP-clock scheduling, timing windows of 45/90/160 ms, combo, accuracy, million-point score and rank.
-- Start, pause and results screens, personal best, device safe-area HUD.
-- Deterministic 96-note demonstration chart and an original synthesized soundtrack.
-- Runtime graphics in one batched UI mesh, without external art or shader dependencies.
+## Chart Studio
 
-## Android
+Open **CHART STUDIO / IMPORT AUDIO**.
 
-Use **SYNK > Build Android APK**, or select Android in Build Profiles and build manually. The setup selects ARM64, IL2CPP and minimum Android API 26. Configure your own application ID, signing keystore and store-required target API in Player Settings before distribution. For Google Play, enable App Bundle in Build Profiles and create a signed AAB. Test timing, touch accuracy, thermals and audio latency on real devices.
+1. **IMPORT AUDIO** accepts standard MP3, WAV and OGG (up to 150 MB and 20 minutes). Audio is copied into the persistent local library. Select a song after restarting to reopen its saved chart. You can also drop an audio file onto the desktop window. M4A/AAC/DRM audio is not supported.
+2. Touch the waveform, scrub the slider, or use **−5s / +5s** to navigate. **ZOOM + / −** changes the visible span. The yellow line is the playhead; the waveform samples the actual decoded track.
+3. **PLAY** auditions from the playhead. **SPEED** cycles 1x, 0.75x and 0.5x (pitch changes with speed). Set **A**, set **B** after A, and enable **LOOP** to repeat that section. Loops apply to auditioning, not recording.
+4. **REC HERE** counts in for three seconds and records from the chosen position at normal speed. Existing notes remain visible and are kept. **AUTO** distinguishes taps, holds, slides and short flicks; explicit note-type buttons resolve ambiguity. Slides preserve sampled turns. **STOP** adds the take to Studio; one undo removes it. Pausing, canceled touches and stopping discard unfinished gestures.
+5. Tap a note head to select it; drag to change time and lane. **SNAP** cycles sixteenth, eighth, quarter notes and free timing. Set BPM manually with the BPM field.
+6. **TAP / HOLD / SLIDE / FLICK** converts a selected note. **DIRECTION** rotates a flick. **TIME / LANE −/+** makes precise changes. **TAIL −/+** resizes a sustain and scales recorded slide timing. **END LANE** changes a slide destination and replaces its curve with a smooth path.
+7. **ADD**, **DELETE**, **DUPLICATE**, **UNDO**, **REDO**, and **TEST CHART** support manual editing. Testing plays the whole draft; reopen Studio from results to continue. Undo keeps up to 100 snapshots.
+8. **SAVE** keeps one chart per song on this device, including empty charts. A `*` marks unsaved edits. **RELOAD** explicitly discards edits. Save or reload before closing Studio, switching songs or quitting. Drafts/undo history are not crash-persistent.
 
-## iOS
+**RECORD NEW** starts a new chart in memory. A saved chart remains until explicitly overwritten. **PLAY SAVED** plays the saved chart. **PLAY ORIGINAL** always uses Eclipse's demo chart; imported tracks use their saved chart.
 
-Open the project on macOS with Unity's iOS module. Use **SYNK > Export iOS Xcode project**. Open the exported project in Xcode, choose your Apple development team and bundle identifier, connect an iPhone, and build. App Store submission requires your certificates/provisioning and Apple developer account. The initial minimum iOS version is 15.
+## Android and iOS
 
-## Make a song
+Export presets are included under **Project → Export**. Install matching Godot export templates, configure platform SDK paths, and supply your own bundle IDs/signing credentials.
 
-### In-game chart maker
+- **Android:** configure Android SDK and Java SDK in Editor Settings. The preset targets ARM64. Native file selection requires Android 10+; older versions fall back to Godot's browser with storage limitations. Test timing and multitouch on devices.
+- **iOS:** export on macOS and build/sign in Xcode with your Apple development team. Godot 4.5 has no built-in native iOS document picker. The preset exposes Documents through Files/iTunes sharing: copy music into **Files → On My iPhone → SYNK**, then choose **IMPORT AUDIO** and select that file in the game's browser. This Files-based workflow replaces the Unity picker's workflow.
 
-Select **RECORD NEW CHART** from the game menu. After a three-second count-in, the current song plays and your gestures near the judgement line become chart notes. Recording uses the same DSP clock and timing offset as gameplay. Multiple fingers can record simultaneous notes.
+Android/iOS binaries have not been built or device-tested. The neon graphics are procedural approximations of the reference, not a pixel-perfect reproduction.
 
-- **AUTO**: a short stationary touch records a tap; holding for at least 220 ms records a hold; a longer horizontal drag records a slide; a short swipe records a directional flick.
-- **TAP / HOLD / SLIDE / FLICK**: force a note type when an automatic gesture would be ambiguous. Choose the tool before starting the gesture. Slides preserve their sampled path, including turns. Short flicks use touch-down time as the note time.
-- **UNDO** removes the latest completed gesture. **STOP** opens a review screen. Pausing, canceled touches and stopping discard unfinished gestures.
-- **TEST DRAFT** plays your unsaved chart. From results, **BACK TO DRAFT** returns to review so you can save it afterward.
-- **SAVE CHART** saves locally and replaces the previous saved chart for this song. **PLAY SAVED CHART** loads it for gameplay, including after restarting the app. **PLAY ORIGINAL** plays the original chart. **RECORD NEW CHART** clears the current draft; the saved chart stays until explicitly overwritten.
+## Data and migration
 
-Charts are JSON files under `Application.persistentDataPath/Charts`. Imported songs use a content hash to connect their audio and chart; the demo uses its metadata, duration and audio offset. This version saves one chart per song on each device. Personal bests are tracked separately for each chart. Gesture recording is free-time; timeline edits can snap to beats. Chart sharing is not included.
+Songs, JSON charts and preferences live in Godot's `user://` directory. Use **Project → Open User Data Folder** on desktop to inspect it. Content hashes associate imported audio with charts. Saves retain the previous file as `.bak`; invalid charts are rejected without deleting the original.
 
-### Chart Studio: import, seek and edit
+Unity source/configuration and generated files were preserved locally under the ignored **legacy_unity** folder, and prior Unity code remains in Git history. Unity cache folders may remain locally but are excluded from Godot scanning and Git. Fresh clones contain only the Godot project. Existing Unity-format saved charts are not automatically converted; Godot uses a separate data directory/schema.
 
-Open **CHART STUDIO / IMPORT AUDIO** from the menu, review screen or results.
+## Verification
 
-1. Select **IMPORT AUDIO** and choose an **MP3, WAV or OGG** from the device's file picker (or a file dialog in the Unity Editor). Audio is copied to the app's private `Songs` directory and listed in the scrollable song library. Select it again after restarting to reopen its saved chart. M4A/AAC/DRM audio is not supported; convert it to a supported format first. Files are limited to 150 MB and 20 minutes.
-2. Scrub the slider or touch the waveform/timeline to jump through the song. Use **−5s / +5s** and **ZOOM + / −** to find a passage. The yellow line is the playhead; timestamps show the visible section.
-3. **PLAY** auditions from the playhead. **SPEED** cycles 1×, 0.75× and 0.5× (pitch changes with speed). **SET A / SET B** and **LOOP ON** repeat a passage; the loop region is highlighted. Looping applies to auditioning, not recording.
-4. Tap a note to select it; drag its head to change time and lane. **SNAP** cycles sixteenth, eighth, quarter notes and free timing. **BPM − / +** changes the grid tempo. Set the BPM for your song manually; automatic tempo detection is not included.
-5. **TAP / HOLD / SLIDE / FLICK** converts the selected note. **DIRECTION** rotates a flick. **LANE / TIME −/+** makes precise adjustments; **TAIL −/+** resizes a sustain; **END LANE** changes a slide destination and replaces its recorded curve with a smooth path. **ADD**, **DELETE**, **DUPLICATE**, **UNDO** and **REDO** support manual editing. Undo stores whole edit snapshots for this session.
-6. **REC HERE** counts in and records from the current position at normal speed. Existing notes remain visible and are kept. **STOP** adds the take to the editor; one undo removes the entire take. You can delete the old notes in a section before recording if you want to replace them.
-7. **TEST CHART** plays the entire draft. Reopen Studio from results to continue editing. **SAVE** persists the chart with the song; **CLOSE** returns to gameplay. A `*` marks unsaved edits. Song switching and closing require saving or pressing **RELOAD**, which explicitly discards edits and reloads the saved chart (or original chart).
+Validated using the official Godot 4.5.1 executable:
 
-You can save an empty chart. Timeline note rendering is capped at 1,000 visible notes to keep the UI mesh within Unity limits; zoom in on unusually dense passages. Drafts and undo history are in memory until saved.
+```powershell
+godot --headless --editor --path . --quit
+godot --headless --path . --script godot_tests/test_core.gd
+godot --headless --path . --script godot_tests/test_game.gd
+```
 
-Mobile file selection uses the MIT-licensed [Unity Native File Picker](https://github.com/yasirkula/UnityNativeFilePicker), pinned at `f2347e789ccfe35655d2955ca7b4b21123143efd` in the package manifest. Unity Package Manager needs Git and internet access on first import. Its automatic iOS framework and iCloud capability setup is enabled in `ProjectSettings/NativeFilePicker.json`; configure the app's signing and iCloud capability in your Apple developer account/Xcode. The plugin's iOS documentation requires an Apple Developer Program account. The library is local to the device; enabling the picker capability does not sync charts between devices.
+Core tests cover gesture types, multitouch, slide turns, conversion, snapping, deep undo/redo, resizing, JSON persistence, runtime WAV import and library reopening. Scene tests cover startup, scoring, flick release, waveform decoding, recording from a chosen section, overdubbing and inspector updates. Desktop rendering is verified separately. Mobile testing remains necessary.
 
-Run `powershell -File Tests/RunChartCaptureTests.ps1` to verify the gesture and chart-editing engines without Unity. Tests cover type conversion, deep undo/redo, slide paths, resizing, bounded dragging, snapping, multitouch and recording timestamps. Unity/device testing is still required for file picking, decoding, UI, storage and audio integration.
-
-Create **Assets > Create > SYNK > Beatmap**, assign an AudioClip and enter notes in the inspector. Assign the asset to the Main scene's SYNK Game component. Times and durations are seconds, lanes are zero-based (0–12), and `endLane` controls slide destinations. `audioOffset` shifts the chart's zero point relative to audio. Use chronological charts with positive hold/slide durations and legal lane values. The prototype judges each hold or slide once at completion; it has no sustain tick scoring. Custom audio should extend beyond the final note. Difficulty labels are metadata.
-
-The generated demo is intentionally sparse so it can be learned with a single pointer; production charts can contain simultaneous notes and use multitouch. This is a prototype foundation, with one demo song and no song-selection library, account system, purchases or online leaderboard.
-
-## Verification status
-
-Unity is not installed in the creation environment. Source and project structure were inspected, but Unity compilation, Play Mode and mobile builds have **not** been run. Open the project in Unity to perform those checks before relying on a device build. The first editor import generates Unity metadata and the Main scene; commit those generated assets afterward.
+Godot references: [runtime audio loading](https://docs.godotengine.org/en/4.5/tutorials/io/runtime_file_loading_and_saving.html), [native FileDialog support](https://docs.godotengine.org/en/4.5/classes/class_filedialog.html), [iOS Files access](https://docs.godotengine.org/en/4.5/classes/class_editorexportplatformios.html).
