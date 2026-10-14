@@ -23,7 +23,10 @@ static func lane_at(n: Dictionary, time: float) -> float:
 	return lerpf(float(n.lane), float(n.end_lane), smoothstep(0, maxf(.01, float(n.duration)), elapsed))
 
 func load_notes(source: Array) -> void:
-	notes = source.duplicate(true); selected = -1; dirty = false; undo_stack.clear(); redo_stack.clear()
+	notes = source.duplicate(true)
+	for n in notes:
+		if n.kind=="flick" and int(n.direction)==2: n.direction=0
+	selected = -1; dirty = false; undo_stack.clear(); redo_stack.clear()
 
 func checkpoint() -> void:
 	undo_stack.append(notes.duplicate(true))
@@ -52,6 +55,7 @@ func convert(kind: String, beat: float, song_end: float) -> void:
 	var n = selection()
 	if n.is_empty(): return
 	checkpoint(); n.kind = kind
+	if kind=="flick" and int(n.direction)==2: n.direction=0
 	if kind in ["tap", "flick"]: n.duration = 0.0; n.path = []; n.end_lane = n.lane
 	else:
 		n.duration = maxf(.04, float(n.duration) if float(n.duration) > 0 else beat)
@@ -101,6 +105,6 @@ static func demo() -> Array:
 	for i in 96:
 		var n = note(3 + i * 60.0 / 128 * 2, random.randi_range(1, 11), "tap" if i < 8 else TYPES[i % 4])
 		n.duration = 60.0 / 128 if n.kind in ["hold", "slide"] else 0.0
-		n.end_lane = clampi(int(n.lane) + (3 if i % 2 == 0 else -3), 0, 12); n.direction = (i / 4) % 4
+		n.end_lane = clampi(int(n.lane) + (3 if i % 2 == 0 else -3), 0, 12); n.direction = [0,1,3][(i / 4) % 3]
 		result.append(n)
 	return result

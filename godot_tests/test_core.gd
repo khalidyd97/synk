@@ -16,7 +16,13 @@ func _initialize() -> void:
 	var directions=[Vector2.UP,Vector2.RIGHT,Vector2.DOWN,Vector2.LEFT]
 	for i in 4:
 		capture.begin(1,3,Vector2(.5,.765)); n=capture.end(1,3.1,Vector2(.5,.765)+directions[i]*.08)
-		check(n.kind=="flick" and n.direction==i,"Flick direction "+str(i))
+		check(n.kind=="tap","Quick recorder swipe stays a tap in direction "+str(i))
+	for i in [0,1,3]:
+		capture.begin(1,3.3,Vector2(.5,.765),"flick")
+		n=capture.end(1,3.4,Vector2(.5,.765)+directions[i]*.08)
+		check(n.kind=="flick" and n.direction==i,"Manual flick tool records direction "+str(i))
+	capture.begin(1,3.5,Vector2(.5,.765),"flick")
+	check(capture.end(1,3.6,Vector2(.5,.845)).is_empty(),"Manual downward flick remains disallowed")
 	capture.begin(1,4,Vector2(.5,.765)); capture.move(1,4.3,Vector2(.7,.765)); capture.move(1,4.6,Vector2(.3,.765)); n=capture.end(1,4.9,Vector2(.5,.765))
 	check(n.kind=="slide" and SynkChart.lane_at(n,4.3)>8 and SynkChart.lane_at(n,4.6)<4,"Slide preserves turns")
 	capture.begin(1,5,Vector2(.5,.765),"slide"); n=capture.end(1,5.1,Vector2(.7,.765)); check(n.kind=="slide","Explicit slide tool")
@@ -24,7 +30,19 @@ func _initialize() -> void:
 	check(n.is_empty() and capture.notes.size()==count,"Canceled touch discarded")
 	capture.begin(1,7,Vector2(.3,.765)); capture.begin(2,7,Vector2(.7,.765))
 	check(capture.gestures.size()==2,"Multitouch gestures independent"); capture.gestures.clear()
+	var chord=SynkCapture.new()
+	chord.begin(1,8.0,Vector2(.3,.765)); chord.begin(2,8.045,Vector2(.7,.765))
+	var first=chord.end(1,8.08,Vector2(.3,.765))
+	var second=chord.end(2,8.1,Vector2(.7,.765))
+	check(first.lane!=second.lane and is_equal_approx(first.time,second.time),"Near-simultaneous double taps align as a chord")
+	chord.begin(3,8.13,Vector2(.3,.765)); var repeat=chord.end(3,8.2,Vector2(.3,.765))
+	check(repeat.time>first.time,"Repeated taps in one lane retain separate timing")
 	var chart=SynkChart.new(); chart.add(2,6); chart.convert("flick",.5,10)
+	var old_flick=SynkChart.note(1,4,"flick"); old_flick.direction=2
+	var migrated=SynkChart.new(); migrated.load_notes([old_flick])
+	check(migrated.notes[0].direction==0,"Existing downward flicks open as upward flicks")
+	for demo_note in SynkChart.demo():
+		check(demo_note.kind!="flick" or demo_note.direction!=2,"Demo has no downward flicks")
 	check(chart.selection().kind=="flick" and chart.selection().duration==0,"Tap converts to flick")
 	chart.convert("tap",.5,10); chart.undo(); check(chart.notes[0].kind=="flick","Undo conversion")
 	chart.redo(); check(chart.notes[0].kind=="tap","Redo conversion")
@@ -50,6 +68,10 @@ func _initialize() -> void:
 		check(FileAccess.file_exists(folder.path_join("songs/"+imported.song.file)),"Imported audio kept")
 		var restored=SynkLibrary.new(folder); check(restored.songs.size()==1,"Song library survives restart")
 		check(not library.import_song(path).is_empty() and library.songs.size()==1,"Audio imports deduplicate")
+		var unnamed=folder.path_join("selected_document")
+		check(DirAccess.copy_absolute(path,unnamed)==OK,"Extensionless picker file created")
+		check(not library.import_song(unnamed).is_empty() and library.songs.size()==1,"Audio import recognizes content without a filename extension")
+		DirAccess.remove_absolute(unnamed)
 	# Test files are isolated from the player's songs and charts.
 	for sub in ["songs","charts"]:
 		for file in DirAccess.get_files_at(folder.path_join(sub)): DirAccess.remove_absolute(folder.path_join(sub).path_join(file))

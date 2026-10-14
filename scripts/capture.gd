@@ -9,7 +9,17 @@ static func lane(x: float) -> float:
 
 func begin(id: int, time: float, p: Vector2, tool = "auto") -> bool:
 	if time < 0 or p.x < .07 or p.x > .93 or p.y < .6 or p.y > .92 or gestures.has(id): return false
-	var n = SynkChart.note(time, roundi(lane(p.x)))
+	var note_lane = roundi(lane(p.x))
+	# Fingers landing together should become a chord, even when touch events arrive on separate frames.
+	for gesture in gestures.values():
+		var neighbor: Dictionary = gesture.note
+		if int(neighbor.lane)!=note_lane and absf(time-float(neighbor.time))<=.06:
+			time=float(neighbor.time); break
+	if not notes.is_empty():
+		var previous: Dictionary = notes.back()
+		if int(previous.lane)!=note_lane and absf(time-float(previous.time))<=.06:
+			time=float(previous.time)
+	var n = SynkChart.note(time, note_lane)
 	n.path.append({"offset": 0.0, "lane": float(n.lane)})
 	gestures[id] = {"note": n, "tool": tool, "start": p, "position": p, "max_delta": 0.0}
 	return true
@@ -27,14 +37,15 @@ func end(id: int, time: float, p: Vector2, canceled = false) -> Dictionary:
 	move(id, time, p)
 	var g: Dictionary = gestures[id]; gestures.erase(id)
 	if canceled: return {}
-	var n: Dictionary = g.note; var delta: Vector2 = p - g.start
-	var flick = n.duration <= .22 and maxf(absf(delta.x), absf(delta.y)) >= .035
+	var n: Dictionary = g.note
 	n.kind = g.tool
-	if g.tool == "auto": n.kind = "flick" if flick else ("tap" if n.duration < .22 else ("slide" if g.max_delta >= .8 else "hold"))
-	if n.kind == "flick":
-		if maxf(absf(delta.x), absf(delta.y)) < .035: return {}
-		n.direction = (1 if delta.x > 0 else 3) if absf(delta.x) > absf(delta.y) else (2 if delta.y > 0 else 0)
-	if n.kind in ["tap", "flick"]: n.duration = 0.0; n.path = []; n.end_lane = n.lane
+	if g.tool == "auto": n.kind = "tap" if n.duration < .22 else ("slide" if g.max_delta >= .8 else "hold")
+	if n.kind=="flick":
+		var displacement: Vector2=p-g.start
+		if maxf(absf(displacement.x),absf(displacement.y))<.035: return {}
+		n.direction=(1 if displacement.x>0 else 3) if absf(displacement.x)>absf(displacement.y) else (2 if displacement.y>0 else 0)
+		if n.direction==2: return {}
+	if n.kind in ["tap","flick"]: n.duration = 0.0; n.path = []; n.end_lane = n.lane
 	else:
 		if n.duration < .04: return {}
 		if n.kind == "hold": n.end_lane = n.lane; n.path = []
