@@ -47,8 +47,9 @@ static func inspect_song(audio_path: String, chart_path: String, song_id: String
 	result.notes=[]
 	if result.has_chart:
 		var data: Variant=JSON.parse_string(FileAccess.get_file_as_string(chart_path))
-		if data is Dictionary and data.get("version")==1 and data.get("song_id")==song_id and SynkChart.valid(data.get("notes")):
-			result.notes=data.notes
+		var loaded: Variant=SynkChart.notes_from_file(data)
+		if loaded!=null and data.get("song_id")==song_id:
+			result.notes=loaded
 		else: result.chart_error="Saved chart is invalid; the original file has been kept."
 	result.note_count=result.notes.size()
 	if FileAccess.file_exists(cover_file):
@@ -116,7 +117,25 @@ func import_song(path: String) -> Dictionary:
 	return {"song": song, "stream": stream}
 
 func save_chart(id: String, notes: Array) -> Error:
-	return atomic_write(root_path.path_join("charts/" + id + ".json"), {"version": 1, "song_id": id, "notes": notes})
+	return atomic_write(root_path.path_join("charts/" + id + ".json"), {"version": SynkChart.FORMAT_VERSION, "song_id": id, "notes": notes})
+
+func delete_chart(id: String) -> void:
+	for suffix in ["", ".bak", ".tmp"]:
+		var path = root_path.path_join("charts/" + id + ".json" + suffix)
+		if FileAccess.file_exists(path): DirAccess.remove_absolute(path)
+
+func delete_song(id: String) -> Error:
+	# Removes the song's audio, chart, cover and library entry.
+	var index = -1
+	for i in songs.size():
+		if str(songs[i].id) == id: index = i
+	if index < 0: return ERR_DOES_NOT_EXIST
+	var entry: Dictionary = songs[index]
+	delete_chart(id)
+	for path in [root_path.path_join("songs/" + str(entry.file)), root_path.path_join("covers/" + id + ".png")]:
+		if FileAccess.file_exists(path): DirAccess.remove_absolute(path)
+	songs.remove_at(index)
+	return atomic_write(root_path.path_join("songs/library.json"), songs)
 
 func has_chart(id: String) -> bool:
 	return FileAccess.file_exists(root_path.path_join("charts/"+id+".json"))
@@ -125,8 +144,9 @@ func load_chart(id: String) -> Array:
 	var path = root_path.path_join("charts/" + id + ".json")
 	if not FileAccess.file_exists(path): return []
 	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
-	if data is Dictionary and data.get("version") == 1 and data.get("song_id") == id and SynkChart.valid(data.get("notes")):
-		return data.notes
+	var loaded: Variant = SynkChart.notes_from_file(data)
+	if loaded != null and data.get("song_id") == id:
+		return loaded
 	message = "Saved chart is invalid; the original file has been kept."
 	return []
 

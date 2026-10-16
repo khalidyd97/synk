@@ -10,7 +10,8 @@ void fragment() {
 	vec2 source_uv = vec2(11.0 / 249.0, 7.0 / 88.0) + UV * vec2(226.0 / 249.0, 59.0 / 88.0);
 	vec4 art = texture(TEXTURE, source_uv);
 	float peak = max(art.r, max(art.g, art.b));
-	float silhouette = smoothstep(0.025, 0.105, peak);
+	// Keys out the navy backdrop (about 9-20% bright) so the plate floats over the lobby.
+	float silhouette = smoothstep(0.17, 0.34, peak);
 	float breath = 0.94 + 0.08 * sin(TIME * 2.3);
 	float sweep_x = fract(TIME * 0.23) * 1.4 - 0.20;
 	float sweep = exp(-pow((UV.x - sweep_x) / 0.055, 2.0));

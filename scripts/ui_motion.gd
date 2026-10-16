@@ -1,15 +1,25 @@
 extends RefCounted
 
+const UiSound = preload("res://scripts/ui_sound.gd")
+
 static func bind_button(target: BaseButton) -> void:
 	if target.has_meta("ui_motion_bound"): return
 	target.set_meta("ui_motion_bound", true)
 	target.mouse_default_cursor_shape=Control.CURSOR_POINTING_HAND
 	target.resized.connect(func(): target.pivot_offset=target.size*.5)
 	target.pivot_offset=target.size*.5
-	target.mouse_entered.connect(func(): _scale(target,1.035,.16))
+	target.mouse_entered.connect(func():
+		if not target.disabled: _scale(target,1.035,.16))
 	target.mouse_exited.connect(func(): _scale(target,1.0,.16))
-	target.button_down.connect(func(): _scale(target,.94,.085); _flash(target))
+	target.button_down.connect(func(): _scale(target,.94,.085); _flash(target); UiSound.play(target,UiSound.sound_for(target)))
 	target.button_up.connect(func(): _scale(target,1.035 if target.get_global_rect().has_point(target.get_global_mouse_position()) else 1.0,.20))
+	target.focus_entered.connect(func(): _scale(target,1.035,.16))
+	target.focus_exited.connect(func(): _scale(target,1.0,.16))
+	target.visibility_changed.connect(func():
+		if not target.is_visible_in_tree():
+			var running: Variant=target.get_meta("motion_tween") if target.has_meta("motion_tween") else null
+			if running is Tween: running.kill()
+			target.scale=Vector2.ONE)
 
 static func style_button(target: Button, accent: Color = Color("a765ff"), strong: bool = false) -> void:
 	var normal=StyleBoxFlat.new()
@@ -68,3 +78,51 @@ static func reveal(target: CanvasItem, delay: float = 0.0) -> void:
 	if delay>0: tween.tween_interval(delay)
 	tween.tween_property(target,"modulate:a",1.0,.32).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	target.set_meta("reveal_tween",tween)
+
+# Capture the outgoing frame once, then dissolve it over the live destination.
+# Navigation stays synchronous: audio, focus and game clocks are never delayed.
+static func transition(source: Node, duration: float = .30) -> void:
+	if not source.is_inside_tree() or Engine.get_frames_drawn()<2: return
+	var viewport=source.get_viewport()
+	var existing=viewport.get_node_or_null("ScreenTransition")
+	if existing: return
+	if DisplayServer.get_name()=="headless": return
+	var frame=viewport.get_texture().get_image()
+	if frame==null or frame.is_empty(): return
+	if frame.get_width()>1280:
+		frame.resize(1280,int(frame.get_height()*1280.0/frame.get_width()),Image.INTERPOLATE_BILINEAR)
+	var layer=CanvasLayer.new(); layer.name="ScreenTransition"; layer.layer=100
+	viewport.add_child(layer)
+	var picture=TextureRect.new(); layer.add_child(picture)
+	picture.texture=ImageTexture.create_from_image(frame)
+	picture.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	picture.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
+	picture.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	var tween=layer.create_tween()
+	tween.tween_property(picture,"modulate:a",0.0,duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.tween_callback(layer.queue_free)
+
+# Animate the visual transform, leaving Container layout and hit geometry intact.
+static func pop(target: Control, delay: float = 0.0) -> void:
+	var previous: Variant=target.get_meta("pop_tween") if target.has_meta("pop_tween") else null
+	if previous is Tween: previous.kill()
+	target.pivot_offset=target.size*.5
+	target.scale=Vector2.ONE*.975
+	reveal(target,delay)
+	var tween=target.create_tween()
+	if delay>0: tween.tween_interval(delay)
+	tween.tween_property(target,"scale",Vector2.ONE,.34).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	target.set_meta("pop_tween",tween)
+
+static func page(tabs: TabContainer) -> void:
+	transition(tabs,.20)
+	var content=tabs.get_current_tab_control()
+	if content: reveal(content)
+
+static func screen(target: Control) -> void:
+	reveal(target)
+	var index=0
+	for child in target.get_children():
+		if child is Panel and child.visible:
+			pop(child,minf(index*.045,.18))
+			index+=1

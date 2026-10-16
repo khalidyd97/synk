@@ -11,10 +11,32 @@ uniform float motion = 0.0;
 uniform float glow_pulse = 0.0;
 uniform float desaturate = 0.0;
 uniform float ghost_fade = 1.0;
+// While a hold or slide is held, anything past this world z (the judgment bar) is hidden.
+uniform float clip_z = 1000.0;
+// Extends art that is cut off at its bottom edge: the quad is this much taller than the art,
+// and the extra part shows a mirrored copy that fades out (used by the hit flashes).
+uniform float mirror_extra = 0.0;
 uniform vec3 tint : source_color = vec3(0.6, 0.2, 1.0);
 
+// Fades toward the far end of the highway (world z -60), matching track_surface.gdshader.
+varying float world_z;
+
+void vertex() {
+	world_z = (MODEL_MATRIX * vec4(VERTEX, 1.0)).z;
+}
+
 void fragment() {
+	if (world_z > clip_z) discard;
 	vec2 artwork_uv = UV;
+	float mirror_fade = 1.0;
+	if (mirror_extra > 0.0) {
+		artwork_uv.y = UV.y * (1.0 + mirror_extra);
+		if (artwork_uv.y > 1.0) {
+			float below = (artwork_uv.y - 1.0) / mirror_extra;
+			artwork_uv.y = 1.0 - (artwork_uv.y - 1.0);
+			mirror_fade = pow(1.0 - smoothstep(0.0, 1.0, below), 2.5) * 0.85;
+		}
+	}
 	if (rail_warp) {
 		artwork_uv.x = 0.5 + (UV.x - 0.5) * mix(0.27, 0.94, UV.y);
 	}
@@ -31,5 +53,5 @@ void fragment() {
 	ALBEDO *= 1.0 + glow_pulse * pulse;
 	float gray = dot(ALBEDO, vec3(0.299, 0.587, 0.114));
 	ALBEDO = mix(ALBEDO, vec3(gray * 0.52), desaturate);
-	ALPHA = sample_color.a * smoothstep(0.025, 0.13, peak) * opacity * ghost_fade;
+	ALPHA = sample_color.a * mirror_fade * smoothstep(0.025, 0.13, peak) * opacity * ghost_fade * smoothstep(-60.0, -40.0, world_z);
 }

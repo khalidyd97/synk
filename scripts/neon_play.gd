@@ -30,6 +30,7 @@ func _ready() -> void:
 	mouse_exited.connect(func(): animate_hover(0.0))
 	button_down.connect(func(): art_material.set_shader_parameter("press_amount", 1.0))
 	button_up.connect(func(): art_material.set_shader_parameter("press_amount", 0.0))
+	set_meta("ui_sound","play")
 	UiMotion.bind_button(self)
 
 func _process(_delta: float) -> void:

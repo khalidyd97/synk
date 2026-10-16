@@ -41,27 +41,15 @@ func _ready() -> void:
 		float entry_fade = 1.0 - smoothstep(0.015, 0.22, UV.y);
 		float rail_mask = 1.0 - smoothstep(0.23, 0.40, abs(UV.x - 0.5));
 		vec3 scene_color = (base.rgb + bloom * 0.24) * (1.0 - entry_fade * rail_mask * 0.82);
-		// Animated nebula and light ribbons live beyond the perspective rail edges.
+		// Only faint stars beyond the rail edges: no colored nebula or ribbon gradients.
 		float rail_half_width = 0.045 + 0.445 * UV.y;
 		float outside = smoothstep(rail_half_width - 0.035, rail_half_width + 0.015, abs(UV.x - 0.5));
-		float side_x = min(UV.x, 1.0 - UV.x);
-		float ribbon_center = 0.105 + 0.032 * sin(UV.y * 7.0 - TIME * 0.42)
-			+ 0.014 * sin(UV.y * 15.0 + TIME * 0.27);
-		float ribbon = exp(-pow((side_x - ribbon_center) / 0.055, 2.0))
-			* (0.42 + 0.58 * UV.y);
-		float nebula_left = exp(-pow((UV.x - 0.09 - 0.018 * sin(TIME * 0.18)) / 0.19, 2.0)
-			- pow((UV.y - 0.35) / 0.34, 2.0));
-		float nebula_right = exp(-pow((UV.x - 0.91 + 0.018 * sin(TIME * 0.15)) / 0.19, 2.0)
-			- pow((UV.y - 0.30) / 0.33, 2.0));
 		vec2 star_grid = UV * vec2(145.0, 68.0);
 		vec2 star_cell = floor(star_grid);
 		float star = step(0.994, star_hash(star_cell))
 			* exp(-dot(fract(star_grid) - 0.5, fract(star_grid) - 0.5) * 75.0)
 			* (0.58 + 0.42 * sin(TIME * 1.8 + star_hash(star_cell + 7.0) * 6.283));
-		vec3 backdrop = vec3(0.09, 0.015, 0.16) * nebula_left
-			+ vec3(0.015, 0.07, 0.17) * nebula_right
-			+ mix(vec3(0.11, 0.035, 0.20), vec3(0.025, 0.16, 0.24), step(0.5, UV.x)) * ribbon
-			+ vec3(0.26, 0.24, 0.37) * star;
+		vec3 backdrop = vec3(0.26, 0.24, 0.37) * star;
 		scene_color += backdrop * outside;
 		COLOR = vec4(scene_color,1.0);
 	}"""
@@ -100,6 +88,9 @@ func build_asset_guide() -> void:
 		mat.set_shader_parameter("recolor",i>0)
 		mat.set_shader_parameter("tint",Color("ffd447") if i==3 else PURPLE)
 		art.material = mat
+		if i==3:
+			art.texture=load("res://assets/brand/flick_guide.svg")
+			art.material=null
 
 func resize_viewport() -> void:
 	if viewport: viewport.size = Vector2i(maxi(1,roundi(size.x)),maxi(1,roundi(size.y)))
@@ -117,12 +108,12 @@ func project(lane: float, d: float) -> Vector2:
 	return world.camera.unproject_position(Vector3(world.lane_x(lane),0,-d*world.TRACK_LENGTH))
 
 func input_position(p: Vector2) -> Vector2:
-	# Map the actual camera projection back to the chart's 13-lane coordinates.
-	var screen_point = Vector2(p.x*viewport.size.x,project(6,0).y)
+	# Map the actual camera projection back to the chart's lane coordinates.
+	var screen_point = Vector2(p.x*viewport.size.x,project(world.CENTER_LANE,0).y)
 	var origin = world.camera.project_ray_origin(screen_point)
 	var direction = world.camera.project_ray_normal(screen_point)
 	var hit = Plane(Vector3.UP,0).intersects_ray(origin,direction)
-	if hit != null: p.x = .07 + ((hit.x/world.LANE_WIDTH+6.0)+.5)/13.0*.86
+	if hit != null: p.x = .07 + ((hit.x/world.LANE_WIDTH+world.CENTER_LANE)+.5)/SynkChart.LANES*.86
 	return p
 
 func glow(a: Vector2, b: Vector2, width: float, color: Color) -> void:
@@ -130,10 +121,6 @@ func glow(a: Vector2, b: Vector2, width: float, color: Color) -> void:
 	draw_line(a,b,color,width,true); draw_line(a,b,Color(Color("f8eaff"),color.a),maxf(1,width*.22),true)
 
 func draw_overlay(overlay: Control) -> void:
-	var font = ThemeDB.fallback_font
-	var origin = Vector2((size.x-font.get_string_size("S Y N K",HORIZONTAL_ALIGNMENT_LEFT,-1,36).x)*.5,54)
-	overlay.draw_string_outline(font,origin,"S Y N K",HORIZONTAL_ALIGNMENT_LEFT,-1,36,6,Color(PURPLE,.3))
-	overlay.draw_string(font,origin,"S Y N K",HORIZONTAL_ALIGNMENT_LEFT,-1,36,Color("f7eaff"))
 	if game.mode=="record" and game.arranging and not game.arrange_selection.is_empty():
 		var note: Dictionary=game.arrange_selection.note
 		var note_position=Vector3(world.lane_x(float(note.lane)),.2,(float(note.time)-game.song_time)*world.travel_speed())
@@ -158,14 +145,14 @@ func guide_bar(center: Vector2, width: float, color: Color) -> void:
 
 func draw_guide() -> void:
 	draw_rect(Rect2(Vector2(0,size.y*.18),Vector2(size.x,size.y*.69)),Color("030713"))
-	guide_text("13 LANES  /  FOLLOW THE LIGHT",Vector2(size.x*.1,size.y*.25),size.x*.8,28)
+	guide_text(str(SynkChart.LANES)+" LANES  /  FOLLOW THE LIGHT",Vector2(size.x*.1,size.y*.25),size.x*.8,28)
 	var titles=["1. TAP NOTE","2. HOLD NOTE","3. SLIDE NOTE","4. FLICK NOTE"]
-	var captions=["Tap at the hit line.","Hold until the tail arrives.","Follow the glowing path.","Flick in the arrow direction."]
+	var captions=["Tap when the note hits the line.","Keep holding until the tail ends.","Follow the trail all the way to its end.","Swipe in the arrow direction."]
 	for i in 4:
 		var x=size.x*(.045+i*.24)
 		var w=size.x*.22
 		var box=Rect2(Vector2(x,size.y*.3),Vector2(w,size.y*.52))
-		var style=StyleBoxFlat.new(); style.bg_color=Color("070b1c"); style.border_color=Color("553579"); style.set_border_width_all(1); style.set_corner_radius_all(12)
+		var style=StyleBoxFlat.new(); style.bg_color=Color("0d1128"); style.border_color=[Color("52dfff"),Color("b58aff"),Color("b58aff"),Color("ffd447")][i]; style.set_border_width_all(2); style.set_corner_radius_all(18)
 		draw_style_box(style,box)
 		guide_text(titles[i],Vector2(x,size.y*.36),w,20)
 		guide_text(captions[i],Vector2(x,size.y*.77),w,16)

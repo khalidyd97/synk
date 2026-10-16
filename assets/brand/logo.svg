@@ -1,0 +1,314 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" width="100%" height="100%">
+  <defs>
+    <!-- CSS Keyframe Animations -->
+    <style>
+      /* 1. Bass-drop scale pulse on the whole logo (128 BPM rhythm feel) */
+      .beat-reactor {
+        transform-origin: 450px 160px;
+        animation: bassPulse 0.9375s cubic-bezier(0.15, 0.85, 0.35, 1) infinite;
+      }
+
+      /* 2. Background Equalizer Bars bouncing from bottom up */
+      .eq-bar {
+        transform-box: fill-box;
+        transform-origin: bottom;
+        animation: eqBounce 0.55s ease-in-out infinite alternate;
+      }
+      .eq-1 { animation-duration: 0.42s; animation-delay: 0.05s; }
+      .eq-2 { animation-duration: 0.65s; animation-delay: 0.15s; }
+      .eq-3 { animation-duration: 0.38s; animation-delay: 0.25s; }
+      .eq-4 { animation-duration: 0.52s; animation-delay: 0.0s; }
+      .eq-5 { animation-duration: 0.48s; animation-delay: 0.35s; }
+      .eq-6 { animation-duration: 0.60s; animation-delay: 0.12s; }
+
+      /* 3. Neon Outer Glow Breath &amp; Flicker */
+      .neon-glow-layer {
+        animation: neonPulse 1.875s ease-in-out infinite;
+      }
+
+      /* 4. Traveling Laser Beam along the letter borders */
+      .energy-trace {
+        stroke-dasharray: 180 650;
+        stroke-dashoffset: 830;
+        animation: traceLoop 2.8s linear infinite;
+      }
+
+      /* 5. Chromatic Aberration / Cyber Glitch on Offset Wireframes */
+      .cyber-glitch-magenta {
+        animation: glitchMagenta 3.5s infinite;
+      }
+      .cyber-glitch-cyan {
+        animation: glitchCyan 3.5s infinite;
+      }
+
+      /* 6. Internal 'N' LED Meter Blinking */
+      .led-1 { animation: ledBlink 0.45s steps(2, start) infinite; }
+      .led-2 { animation: ledBlink 0.35s steps(2, start) infinite 0.15s; }
+      .led-3 { animation: ledBlink 0.55s steps(2, start) infinite 0.25s; }
+
+      /* 7. Floating Cyber Particles */
+      .particle-float-left {
+        animation: floatLeft 2.6s ease-in-out infinite alternate;
+      }
+      .particle-float-right {
+        animation: floatRight 2.2s ease-in-out infinite alternate;
+      }
+
+      /* Keyframe Definitions */
+      @keyframes bassPulse {
+        0% { transform: scale(1.035); }
+        25% { transform: scale(1); }
+        50% { transform: scale(1.018); }
+        75% { transform: scale(1); }
+        100% { transform: scale(1.035); }
+      }
+
+      @keyframes eqBounce {
+        0% { transform: scaleY(0.2); opacity: 0.4; }
+        50% { transform: scaleY(0.75); opacity: 0.8; }
+        100% { transform: scaleY(1.3); opacity: 1; }
+      }
+
+      @keyframes neonPulse {
+        0%, 100% { opacity: 0.75; filter: url(#neonGlow); }
+        50% { opacity: 1; filter: url(#neonGlowIntense); }
+        52% { opacity: 0.45; }
+        54% { opacity: 1; }
+      }
+
+      @keyframes traceLoop {
+        to { stroke-dashoffset: 0; }
+      }
+
+      @keyframes glitchMagenta {
+        0%, 88%, 100% { transform: translate(-10px, 10px); opacity: 0.85; }
+        90% { transform: translate(-18px, 6px) skewX(6deg); opacity: 1; }
+        92% { transform: translate(-5px, 13px) skewX(-4deg); opacity: 0.5; }
+        94% { transform: translate(-14px, 10px); opacity: 0.95; }
+      }
+
+      @keyframes glitchCyan {
+        0%, 88%, 100% { transform: translate(8px, -7px); opacity: 0.45; }
+        90% { transform: translate(16px, -3px) skewX(-6deg); opacity: 0.9; }
+        92% { transform: translate(3px, -11px) skewX(4deg); opacity: 0.3; }
+        94% { transform: translate(10px, -7px); opacity: 0.7; }
+      }
+
+      @keyframes ledBlink {
+        0%, 100% { opacity: 0.95; }
+        50% { opacity: 0.15; }
+      }
+
+      @keyframes floatLeft {
+        0% { transform: translate(0px, 0px) scale(0.9); opacity: 0.45; }
+        100% { transform: translate(-14px, -12px) scale(1.15); opacity: 1; }
+      }
+
+      @keyframes floatRight {
+        0% { transform: translate(0px, 0px) scale(1.1); opacity: 1; }
+        100% { transform: translate(14px, -10px) scale(0.85); opacity: 0.45; }
+      }
+    </style>
+
+    <!-- Main Neon Gradient (Animated Color Shift) -->
+    <linearGradient id="neonBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f2fe">
+        <animate attributeName="stop-color" values="#00f2fe;#ff00a0;#7a28ff;#00f2fe" dur="5s" repeatCount="indefinite" />
+      </stop>
+      <stop offset="50%" stop-color="#7a28ff">
+        <animate attributeName="stop-color" values="#7a28ff;#00f2fe;#ff00a0;#7a28ff" dur="5s" repeatCount="indefinite" />
+      </stop>
+      <stop offset="100%" stop-color="#ff00a0">
+        <animate attributeName="stop-color" values="#ff00a0;#7a28ff;#00f2fe;#ff00a0" dur="5s" repeatCount="indefinite" />
+      </stop>
+    </linearGradient>
+
+    <!-- Secondary Offset Frame Gradient -->
+    <linearGradient id="offsetGradient" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ff00a0" stop-opacity="0.85" />
+      <stop offset="100%" stop-color="#00f2fe" stop-opacity="0.85" />
+    </linearGradient>
+
+    <!-- Deep Cyber Body Fill -->
+    <linearGradient id="bodyFill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1b5cff" />
+      <stop offset="48%" stop-color="#240b59" />
+      <stop offset="52%" stop-color="#120436" />
+      <stop offset="100%" stop-color="#7c067d" />
+    </linearGradient>
+
+    <!-- Glossy Top Highlight (Animated Shimmer Sweep) -->
+    <linearGradient id="glassShine" x1="-30%" y1="0%" x2="10%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0" />
+      <stop offset="45%" stop-color="#ffffff" stop-opacity="0.08" />
+      <stop offset="50%" stop-color="#ffffff" stop-opacity="0.65" />
+      <stop offset="55%" stop-color="#ffffff" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+      <animate attributeName="x1" values="-60%;140%" dur="3.2s" repeatCount="indefinite" />
+      <animate attributeName="x2" values="-20%;180%" dur="3.2s" repeatCount="indefinite" />
+    </linearGradient>
+
+    <!-- Equalizer Gradient -->
+    <linearGradient id="eqGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#00f2fe" />
+      <stop offset="60%" stop-color="#9b2cff" />
+      <stop offset="100%" stop-color="#ff00a0" />
+    </linearGradient>
+
+    <!-- Standard Neon Glow Filter -->
+    <filter id="neonGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur1" />
+      <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur2" />
+      <feGaussianBlur in="SourceGraphic" stdDeviation="24" result="blur3" />
+      <feMerge>
+        <feMergeNode in="blur3" />
+        <feMergeNode in="blur2" />
+        <feMergeNode in="blur1" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <!-- Intense Peak Glow Filter -->
+    <filter id="neonGlowIntense" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur1" />
+      <feGaussianBlur in="SourceGraphic" stdDeviation="18" result="blur2" />
+      <feGaussianBlur in="SourceGraphic" stdDeviation="34" result="blur3" />
+      <feMerge>
+        <feMergeNode in="blur3" />
+        <feMergeNode in="blur2" />
+        <feMergeNode in="blur1" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="5" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <!-- Custom Futuristic Letter Paths -->
+    <g id="synkPaths">
+      <!-- S -->
+      <path d="M 275 80 L 130 80 L 95 115 L 95 162 L 218 162 L 218 197 L 95 197 L 75 235 L 235 235 L 270 200 L 270 145 L 145 145 L 145 118 L 258 118 Z" />
+      <!-- Y -->
+      <path d="M 290 80 L 340 80 L 378 138 L 416 80 L 466 80 L 401 172 L 401 235 L 355 235 L 355 172 Z" />
+      <!-- N -->
+      <path d="M 480 235 L 480 80 L 528 80 L 595 172 L 595 80 L 642 80 L 642 235 L 595 235 L 527 143 L 527 235 Z" />
+      <!-- K -->
+      <path d="M 672 80 L 720 80 L 720 142 L 782 80 L 840 80 L 766 152 L 845 235 L 785 235 L 720 165 L 720 235 L 672 235 Z" />
+    </g>
+
+    <!-- Clip Path to keep internal equalizer details inside the N -->
+    <clipPath id="nClip">
+      <path d="M 480 235 L 480 80 L 528 80 L 595 172 L 595 80 L 642 80 L 642 235 L 595 235 L 527 143 L 527 235 Z" />
+    </clipPath>
+  </defs>
+
+  <!-- Beat-Reactive Wrapper -->
+  <g class="beat-reactor">
+    <!-- Master Skew for Fast-Paced Rhythm Game Vibe -->
+    <g transform="translate(35, 0) skewX(-12)">
+
+      <!-- 1. Animated Background Equalizer Bars -->
+      <g filter="url(#softGlow)">
+        <!-- Left cluster -->
+        <rect class="eq-bar eq-1" x="275" y="195" width="10" height="40" fill="url(#eqGrad)" rx="1" />
+        <rect class="eq-bar eq-3" x="289" y="175" width="10" height="60" fill="url(#eqGrad)" rx="1" />
+        <rect class="eq-bar eq-2" x="303" y="205" width="10" height="30" fill="url(#eqGrad)" rx="1" />
+        <rect class="eq-bar eq-5" x="317" y="160" width="10" height="75" fill="url(#eqGrad)" rx="1" />
+        <rect class="eq-bar eq-4" x="331" y="185" width="10" height="50" fill="url(#eqGrad)" rx="1" />
+        <!-- Center cluster -->
+        <rect class="eq-bar eq-2" x="420" y="180" width="10" height="55" fill="url(#eqGrad)" rx="1" />
+        <rect class="eq-bar eq-6" x="434" y="155" width="10" height="80" fill="url(#eqGrad)" rx="1" />
+        <rect class="eq-bar eq-1" x="448" y="170" width="10" height="65" fill="url(#eqGrad)" rx="1" />
+        <rect class="eq-bar eq-3" x="462" y="195" width="10" height="40" fill="url(#eqGrad)" rx="1" />
+        <!-- Right cluster -->
+        <rect class="eq-bar eq-5" x="648" y="185" width="10" height="50" fill="url(#eqGrad)" rx="1" />
+        <rect class="eq-bar eq-2" x="662" y="165" width="10" height="70" fill="url(#eqGrad)" rx="1" />
+      </g>
+
+      <!-- 2. Glitching Offset Cyber Wireframes -->
+      <g class="cyber-glitch-magenta">
+        <use href="#synkPaths" fill="none" stroke="url(#offsetGradient)" stroke-width="3.5" filter="url(#softGlow)" />
+      </g>
+      <g class="cyber-glitch-cyan">
+        <use href="#synkPaths" fill="none" stroke="#00f2fe" stroke-width="2" />
+      </g>
+
+      <!-- 3. Pulsing Outer Neon Glow Layer -->
+      <use class="neon-glow-layer" href="#synkPaths" fill="none" stroke="url(#neonBorder)" stroke-width="10" stroke-linejoin="round" />
+
+      <!-- 4. Main Letter Body Fill -->
+      <use href="#synkPaths" fill="url(#bodyFill)" />
+
+      <!-- 5. Animated Internal Equalizer Bars Inside the 'N' -->
+      <g clip-path="url(#nClip)">
+        <!-- Bottom Left N Equalizer -->
+        <g fill="#00f2fe">
+          <rect x="482" y="224" width="12" height="5" />
+          <rect x="482" y="216" width="12" height="5" />
+          <rect x="482" y="208" width="12" height="5" />
+          <rect class="led-3" x="482" y="200" width="12" height="5" />
+          <rect class="led-2" x="482" y="192" width="12" height="5" />
+          <rect class="led-1" x="482" y="184" width="12" height="5" />
+
+          <rect x="497" y="224" width="12" height="5" />
+          <rect x="497" y="216" width="12" height="5" />
+          <rect class="led-2" x="497" y="208" width="12" height="5" />
+          <rect class="led-1" x="497" y="200" width="12" height="5" />
+
+          <rect x="512" y="224" width="12" height="5" />
+          <rect class="led-3" x="512" y="216" width="12" height="5" />
+          <rect class="led-1" x="512" y="208" width="12" height="5" />
+        </g>
+        <!-- Top Right N Equalizer -->
+        <g fill="#ff00a0">
+          <rect class="led-1" x="597" y="110" width="12" height="5" />
+          <rect class="led-2" x="597" y="118" width="12" height="5" />
+          <rect class="led-3" x="597" y="126" width="12" height="5" />
+          <rect x="597" y="134" width="12" height="5" />
+          <rect x="597" y="142" width="12" height="5" />
+
+          <rect class="led-2" x="612" y="126" width="12" height="5" />
+          <rect x="612" y="134" width="12" height="5" />
+          <rect x="612" y="142" width="12" height="5" />
+        </g>
+      </g>
+
+      <!-- 6. Sweeping Glass Shimmer Overlay -->
+      <use href="#synkPaths" fill="url(#glassShine)" />
+
+      <!-- 7. Crisp Outer Gradient Border &amp; Traveling Energy Laser Trace -->
+      <use href="#synkPaths" fill="none" stroke="url(#neonBorder)" stroke-width="5.5" stroke-linejoin="round" />
+      <use class="energy-trace" href="#synkPaths" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow)" />
+      <use href="#synkPaths" fill="none" stroke="#ffffff" stroke-width="1.2" stroke-linejoin="round" opacity="0.8" />
+
+      <!-- 8. Floating Ambient Cyber Particles -->
+      <g filter="url(#softGlow)">
+        <!-- Left Cyan Particles -->
+        <g class="particle-float-left">
+          <circle cx="55" cy="105" r="3" fill="#00f2fe" />
+          <circle cx="72" cy="85" r="2" fill="#00f2fe" opacity="0.8" />
+          <circle cx="48" cy="155" r="2.5" fill="#00f2fe" />
+          <circle cx="65" cy="210" r="3.5" fill="#ff00a0" />
+          <polygon points="60,130 68,125 65,136" fill="#00f2fe" />
+          <polygon points="82,68 90,62 87,73" fill="#00f2fe" opacity="0.7" />
+        </g>
+
+        <!-- Right Magenta Particles -->
+        <g class="particle-float-right">
+          <circle cx="855" cy="95" r="3.5" fill="#ff00a0" />
+          <circle cx="870" cy="125" r="2" fill="#ff00a0" />
+          <circle cx="845" cy="185" r="3" fill="#b429ff" />
+          <circle cx="862" cy="215" r="2.5" fill="#00f2fe" />
+          <polygon points="850,150 860,146 856,157" fill="#ff00a0" />
+          <polygon points="832,68 840,62 838,72" fill="#ff00a0" opacity="0.8" />
+        </g>
+      </g>
+
+    </g>
+  </g>
+</svg>

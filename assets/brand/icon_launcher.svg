@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><defs><linearGradient xmlns="http://www.w3.org/2000/svg" id="synk-full-stat-neonBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f2fe" />
+      <stop offset="50%" stop-color="#7a28ff" />
+      <stop offset="100%" stop-color="#ff00a0" />
+    </linearGradient>
+
+    
+    <linearGradient xmlns="http://www.w3.org/2000/svg" id="synk-full-stat-offsetGrad" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ff00a0" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#00f2fe" stop-opacity="0.9" />
+    </linearGradient>
+
+    
+    <linearGradient xmlns="http://www.w3.org/2000/svg" id="synk-full-stat-bodyFill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1966ff" />
+      <stop offset="46%" stop-color="#250b5e" />
+      <stop offset="52%" stop-color="#0f032e" />
+      <stop offset="100%" stop-color="#8f0789" />
+    </linearGradient>
+
+    
+    <linearGradient xmlns="http://www.w3.org/2000/svg" id="synk-full-stat-glassShine" x1="-30%" y1="0%" x2="10%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0" />
+      <stop offset="45%" stop-color="#ffffff" stop-opacity="0.1" />
+      <stop offset="50%" stop-color="#ffffff" stop-opacity="0.7" />
+      <stop offset="55%" stop-color="#ffffff" stop-opacity="0.1" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+      
+      
+    </linearGradient>
+
+    
+    <linearGradient xmlns="http://www.w3.org/2000/svg" id="synk-full-stat-eqGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#00f2fe" />
+      <stop offset="55%" stop-color="#8c2eff" />
+      <stop offset="100%" stop-color="#ff00a0" />
+    </linearGradient>
+
+    
+    </defs><defs><radialGradient id="back" cx="25%" cy="15%" r="110%"><stop stop-color="#19365e"/><stop offset=".5" stop-color="#10102b"/><stop offset="1" stop-color="#310c3c"/></radialGradient></defs>
+<rect width="512" height="512" fill="url(#back)"/>
+<path d="M 0 92 L 92 0 M 420 512 L 512 420" stroke="#7a28ff" stroke-width="20" opacity=".18"/>
+<path d="M 0 82 L 82 0" stroke="#00f2fe" stroke-width="4" opacity=".5"/>
+<path d="M 430 512 L 512 430" stroke="#ff00a0" stroke-width="4" opacity=".5"/><g transform="translate(256 256) scale(1.65) skewX(-11) translate(-125 -147.5)">
+<path d="M 225 60 L 85 60 L 48 97 L 48 152 L 168 152 L 168 192 L 45 192 L 25 235 L 185 235 L 222 198 L 222 135 L 98 135 L 98 102 L 208 102 Z" fill="none" stroke="url(#synk-full-stat-neonBorder)" stroke-width="22" opacity=".08"/>
+<path d="M 225 60 L 85 60 L 48 97 L 48 152 L 168 152 L 168 192 L 45 192 L 25 235 L 185 235 L 222 198 L 222 135 L 98 135 L 98 102 L 208 102 Z" fill="none" stroke="url(#synk-full-stat-neonBorder)" stroke-width="13" opacity=".18"/>
+<path d="M 225 60 L 85 60 L 48 97 L 48 152 L 168 152 L 168 192 L 45 192 L 25 235 L 185 235 L 222 198 L 222 135 L 98 135 L 98 102 L 208 102 Z" transform="translate(-5 6)" fill="none" stroke="url(#synk-full-stat-offsetGrad)" stroke-width="3"/>
+<path d="M 225 60 L 85 60 L 48 97 L 48 152 L 168 152 L 168 192 L 45 192 L 25 235 L 185 235 L 222 198 L 222 135 L 98 135 L 98 102 L 208 102 Z" fill="url(#synk-full-stat-bodyFill)" stroke="url(#synk-full-stat-neonBorder)" stroke-width="6" stroke-linejoin="round"/>
+<path d="M 103 73 L 207 73 M 61 219 L 179 219" fill="none" stroke="#e8fbff" stroke-width="2" opacity=".8"/>
+<path d="M 108 116 L 196 116" stroke="#00f2fe" stroke-width="2" stroke-dasharray="14 6" opacity=".6"/>
+</g></svg>
