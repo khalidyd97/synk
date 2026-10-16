@@ -1,0 +1,18 @@
+; Standalone generator for assets/lobby/lobby_loop.ogv. See README.md in this folder.
+config_version=5
+
+[application]
+config/name="SYNK Lobby Video Generator"
+run/main_scene="res://render.tscn"
+
+[display]
+window/size/viewport_width=1280
+window/size/viewport_height=720
+
+[editor]
+movie_writer/fps=30
+movie_writer/video_quality=0.55
+movie_writer/disable_vsync=true
+
+[rendering]
+renderer/rendering_method="gl_compatibility"

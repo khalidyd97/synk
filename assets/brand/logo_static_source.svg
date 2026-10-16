@@ -1,0 +1,287 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1060 390" width="100%" height="100%">
+  <defs>
+    
+    
+    <style>
+      .synk-full-stat-root {
+        transform-origin: center;
+        
+      }
+      .synk-full-stat-glitch-mag {
+        transform: translate(-8px, 8px); opacity: 0.85;
+      }
+      .synk-full-stat-glitch-cya {
+        transform: translate(6px, -6px); opacity: 0.5;
+      }
+      .synk-full-stat-laser {
+        stroke-dasharray: 140 600;
+        stroke-dashoffset: 740;
+        opacity: 0.7;
+      }
+      .synk-full-stat-eq {
+        transform-box: fill-box;
+        transform-origin: bottom;
+        
+      }
+      .synk-full-stat-eq-2 { animation-duration: 0.62s; animation-delay: 0.12s; }
+      .synk-full-stat-eq-3 { animation-duration: 0.39s; animation-delay: 0.24s; }
+      .synk-full-stat-eq-4 { animation-duration: 0.54s; animation-delay: 0.07s; }
+      .synk-full-stat-led-1 {  }
+      .synk-full-stat-led-2 {  }
+      .synk-full-stat-led-3 {  }
+      .synk-full-stat-float {  }
+
+      @keyframes synk-full-stat-pulse {
+        0%, 100% { transform: scale(1.03); }
+        25%, 75% { transform: scale(1); }
+        50% { transform: scale(1.015); }
+      }
+      @keyframes synk-full-stat-eqBounce {
+        0% { transform: scaleY(0.25); opacity: 0.45; }
+        100% { transform: scaleY(1.25); opacity: 1; }
+      }
+      @keyframes synk-full-stat-trace {
+        to { stroke-dashoffset: 0; }
+      }
+      @keyframes synk-full-stat-blink {
+        0%, 100% { opacity: 0.95; }
+        50% { opacity: 0.15; }
+      }
+      @keyframes synk-full-stat-floatAnim {
+        0% { transform: translate(0px, 0px); opacity: 0.5; }
+        100% { transform: translate(-8px, -10px); opacity: 1; }
+      }
+      @keyframes synk-full-stat-glitchM {
+        0%, 88%, 100% { transform: translate(-8px, 8px); opacity: 0.85; }
+        90% { transform: translate(-15px, 4px) skewX(5deg); opacity: 1; }
+        92% { transform: translate(-4px, 11px) skewX(-4deg); opacity: 0.45; }
+        94% { transform: translate(-11px, 8px); opacity: 0.9; }
+      }
+      @keyframes synk-full-stat-glitchC {
+        0%, 88%, 100% { transform: translate(6px, -6px); opacity: 0.5; }
+        90% { transform: translate(14px, -2px) skewX(-5deg); opacity: 0.9; }
+        92% { transform: translate(2px, -9px) skewX(4deg); opacity: 0.3; }
+        94% { transform: translate(8px, -6px); opacity: 0.7; }
+      }
+    </style>
+    
+    <!-- Primary Neon Border Gradient -->
+    <linearGradient id="synk-full-stat-neonBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f2fe"></stop>
+      <stop offset="50%" stop-color="#7a28ff"></stop>
+      <stop offset="100%" stop-color="#ff00a0"></stop>
+    </linearGradient>
+
+    <!-- Offset 3D Wireframe Gradient -->
+    <linearGradient id="synk-full-stat-offsetGrad" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ff00a0" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#00f2fe" stop-opacity="0.9" />
+    </linearGradient>
+
+    <!-- Deep Cyber Metallic Armor Fill -->
+    <linearGradient id="synk-full-stat-bodyFill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1966ff" />
+      <stop offset="46%" stop-color="#250b5e" />
+      <stop offset="52%" stop-color="#0f032e" />
+      <stop offset="100%" stop-color="#8f0789" />
+    </linearGradient>
+
+    <!-- Glassmorphic Horizon Reflection -->
+    <linearGradient id="synk-full-stat-glassShine" x1="-30%" y1="0%" x2="10%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0" />
+      <stop offset="45%" stop-color="#ffffff" stop-opacity="0.1" />
+      <stop offset="50%" stop-color="#ffffff" stop-opacity="0.7" />
+      <stop offset="55%" stop-color="#ffffff" stop-opacity="0.1" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+      
+      
+    </linearGradient>
+
+    <!-- Equalizer Bar Gradient -->
+    <linearGradient id="synk-full-stat-eqGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#00f2fe" />
+      <stop offset="55%" stop-color="#8c2eff" />
+      <stop offset="100%" stop-color="#ff00a0" />
+    </linearGradient>
+
+    <!-- True Alpha Neon Glow Filter -->
+    <filter id="synk-full-stat-neonGlow" x="-35%" y="-35%" width="170%" height="170%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="blur1" />
+      <feGaussianBlur in="SourceGraphic" stdDeviation="11" result="blur2" />
+      <feGaussianBlur in="SourceGraphic" stdDeviation="22" result="blur3" />
+      <feMerge>
+        <feMergeNode in="blur3" />
+        <feMergeNode in="blur2" />
+        <feMergeNode in="blur1" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <filter id="synk-full-stat-softGlow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="4.5" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    
+    <g id="synk-full-stat-path-S" transform="translate(45, 0)"><path d="M 225 60 L 85 60 L 48 97 L 48 152 L 168 152 L 168 192 L 45 192 L 25 235 L 185 235 L 222 198 L 222 135 L 98 135 L 98 102 L 208 102 Z" /></g><g id="synk-full-stat-path-Y" transform="translate(270, 0)"><path d="M 32 60 L 86 60 L 130 126 L 174 60 L 228 60 L 154 162 L 154 235 L 106 235 L 106 162 Z" /></g><g id="synk-full-stat-path-N" transform="translate(495, 0)"><path d="M 36 235 L 36 60 L 88 60 L 164 162 L 164 60 L 216 60 L 216 235 L 164 235 L 88 133 L 88 235 Z" /></g><g id="synk-full-stat-path-K" transform="translate(725, 0)"><path d="M 34 60 L 86 60 L 86 128 L 154 60 L 218 60 L 138 138 L 224 235 L 158 235 L 86 154 L 86 235 L 34 235 Z" /></g>
+    <clipPath id="synk-full-stat-clip-S"><path d="M 225 60 L 85 60 L 48 97 L 48 152 L 168 152 L 168 192 L 45 192 L 25 235 L 185 235 L 222 198 L 222 135 L 98 135 L 98 102 L 208 102 Z" /></clipPath><clipPath id="synk-full-stat-clip-Y"><path d="M 32 60 L 86 60 L 130 126 L 174 60 L 228 60 L 154 162 L 154 235 L 106 235 L 106 162 Z" /></clipPath><clipPath id="synk-full-stat-clip-N"><path d="M 36 235 L 36 60 L 88 60 L 164 162 L 164 60 L 216 60 L 216 235 L 164 235 L 88 133 L 88 235 Z" /></clipPath><clipPath id="synk-full-stat-clip-K"><path d="M 34 60 L 86 60 L 86 128 L 154 60 L 218 60 L 138 138 L 224 235 L 158 235 L 86 154 L 86 235 L 34 235 Z" /></clipPath>
+    <g id="synk-full-stat-all-letters">
+      <use href="#synk-full-stat-path-S" />
+      <use href="#synk-full-stat-path-Y" />
+      <use href="#synk-full-stat-path-N" />
+      <use href="#synk-full-stat-path-K" />
+    </g>
+  </defs>
+
+  <g class="synk-full-stat-root">
+    <!-- Ambient Side Acoustic Waveforms (Left & Right Sound Wings) -->
+    <g filter="url(#synk-full-stat-softGlow)" opacity="0.8">
+      <!-- Left Sound Wing -->
+      <path d="M 15 160 L 38 160 L 46 135 L 54 185 L 62 148 L 70 172 L 78 160 L 95 160" fill="none" stroke="#00f2fe" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+      <!-- Right Sound Wing -->
+      <path d="M 965 160 L 982 160 L 990 142 L 998 178 L 1006 130 L 1014 190 L 1022 160 L 1045 160" fill="none" stroke="#ff00a0" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+    </g>
+
+    <!-- Main Skewed Cyber Typography Group -->
+    <g transform="translate(30, 5) skewX(-11)">
+
+      <!-- 1. Full Spectrum Background Equalizer -->
+      <g opacity="0.65" filter="url(#synk-full-stat-softGlow)">
+        <g transform="translate(45, 0)">
+          <rect class="synk-full-stat-eq" x="28" y="165" width="9" height="70" fill="url(#synk-full-stat-eqGrad)" rx="1.5" />
+          <rect class="synk-full-stat-eq synk-full-stat-eq-2" x="41" y="180" width="9" height="55" fill="url(#synk-full-stat-eqGrad)" rx="1.5" />
+          <rect class="synk-full-stat-eq synk-full-stat-eq-3" x="218" y="175" width="9" height="60" fill="url(#synk-full-stat-eqGrad)" rx="1.5" />
+        </g><g transform="translate(270, 0)">
+          <rect class="synk-full-stat-eq synk-full-stat-eq-2" x="62" y="170" width="9" height="65" fill="url(#synk-full-stat-eqGrad)" rx="1.5" />
+          <rect class="synk-full-stat-eq synk-full-stat-eq-4" x="75" y="150" width="9" height="85" fill="url(#synk-full-stat-eqGrad)" rx="1.5" />
+          <rect class="synk-full-stat-eq synk-full-stat-eq-3" x="88" y="185" width="9" height="50" fill="url(#synk-full-stat-eqGrad)" rx="1.5" />
+          <rect class="synk-full-stat-eq synk-full-stat-eq-1" x="163" y="160" width="9" height="75" fill="url(#synk-full-stat-eqGrad)" rx="1.5" />
+          <rect class="synk-full-stat-eq synk-full-stat-eq-2" x="176" y="180" width="9" height="55" fill="url(#synk-full-stat-eqGrad)" rx="1.5" />
+        </g><g transform="translate(495, 0)">
+          <rect class="synk-full-stat-eq synk-full-stat-eq-3" x="102" y="180" width="9" height="55" fill="url(#synk-full-stat-eqGrad)" rx="1.5" />
+          <rect class="synk-full-stat-eq synk-full-stat-eq-1" x="115" y="160" width="9" height="75" fill="url(#synk-full-stat-eqGrad)" rx="1.5" />
+          <rect class="synk-full-stat-eq synk-full-stat-eq-4" x="128" y="190" width="9" height="45" fill="url(#synk-full-stat-eqGrad)" rx="1.5" />
+        </g><g transform="translate(725, 0)">
+          <rect class="synk-full-stat-eq synk-full-stat-eq-2" x="18" y="170" width="9" height="65" fill="url(#synk-full-stat-eqGrad)" rx="1.5" />
+          <rect class="synk-full-stat-eq synk-full-stat-eq-4" x="100" y="185" width="9" height="50" fill="url(#synk-full-stat-eqGrad)" rx="1.5" />
+          <rect class="synk-full-stat-eq synk-full-stat-eq-1" x="113" y="200" width="9" height="35" fill="url(#synk-full-stat-eqGrad)" rx="1.5" />
+        </g>
+      </g>
+
+      <!-- 2. Offset 3D Chromatic Aberration Wireframes -->
+      <g class="synk-full-stat-glitch-mag">
+        <use href="#synk-full-stat-all-letters" fill="none" stroke="url(#synk-full-stat-offsetGrad)" stroke-width="3.5" filter="url(#synk-full-stat-softGlow)" />
+      </g>
+      <g class="synk-full-stat-glitch-cya">
+        <use href="#synk-full-stat-all-letters" fill="none" stroke="#00f2fe" stroke-width="2" />
+      </g>
+
+      <!-- 3. Intense Outer Neon Bloom -->
+      <use href="#synk-full-stat-all-letters" fill="none" stroke="url(#synk-full-stat-neonBorder)" stroke-width="10" stroke-linejoin="round" filter="url(#synk-full-stat-neonGlow)" opacity="0.88" />
+
+      <!-- 4. Deep Metallic Cyber Armor Fill -->
+      <use href="#synk-full-stat-all-letters" fill="url(#synk-full-stat-bodyFill)" />
+
+      <!-- 5. Internal Letter Circuitry & LED Equalizer Matrices -->
+      <g transform="translate(45, 0)" clip-path="url(#synk-full-stat-clip-S)">
+          <!-- Cyber Sonic Wave & Circuit Track Inside S -->
+          <path d="M 65 118 L 195 118" stroke="#00f2fe" stroke-width="2.5" stroke-dasharray="14 6" opacity="0.65" />
+          <path d="M 55 215 L 195 215" stroke="#ff00a0" stroke-width="3" stroke-dasharray="22 8" opacity="0.7" />
+          <!-- Mini Equalizer Steps in lower S curve -->
+          <g fill="#00f2fe" opacity="0.85">
+            <rect class="synk-full-stat-led-1" x="172" y="142" width="38" height="5" />
+            <rect class="synk-full-stat-led-2" x="172" y="151" width="28" height="5" />
+            <rect class="synk-full-stat-led-3" x="172" y="160" width="42" height="5" />
+            <rect class="synk-full-stat-led-1" x="172" y="169" width="20" height="5" />
+          </g>
+        </g><g transform="translate(270, 0)" clip-path="url(#synk-full-stat-clip-Y)">
+          <!-- Resonance Tuning Core Inside Y Junction -->
+          <polygon points="130,136 146,112 130,148 114,112" fill="#00f2fe" opacity="0.75" class="synk-full-stat-led-1" />
+          <!-- Vertical Beat Stem Meter -->
+          <g fill="#ff00a0" opacity="0.9">
+            <rect x="114" y="220" width="32" height="5" />
+            <rect x="114" y="211" width="32" height="5" />
+            <rect class="synk-full-stat-led-3" x="114" y="202" width="32" height="5" />
+            <rect class="synk-full-stat-led-2" x="114" y="193" width="32" height="5" />
+            <rect class="synk-full-stat-led-1" x="114" y="184" width="32" height="5" />
+            <rect class="synk-full-stat-led-2" x="114" y="175" width="32" height="5" />
+          </g>
+        </g><g transform="translate(495, 0)" clip-path="url(#synk-full-stat-clip-N)">
+          <!-- Iconic Dual Equalizer Matrices Inside N -->
+          <g fill="#00f2fe">
+            <rect x="40" y="222" width="14" height="5" />
+            <rect x="40" y="214" width="14" height="5" />
+            <rect x="40" y="206" width="14" height="5" />
+            <rect class="synk-full-stat-led-3" x="40" y="198" width="14" height="5" />
+            <rect class="synk-full-stat-led-2" x="40" y="190" width="14" height="5" />
+            <rect class="synk-full-stat-led-1" x="40" y="182" width="14" height="5" />
+
+            <rect x="57" y="222" width="14" height="5" />
+            <rect x="57" y="214" width="14" height="5" />
+            <rect class="synk-full-stat-led-2" x="57" y="206" width="14" height="5" />
+            <rect class="synk-full-stat-led-1" x="57" y="198" width="14" height="5" />
+
+            <rect x="74" y="222" width="12" height="5" />
+            <rect class="synk-full-stat-led-3" x="74" y="214" width="12" height="5" />
+          </g>
+          <g fill="#ff00a0">
+            <rect class="synk-full-stat-led-1" x="166" y="92" width="14" height="5" />
+            <rect class="synk-full-stat-led-2" x="166" y="100" width="14" height="5" />
+            <rect class="synk-full-stat-led-3" x="166" y="108" width="14" height="5" />
+            <rect x="166" y="116" width="14" height="5" />
+            <rect x="166" y="124" width="14" height="5" />
+
+            <rect class="synk-full-stat-led-2" x="183" y="108" width="14" height="5" />
+            <rect x="183" y="116" width="14" height="5" />
+            <rect x="183" y="124" width="14" height="5" />
+          </g>
+          <!-- Diagonal Rhythm Note Track -->
+          <line x1="78" y1="82" x2="174" y2="210" stroke="#00f2fe" stroke-width="2" stroke-dasharray="10 8" opacity="0.6" />
+        </g><g transform="translate(725, 0)" clip-path="url(#synk-full-stat-clip-K)">
+          <!-- Kinetic Slash Bars Inside K Wings -->
+          <path d="M 102 138 L 185 68" stroke="#00f2fe" stroke-width="3" stroke-dasharray="16 6" opacity="0.75" />
+          <path d="M 105 148 L 192 228" stroke="#ff00a0" stroke-width="3" stroke-dasharray="16 6" opacity="0.75" />
+          <!-- Left Pillar Equalizer -->
+          <g fill="#00f2fe" opacity="0.85">
+            <rect x="42" y="220" width="36" height="5" />
+            <rect x="42" y="211" width="36" height="5" />
+            <rect class="synk-full-stat-led-2" x="42" y="202" width="36" height="5" />
+            <rect class="synk-full-stat-led-1" x="42" y="193" width="36" height="5" />
+          </g>
+        </g>
+
+      <!-- 6. Sweeping Glass Horizon Reflection -->
+      <use href="#synk-full-stat-all-letters" fill="url(#synk-full-stat-glassShine)" />
+
+      <!-- 7. Crisp Neon Borders & Racing Laser Beam -->
+      <use href="#synk-full-stat-all-letters" fill="none" stroke="url(#synk-full-stat-neonBorder)" stroke-width="5.5" stroke-linejoin="round" />
+      <use class="synk-full-stat-laser" href="#synk-full-stat-all-letters" fill="none" stroke="#ffffff" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round" filter="url(#synk-full-stat-softGlow)" />
+      <use href="#synk-full-stat-all-letters" fill="none" stroke="#ffffff" stroke-width="1.3" stroke-linejoin="round" opacity="0.9" />
+
+      <!-- 8. Floating Cyber Particles (Zero Play/Rewind Icons) -->
+      <g class="synk-full-stat-float" filter="url(#synk-full-stat-softGlow)">
+        <circle cx="55" cy="85" r="3.5" fill="#00f2fe" />
+        <circle cx="72" cy="65" r="2" fill="#00f2fe" />
+        <polygon points="48,135 58,130 54,142" fill="#00f2fe" />
+        <circle cx="65" cy="215" r="3" fill="#ff00a0" />
+        <circle cx="955" cy="85" r="3.5" fill="#ff00a0" />
+        <circle cx="972" cy="120" r="2.5" fill="#00f2fe" />
+        <polygon points="948,155 958,150 954,162" fill="#ff00a0" />
+        <circle cx="940" cy="220" r="3" fill="#7a28ff" />
+      </g>
+    </g>
+
+    <!-- Bottom Rhythm ECG Pulse Line & Sub-Deck Accent -->
+    <g transform="translate(0, 25)" filter="url(#synk-full-stat-softGlow)">
+      <!-- Left ECG Heartbeat Line -->
+      <path d="M 140 275 L 285 275 L 298 252 L 310 298 L 324 240 L 338 290 L 348 268 L 356 275 L 430 275" fill="none" stroke="url(#synk-full-stat-neonBorder)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+      <!-- Center Diamond Beat Core -->
+      <polygon points="530,260 545,275 530,290 515,275" fill="url(#synk-full-stat-neonBorder)" />
+      <polygon points="530,266 539,275 530,284 521,275" fill="#ffffff" />
+      <!-- Right ECG Heartbeat Line -->
+      <path d="M 630 275 L 704 275 L 712 268 L 722 290 L 736 240 L 750 298 L 762 252 L 775 275 L 920 275" fill="none" stroke="url(#synk-full-stat-neonBorder)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    </g>
+  </g>
+</svg>
