@@ -401,6 +401,12 @@ func build_gameplay(items: VBoxContainer,browsing: VBoxContainer) -> void:
     note_speed_input=Stepper.new(.5,3,.25,game.note_speed,"×",2)
     add_control(row(items,"Note speed","Same feel on every song: notes take 2.6 s ÷ speed to reach the line."),note_speed_input)
     note_speed_input.value_changed.connect(game.change_note_speed)
+    var match_display=Switch.new(); add_control(row(items,"Match display refresh rate","Run at your screen's own rate (%d Hz) for the smoothest motion." % game.display_refresh_rate()),match_display,152)
+    var fps=Stepper.new(30,120,30,float(game.frame_rate_setting() if game.frame_rate_setting()>0 else 60),"fps",0)
+    add_control(row(items,"Frame rate limit","Used when matching the display is off."),fps)
+    match_display.button_pressed=game.frame_rate_setting()<=0; fps.editable=not match_display.button_pressed
+    connect_switch(match_display,func(on): fps.editable=not on; game.change_frame_rate(0 if on else roundi(fps.value)))
+    fps.value_changed.connect(func(v): if not match_display.button_pressed: game.change_frame_rate(roundi(v)))
     extras_switch(items,"judgement","Easy judging","Wider timing windows for PERFECT, GREAT and GOOD.",true)
     extras_switch(items,"touch_assist","Touch assist","A tap just beside an empty lane still hits the nearby note.")
     extras_switch(items,"lane_hints","Lane lines","Show faint lane lines while you play.")

@@ -493,10 +493,36 @@ func build_effects() -> void:
 		finger_beams.append(finger_beam)
 	for lane in SynkChart.LANES:
 		var beam = Node3D.new(); add_child(beam); beam.position = Vector3(lane_x(lane),.08,0)
-		artwork(beam,"Hit_Effect_Pink",1,Vector3(0,1.35*FIT,0),Vector2(4.4,3.3)*FIT,Vector4(0,0,1,1),.75)
+		own_material(artwork(beam,"Hit_Effect_Pink",1,Vector3(0,1.35*FIT,0),Vector2(4.4,3.3)*FIT,Vector4(0,0,1,1),.75))  # each lane glow pulses on its own
 		beam.visible = false; active_beams.append(beam)
 
+# --- Shared note materials ------------------------------------------------------------
+# Every note of the same look uses one material, so a dense chart draws with a handful of
+# materials instead of hundreds. A note that needs its own state (a held trail being eaten,
+# a missed note turning grey, a recorder ghost) gets a private copy at that moment.
+var shared_materials: Dictionary = {}
+func shared(key: String, build: Callable) -> Material:
+	if shared_materials.has(key): return shared_materials[key]
+	var mat: Material = build.call()
+	mat.set_meta("shared", true)
+	shared_materials[key] = mat
+	return mat
+func clear_shared_materials() -> void:
+	shared_materials.clear()
+# Gives this mesh its own copy of a shared material before it is changed.
+func own_material(mesh: GeometryInstance3D) -> Material:
+	var mat: Material = mesh.material_override
+	if mat == null and mesh is MeshInstance3D and mesh.mesh: mat = mesh.mesh.surface_get_material(0)
+	if mat == null or not mat.has_meta("shared"): return mat
+	var copy: Material = mat.duplicate()
+	copy.remove_meta("shared")
+	mesh.material_override = copy
+	if copy is ShaderMaterial: animated_materials.append(weakref(copy))
+	return copy
+
 func asset_material(name: String, palette: int, region = Vector4(0,0,1,1), opacity = 1.0) -> ShaderMaterial:
+	return shared("asset|%s|%d|%s|%s|%s" % [name, palette, region, opacity, colors[palette]], func(): return build_asset_material(name, palette, region, opacity))
+func build_asset_material(name: String, palette: int, region = Vector4(0,0,1,1), opacity = 1.0) -> ShaderMaterial:
 	var mat = ShaderMaterial.new(); mat.shader = load("res://scripts/neon_asset.gdshader")
 	mat.set_shader_parameter("artwork",load("res://assets/neon/"+name+".png"))
 	mat.set_shader_parameter("region",region); mat.set_shader_parameter("opacity",opacity)
@@ -546,6 +572,7 @@ func spawn_hit(lane: float, kind: String, direction: int = 0, sustain_entry: Dic
 	var node = Node3D.new(); add_child(node); node.position = touch_hit_position(lane,pointer_id)+Vector3(0,.065,0)
 	# Share the regular hit flash across taps, slides and flicks.
 	var flash = artwork(node,"Hit_Effect_Blue" if palette==0 else "Hit_Effect_Pink",palette,Vector3(0,(2.25-4.0*HIT_MIRROR*.5)*FIT,0),Vector2(5.8,4.0*(1.0+HIT_MIRROR))*FIT)
+	own_material(flash)  # each hit fades on its own
 	flash.material_override.set_shader_parameter("mirror_extra",HIT_MIRROR)
 	flash.material_override.set_shader_parameter("tint",hit_color)
 	flash.material_override.set_shader_parameter("recolor",palette!=0 or cover_palette_active or (game.highway_colors=="theme" and game.gameplay_colors.has("hits")))
@@ -735,6 +762,7 @@ func clear_hit_effects() -> void:
 	bursts.clear(); hit_pool.clear()
 
 func clear_notes() -> void:
+	clear_shared_materials()
 	play_render_cursor=0
 	prebuilding=false; prebuild_queue.clear(); prebuild_total=0
 	for entry in notes.values(): entry.node.queue_free()
@@ -813,13 +841,15 @@ func make_circle_cap(parent: Node3D, position_value: Vector3, palette: int, size
 	# The supplied artwork already contains its perspective and thickness.
 	# Face the camera once so it keeps that silhouette rather than flattening twice.
 	var radius = 1.16*NOTE_SCALE*size
-	var mat = ShaderMaterial.new(); mat.shader = preload("res://scripts/reference_note.gdshader")
-	mat.set_shader_parameter("artwork",preload("res://assets/neon/Circle_Note_Reference.png"))
-	mat.set_shader_parameter("hue_shift",colors[palette].h-.53)
 	var role=["tap","hold","flick","slide"][palette]
-	if game.highway_colors=="theme" and not game.uses_recorder_colors() and game.gameplay_colors.has(role):
-		mat.set_shader_parameter("saturation_scale",colors[palette].s/.78)
-		mat.set_shader_parameter("value_scale",colors[palette].v)
+	var mat = shared("circle|%d|%s|%s|%s" % [palette, colors[palette], game.highway_colors, game.uses_recorder_colors()], func():
+		var m = ShaderMaterial.new(); m.shader = preload("res://scripts/reference_note.gdshader")
+		m.set_shader_parameter("artwork",preload("res://assets/neon/Circle_Note_Reference.png"))
+		m.set_shader_parameter("hue_shift",colors[palette].h-.53)
+		if game.highway_colors=="theme" and not game.uses_recorder_colors() and game.gameplay_colors.has(role):
+			m.set_shader_parameter("saturation_scale",colors[palette].s/.78)
+			m.set_shader_parameter("value_scale",colors[palette].v)
+		return m)
 	if not reference_note_meshes.has(size):
 		var quad = QuadMesh.new(); quad.size = Vector2(radius/.4,radius/.4*797.0/1388.0)
 		reference_note_meshes[size]=quad
@@ -842,8 +872,9 @@ func make_flick(parent: Node3D, note: Dictionary, palette: int) -> void:
 	for i in 1:
 		var base = Vector3(lane_x(note.lane),2.0*FIT*game.note_size,0)
 		var arrow_mesh = QuadMesh.new(); arrow_mesh.size=Vector2(3.22,1.6)*FIT*game.note_size
-		var arrow_material = ShaderMaterial.new(); arrow_material.shader=preload("res://scripts/flick_arrow.gdshader")
-		arrow_material.set_shader_parameter("tint",element_color("arrows",colors[palette]))
+		var arrow_material = shared("arrow|%d|%s" % [palette, element_color("arrows",colors[palette])], func():
+			var m = ShaderMaterial.new(); m.shader=preload("res://scripts/flick_arrow.gdshader")
+			m.set_shader_parameter("tint",element_color("arrows",colors[palette])); return m)
 		var arrow = mesh_node(arrow_mesh,parent,arrow_material)
 		arrow.position=base; arrow.rotation=camera.rotation
 		arrow.rotate_object_local(Vector3.FORWARD,float(note.direction)*PI*.5)
@@ -901,27 +932,33 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 	var solid=game.trail_style=="solid"
 	var trail_material: ShaderMaterial
 	if solid:
-		trail_material=ShaderMaterial.new(); trail_material.shader=preload("res://scripts/solid_trail.gdshader")
-		trail_material.set_shader_parameter("tint",trail_color(palette))
+		trail_material=shared("solid_trail|%s" % trail_color(palette), func():
+			var m=ShaderMaterial.new(); m.shader=preload("res://scripts/solid_trail.gdshader")
+			m.set_shader_parameter("tint",trail_color(palette)); return m)
 	else:
-		trail_material=asset_material("Hold_Note_Pink",palette,TRAIL_REGION,.85)
-		trail_material.set_shader_parameter("tint",trail_color(palette))
-		if note.kind=="hold":
-			trail_material.set_shader_parameter("motion",0.0)
-			trail_material.set_shader_parameter("glow_pulse",0.0)
+		var still = note.kind=="hold"
+		trail_material=shared("art_trail|%d|%s|%s" % [palette, trail_color(palette), still], func():
+			var m=build_asset_material("Hold_Note_Pink",palette,TRAIL_REGION,.85)
+			m.set_shader_parameter("tint",trail_color(palette))
+			if still:
+				m.set_shader_parameter("motion",0.0); m.set_shader_parameter("glow_pulse",0.0)
+			return m)
 	st.set_material(trail_material); mesh_node(st.commit(),parent)
 	if solid:
 		make_solid_trail_joints(parent,note,palette,recording,half_width)
 	else:
-		var edge_material = ShaderMaterial.new(); edge_material.shader = preload("res://scripts/ribbon_edge.gdshader")
-		edge_material.set_shader_parameter("color",trail_color(palette).lightened(.4))
+		var edge_material = shared("ribbon_edge|%s" % trail_color(palette), func():
+			var m = ShaderMaterial.new(); m.shader = preload("res://scripts/ribbon_edge.gdshader")
+			m.set_shader_parameter("color",trail_color(palette).lightened(.4)); return m)
 		edge.set_material(edge_material); mesh_node(edge.commit(),parent)
 	# Checkpoint dots: glowing beads where the finger must be when they reach the bar.
 	if note.has("checkpoints") and not solid:
-		var dot_material = ShaderMaterial.new(); dot_material.shader = preload("res://scripts/ribbon_edge.gdshader")
-		dot_material.set_shader_parameter("color",Color("fff4ff"))
-		var halo_material = ShaderMaterial.new(); halo_material.shader = preload("res://scripts/ribbon_edge.gdshader")
-		halo_material.set_shader_parameter("color",trail_color(palette).lightened(.55))
+		var dot_material = shared("bead", func():
+			var m = ShaderMaterial.new(); m.shader = preload("res://scripts/ribbon_edge.gdshader")
+			m.set_shader_parameter("color",Color("fff4ff")); return m)
+		var halo_material = shared("halo|%s" % trail_color(palette), func():
+			var m = ShaderMaterial.new(); m.shader = preload("res://scripts/ribbon_edge.gdshader")
+			m.set_shader_parameter("color",trail_color(palette).lightened(.55)); return m)
 		for offset in note.checkpoints:
 			var at = float(offset)
 			var dot_position = Vector3(lane_x(SynkChart.lane_at(note,note.time+at)),trail_height()+.07,-at*travel_speed()*(-1 if recording else 1))
@@ -946,8 +983,9 @@ func solid_trail_offsets(note: Dictionary) -> Array:
 
 func make_solid_trail_joints(parent: Node3D,note: Dictionary,palette: int,recording: bool,half_width: float) -> void:
 	var offsets=solid_trail_offsets(note)
-	var material=ShaderMaterial.new(); material.shader=preload("res://scripts/solid_trail.gdshader")
-	material.set_shader_parameter("tint",trail_color(palette)); material.set_shader_parameter("joint",true)
+	var material=shared("joint|%s" % trail_color(palette), func():
+		var m=ShaderMaterial.new(); m.shader=preload("res://scripts/solid_trail.gdshader")
+		m.set_shader_parameter("tint",trail_color(palette)); m.set_shader_parameter("joint",true); return m)
 	var disc=PlaneMesh.new(); disc.size=Vector2.ONE*half_width*3.0
 	for offset in offsets:
 		# The endpoint is the smaller note cap, rather than a second disc beneath it.
@@ -992,7 +1030,12 @@ func build_note_node(key: String, note: Dictionary, recording = false) -> void:
 	var lines: Array = []
 	if recording: lines = make_alignment_lines(node,note,palette)
 	var signature = (hash(note) if recording or game.mode=="record" else 0)^hash([game.note_speed,game.note_shape,game.note_size,game.hold_trail_width,game.trail_style])
-	var own_materials = animated_materials.slice(first_material); animated_materials.resize(first_material)
+	var own_materials: Array = []
+	for ref in animated_materials.slice(first_material):
+		var m = ref.get_ref()
+		if m and not m.has_meta("shared"): own_materials.append(ref)
+	var keep_shared = animated_materials.slice(first_material).filter(func(ref): return ref.get_ref() != null and ref.get_ref().has_meta("shared"))
+	animated_materials.resize(first_material); animated_materials.append_array(keep_shared)
 	notes[key] = {"node":node,"signature":signature,"lines":lines,"held":false,"prebuilt":false,"materials":own_materials}
 
 func begin_prebuild() -> void:
@@ -1060,8 +1103,13 @@ func update_finger_beams() -> void:
 
 func set_trail_clip(node: Node3D, clip_z: float) -> void:
 	for mesh in node.get_children():
-		var mat: Material = mesh.material_override
-		if mat == null and mesh.mesh: mat = mesh.mesh.surface_get_material(0)
+		if not mesh is GeometryInstance3D: continue
+		var current: Material = mesh.material_override
+		if current == null and mesh is MeshInstance3D and mesh.mesh: current = mesh.mesh.surface_get_material(0)
+		if not current is ShaderMaterial: continue
+		# Unclipped is the shared default, so only a held note needs its own copy.
+		if current.has_meta("shared") and clip_z >= 999.0: continue
+		var mat: Material = own_material(mesh)
 		if mat is ShaderMaterial: mat.set_shader_parameter("clip_z",clip_z)
 
 # fade=false keeps the note fully visible (missed holds stay gray and scroll past).
@@ -1069,8 +1117,8 @@ func fade_missed_slide(key: String, age: float, fade_out: bool = true) -> void:
 	var gray=clampf(age/.16,0,1)
 	var fade=1.0-smoothstep(.40,.9,age) if fade_out else 1.0
 	for mesh in notes[key].node.get_children():
-		var mat: Material=mesh.material_override
-		if mat==null: mat=mesh.mesh.surface_get_material(0)
+		if not mesh is GeometryInstance3D: continue
+		var mat: Material=own_material(mesh)
 		if mat is ShaderMaterial:
 			mat.set_shader_parameter("desaturate",gray)
 			mat.set_shader_parameter("ghost_fade",fade)
@@ -1185,8 +1233,7 @@ func recording_preview(gesture: Dictionary) -> Dictionary:
 func style_record_ghost(node: Node3D) -> void:
 	for mesh in node.get_children():
 		if not mesh is MeshInstance3D: continue
-		var mat: Material=mesh.material_override
-		if mat==null and mesh.mesh: mat=mesh.mesh.surface_get_material(0)
+		var mat: Material=own_material(mesh)
 		if mat is ShaderMaterial:
 			mat.set_shader_parameter("ghost_fade",.32)
 			mat.set_shader_parameter("glow_pulse",0.0)

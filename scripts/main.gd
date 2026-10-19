@@ -234,10 +234,25 @@ const GAME_FONT = preload("res://assets/fonts/FiraSans-Regular.ttf")
 func _enter_tree() -> void:
 	ThemeDB.fallback_font=GAME_FONT
 
+# Frame pacing: by default the game runs at exactly the display's refresh rate (60/90/120 Hz),
+# so every frame lines up with the screen. A fixed limit can be chosen in Settings instead.
+func display_refresh_rate() -> int:
+	var rate=DisplayServer.screen_get_refresh_rate()
+	return clampi(roundi(rate),30,144) if rate>0 else 60
+func frame_rate_setting() -> int:
+	return int(prefs.get_value("gameplay","frame_rate",0))  # 0 = match display
+func apply_frame_rate() -> void:
+	var chosen=frame_rate_setting()
+	Engine.max_fps=display_refresh_rate() if chosen<=0 else chosen
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
+func change_frame_rate(value: int) -> void:
+	prefs.set_value("gameplay","frame_rate",value); prefs.save("user://preferences.cfg")
+	apply_frame_rate()
+
 func _ready() -> void:
 	mouse_filter=Control.MOUSE_FILTER_IGNORE
 	process_priority=-10
-	Engine.max_fps = 120
+	apply_frame_rate()
 	if OS.has_feature("android"):
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	prefs.load("user://preferences.cfg"); timing_ms = float(prefs.get_value("audio","offset_ms",0))

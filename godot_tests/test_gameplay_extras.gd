@@ -51,6 +51,29 @@ func run() -> void:
 	g.start_game([hold],false); g.countdown=0; g.song_time=20.0
 	g.pointer_event(41,hp,true,false,false); g.song_time=20.8; g.pointer_event(41,hp,false,true,false)
 	check(g.judgment_counts.MISS==1,"Letting go far too early is still a miss")
+	# Shared note materials and copy-on-write
+	var many=[]
+	for i in 30: many.append(SynkChart.note(40.0+i*.3,i%10))
+	g.start_game(many,false)
+	while w.prebuilding: w.step_prebuild()
+	var mats={}
+	for k in w.notes:
+		for child in w.notes[k].node.get_children():
+			if child is GeometryInstance3D and child.material_override: mats[child.material_override.get_instance_id()]=true
+	check(mats.size()<=3,"30 tap notes share their materials (%d unique)" % mats.size())
+	var held_hold=SynkChart.note(60,3,"hold"); held_hold.duration=2.0
+	var other_hold=SynkChart.note(61,6,"hold"); other_hold.duration=2.0
+	g.start_game([held_hold,other_hold],false)
+	while w.prebuilding: w.step_prebuild()
+	var keys=w.notes.keys()
+	w.set_trail_clip(w.notes[keys[0]].node,.02)
+	var clipped_any=false; var other_clean=true
+	for child in w.notes[keys[0]].node.get_children():
+		if child is GeometryInstance3D and child.material_override is ShaderMaterial and not child.material_override.has_meta("shared") and float(child.material_override.get_shader_parameter("clip_z"))<1.0: clipped_any=true
+	for child in w.notes[keys[1]].node.get_children():
+		if child is GeometryInstance3D and child.material_override is ShaderMaterial and float(child.material_override.get_shader_parameter("clip_z"))<1.0: other_clean=false
+	check(clipped_any and other_clean,"Holding one note clips only that note's trail")
+	check(Engine.max_fps==g.display_refresh_rate() or g.frame_rate_setting()>0,"Frame rate follows the display refresh rate")
 	# Stats
 	var key="test_stats_"+str(Time.get_ticks_usec())
 	var stats=x.record_result(key,{"PERFECT":4,"GREAT":0,"GOOD":0,"MISS":0},4)
