@@ -1729,13 +1729,14 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 			var entry: Dictionary=live[live_index]
 			if entry.done or entry.pointer!=id or entry.note.kind!="hold": continue
 			var hold_end=float(entry.note.time)+float(entry.note.duration)
-			judge(entry,absf(song_time-hold_end) if not canceled and absf(song_time-hold_end)<=extras.good_window() else -1)
+			# Letting go a little early still completes the hold; the score keeps the head's accuracy.
+			judge(entry,tail_error(entry) if not canceled and song_time>=hold_end-tail_grace(entry) else -1)
 		for live_index in range(first_live_index(),live.size()):
 			var entry: Dictionary=live[live_index]
 			if entry.done or entry.pointer!=id or entry.note.kind!="slide": continue
 			var end_time=float(entry.note.time)+float(entry.note.duration)
 			var lane_error=absf(SynkCapture.lane(p.x)-SynkChart.lane_at(entry.note,end_time))
-			if not canceled and lane_error<=2.75 and p.y>=.5 and song_time>=end_time-.20 and song_time<=end_time+.20:
+			if not canceled and lane_error<=SLIDE_END_LANES and p.y>=.4 and song_time>=end_time-tail_grace(entry) and song_time<=end_time+.30:
 				judge(entry,float(entry.error))
 		pointers.erase(id)
 		if canceled:
@@ -1757,6 +1758,15 @@ func update_autoplay() -> void:
 		if entry.started and not entry.done: process_checkpoints(entry,0.0,true)
 		if entry.started and not entry.done and song_time>=float(n.time)+float(n.duration):
 			judge(entry,0.0)
+
+# Hold and slide ends: a release this early still completes the note (20% of its length,
+# between 0.2 and 0.45 s), and the end is scored by how well the head was hit, never worse
+# than GREAT, so a clean start isn't lost to a slightly early lift.
+const SLIDE_END_LANES = 3.5
+func tail_grace(entry: Dictionary) -> float:
+	return clampf(float(entry.note.duration)*.2,.2,.45)*extras.scale()
+func tail_error(entry: Dictionary) -> float:
+	return minf(float(entry.get("error",0.0)),extras.great_window())
 
 func update_game() -> void:
 	for live_index in range(first_live_index(),live.size()):
@@ -1783,11 +1793,11 @@ func update_game() -> void:
 			var end_time=float(n.time)+float(n.duration)
 			if song_time>=end_time-.045:
 				var lane_error=absf(SynkCapture.lane(p.position.x)-SynkChart.lane_at(n,end_time))
-				if lane_error<=2.75 and p.position.y>=.5: judge(entry,float(entry.error))
-				elif song_time>end_time+.20: judge(entry,-1)
+				if lane_error<=SLIDE_END_LANES and p.position.y>=.4: judge(entry,tail_error(entry))
+				elif song_time>end_time+.30: judge(entry,-1)
 		elif n.kind=="hold":
 			var hold_end=float(n.time)+float(n.duration)
-			if song_time>=hold_end-.045: judge(entry,absf(song_time-hold_end))
+			if song_time>=hold_end-.045: judge(entry,tail_error(entry))
 
 func judge(entry: Dictionary,error: float,complete: bool = true) -> void:
 	var at=float(entry.note.time)

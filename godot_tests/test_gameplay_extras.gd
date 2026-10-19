@@ -41,6 +41,16 @@ func run() -> void:
 	g.song_time=12.5; g.update_game()
 	check(g.judgment_counts.MISS==1 and w.miss_flashes[1].amount>0,"A miss flashes its lane")
 	g.combo=50; x.on_judged(g.live[0],"PERFECT",50); check(g.combo_caption.text.contains("50") and g.combo_caption.text.contains("COMBO"),"Combo milestones light up the combo caption")
+	# Lenient hold and slide ends
+	var hold=SynkChart.note(20,4,"hold"); hold.duration=2.0
+	g.start_game([hold],false); g.countdown=0; g.song_time=20.0
+	var hp=w.camera.unproject_position(Vector3(w.lane_x(4),.035,0))/Vector2(g.field.viewport.size)
+	g.pointer_event(40,hp,true,false,false)
+	g.song_time=21.65; g.pointer_event(40,hp,false,true,false)
+	check(g.judgment_counts.MISS==0 and g.judgment_counts.PERFECT==2,"Releasing a hold 0.35 s early still completes it as PERFECT")
+	g.start_game([hold],false); g.countdown=0; g.song_time=20.0
+	g.pointer_event(41,hp,true,false,false); g.song_time=20.8; g.pointer_event(41,hp,false,true,false)
+	check(g.judgment_counts.MISS==1,"Letting go far too early is still a miss")
 	# Stats
 	var key="test_stats_"+str(Time.get_ticks_usec())
 	var stats=x.record_result(key,{"PERFECT":4,"GREAT":0,"GOOD":0,"MISS":0},4)
