@@ -46,7 +46,7 @@ func _ready() -> void:
 	milestone_label.add_theme_font_override("font", BOLD); milestone_label.add_theme_font_size_override("font_size", 30)
 	milestone_label.add_theme_color_override("font_color", Color("fff1cf"))
 	milestone_label.add_theme_color_override("font_outline_color", Color(1, .6, .2, .55)); milestone_label.add_theme_constant_override("outline_size", 10)
-	milestone_label.mouse_filter = Control.MOUSE_FILTER_IGNORE; milestone_label.modulate.a = 0
+	milestone_label.mouse_filter = Control.MOUSE_FILTER_IGNORE; milestone_label.modulate.a = 0; milestone_label.visible = false
 	build_intro_card()
 
 func set_setting(key: String, value: Variant) -> void:
@@ -77,13 +77,15 @@ func play_hit(kind: String) -> void:
 	player.stream = SOUNDS[kind]; player.volume_db = linear_to_db(volume) - 4.0
 	player.play()
 
+# Milestones light up the combo's own caption, so the flare stays part of the combo group.
 func show_milestone(combo: int) -> void:
-	milestone_label.text = "%d COMBO" % combo
-	milestone_label.pivot_offset = milestone_label.size * .5
-	milestone_label.scale = Vector2.ONE * 1.25; milestone_label.modulate.a = 1.0
-	var tween = create_tween().set_parallel(true)
-	tween.tween_property(milestone_label, "scale", Vector2.ONE, .35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tween.tween_property(milestone_label, "modulate:a", 0.0, .5).set_delay(.9)
+	game.update_combo_art()
+	var caption: Label = game.combo_caption
+	caption.text = "★  %d  COMBO  ★" % combo
+	caption.add_theme_color_override("font_color", Color("ffe08a"))
+	caption.set_meta("milestone_until", Time.get_ticks_msec() + 1400)
+	caption.pivot_offset = caption.size * .5; caption.scale = Vector2.ONE * 1.35
+	create_tween().tween_property(caption, "scale", Vector2.ONE, .4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	if game.field: game.field.world.rail_flare()
 
 # --- Song intro card -----------------------------------------------------------------

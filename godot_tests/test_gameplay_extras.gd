@@ -40,7 +40,7 @@ func run() -> void:
 	check(g.combo==3,"Touch assist hits a note 1.3 lanes away when nothing is closer")
 	g.song_time=12.5; g.update_game()
 	check(g.judgment_counts.MISS==1 and w.miss_flashes[1].amount>0,"A miss flashes its lane")
-	x.on_judged(g.live[0],"PERFECT",50); check(x.milestone_label.text=="50 COMBO","Combo milestones show a flare")
+	g.combo=50; x.on_judged(g.live[0],"PERFECT",50); check(g.combo_caption.text.contains("50") and g.combo_caption.text.contains("COMBO"),"Combo milestones light up the combo caption")
 	# Stats
 	var key="test_stats_"+str(Time.get_ticks_usec())
 	var stats=x.record_result(key,{"PERFECT":4,"GREAT":0,"GOOD":0,"MISS":0},4)

@@ -471,14 +471,14 @@ func build_ui() -> void:
 	# Energy gauge and score stack on the left, next to the pause button.
 	score_panel=SynkScoreHud.new(); rect(score_panel,safe_parent("SafeScoreHud"),.1,.025,.34,.205)
 	hud=score_panel.score_label
-	combo_hud=Control.new(); rect(combo_hud,ui,.36,.355,.64,.455)
+	combo_hud=Control.new(); rect(combo_hud,ui,.36,.338,.64,.428)
 	combo_hud.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	rank_hud=label(ui,"SS",.925,.015,.99,.12,46); rank_hud.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	rank_hud.add_theme_color_override("font_color",Color("b985ff")); rank_hud.add_theme_color_override("font_outline_color",Color("5921a8")); rank_hud.add_theme_constant_override("outline_size",5)
 	pause_button=button(safe_parent("SafePauseButton"),"II",.02,.025,.08,.105,toggle_pause,"nav")
 	# Judgments are plain bold white text for now, so they suit any cover palette.
-	hit_label=label(ui,"",.3,.235,.7,.305,40); hit_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-	timing_label=label(ui,"",.3,.305,.7,.34,18); timing_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	hit_label=label(ui,"",.3,.25,.7,.315,40); hit_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	timing_label=label(ui,"",.3,.312,.7,.342,18); timing_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	practice_hud=label(ui,"",.33,.025,.74,.08,18); practice_hud.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	var bold=FontVariation.new(); bold.base_font=ThemeDB.fallback_font; bold.variation_embolden=1.0
 	hit_label.add_theme_font_override("font",bold)
@@ -1618,7 +1618,9 @@ func update_combo_art() -> void:
 	var tint: Color=combo_glow.get_shader_parameter("gradient_middle") if combo_glow and combo_glow.get_shader_parameter("gradient_middle") is Color else Color("b985ff")
 	combo_number.add_theme_color_override("font_color",Color.WHITE)
 	combo_number.add_theme_color_override("font_outline_color",Color(tint,.85)); combo_number.add_theme_constant_override("outline_size",maxi(4,roundi(h*.06)))
-	combo_caption.add_theme_color_override("font_color",tint.lerp(Color.WHITE,.45))
+	if not combo_caption.has_meta("milestone_until") or Time.get_ticks_msec()>int(combo_caption.get_meta("milestone_until")):
+		combo_caption.text="C O M B O"
+		combo_caption.add_theme_color_override("font_color",tint.lerp(Color.WHITE,.45))
 
 func build_combo_digit_textures() -> void:
 	combo_digit_textures.clear()
