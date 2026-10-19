@@ -24,13 +24,13 @@ func _draw() -> void:
     var tint=Color("ff6489") if variant=="record" else (Color("4cdeed") if variant=="primary" else Color("a99bfa"))
     if destructive: tint=Color("ff6489")
     var plate=StyleBoxFlat.new(); plate.set_corner_radius_all(12); plate.set_border_width_all(1)
-    plate.bg_color=Color("111429").lerp(tint.darkened(.75),selection*.8+engagement*.25+touch*.2)
+    plate.bg_color=Color("161616").lerp(tint.darkened(.75),selection*.8+engagement*.25+touch*.2)
     if strong: plate.bg_color=tint.darkened(.65).lightened(engagement*.08+touch*.04)
     plate.border_color=Color("36394e").lerp(tint,maxf(selection,maxf(engagement,.7 if strong else 0.0)))
     if destructive:
         plate.bg_color=Color("241424").lightened(engagement*.06)
         plate.border_color=Color(tint,.65)
-    if disabled: plate.bg_color=Color("0d1020"); plate.border_color=Color("25283b")
+    if disabled: plate.bg_color=Color("111111"); plate.border_color=Color("272727")
     draw_style_box(plate,Rect2(Vector2.ONE,size-Vector2.ONE*2))
     if selection>.01:
         var marker=StyleBoxFlat.new(); marker.set_corner_radius_all(2); marker.bg_color=Color(tint,selection)

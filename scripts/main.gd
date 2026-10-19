@@ -464,7 +464,7 @@ func build_ui() -> void:
 	var shadow_texture=GradientTexture2D.new(); shadow_texture.width=256; shadow_texture.height=256
 	shadow_texture.fill=GradientTexture2D.FILL_RADIAL; shadow_texture.fill_from=Vector2(.5,.5); shadow_texture.fill_to=Vector2(1,.5)
 	var shadow_ramp=Gradient.new(); shadow_ramp.offsets=PackedFloat32Array([0.0,.55,1.0])
-	shadow_ramp.colors=PackedColorArray([Color(0,0,.01,.72),Color(0,0,.01,.45),Color(0,0,.01,0)])
+	shadow_ramp.colors=PackedColorArray([Color(0.003,0.003,0.003,.72),Color(0.003,0.003,0.003,.45),Color(0.003,0.003,0.003,0)])
 	shadow_texture.gradient=shadow_ramp; hud_shadow.texture=shadow_texture
 	hud_shadow.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; hud_shadow.stretch_mode=TextureRect.STRETCH_SCALE
 	ui.move_child(hud_shadow,0)
@@ -482,7 +482,7 @@ func build_ui() -> void:
 	practice_hud=label(ui,"",.33,.025,.74,.08,18); practice_hud.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	var bold=FontVariation.new(); bold.base_font=ThemeDB.fallback_font; bold.variation_embolden=1.0
 	hit_label.add_theme_font_override("font",bold)
-	hit_label.add_theme_color_override("font_shadow_color",Color(0,0,.02,.6)); hit_label.add_theme_constant_override("shadow_outline_size",8)
+	hit_label.add_theme_color_override("font_shadow_color",Color(0.006,0.006,0.006,.6)); hit_label.add_theme_constant_override("shadow_outline_size",8)
 	hit_label.add_theme_constant_override("shadow_offset_x",0); hit_label.add_theme_constant_override("shadow_offset_y",2)
 	# Judgments are smaller, silver and softly lit so they never fight the cover-colored combo.
 	hit_art=TextureRect.new(); rect(hit_art,ui,.32,.452,.68,.552)
@@ -506,14 +506,14 @@ func build_ui() -> void:
 	pause_backdrop=ColorRect.new(); rect(pause_backdrop,ui,0,0,1,1); pause_backdrop.color=Color.WHITE
 	pause_backdrop.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	var blur=ShaderMaterial.new(); blur.shader=preload("res://scripts/frosted_glass.gdshader"); pause_backdrop.material=blur
-	blur.set_shader_parameter("radius",0.0); blur.set_shader_parameter("blur",3.0); blur.set_shader_parameter("tint",Color(0,0,.03,.55))
+	blur.set_shader_parameter("radius",0.0); blur.set_shader_parameter("blur",3.0); blur.set_shader_parameter("tint",Color(0.009,0.009,0.009,.55))
 	pause_backdrop.resized.connect(func(): blur.set_shader_parameter("rect_size",pause_backdrop.size))
 	modal=Panel.new(); rect(modal,safe_parent("SafeModal"),.19,.11,.81,.89)
 	modal.add_theme_stylebox_override("panel",StyleBoxEmpty.new())
 	var glass=ColorRect.new(); glass.name="FrostedGlass"; modal.add_child(glass); glass.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	glass.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	var glass_material=ShaderMaterial.new(); glass_material.shader=preload("res://scripts/frosted_glass.gdshader"); glass.material=glass_material
-	glass_material.set_shader_parameter("blur",4.0); glass_material.set_shader_parameter("tint",Color(.035,.028,.08,.62))
+	glass_material.set_shader_parameter("blur",4.0); glass_material.set_shader_parameter("tint",Color(0.041,0.041,0.041,.62))
 	glass.resized.connect(func(): glass_material.set_shader_parameter("rect_size",glass.size); glass_material.set_shader_parameter("radius",28.0))
 	modal_title=label(modal,"S Y N K",.04,.025,.96,.17,48); modal_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	modal_title.add_theme_font_override("font",preload("res://assets/fonts/FiraSans-Bold.ttf"))
@@ -553,7 +553,7 @@ func build_ui() -> void:
 	record_info=label(record_tools,"",.67,.148,.97,.228,21); record_info.horizontal_alignment=HORIZONTAL_ALIGNMENT_LEFT
 	recorder.progress=ProgressBar.new(); rect(recorder.progress,record_tools,.67,.235,.967,.245)
 	recorder.progress.show_percentage=false; recorder.progress.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	var track=StyleBoxFlat.new(); track.bg_color=Color("29283f"); track.set_corner_radius_all(4)
+	var track=StyleBoxFlat.new(); track.bg_color=Color("292929"); track.set_corner_radius_all(4)
 	var fill=track.duplicate(); fill.bg_color=Color("ff6489")
 	recorder.progress.add_theme_stylebox_override("background",track); recorder.progress.add_theme_stylebox_override("fill",fill)
 	note_lines_button=button(record_tools,"",.025,.19,.195,.258,toggle_note_lines,"tool"); update_note_lines_button()
@@ -574,7 +574,7 @@ func build_ui() -> void:
 func recorder_plate(bounds: Rect2) -> Panel:
 	var panel=Panel.new(); rect(panel,record_tools,bounds.position.x,bounds.position.y,bounds.end.x,bounds.end.y)
 	panel.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	var plate=StyleBoxFlat.new(); plate.bg_color=Color(.025,.03,.075,.94)
+	var plate=StyleBoxFlat.new(); plate.bg_color=Color(0.037,0.037,0.037,.94)
 	plate.border_color=Color("303349"); plate.set_border_width_all(1); plate.set_corner_radius_all(16)
 	panel.add_theme_stylebox_override("panel",plate); return panel
 
@@ -1607,7 +1607,7 @@ func update_combo_art() -> void:
 			label_node.mouse_filter=Control.MOUSE_FILTER_IGNORE
 			label_node.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; label_node.vertical_alignment=VERTICAL_ALIGNMENT_CENTER
 			label_node.add_theme_font_override("font",preload("res://assets/fonts/FiraSans-Bold.ttf"))
-			label_node.add_theme_color_override("font_shadow_color",Color(0,0,.02,.7)); label_node.add_theme_constant_override("shadow_offset_y",3)
+			label_node.add_theme_color_override("font_shadow_color",Color(0.006,0.006,0.006,.7)); label_node.add_theme_constant_override("shadow_offset_y",3)
 		combo_caption.text="C O M B O"
 	var h=combo_hud.size.y
 	combo_number.position=Vector2.ZERO; combo_number.size=Vector2(combo_hud.size.x,h*.74)

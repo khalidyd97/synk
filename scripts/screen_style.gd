@@ -10,9 +10,9 @@ static func glass(parent: Control, bounds: Rect2, accent: Color=Color("9274df"),
     panel.anchor_left=bounds.position.x; panel.anchor_top=bounds.position.y
     panel.anchor_right=bounds.end.x; panel.anchor_bottom=bounds.end.y
     panel.mouse_filter=Control.MOUSE_FILTER_IGNORE
-    var style=StyleBoxFlat.new(); style.bg_color=Color(.025,.028,.075,.91)
+    var style=StyleBoxFlat.new(); style.bg_color=Color(0.036,0.036,0.036,.91)
     style.border_color=Color(accent,.25); style.set_border_width_all(1); style.set_corner_radius_all(18)
-    style.shadow_color=Color(0,0,.015,.28); style.shadow_size=16
+    style.shadow_color=Color(0.004,0.004,0.004,.28); style.shadow_size=16
     panel.add_theme_stylebox_override("panel",style)
     chassis(panel,accent)
     parent.move_child(panel,index)

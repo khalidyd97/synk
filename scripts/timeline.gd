@@ -294,7 +294,7 @@ func finish_group_drag() -> void:
     selection_gap=first-range_start; selection_span=range_end-range_start
     group_sources.clear()
 func _draw() -> void:
-    draw_rect(Rect2(Vector2.ZERO,size),Color("0c1024"))
+    draw_rect(Rect2(Vector2.ZERO,size),Color("121212"))
     if game==null: return
     var area=grid(); var font=ThemeDB.fallback_font
     var beat=60.0/float(game.chart_bpm())
@@ -302,7 +302,7 @@ func _draw() -> void:
     if game.zoom_seconds/step>300: step=beat
     for i in SynkChart.LANES:
         var x=area.position.x+i*area.size.x/SynkChart.LANES
-        draw_rect(Rect2(x,area.position.y,area.size.x/SynkChart.LANES,area.size.y),Color(.07,.065,.15,.6) if i%2==0 else Color(.035,.04,.1,.5))
+        draw_rect(Rect2(x,area.position.y,area.size.x/SynkChart.LANES,area.size.y),Color(0.081,0.081,0.081,.6) if i%2==0 else Color(0.05,0.05,0.05,.5))
         draw_line(Vector2(x,area.position.y),Vector2(x,area.end.y),Color(.45,.35,.65,.3),1)
         draw_string(font,Vector2(lane_x(i)-15,23),str(i+1),HORIZONTAL_ALIGNMENT_CENTER,30,15,Color("baacd9"))
     draw_string(font,Vector2(8,23),"TIME ↓",HORIZONTAL_ALIGNMENT_LEFT,-1,12,Color("8e82b6"))
@@ -353,7 +353,7 @@ func _draw() -> void:
             draw_polyline(points,Color(color,.85),6,true)
             var tail=points[-1]
             draw_circle(tail,10 if selected else 6,color)
-            draw_circle(tail,5,Color("101329"))
+            draw_circle(tail,5,Color("151515"))
             if selected: draw_arc(tail,18,0,TAU,32,Color(1,1,1,.7),1.5,true)
         if head.y>=area.position.y:
             if selected: draw_rect(Rect2(head-Vector2(width*.5+4,10),Vector2(width+8,20)),Color.WHITE,false,2)

@@ -26,7 +26,7 @@ var picking = ""
 var pending_cover: Variant = null
 var pending_background: Variant = null
 
-func style(fill: Color=Color("0c0d21"),edge: Color=Color("2c2d44"),radius: int=22) -> StyleBoxFlat:
+func style(fill: Color=Color("101010"),edge: Color=Color("2c2d44"),radius: int=22) -> StyleBoxFlat:
 	var box=StyleBoxFlat.new(); box.bg_color=fill; box.border_color=edge; box.set_corner_radius_all(radius); box.set_border_width_all(1); return box
 func place(node: Control,parent: Control,x: float,y: float,w: float,h: float) -> Control:
 	parent.add_child(node); node.position=Vector2(x,y); node.size=Vector2(w,h); return node
@@ -46,7 +46,7 @@ func _ready() -> void:
 	var background=ColorRect.new(); add_child(background); background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	background.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	var mat=preload("res://scripts/background_motion.gd").attach(background,preload("res://scripts/song_browser_background.gdshader"))
-	mat.set_shader_parameter("ambience",Color(.1,.07,.24))
+	mat.set_shader_parameter("ambience",Color(0.116,0.116,0.116))
 	preload("res://scripts/screen_backdrop.gd").video(self,0.08,.5)  # magenta stage
 	canvas=Control.new(); add_child(canvas); canvas.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	var theme_local=Theme.new(); theme_local.default_font=ThemeDB.fallback_font; canvas.theme=theme_local
@@ -66,7 +66,7 @@ func _ready() -> void:
 		label(info,rows[i][1],28,y,560,26,17,MUTED)
 		var input=LineEdit.new(); place(input,info,28,y+30,564 if i<3 else 200,62)
 		input.placeholder_text=rows[i][2]; input.add_theme_font_size_override("font_size",22)
-		var box=style(Color("09091c"),Color("302a42"),15); box.content_margin_left=18; box.content_margin_right=14
+		var box=style(Color("0d0d0d"),Color("302a42"),15); box.content_margin_left=18; box.content_margin_right=14
 		input.add_theme_stylebox_override("normal",box)
 		var focus=box.duplicate(); focus.border_color=ACCENT; input.add_theme_stylebox_override("focus",focus)
 		input.text_submitted.connect(func(_text): input.release_focus())
@@ -82,7 +82,7 @@ func _ready() -> void:
 	var art=place(Panel.new(),canvas,696,150,712,520); art.add_theme_stylebox_override("panel",style())
 	label(art,"Artwork",28,20,640,40,26)
 	label(art,"Album art",28,78,300,26,17,MUTED)
-	var cover_frame=place(Panel.new(),art,28,110,180,180); cover_frame.add_theme_stylebox_override("panel",style(Color("09091c"),Color("302a42"),18))
+	var cover_frame=place(Panel.new(),art,28,110,180,180); cover_frame.add_theme_stylebox_override("panel",style(Color("0d0d0d"),Color("302a42"),18))
 	cover_frame.clip_contents=true
 	cover_preview=TextureRect.new(); place(cover_preview,cover_frame,0,0,180,180)
 	cover_preview.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; cover_preview.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED
@@ -92,7 +92,7 @@ func _ready() -> void:
 	cover_note=label(art,"",230,186,450,100,15,MUTED); cover_note.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	cover_note.vertical_alignment=VERTICAL_ALIGNMENT_TOP
 	label(art,"Gameplay background",28,306,400,26,17,MUTED)
-	var bg_frame=place(Panel.new(),art,28,338,288,162); bg_frame.add_theme_stylebox_override("panel",style(Color("09091c"),Color("302a42"),14))
+	var bg_frame=place(Panel.new(),art,28,338,288,162); bg_frame.add_theme_stylebox_override("panel",style(Color("0d0d0d"),Color("302a42"),14))
 	bg_frame.clip_contents=true
 	background_black=ColorRect.new(); place(background_black,bg_frame,1,1,286,160); background_black.color=Color.BLACK
 	background_preview=TextureRect.new(); place(background_preview,bg_frame,1,1,286,160)

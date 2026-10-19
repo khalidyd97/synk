@@ -98,7 +98,7 @@ func draw_details() -> void:
     if motion_kind=="settings":
         draw_settings(); details.draw_set_transform(Vector2.ZERO); return
     var edge=Color(accent,.55+hover*.35+press*.1)
-    plate(PLATE,28,Color("0b0d22").lerp(Color("141934"),hover*.65+press*.3),edge,.12+hover*.12)
+    plate(PLATE,28,Color("101010").lerp(Color("1c1c1c"),hover*.65+press*.3),edge,.12+hover*.12)
     plate(PLATE.grow(-7),22,Color(0,0,0,0),Color(accent,.07+hover*.08))
     # A restrained gradient seam replaces the old stacked metal frame.
     for i in 40:
@@ -157,7 +157,7 @@ func draw_chevrons() -> void:
         details.draw_polyline(points,Color(accent,.22+chase*.65+hover*.1),3.2,true)
 
 func draw_settings() -> void:
-    plate(Rect2(12,12,96,96),26,Color("0c0d23"),Color(accent,.5+hover*.4),.14+hover*.1)
+    plate(Rect2(12,12,96,96),26,Color("111111"),Color(accent,.5+hover*.4),.14+hover*.1)
     var points=PackedVector2Array()
     for i in 64:
         var angle=gear_angle+TAU*i/64.0

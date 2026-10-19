@@ -15,20 +15,20 @@ static func create() -> Theme:
 		t.set_color("font_hover_color",type,Color.WHITE)
 		t.set_color("font_selected_color",type,Color.WHITE)
 	for type in ["Button","OptionButton","LineEdit"]:
-		t.set_stylebox("normal",type,plate(Color("0b142c"),muted))
+		t.set_stylebox("normal",type,plate(Color("151515"),muted))
 		t.set_stylebox("hover",type,plate(Color("172a48"),cyan))
 		t.set_stylebox("pressed",type,plate(Color("283265"),Color("d899ff"),4))
 		t.set_stylebox("focus",type,plate(Color(0,0,0,0),cyan))
-		t.set_stylebox("disabled",type,plate(Color("0a1020"),Color("303849")))
-	t.set_stylebox("panel","PopupMenu",plate(Color("0b142c"),cyan))
+		t.set_stylebox("disabled",type,plate(Color("101010"),Color("303849")))
+	t.set_stylebox("panel","PopupMenu",plate(Color("151515"),cyan))
 	t.set_stylebox("hover","PopupMenu",plate(Color("273862"),cyan))
-	t.set_stylebox("panel","TabContainer",plate(Color("090f25"),Color("38466b")))
+	t.set_stylebox("panel","TabContainer",plate(Color("111111"),Color("38466b")))
 	for type in ["TabBar","TabContainer"]:
 		t.set_stylebox("tab_selected",type,plate(Color("26335b"),cyan,4))
-		t.set_stylebox("tab_unselected",type,plate(Color("0c142b"),Color("334465")))
+		t.set_stylebox("tab_unselected",type,plate(Color("151515"),Color("334465")))
 		t.set_stylebox("tab_hovered",type,plate(Color("1a2949"),Color("b395ff")))
 	for type in ["HSlider","VSlider"]:
-		var rail=plate(Color("17233d"),Color("344b6b"),1)
+		var rail=plate(Color("222222"),Color("344b6b"),1)
 		rail.content_margin_top=3; rail.content_margin_bottom=3
 		t.set_stylebox("slider",type,rail)
 		t.set_stylebox("grabber_area",type,plate(Color("347aaa"),cyan,1))

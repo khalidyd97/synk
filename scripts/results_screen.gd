@@ -57,7 +57,7 @@ func label(parent: Control,value: String,x: float,y: float,w: float,h: float,fon
     return n
 func panel(parent: Control,x: float,y: float,w: float,h: float,base: Vector2=Vector2(2048,1152)) -> Panel:
     var n=Panel.new(); place(n,parent,x,y,w,h,base)
-    n.add_theme_stylebox_override("panel",style(Color(.035,.028,.080,.90),Color("2c273d"),30)); return n
+    n.add_theme_stylebox_override("panel",style(Color(0.041,0.041,0.041,.90),Color("2c273d"),30)); return n
 func button(value: String,x: float,y: float,w: float,h: float,callback: Callable,primary: bool=false) -> Button:
     var n=ButtonArt.new(); n.menu_motion=true; n.text=value; n.primary=primary; n.caption_size=32
     place(n,canvas,x,y,w,h); n.pressed.connect(callback); return n
@@ -80,10 +80,10 @@ func _ready() -> void:
     song_title=label(canvas,"",236,80,1500,68,52,Color("f3f0ff"),Vector2(2048,1152),true)
     song_meta=label(canvas,"",236,149,390,36,23,Color("bcb4d2"))
     difficulty_label=label(canvas,"",644,149,110,42,20,Color("e8f8ff"))
-    var pill=style(Color("092737"),Color("2bd8ef"),18); pill.content_margin_left=13; pill.content_margin_right=13
+    var pill=style(Color("1d1d1d"),Color("2bd8ef"),18); pill.content_margin_left=13; pill.content_margin_right=13
     difficulty_label.add_theme_stylebox_override("normal",pill); difficulty_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     bpm_label=label(canvas,"",768,149,132,42,20,Color("c1b9d6"))
-    var bpm_style=style(Color("171426"),Color(0,0,0,0),18); bpm_style.content_margin_left=12; bpm_style.content_margin_right=12
+    var bpm_style=style(Color("171717"),Color(0,0,0,0),18); bpm_style.content_margin_left=12; bpm_style.content_margin_right=12
     bpm_label.add_theme_stylebox_override("normal",bpm_style); bpm_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     ring=Control.new(); place(ring,canvas,265,295,400,400); ring.mouse_filter=Control.MOUSE_FILTER_IGNORE; ring.draw.connect(draw_ring)
     rank_label=label(ring,"A",40,52,320,250,202,Color.WHITE,Vector2(400,400),true)
@@ -109,7 +109,7 @@ func _ready() -> void:
     var combo=panel(detail_panel,44,41,311,150,p)
     var accuracy=panel(detail_panel,372,41,311,150,p)
     var hits=panel(detail_panel,700,41,314,150,p)
-    for n in [combo,accuracy,hits]: n.add_theme_stylebox_override("panel",style(Color("101022"),Color("292539"),23))
+    for n in [combo,accuracy,hits]: n.add_theme_stylebox_override("panel",style(Color("131313"),Color("292539"),23))
     label(combo,"Max combo",26,21,260,31,20,Color("aaa1c4"),Vector2(311,150))
     combo_slot=Control.new(); place(combo_slot,combo,26,54,260,48,Vector2(311,150))
     combo_value_label=label(combo_slot,"0",0,0,260,48,38,Color.WHITE,Vector2(260,48),true)
@@ -266,7 +266,7 @@ func animate() -> void:
 func draw_ring() -> void:
     var center=ring.size*.5; var radius=minf(ring.size.x,ring.size.y)*.42
     ring.draw_texture_rect(rank_glow,Rect2(center-Vector2.ONE*radius,Vector2.ONE*radius*2),false)
-    ring.draw_arc(center,radius,-PI*.5,TAU-PI*.5,128,Color("242039"),19,true)
+    ring.draw_arc(center,radius,-PI*.5,TAU-PI*.5,128,Color("232323"),19,true)
     var progress=final_accuracy/100*ease_out((elapsed-.15)/1.1)
     for i in 120:
         var part=float(i)/120
@@ -290,7 +290,7 @@ func draw_breakdown() -> void:
         breakdown.draw_string(font,Vector2(breakdown.size.x-percent_width,y+29),percent,HORIZONTAL_ALIGNMENT_LEFT,-1,20,Color("c2b9d8"))
         var number=str(roundi(count*grow)); var number_width=font.get_string_size(number,HORIZONTAL_ALIGNMENT_LEFT,-1,30).x
         breakdown.draw_string(font,Vector2(breakdown.size.x-percent_width-number_width-18,y+29),number,HORIZONTAL_ALIGNMENT_LEFT,-1,30,Color.WHITE)
-        var rail=style(Color("1d192e"),Color(0,0,0,0),6)
+        var rail=style(Color("1c1c1c"),Color(0,0,0,0),6)
         breakdown.draw_style_box(rail,Rect2(0,y+49,breakdown.size.x,11))
         var width=breakdown.size.x*share*grow
         if width>0:

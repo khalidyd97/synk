@@ -10,7 +10,7 @@ func _draw() -> void:
     mean/=samples.size()
     draw_string(font,Vector2(0,16),"%d HITS  /  AVERAGE %+.1f ms" % [samples.size(),mean],HORIZONTAL_ALIGNMENT_LEFT,-1,15,Color("deecff"))
     var top=27.0; var h=maxf(24,size.y-top); var mid=top+h*.5
-    draw_rect(Rect2(0,top,size.x,h),Color("0b152b"))
+    draw_rect(Rect2(0,top,size.x,h),Color("151515"))
     draw_line(Vector2(0,mid),Vector2(size.x,mid),Color("c9d8f1"),1)
     draw_string(font,Vector2(4,top+12),"EARLY",HORIZONTAL_ALIGNMENT_LEFT,-1,10,Color("65dcff"))
     draw_string(font,Vector2(4,size.y-3),"LATE",HORIZONTAL_ALIGNMENT_LEFT,-1,10,Color("ff82d2"))

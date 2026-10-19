@@ -28,7 +28,7 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	shade = ColorRect.new(); add_child(shade); shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	shade.color = Color(0,0,.03,0); shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	shade.color = Color(0.009,0.009,0.009,0); shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	digits_box = Control.new(); add_child(digits_box); digits_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	banner = Label.new(); add_child(banner)
 	var bold = FontVariation.new(); bold.base_font = ThemeDB.fallback_font; bold.variation_embolden = 1.0

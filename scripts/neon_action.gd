@@ -18,7 +18,7 @@ const VARIANTS = {
 	"tool": {"accent":Color("9b8cff"),"end":Color("c77dff"),"fill":0.0,"slant":1.0,"rim":.55,"ring":0.0,"selected_fill":.8,"text":Color("ddd6ff"),"outline":Color("2b2160")},
 	"danger": {"accent":Color("ff4d6a"),"end":Color("ff4d6a"),"fill":0.0,"slant":1.0,"rim":.9,"ring":0.0,"text":Color("ffd9df"),"outline":Color("6a0f22")},
 	"track": {"accent":Color("9b6cff"),"end":Color("ff4fd8"),"fill":0.0,"slant":1.0,"rim":.6,"ring":.6,"selected_fill":.62,"text":Color("d9d2f5"),"outline":Color("2b1660")},
-	"nav": {"accent":Color("a9a3d9"),"end":Color("a9a3d9"),"fill":0.0,"slant":1.0,"rim":.45,"ring":0.0,"ghost":1.0,"text":Color("d9d4f2"),"outline":Color("1d1840")},
+	"nav": {"accent":Color("a9a3d9"),"end":Color("a9a3d9"),"fill":0.0,"slant":1.0,"rim":.45,"ring":0.0,"ghost":1.0,"text":Color("d9d4f2"),"outline":Color("212121")},
 }
 
 var caption_text = ""

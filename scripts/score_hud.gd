@@ -25,7 +25,7 @@ func _init() -> void:
 	score_label.add_theme_font_override("font",light_italic)
 	score_label.add_theme_font_size_override("font_size",48)
 	score_label.add_theme_color_override("font_color",TEXT_COLOR)
-	score_label.add_theme_color_override("font_shadow_color",Color(0,0,.02,.6))
+	score_label.add_theme_color_override("font_shadow_color",Color(0.006,0.006,0.006,.6))
 	score_label.add_theme_constant_override("shadow_offset_x",0); score_label.add_theme_constant_override("shadow_offset_y",2)
 	score_label.add_theme_constant_override("shadow_outline_size",8)
 	score_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -47,7 +47,7 @@ func caption(text: String, left: float, top: float, right: float, bottom: float,
 	result.add_theme_font_override("font",italic)
 	result.add_theme_font_size_override("font_size",font_size)
 	result.add_theme_color_override("font_color",TEXT_COLOR)
-	result.add_theme_color_override("font_shadow_color",Color(0,0,.02,.55))
+	result.add_theme_color_override("font_shadow_color",Color(0.006,0.006,0.006,.55))
 	result.add_theme_constant_override("shadow_outline_size",6)
 	result.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	result.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -71,7 +71,7 @@ func _draw() -> void:
 	for i in 32:
 		var t = TAU*i/32.0
 		heart.append(badge+Vector2(16*pow(sin(t),3),-(13*cos(t)-5*cos(2*t)-2*cos(3*t)-cos(4*t)))*s/16.0+Vector2(0,s*.1))
-	draw_colored_polygon(heart,Color("1a1830"))
+	draw_colored_polygon(heart,Color("1c1c1c"))
 	# Energy gauge.
 	var bar = Rect2(0,h*.235,size.x,h*.1)
 	draw_rect(bar,ENERGY_TRACK)

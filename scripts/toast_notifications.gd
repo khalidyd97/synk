@@ -51,7 +51,7 @@ func notify(message: String,kind: String="auto",seconds: float=-1.0):
     if items.size()>=MAX_VISIBLE: dismiss(items.back(),false)
     var card=PanelContainer.new(); overlay.add_child(card); card.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var tint: Color=COLORS[kind]
-    var style=StyleBoxFlat.new(); style.bg_color=Color(.035,.045,.085,.97)
+    var style=StyleBoxFlat.new(); style.bg_color=Color(0.047,0.047,0.047,.97)
     style.border_color=Color(tint,.75); style.set_border_width_all(1); style.border_width_left=4
     style.set_corner_radius_all(16); style.shadow_color=Color(0,0,0,.45); style.shadow_size=14
     style.content_margin_left=16; style.content_margin_right=14; style.content_margin_top=14; style.content_margin_bottom=10

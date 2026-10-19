@@ -5,7 +5,7 @@ uniform sampler2D screen : hint_screen_texture, filter_linear_mipmap;
 uniform vec2 rect_size = vec2(100.0);
 uniform float radius = 28.0;
 uniform float blur = 3.5;
-uniform vec4 tint : source_color = vec4(0.035, 0.028, 0.08, 0.45);
+uniform vec4 tint : source_color = vec4(0.03, 0.03, 0.03, 0.45);
 
 void fragment() {
 	vec2 p = UV * rect_size;

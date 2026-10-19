@@ -6,7 +6,7 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
     if is_visible_in_tree(): queue_redraw()
 func _draw() -> void:
-    var plate=StyleBoxFlat.new(); plate.bg_color=Color("101124"); plate.border_color=Color("292c43")
+    var plate=StyleBoxFlat.new(); plate.bg_color=Color("141414"); plate.border_color=Color("292c43")
     plate.set_corner_radius_all(18); plate.set_border_width_all(1)
     draw_style_box(plate,Rect2(Vector2.ZERO,size))
     var baseline=size.y*.72

@@ -85,7 +85,7 @@ func _ready() -> void:
 	background.texture = BACKGROUND; background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED; background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preload("res://scripts/background_motion.gd").attach(background,preload("res://scripts/image_atmosphere.gdshader"))
-	var shade = ColorRect.new(); place(shade,self,0,0,1,1); shade.color = Color(.01,.01,.04,.86); shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var shade = ColorRect.new(); place(shade,self,0,0,1,1); shade.color = Color(0.017,0.017,0.017,.86); shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	safe_content=game.safe_parent("SafeSyncControls",self)
 	action(self,"‹  BACK",.035,.035,.17,.15,close,"nav")
 	text(self,"AUDIO SYNC",.2,.04,.6,.115,42)
@@ -100,7 +100,7 @@ func _ready() -> void:
 	ScreenStyle.glass(self,Rect2(.035,.20,.465,.75),Color("65dfff"),2)
 
 	var panel = Panel.new(); place(panel,self,.53,.2,.965,.95)
-	var style = StyleBoxFlat.new(); style.bg_color = Color(.025,.03,.09,.84); style.set_corner_radius_all(22)
+	var style = StyleBoxFlat.new(); style.bg_color = Color(0.041,0.041,0.041,.84); style.set_corner_radius_all(22)
 	style.border_color = Color(.55,.4,.9,.30); style.set_border_width_all(1)
 	panel.add_theme_stylebox_override("panel",style)
 	text(panel,"HEADSET DELAY",.07,.03,.93,.11,20,Color("bdadff"))
@@ -190,7 +190,7 @@ func draw_lane() -> void:
 	# A narrow perspective lane, wider at the bottom like the real highway.
 	var top_half = size_value.x*.12; var bottom_half = size_value.x*.42; var center = size_value.x*.5
 	var outline = PackedVector2Array([Vector2(center-top_half,0),Vector2(center+top_half,0),Vector2(center+bottom_half,size_value.y),Vector2(center-bottom_half,size_value.y)])
-	lane.draw_colored_polygon(outline,Color(.05,.06,.16,.75))
+	lane.draw_colored_polygon(outline,Color(0.077,0.077,0.077,.75))
 	lane.draw_polyline(PackedVector2Array([outline[0],outline[3]]),Color("38baff"),2.0,true)
 	lane.draw_polyline(PackedVector2Array([outline[1],outline[2]]),Color("a36aff"),2.0,true)
 	var half_at = func(y: float) -> float: return lerpf(top_half,bottom_half,y/size_value.y)

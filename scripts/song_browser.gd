@@ -49,7 +49,7 @@ func button(parent: Control,value: String,x: float,y: float,w: float,h: float,ca
     var n=ButtonArt.new(); n.menu_motion=true; n.text=value; n.primary=primary; n.caption_size=22; place(n,parent,x,y,w,h,base); n.pressed.connect(callback); return n
 func card(parent: Control,x: float,y: float,w: float,h: float,base: Vector2=Vector2(1456,819),radius: int=20) -> Panel:
     var n=Panel.new(); place(n,parent,x,y,w,h,base)
-    n.add_theme_stylebox_override("panel",box_style(Color(.035,.028,.080,.88),Color("2b263b"),radius)); return n
+    n.add_theme_stylebox_override("panel",box_style(Color(0.041,0.041,0.041,.88),Color("2b263b"),radius)); return n
 func _ready() -> void:
     mouse_filter=Control.MOUSE_FILTER_IGNORE
     background=ColorRect.new(); add_child(background); background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -69,7 +69,7 @@ func _ready() -> void:
     heading.add_theme_font_override("font",bold)
     search=LineEdit.new(); place(search,canvas,1084,23,324,76)
     search.placeholder_text="⌕   Search songs or artists"; search.add_theme_font_size_override("font_size",19)
-    var s=box_style(Color("09091c"),Color("302a42"),15); s.content_margin_left=18; s.content_margin_right=14
+    var s=box_style(Color("0d0d0d"),Color("302a42"),15); s.content_margin_left=18; s.content_margin_right=14
     search.add_theme_stylebox_override("normal",s)
     var focus=s.duplicate(); focus.border_color=Color("50daec"); search.add_theme_stylebox_override("focus",focus)
     search.text_changed.connect(func(_text): lobby.refresh_tracks())
@@ -82,7 +82,7 @@ func _ready() -> void:
     for item in tab_data:
         var key: String=item[0]; var n=button(canvas,item[1],item[2],96,item[3],56,func(): lobby.set_filter(key))
         n.tab=true; n.caption_size=21; tabs[key]=n
-    var rule=ColorRect.new(); place(rule,canvas,48,154,1360,1); rule.color=Color("242036"); rule.mouse_filter=Control.MOUSE_FILTER_IGNORE
+    var rule=ColorRect.new(); place(rule,canvas,48,154,1360,1); rule.color=Color("232323"); rule.mouse_filter=Control.MOUSE_FILTER_IGNORE
     canvas.move_child(rule,canvas.get_child_count()-tabs.size()-2)
     count=label(canvas,"",1250,106,158,28,13,Color("aaa2bf")); count.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
     scroll=ScrollContainer.new(); place(scroll,canvas,48,168,794,615)
@@ -121,7 +121,7 @@ func _ready() -> void:
     sections.add_theme_font_size_override("font_size",21)
     sections.get_popup().add_theme_font_size_override("font_size",21)
     sections.get_popup().add_theme_constant_override("v_separation",16)
-    var section_style=box_style(Color("111022"),Color("2d2940"),18)
+    var section_style=box_style(Color("131313"),Color("2b2b2b"),18)
     section_style.content_margin_left=18; section_style.content_margin_right=18
     sections.add_theme_stylebox_override("normal",section_style)
     var section_focus=section_style.duplicate(); section_focus.border_color=Color("50daec")
@@ -146,7 +146,7 @@ func _ready() -> void:
 func chip() -> Label:
     var n=Label.new(); metadata.add_child(n); n.add_theme_font_size_override("font_size",14)
     n.add_theme_color_override("font_color",Color("d7d1e5"))
-    var style=box_style(Color("1a172c"),Color(0,0,0,0),14)
+    var style=box_style(Color("1a1a1a"),Color(0,0,0,0),14)
     style.content_margin_left=10; style.content_margin_right=10; style.content_margin_top=5; style.content_margin_bottom=5
     n.add_theme_stylebox_override("normal",style); return n
 func layout() -> void:

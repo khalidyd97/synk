@@ -32,7 +32,7 @@ func _init(title_value: String = "", badge: String = "", art: Texture2D = null, 
     badge_label=Label.new(); add_child(badge_label); badge_label.text=badge
     badge_label.add_theme_font_size_override("font_size",12)
     badge_label.add_theme_color_override("font_color",Color("e5dbff"))
-    var badge_style=StyleBoxFlat.new(); badge_style.bg_color=Color(.025,.02,.08,.88)
+    var badge_style=StyleBoxFlat.new(); badge_style.bg_color=Color(0.035,0.035,0.035,.88)
     badge_style.set_corner_radius_all(7); badge_style.content_margin_left=9; badge_style.content_margin_right=9
     badge_label.add_theme_stylebox_override("normal",badge_style)
     badge_label.mouse_filter=Control.MOUSE_FILTER_IGNORE
@@ -53,7 +53,7 @@ func layout() -> void:
 func _draw() -> void:
     if cover_rect==null: return
     var rect=Rect2(cover_rect.position,cover_rect.size).grow(3)
-    var border=StyleBoxFlat.new(); border.bg_color=Color(.025,.02,.08,.8)
+    var border=StyleBoxFlat.new(); border.bg_color=Color(0.035,0.035,0.035,.8)
     border.border_color=Color("77dfff") if selected else Color(.7,.6,1,.28)
     border.set_border_width_all(2 if selected else 1); border.set_corner_radius_all(18)
     border.shadow_color=Color(.35,.15,1,.35 if selected else .12); border.shadow_size=22 if selected else 8

@@ -17,10 +17,10 @@ func _ready() -> void:
     overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     overlay.theme=game.ui.theme
     var dim=ColorRect.new(); overlay.add_child(dim)
-    dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); dim.color=Color(0,0,.02,.25)
+    dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); dim.color=Color(0.006,0.006,0.006,.25)
     dim.mouse_filter=Control.MOUSE_FILTER_STOP
     panel=PanelContainer.new(); overlay.add_child(panel)
-    var style=StyleBoxFlat.new(); style.bg_color=Color("10142b"); style.border_color=Color("55d9e8")
+    var style=StyleBoxFlat.new(); style.bg_color=Color("161616"); style.border_color=Color("55d9e8")
     style.set_corner_radius_all(20); style.set_border_width_all(2)
     style.shadow_color=Color(0,0,0,.55); style.shadow_size=20
     style.content_margin_left=18; style.content_margin_right=18

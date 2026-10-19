@@ -19,7 +19,7 @@ func _draw() -> void:
     var accent=Color("aaa1c9").lerp(Color("49e4ff"),amount)
     var track=Rect2(size.x*.12,size.y*.08,size.x*.76,size.y*.54)
     var style=StyleBoxFlat.new()
-    style.bg_color=Color("211c36").lerp(Color("124c68"),amount)
+    style.bg_color=Color("212121").lerp(Color("124c68"),amount)
     style.border_color=accent; style.set_border_width_all(2)
     style.set_corner_radius_all(int(track.size.y*.5))
     draw_style_box(style,track)

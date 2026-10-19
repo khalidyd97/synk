@@ -13,7 +13,7 @@ func _process(delta: float) -> void:
 func _draw() -> void:
     var inset=8.0; var cut=26.0
     var outline=PackedVector2Array([Vector2(cut,inset),Vector2(size.x-inset,inset),Vector2(size.x-inset,size.y-cut),Vector2(size.x-cut,size.y-inset),Vector2(inset,size.y-inset),Vector2(inset,cut)])
-    draw_colored_polygon(outline,Color("081327").lerp(Color(accent*.22,1),hover))
+    draw_colored_polygon(outline,Color("131313").lerp(Color(accent*.22,1),hover))
     var border=outline.duplicate(); border.append(outline[0])
     draw_polyline(border,Color(accent,.6+hover*.4),2,true)
     draw_line(Vector2(cut+8,inset),Vector2(size.x*.52,inset),accent,4,true)

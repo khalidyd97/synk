@@ -61,7 +61,7 @@ func _process(delta: float) -> void:
     motion.advance(delta,selected or hover_amount>.01)
 func _draw() -> void:
     var style=StyleBoxFlat.new(); style.set_corner_radius_all(18); style.set_border_width_all(1)
-    style.bg_color=Color("090c1c").lerp(Color("092032"),amount)
+    style.bg_color=Color("0e0e0e").lerp(Color("1a1a1a"),amount)
     style.bg_color=style.bg_color.lightened(hover_amount*.04)
     style.border_color=Color("263047").lerp(Color("4bdaed"),amount)
     style.shadow_color=Color(.05,.75,.9,.12*amount); style.shadow_size=8

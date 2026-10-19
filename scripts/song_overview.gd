@@ -26,7 +26,7 @@ func _process(_delta: float) -> void:
     if is_visible_in_tree(): queue_redraw()
 func _draw() -> void:
     if game==null or bins.is_empty(): return
-    draw_rect(Rect2(Vector2.ZERO,size),Color("0b142c"))
+    draw_rect(Rect2(Vector2.ZERO,size),Color("151515"))
     var font=ThemeDB.fallback_font
     draw_string(font,Vector2(4,16),"ALL",HORIZONTAL_ALIGNMENT_LEFT,-1,12,Color("a5cde8"))
     var h=maxf(1,size.y-30); var length=maxf(.001,game.length()); var peak=1

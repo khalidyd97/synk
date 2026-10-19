@@ -18,9 +18,9 @@ func _process(delta: float) -> void:
     touch=move_toward(touch,0,delta*5)
 func _draw() -> void:
     var box=StyleBoxFlat.new(); box.set_corner_radius_all(18); box.set_border_width_all(1)
-    box.bg_color=Color("0b0e22").lerp(Color("143443"),maxf(amount*.8,engagement*.45)+touch*.1)
+    box.bg_color=Color("111111").lerp(Color("143443"),maxf(amount*.8,engagement*.45)+touch*.1)
     box.border_color=Color("30364e").lerp(accent,maxf(amount,engagement*.8))
-    if primary: box.bg_color=Color("753cf0") if not disabled else Color("222236")
+    if primary: box.bg_color=Color("753cf0") if not disabled else Color("232323")
     box.shadow_color=Color(accent,(amount*.08+engagement*.1+touch*.1)); box.shadow_size=10
     draw_style_box(box,Rect2(Vector2.ONE,size-Vector2.ONE*2))
     if touch>0: draw_style_box(outline(touch),Rect2(Vector2.ONE,size-Vector2.ONE*2))

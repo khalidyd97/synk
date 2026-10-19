@@ -63,7 +63,7 @@ class Stepper extends Control:
         plus = Action.new(); plus.text = "+"; plus.caption_size = 30
         readout = Label.new(); readout.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; readout.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
         readout.add_theme_font_size_override("font_size",24); readout.add_theme_color_override("font_color",TEXT)
-        var value_style=StyleBoxFlat.new(); value_style.bg_color=Color("0a1025")
+        var value_style=StyleBoxFlat.new(); value_style.bg_color=Color("121212")
         value_style.set_corner_radius_all(16); value_style.border_color=Color("2d3048"); value_style.set_border_width_all(1)
         readout.add_theme_stylebox_override("normal",value_style)
         for node in [minus,readout,plus]: add_child(node)
@@ -101,7 +101,7 @@ class Switch extends Button:
         queue_redraw()
     func _draw() -> void:
         var style=StyleBoxFlat.new(); style.set_corner_radius_all(18); style.set_border_width_all(1)
-        style.bg_color=Color("101225").lerp(Color("12313d"),knob*.65)
+        style.bg_color=Color("141414").lerp(Color("12313d"),knob*.65)
         style.border_color=Color("34364f").lerp(Color("50daec"),maxf(knob*.7,engagement))
         draw_style_box(style,Rect2(Vector2.ONE,size-Vector2.ONE*2))
         var font=ThemeDB.fallback_font; var caption="ON" if button_pressed else "OFF"
@@ -128,7 +128,7 @@ class Swatch extends Button:
         if selected: draw_arc(center,r+6,0,TAU,40,Color("50daec"),3,true)
         elif is_hovered() or has_focus(): draw_arc(center,r+6,0,TAU,40,Color("a499e8"),2,true)
         if color_code=="":
-            draw_circle(center,r,Color("1a1d33"))
+            draw_circle(center,r,Color("1e1e1e"))
             draw_arc(center,r,0,TAU,40,Color(1,1,1,.5),1.5,true)
             var font = ThemeDB.fallback_font
             var w = font.get_string_size("A",HORIZONTAL_ALIGNMENT_LEFT,-1,18).x
@@ -148,7 +148,7 @@ class StyleTile extends Button:
         for state in ["normal","hover","pressed","disabled","focus","hover_pressed"]: add_theme_stylebox_override(state,StyleBoxEmpty.new())
     func _draw() -> void:
         var box = StyleBoxFlat.new(); box.set_corner_radius_all(18)
-        box.bg_color = Color("10313f") if selected else Color("0c1022")
+        box.bg_color = Color("10313f") if selected else Color("121212")
         box.border_color = Color("50daec") if selected else Color("30364e")
         if is_hovered() or has_focus(): box.border_color=Color("a499e8")
         box.set_border_width_all(2 if selected else 1)
@@ -157,7 +157,7 @@ class StyleTile extends Button:
         var top = size.y*.14; var bottom = size.y*.66
         var a = Vector2(size.x*.40,top); var b = Vector2(size.x*.60,top)
         var c = Vector2(size.x*.86,bottom); var d = Vector2(size.x*.14,bottom)
-        draw_colored_polygon(PackedVector2Array([a,b,c,d]),Color("050409") if gold else Color("0b1030"))
+        draw_colored_polygon(PackedVector2Array([a,b,c,d]),Color("050505") if gold else Color("151515"))
         var band_top = lerpf(top,bottom,.72)
         draw_colored_polygon(PackedVector2Array([a.lerp(d,.72),b.lerp(c,.72),c,d]),Color(1.0,.86,.34) if gold else Color(.60,.36,1.0,.85))
         for rail in [[a,d,Color("38baff")],[b,c,Color("b35cff")]]:
@@ -180,7 +180,7 @@ class ModeTile extends Button:
         for state in ["normal","hover","pressed","disabled","focus","hover_pressed"]: add_theme_stylebox_override(state,StyleBoxEmpty.new())
     func _draw() -> void:
         var box = StyleBoxFlat.new(); box.set_corner_radius_all(18)
-        box.bg_color = Color("10313f") if selected else Color("0c1022")
+        box.bg_color = Color("10313f") if selected else Color("121212")
         box.border_color = Color("50daec") if selected else Color("30364e")
         if is_hovered() or has_focus(): box.border_color=Color("a499e8")
         box.set_border_width_all(2 if selected else 1)
@@ -214,7 +214,7 @@ class ShapeTile extends Button:
         for state in ["normal","hover","pressed","disabled","focus","hover_pressed"]: add_theme_stylebox_override(state,StyleBoxEmpty.new())
     func _draw() -> void:
         var style = StyleBoxFlat.new(); style.set_corner_radius_all(18)
-        style.bg_color = Color("0c1022").lerp(Color("10313f"),selected_amount)
+        style.bg_color = Color("121212").lerp(Color("10313f"),selected_amount)
         style.border_color = Color("30364e").lerp(Color("50daec"),selected_amount)
         if is_hovered() or has_focus(): style.border_color=Color("a499e8")
         style.set_border_width_all(2 if selected else 1)
@@ -268,7 +268,7 @@ const SUBPAGES={"gameplay":{"play":"Play","browsing":"Browsing"},"audio":{"timin
 const SUBPAGE_HINTS={"colors":"Choose Theme in Highway to use custom colors. Adaptive keeps your choices saved.","play":"Tune how notes travel while you play.","browsing":"Choose how the song library behaves.","timing":"Match the judgment timing to your music.","headset":"Compensate for wireless audio delay.","highway":"Choose the rail style, colors, and viewing angle.","notes":"Choose note shapes, trail styles, and sizes.","hits":"Tune hit feedback and particle intensity.","stage":"Choose your stage atmosphere. Combine effects freely.","recording":"Personal recording aids and playback preferences.","guides":"Listen for the rhythm while you create charts."}
 const PAGE_HINTS={"gameplay":"Tune your highway and browsing experience.","audio":"Match your taps to the music and your headset.","visuals":"Customize the highway, note sizes and stage effects.","editor":"Personal preferences for every chart you create."}
 
-func style(fill: Color=Color("0c0d21"),edge: Color=Color("2c2d44"),radius: int=22) -> StyleBoxFlat:
+func style(fill: Color=Color("101010"),edge: Color=Color("2c2d44"),radius: int=22) -> StyleBoxFlat:
     var box=StyleBoxFlat.new(); box.bg_color=fill; box.border_color=edge; box.set_corner_radius_all(radius); box.set_border_width_all(1); return box
 func place(node: Control,parent: Control,x: float,y: float,w: float,h: float) -> void:
     parent.add_child(node); node.position=Vector2(x,y); node.size=Vector2(w,h)
@@ -291,7 +291,7 @@ func connect_switch(control: Switch,callback: Callable) -> void:
         else: callback.call(on))
 func row(parent: Node,title: String,hint: String,height: float=132) -> PanelContainer:
     var panel=PanelContainer.new(); parent.add_child(panel); panel.custom_minimum_size=Vector2(0,height)
-    panel.add_theme_stylebox_override("panel",style(Color("101124"),Color("292c43"),18))
+    panel.add_theme_stylebox_override("panel",style(Color("141414"),Color("292c43"),18))
     var margin=MarginContainer.new(); panel.add_child(margin)
     for edge in ["left","right"]: margin.add_theme_constant_override("margin_"+edge,24)
     for edge in ["top","bottom"]: margin.add_theme_constant_override("margin_"+edge,12)
@@ -335,7 +335,7 @@ func _ready() -> void:
     var background=ColorRect.new(); add_child(background); background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     background.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var mat=preload("res://scripts/background_motion.gd").attach(background,preload("res://scripts/song_browser_background.gdshader"))
-    mat.set_shader_parameter("ambience",Color(.1,.07,.24))
+    mat.set_shader_parameter("ambience",Color(0.116,0.116,0.116))
     preload("res://scripts/screen_backdrop.gd").video(self,0.17,.5)  # violet stage
     canvas=Control.new(); add_child(canvas); canvas.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var theme_local=Theme.new(); theme_local.default_font=ThemeDB.fallback_font; canvas.theme=theme_local
@@ -507,7 +507,7 @@ func build_notes(items: VBoxContainer) -> void:
     trail_style_input=OptionButton.new(); trail_style_input.add_item("Neon trail"); trail_style_input.add_item("Solid ribbon")
     trail_style_input.add_theme_font_size_override("font_size",21); trail_style_input.get_popup().add_theme_font_size_override("font_size",21)
     trail_style_input.get_popup().add_theme_constant_override("v_separation",16)
-    var picker_style=style(Color("0d1022"),Color("373c55"),14)
+    var picker_style=style(Color("121212"),Color("373c55"),14)
     picker_style.content_margin_left=18; picker_style.content_margin_right=18
     trail_style_input.add_theme_stylebox_override("normal",picker_style)
     var focus=picker_style.duplicate(); focus.border_color=ACCENT

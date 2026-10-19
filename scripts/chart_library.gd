@@ -55,13 +55,13 @@ func button(parent: Control,value: String,x: float,y: float,w: float,h: float,ca
     var n=ButtonArt.new(); n.menu_motion=true; n.text=value; n.primary=primary; n.caption_size=22; place(n,parent,x,y,w,h,base); n.pressed.connect(callback); return n
 func card(parent: Control,x: float,y: float,w: float,h: float,base: Vector2=Vector2(1456,819),radius: int=20) -> Panel:
     var n=Panel.new(); place(n,parent,x,y,w,h,base)
-    n.add_theme_stylebox_override("panel",box_style(Color(.035,.028,.080,.88),Color("2b263b"),radius)); return n
+    n.add_theme_stylebox_override("panel",box_style(Color(0.041,0.041,0.041,.88),Color("2b263b"),radius)); return n
 func _ready() -> void:
     mouse_filter=Control.MOUSE_FILTER_IGNORE
     var bg=ColorRect.new(); add_child(bg); bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     bg.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var mat=preload("res://scripts/background_motion.gd").attach(bg,preload("res://scripts/song_browser_background.gdshader"))
-    mat.set_shader_parameter("ambience",Color(.08,.1,.24,1))
+    mat.set_shader_parameter("ambience",Color(0.119,0.119,0.119,1))
     # Real studio footage: hands on a DJ mixer, tinted blue.
     preload("res://scripts/screen_backdrop.gd").video(self,0.42,.22,1.0,"res://assets/lobby/ui/studio_background.ogv",2.1)
     canvas=Control.new(); add_child(canvas); canvas.mouse_filter=Control.MOUSE_FILTER_IGNORE
@@ -73,7 +73,7 @@ func _ready() -> void:
     label(canvas,"Chart library",136,48,580,48,36)
     search=LineEdit.new(); place(search,canvas,800,18,350,80)
     search.placeholder_text="Search songs or charts"; search.add_theme_font_size_override("font_size",18)
-    var style=box_style(Color("090b1c"),Color("34334e"),14); style.content_margin_left=18
+    var style=box_style(Color("0e0e0e"),Color("34334e"),14); style.content_margin_left=18
     search.add_theme_stylebox_override("normal",style)
     var focused=style.duplicate(); focused.border_color=Color("4bdaed"); search.add_theme_stylebox_override("focus",focused)
     search.text_changed.connect(func(_value): refresh())
@@ -303,9 +303,9 @@ func fraction_button(parent: Control,value: String,l: float,t: float,r: float,b:
 func build_confirm() -> void:
     # Deleting is permanent, so it always asks first.
     confirm=Control.new(); fraction_place(confirm,canvas,0,0,1,1); confirm.mouse_filter=Control.MOUSE_FILTER_STOP
-    var dim=ColorRect.new(); fraction_place(dim,confirm,0,0,1,1); dim.color=Color(0,0,.02,.72); dim.mouse_filter=Control.MOUSE_FILTER_IGNORE
+    var dim=ColorRect.new(); fraction_place(dim,confirm,0,0,1,1); dim.color=Color(0.006,0.006,0.006,.72); dim.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var panel=Panel.new(); fraction_place(panel,confirm,.27,.28,.73,.72)
-    var style=StyleBoxFlat.new(); style.bg_color=Color("0b0a22"); style.border_color=Color("ff4d6a")
+    var style=StyleBoxFlat.new(); style.bg_color=Color("101010"); style.border_color=Color("ff4d6a")
     style.set_border_width_all(2); style.set_corner_radius_all(16); style.shadow_color=Color(Color("ff4d6a"),.25); style.shadow_size=20
     panel.add_theme_stylebox_override("panel",style)
     confirm_title=fraction_label(panel,"",.06,.06,.94,.24,30); confirm_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER

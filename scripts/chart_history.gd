@@ -30,11 +30,11 @@ func action(parent: Control, value: String, callback: Callable, primary: bool = 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	var dim = ColorRect.new(); add_child(dim); dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); dim.color = Color(0, 0, .02, .78)
+	var dim = ColorRect.new(); add_child(dim); dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); dim.color = Color(0.006,0.006,0.006,.78)
 	canvas = Control.new(); add_child(canvas); canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	resized.connect(layout); layout()
 	var card = Panel.new(); canvas.add_child(card); card.position = Vector2(258, 70); card.size = Vector2(940, 680)
-	card.add_theme_stylebox_override("panel", style(Color(.035, .028, .08, .97), Color("2b263b"), 26))
+	card.add_theme_stylebox_override("panel", style(Color(0.041,0.041,0.041,.97), Color("2b263b"), 26))
 	var eyebrow = label(card, " ".join("VERSION HISTORY".split("")), 36, 24, 600, 24, 14, CYAN)
 	heading = label(card, "", 36, 50, 700, 52, 34); heading.add_theme_font_override("font", BOLD)
 	label(card, "Every save is kept. Switch makes a version the live chart; the current one stays in this list.", 36, 102, 860, 28, 17, MUTED)
@@ -65,7 +65,7 @@ func refresh() -> void:
 
 func row(version: Dictionary, is_live: bool) -> Control:
 	var panel = PanelContainer.new(); panel.custom_minimum_size = Vector2(0, 92)
-	panel.add_theme_stylebox_override("panel", style(Color("103043") if is_live else Color("0c0d21"), CYAN if is_live else Color("2c2d44"), 18))
+	panel.add_theme_stylebox_override("panel", style(Color("103043") if is_live else Color("101010"), CYAN if is_live else Color("2c2d44"), 18))
 	var holder = Control.new(); panel.add_child(holder); holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var number = label(holder, "v%d" % int(version.number), 22, 0, 90, 92, 30); number.add_theme_font_override("font", BOLD)
 	var when = str(version.saved_at).replace("T", "  ·  ").left(20)

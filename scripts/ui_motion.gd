@@ -23,7 +23,7 @@ static func bind_button(target: BaseButton) -> void:
 
 static func style_button(target: Button, accent: Color = Color("a765ff"), strong: bool = false) -> void:
 	var normal=StyleBoxFlat.new()
-	normal.bg_color=Color(.045,.022,.12,.94) if strong else Color(.012,.018,.065,.88)
+	normal.bg_color=Color(0.053,0.053,0.053,.94) if strong else Color(0.027,0.027,0.027,.88)
 	normal.border_color=Color(accent,.93 if strong else .68)
 	normal.set_border_width_all(2 if strong else 1)
 	normal.set_corner_radius_all(6)
@@ -43,7 +43,7 @@ static func style_button(target: Button, accent: Color = Color("a765ff"), strong
 	pressed.shadow_size=4
 	target.add_theme_stylebox_override("pressed",pressed)
 	var disabled=normal.duplicate() as StyleBoxFlat
-	disabled.bg_color=Color(.018,.018,.04,.66)
+	disabled.bg_color=Color(0.022,0.022,0.022,.66)
 	disabled.border_color=Color(.30,.28,.40,.6)
 	disabled.shadow_size=0
 	target.add_theme_stylebox_override("disabled",disabled)

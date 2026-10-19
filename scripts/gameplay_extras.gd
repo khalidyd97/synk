@@ -102,7 +102,7 @@ func build_intro_card() -> void:
 	intro_artist.add_theme_font_size_override("font_size", 24); intro_artist.add_theme_color_override("font_color", Color("cfd2ec"))
 	for label_node in [intro_title, intro_artist]:
 		label_node.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		label_node.add_theme_color_override("font_shadow_color", Color(0, 0, .02, .8)); label_node.add_theme_constant_override("shadow_offset_y", 3)
+		label_node.add_theme_color_override("font_shadow_color", Color(0.006,0.006,0.006,.8)); label_node.add_theme_constant_override("shadow_offset_y", 3)
 	intro_card.modulate.a = 0
 
 func on_song_start() -> void:

@@ -7,7 +7,7 @@ func _ready() -> void:
 func _draw() -> void:
 	var w=size.x; var h=size.y; var cut=minf(22,minf(w,h)*.12)
 	var points=PackedVector2Array([Vector2(cut,0),Vector2(w,0),Vector2(w,h-cut),Vector2(w-cut,h),Vector2(0,h),Vector2(0,cut)])
-	draw_colored_polygon(points,Color("080e24"))
+	draw_colored_polygon(points,Color("101010"))
 	var outline=points.duplicate(); outline.append(points[0])
 	draw_polyline(outline,Color(accent,.4),1.5,true)
 	draw_line(Vector2(cut+12,1),Vector2(minf(w*.38,cut+150),1),accent,3,true)

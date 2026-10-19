@@ -96,7 +96,7 @@ func _draw() -> void:
 		style.border_color = ACCENT_END; style.set_border_width_all(2)
 		style.shadow_color = Color(ACCENT_END,.38); style.shadow_size = 18
 	else:
-		style.bg_color = Color(.07,.07,.17,.86) if not hovered else Color(.1,.09,.22,.9)
+		style.bg_color = Color(0.088,0.088,0.088,.86) if not hovered else Color(0.116,0.116,0.116,.9)
 		style.border_color = Color(1,1,1,.12); style.set_border_width_all(1)
 	draw_style_box(style,plate)
 	if selected:

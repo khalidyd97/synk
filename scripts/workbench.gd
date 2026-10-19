@@ -184,10 +184,10 @@ func open_tools(selected_tab: String="Drafts") -> void:
     game.stop_audition()
     if overlay: overlay.queue_free()
     overlay=Control.new(); game.ui.add_child(overlay); overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    var dim=ColorRect.new(); overlay.add_child(dim); dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); dim.color=Color(0,0,.02,.88)
+    var dim=ColorRect.new(); overlay.add_child(dim); dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); dim.color=Color(0.006,0.006,0.006,.88)
     var safe_content=game.safe_parent("SafeDialogControls",overlay)
     var panel=Panel.new(); game.rect(panel,safe_content,.055,.06,.945,.94)
-    var style=StyleBoxFlat.new(); style.bg_color=Color("10142c"); style.set_corner_radius_all(20); style.border_color=Color("7b60af"); style.set_border_width_all(1)
+    var style=StyleBoxFlat.new(); style.bg_color=Color("171717"); style.set_corner_radius_all(20); style.border_color=Color("7b60af"); style.set_border_width_all(1)
     panel.add_theme_stylebox_override("panel",style)
     preload("res://scripts/screen_style.gd").chassis(panel)
 
@@ -209,7 +209,7 @@ func open_tools(selected_tab: String="Drafts") -> void:
     tabs=TabContainer.new(); game.rect(tabs,panel,.025,.15 if global_settings else .255,.975,.88)
     tabs.get_tab_bar().add_theme_font_size_override("font_size",19)
     for state in ["tab_selected","tab_unselected","tab_hovered"]:
-        var tab_style=preload("res://scripts/game_theme.gd").plate(Color("26335b") if state=="tab_selected" else Color("0c142b"),Color("65dcff") if state=="tab_selected" else Color("334465"),4 if state=="tab_selected" else 1)
+        var tab_style=preload("res://scripts/game_theme.gd").plate(Color("26335b") if state=="tab_selected" else Color("151515"),Color("65dcff") if state=="tab_selected" else Color("334465"),4 if state=="tab_selected" else 1)
         tab_style.content_margin_left=22; tab_style.content_margin_right=22
         tab_style.content_margin_top=12; tab_style.content_margin_bottom=12
         tabs.get_tab_bar().add_theme_stylebox_override(state,tab_style)

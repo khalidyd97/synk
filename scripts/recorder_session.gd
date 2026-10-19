@@ -268,12 +268,12 @@ func toggle(parent: Node,title: String,value: bool,callback: Callable) -> void:
     b.toggled.connect(func(on): b.text=title+(" · ON" if on else " · OFF"); b.set_selected(on); callback.call(on))
 func shell(title: String,narrow: bool=false) -> Dictionary:
     var root=Control.new(); game.ui.add_child(root); root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    var dim=ColorRect.new(); root.add_child(dim); dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); dim.color=Color(0,0,.025,.55)
+    var dim=ColorRect.new(); root.add_child(dim); dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); dim.color=Color(0.007,0.007,0.007,.55)
     var safe_content=game.safe_parent("SafeDialogControls",root)
     var panel=Panel.new(); game.rect(panel,safe_content,.55 if narrow else .14,.05,.98 if narrow else .86,.95)
-    var style=StyleBoxFlat.new(); style.bg_color=Color("0c142c"); style.border_color=Color("65dcff"); style.set_border_width_all(1); panel.add_theme_stylebox_override("panel",style)
+    var style=StyleBoxFlat.new(); style.bg_color=Color("151515"); style.border_color=Color("65dcff"); style.set_border_width_all(1); panel.add_theme_stylebox_override("panel",style)
     panel.set_meta("keep_caption_size",true)
-    var plate=StyleBoxFlat.new(); plate.bg_color=Color("0c1023"); plate.border_color=Color("3e4663")
+    var plate=StyleBoxFlat.new(); plate.bg_color=Color("121212"); plate.border_color=Color("3e4663")
     plate.set_border_width_all(1); plate.set_corner_radius_all(20)
     panel.add_theme_stylebox_override("panel",plate)
     game.label(panel,title,.04,.02,.76,.105,26)
@@ -292,7 +292,7 @@ func persist(name: String,value: Variant) -> void:
 
 func setup_group(parent: Node,title: String) -> VBoxContainer:
     var card=PanelContainer.new(); parent.add_child(card)
-    var plate=StyleBoxFlat.new(); plate.bg_color=Color("11162b"); plate.border_color=Color("2e354d")
+    var plate=StyleBoxFlat.new(); plate.bg_color=Color("171717"); plate.border_color=Color("2e354d")
     plate.set_corner_radius_all(16); plate.set_border_width_all(1)
     for edge in ["left","right","top","bottom"]: plate.set("content_margin_"+edge,18)
     card.add_theme_stylebox_override("panel",plate)
@@ -337,10 +337,10 @@ func show_review() -> void:
     if game.timeline: game.timeline.reveal_time(region.x)
     review=Control.new(); game.ui.add_child(review); review.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     review_dim=ColorRect.new(); review.add_child(review_dim); review_dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    review_dim.color=Color(0,0,.025,.72)
+    review_dim.color=Color(0.007,0.007,0.007,.72)
     var safe=game.safe_parent("SafeTakeReview",review)
     review_panel=Panel.new(); game.rect(review_panel,safe,.10,.07,.90,.95); review_panel.set_meta("keep_caption_size",true)
-    var plate=StyleBoxFlat.new(); plate.bg_color=Color("0c1023"); plate.border_color=Color("3e4663")
+    var plate=StyleBoxFlat.new(); plate.bg_color=Color("121212"); plate.border_color=Color("3e4663")
     plate.set_border_width_all(1); plate.set_corner_radius_all(22); review_panel.add_theme_stylebox_override("panel",plate)
     game.label(review_panel,"TAKE REVIEW",.035,.025,.80,.10,30)
     game.label(review_panel,"%.2f–%.2f s · %s · %s" % [region.x,region.y,"REPLACE" if bool(config.get("replace",replace)) else "LAYER",current_pass().to_upper()],.035,.105,.965,.16,17)
@@ -380,7 +380,7 @@ func review_action(title: String,left: float,right: float,callback: Callable,rol
 
 func review_column(parent: Control,bounds: Rect2,title: String) -> VBoxContainer:
     var panel=Panel.new(); game.rect(panel,parent,bounds.position.x,bounds.position.y,bounds.end.x,bounds.end.y)
-    var plate=StyleBoxFlat.new(); plate.bg_color=Color("11162b"); plate.border_color=Color("2e354d")
+    var plate=StyleBoxFlat.new(); plate.bg_color=Color("171717"); plate.border_color=Color("2e354d")
     plate.set_border_width_all(1); plate.set_corner_radius_all(16); panel.add_theme_stylebox_override("panel",plate)
     var scroll=ScrollContainer.new(); game.rect(scroll,panel,.045,.04,.955,.96); scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
     var drag=preload("res://scripts/song_list_scroll.gd").new(); drag.scroll=scroll; scroll.add_child(drag)

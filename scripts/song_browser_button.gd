@@ -43,13 +43,13 @@ func _draw() -> void:
         tint=Color("b7b2cd").lerp(Color.WHITE,maxf(amount,hover_amount*.7))
     else:
         var style=StyleBoxFlat.new(); style.set_corner_radius_all(16 if primary else 15)
-        style.bg_color=Color("0c0c20").lerp(Color("123142"),amount*.8)
+        style.bg_color=Color("101010").lerp(Color("123142"),amount*.8)
         style.bg_color=style.bg_color.lightened(hover_amount*.065+press_amount*.04)
-        style.border_color=Color("2c293e").lerp(accent,maxf(amount,hover_amount*.65))
+        style.border_color=Color("2a2a2a").lerp(accent,maxf(amount,hover_amount*.65))
         style.set_border_width_all(1)
         if primary:
             # Native gradient plate, clipped with the same rounded silhouette as the reference.
-            style.bg_color=Color("753cf0") if not disabled else Color("222236")
+            style.bg_color=Color("753cf0") if not disabled else Color("232323")
             style.shadow_color=Color(.7,.1,.75,.24+hover_amount*.1+press_amount*.08); style.shadow_size=15
         elif amount>.02:
             style.shadow_color=Color(accent,amount*.15); style.shadow_size=8
