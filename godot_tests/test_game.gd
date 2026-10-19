@@ -284,7 +284,7 @@ func run() -> void:
 	var tail_hold=SynkChart.note(2,5,"hold"); tail_hold.duration=1.0
 	game.start_game([tail_hold]); game.song_time=1.5; world._process(0)
 	var tail_children=world.notes["play0"].node.get_children()
-	check((tail_children[-1].material_override as ShaderMaterial).shader.resource_path.ends_with("release_ring.gdshader") and is_equal_approx(tail_children[-1].rotation_degrees.x,-90.0),"Hold tails end in a hollow release ring on the highway")
+	check(tail_children[-1].name=="SustainEndCap" and tail_children[-1].material_override.shader==tail_children[0].material_override.shader and is_equal_approx(tail_children[-1].mesh.size.x/tail_children[0].mesh.size.x,.65),"Hold tails reuse the filled note head at 65% size")
 	var sharp_slide=SynkChart.note(1,0,"slide"); sharp_slide.duration=.4; sharp_slide.end_lane=SynkChart.MAX_LANE
 	var sharp_centers=world.trail_centers(sharp_slide,32)
 	var sharp_sides=world.trail_sides(sharp_centers)
@@ -367,7 +367,7 @@ func run() -> void:
 	game.pointers[77]={"start":Vector2(.5,.765),"position":Vector2(.07+(9.5/SynkChart.LANES)*.86,.765)}
 	world._process(0)
 	var lit=world.finger_beams.filter(func(b): return b.visible)
-	check(lit.size()==game.pointers.size() and lit.any(func(b): return is_equal_approx(b.position.x,world.lane_x(9))) and lit.all(func(b): return absf(b.position.x)+world.NOTE_WIDTH*.5<=world.HIGHWAY_HALF_WIDTH+.001),"A finger beam lights its lane without leaving the highway")
+	check(lit.size()==game.pointers.size() and lit.any(func(b): return is_equal_approx(b.position.x,world.lane_x(9))) and lit.all(func(b): return absf(b.position.x)+world.LANE_WIDTH*.5<=world.HIGHWAY_HALF_WIDTH+.001),"A finger beam lights exactly its lane without leaving the highway")
 	var beam_mesh=world.finger_beams[0].mesh as PlaneMesh
 	check(is_equal_approx(world.finger_beams[0].position.z+beam_mesh.size.y*.5,world.JUDGMENT_DEPTH*.5),"Finger beams reach the near edge of the judgment bar")
 	check(absf(world.lane_x(0))+world.NOTE_WIDTH*.5<world.HIGHWAY_HALF_WIDTH and absf(world.lane_x(SynkChart.MAX_LANE))+world.NOTE_WIDTH*.5<world.HIGHWAY_HALF_WIDTH,"Notes in the outer lanes stay inside the highway rails")
@@ -578,7 +578,7 @@ func run() -> void:
 	check(game.mode=="editor" and game.song.id==custom_song.id and game.document.notes.size()==1 and game.waveform.size()==512,"Prepared song opens automatically when audio is ready")
 	var art=Image.create_empty(64,64,false,Image.FORMAT_RGBA8); art.fill(Color.RED)
 	var art_path="user://cover_fixture.png"; art.save_png(art_path)
-	game.song=custom_song; game.import_cover(art_path)
+	game.song=custom_song; game.save_cover_image(str(custom_song.id),game.load_picked_image(art_path))
 	check(game.has_custom_cover(str(custom_song.id)) and game.cover_texture_for_id(str(custom_song.id)) is ImageTexture,"Imported chart cover art is saved and cached")
 	DirAccess.remove_absolute(art_path); DirAccess.remove_absolute(game.cover_path(str(custom_song.id)))
 	game.document.dirty=false; game.select_song(0)

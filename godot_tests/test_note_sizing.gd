@@ -32,9 +32,10 @@ func run() -> void:
     check(is_equal_approx(thin_width/full_width,.3),"Hold ribbon has independent width control")
     var slide=hold.duplicate(true); slide.kind="slide"
     var first=Node3D.new(); world.add_child(first); var slide_width=body_width(world,first,slide)
+    check(is_equal_approx(slide_width,thin_width),"Hold and slide ribbons use the same selected width")
     g.change_note_sizing("hold_trail_width",1.5)
     var second=Node3D.new(); world.add_child(second)
-    check(is_equal_approx(body_width(world,second,slide),slide_width),"Hold width does not change slides")
+    check(is_equal_approx(body_width(world,second,slide)/slide_width,5),"Trail width scales slides from 30% to 150%")
     check(g.document.notes==original and g.document.settings==settings,"Sizing never modifies chart data")
     var prefs=ConfigFile.new(); prefs.load("user://preferences.cfg")
     check(prefs.get_value("gameplay","note_size")==1.25 and prefs.get_value("gameplay","hold_trail_width")==1.5,"Visual preferences persist globally")

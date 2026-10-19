@@ -186,6 +186,7 @@ func create_note(point: Vector2) -> void:
     var n=SynkChart.note(minf(time,game.length()-.01),lane(point.x),game.editor_tool)
     if n.kind in ["hold","slide"]: n.duration=minf(60.0/game.chart_bpm(),game.length()-float(n.time))
     game.document.checkpoint(); drag_checkpoint=true
+    game.space_authored_notes([n],game.document.notes)
     game.document.notes.append(n); game.document.selected=game.document.notes.size()-1
     pending_create=false; tail_drag=n.kind in ["hold","slide"]
     game.refresh_editor()

@@ -3,7 +3,7 @@ const UiMotion=preload("res://scripts/ui_motion.gd")
 # Authoring services; saved charts and recoverable drafts stay separate.
 var game: Control
 var current_variant="original"
-const VARIANTS=["original","easy","normal","expert"]
+const VARIANTS=["original","easy","normal","expert","hard"]
 var autosave_elapsed=0.0
 var draft_hash=0
 var recovery_checked=""
@@ -11,7 +11,9 @@ var overlay: Control
 var tabs: TabContainer
 var chart_picker: FileDialog
 var chart_exporter: FileDialog
-const EFFECT_NAMES=["Hit flashes","Particles","Lasers","Background brightness"]
+const EFFECT_NAMES=["Hit flashes","Particles","Lasers","Background brightness","Flowing edge energy","Soft fading glow"]
+const OPTIONAL_STAGE_EFFECTS=["Flowing edge energy","Soft fading glow"]
+static func effect_default(key: String) -> float: return 0.0 if key in OPTIONAL_STAGE_EFFECTS else 1.0
 var effects: Dictionary={}
 var effect_sliders: Dictionary={}
 const TOOL_PAGES=["Drafts","Charts","Sharing","Effects","Arrange","Check","Grid","Practice","Analyze","Bookmarks","Song","Authoring","Recording"]
@@ -25,14 +27,14 @@ var scope_refresh: Dictionary={}
 func _ready() -> void:
     DirAccess.make_dir_recursive_absolute("user://drafts")
     for key in EFFECT_NAMES:
-        effects[key]=clampf(float(game.prefs.get_value("effects",key,1.0)),0,1)
+        effects[key]=clampf(float(game.prefs.get_value("effects",key,effect_default(key))),0,1)
 
 func set_effect(key: String,value: float) -> void:
     if key not in EFFECT_NAMES or not is_finite(value): return
     effects[key]=clampf(value,0,1)
     game.prefs.set_value("effects",key,effects[key]); game.prefs.save("user://preferences.cfg")
 
-func effect(key: String) -> float: return float(effects.get(key,1.0))
+func effect(key: String) -> float: return float(effects.get(key,effect_default(key)))
 func chart_path(variant: String="") -> String:
     var name=current_variant if variant.is_empty() else variant
     return "user://charts/"+str(game.song.id)+("" if name=="original" else "_"+name)+".json"
@@ -97,8 +99,15 @@ func recover(force: bool=false) -> bool:
     return true
 func save_chart(notes: Array) -> Error:
     if settings_from(payload(notes))==null: return ERR_INVALID_DATA
+    var song_id=str(game.song.id)
+    # The first save of a level with no history keeps what was there before as version 1.
+    if SynkChartVersions.list(song_id,current_variant).is_empty():
+        var previous=SynkChartVersions.read(chart_path())
+        if previous.is_empty() and song_id=="eclipse" and current_variant=="original": previous=payload(SynkChart.demo())
+        if not previous.is_empty(): SynkChartVersions.record(song_id,current_variant,SynkChartVersions.strip(previous),"Built-in chart" if song_id=="eclipse" and not chart_exists() else "Before version history")
     var error=SynkLibrary.atomic_write(chart_path(),payload(notes))
     if error==OK:
+        SynkChartVersions.record(song_id,current_variant,payload(notes))
         if FileAccess.file_exists(draft_path()): DirAccess.remove_absolute(draft_path())
         draft_hash=0
     return error
@@ -170,19 +179,19 @@ func ui_field(parent: Node,title: String,low: float,high: float,step: float,valu
     return input
 func report(message: String) -> void:
     game.tell(message)
-    if overlay:
-        var status=overlay.get_node_or_null("Status")
-        if status: status.text=message
+
 func open_tools(selected_tab: String="Drafts") -> void:
     game.stop_audition()
     if overlay: overlay.queue_free()
     overlay=Control.new(); game.ui.add_child(overlay); overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     var dim=ColorRect.new(); overlay.add_child(dim); dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); dim.color=Color(0,0,.02,.88)
-    var panel=Panel.new(); game.rect(panel,overlay,.055,.06,.945,.94)
+    var safe_content=game.safe_parent("SafeDialogControls",overlay)
+    var panel=Panel.new(); game.rect(panel,safe_content,.055,.06,.945,.94)
     var style=StyleBoxFlat.new(); style.bg_color=Color("10142c"); style.set_corner_radius_all(20); style.border_color=Color("7b60af"); style.set_border_width_all(1)
     panel.add_theme_stylebox_override("panel",style)
     preload("res://scripts/screen_style.gd").chassis(panel)
 
+    preload("res://scripts/interface_life.gd").mount(panel)
     UiMotion.reveal(dim)
     UiMotion.pop(panel)
     global_settings=selected_tab in ["Effects","Authoring"]
@@ -209,11 +218,9 @@ func open_tools(selected_tab: String="Drafts") -> void:
         var scroll=ScrollContainer.new(); tabs.add_child(scroll); scroll.name=name
         var box=VBoxContainer.new(); scroll.add_child(box); box.size_flags_horizontal=Control.SIZE_EXPAND_FILL; box.add_theme_constant_override("separation",12)
         pages[name]=box
-    var status=Label.new(); game.rect(status,overlay,.08,.85,.90,.91); status.name="Status"; status.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
     ui_text(pages.Recording,"Record a section, repeat takes, set pre-roll, quantize timing and lock completed passes.",22)
     ui_text(pages.Recording,"Section bounds and pass locks apply to this recording session. Pre-roll, snapping and guide audio are your global recorder preferences.")
     ui_button(pages.Recording,"RECORDING SETUP",func(): close_tools(); game.recorder.show_setup())
-    status.add_theme_color_override("font_color",Color("7fe5ff"))
     ui_text(pages.Drafts,"Drafts autosave every 2 seconds and recover when you reopen this chart.",21)
     draft_context=ui_text(pages.Drafts,"Current version: "+current_variant.to_upper()+" · "+str(game.song.title))
     ui_button(pages.Drafts,"SAVE DRAFT NOW",func(): report("Draft stored." if autosave()==OK else "Draft could not be stored."))
@@ -233,11 +240,11 @@ func open_tools(selected_tab: String="Drafts") -> void:
     ui_text(pages.Effects,"EFFECT INTENSITY",24)
     ui_text(pages.Effects,"Changes save immediately. 0% turns an effect off. Notes and the judgment line stay visible.")
     ui_text(pages.Effects,"NOTE APPEARANCE",22)
-    ui_text(pages.Effects,"Visual size only. Timing, lanes and hit detection stay the same. Hold width is independent of note size.")
+    ui_text(pages.Effects,"Visual size only. Timing, lanes and hit detection stay the same. Hold and slide trails share one width, independent of note size.")
     var preview=preload("res://scripts/note_appearance_preview.gd").new(); preview.game=game; pages.Effects.add_child(preview)
     var sizing_sliders: Dictionary={}
     for key in ["note_size","hold_trail_width"]:
-        var title="Note size" if key=="note_size" else "Hold trail width"
+        var title="Note size" if key=="note_size" else "Hold & slide trail width"
         var value=game.note_size if key=="note_size" else game.hold_trail_width
         var label=ui_text(pages.Effects,title+" · %d%%" % roundi(value*100),19)
         var slider=HSlider.new(); pages.Effects.add_child(slider); slider.name=key.to_pascal_case()
@@ -258,7 +265,7 @@ func open_tools(selected_tab: String="Drafts") -> void:
         effect_sliders[key]=slider
         slider.value_changed.connect(func(value): set_effect(key,value); label.text=key+" · %d%%" % roundi(value*100))
     ui_button(pages.Effects,"RESTORE DEFAULT EFFECTS",func():
-        for key in EFFECT_NAMES: effect_sliders[key].value=1.0)
+        for key in EFFECT_NAMES: effect_sliders[key].value=effect_default(key))
     ui_text(pages.Arrange,"TRANSFORM SELECTED RANGE",24)
     ui_text(pages.Arrange,"Select a passage with RANGE first. Each transform is one undo step; notes outside the selection stay in place.")
     ui_button(pages.Arrange,"MIRROR LANES & FLICKS",func(): game.studio.transform_range("mirror"); report(game.status.text))
@@ -333,8 +340,7 @@ func open_tools(selected_tab: String="Drafts") -> void:
     scope_refresh["Bookmarks"]=func(): populate_bookmarks(bookmark_list)
     ui_text(pages.Song,"SONG DETAILS",24)
     ui_text(pages.Song,str(game.song.title)+" · "+game.album_name(game.song),24)
-    ui_text(pages.Song,"Source audio, title, album and cover are shared by this song's chart versions. Chart timing, sections and bookmarks are under THIS CHART.")
-    ui_button(pages.Song,"EDIT TITLE, ALBUM & COVER",func(): close_tools(); game.set_mode("editor"); game.studio.details_open=false; game.studio.toggle_details())
+    ui_text(pages.Song,"Title, artist, album, track number, album art and gameplay background are shared by this song's chart versions. Edit them with DETAILS in the Chart Studio song list. Chart timing, sections and bookmarks are under THIS CHART.")
     ui_text(pages.Authoring,"PERSONAL EDITING PREFERENCES",24)
     ui_text(pages.Authoring,"These preferences apply across charts. They affect your editing/playback experience and are not written into shared chart files. Recorder controls are quick shortcuts to these same preferences.")
     ui_button(pages.Authoring,"RECORDER PREFERENCES",func(): close_tools(); game.recorder.show_setup(true))

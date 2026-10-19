@@ -1,9 +1,14 @@
 extends Panel
 const UiMotion=preload("res://scripts/ui_motion.gd")
 const ScreenStyle=preload("res://scripts/screen_style.gd")
+# Same components as the song list, settings and song details: rounded dark cards, rounded
+# buttons with a cyan focus edge, gradient primary actions and small cyan section labels.
+const Action=preload("res://scripts/settings_action.gd")
+const CYAN=Color("50daec")
+const MUTED=Color("a7aac6")
 var game: Control
+var safe_content: Control
 var inspector: Control
-var song_panel: Control
 var help_label: Label
 var note_title: Label
 var type_input: OptionButton
@@ -16,10 +21,8 @@ var end_lane_group: Control
 var direction_group: Control
 var selected_actions: Control
 var updating=false
-var details_open=false
 var tool_buttons: Dictionary={}
 var direction_buttons: Dictionary={}
-var details_button: Button
 var range_panel: Control
 var range_info: Label
 var inspected_song_id=""
@@ -31,28 +34,58 @@ var record_button: Button
 var overview: Control
 var group_move_button: Button
 
-func place(node: Control,parent: Node,l: float,t: float,r: float,b: float) -> void: game.rect(node,parent,l,t,r,b)
-func caption(parent: Node,value: String,l: float,t: float,r: float,b: float,fs: int=17) -> Label: return game.label(parent,value,l,t,r,b,fs)
-func action(parent: Node,value: String,l: float,t: float,r: float,b: float,callback: Callable,variant: String="tool") -> Button: return game.button(parent,value,l,t,r,b,callback,variant)
+func place(node: Control,parent: Node,l: float,t: float,r: float,b: float) -> void: game.rect(node,safe_content if parent==self else parent,l,t,r,b)
+func caption(parent: Node,value: String,l: float,t: float,r: float,b: float,fs: int=17) -> Label: return game.label(safe_content if parent==self else parent,value,l,t,r,b,fs)
+# variant: "primary" and "record" are gradient buttons; "danger" uses a red edge; others are plain.
+func action(parent: Node,value: String,l: float,t: float,r: float,b: float,callback: Callable,variant: String="tool") -> Button:
+    var n=Action.new(); n.text=value; n.primary=variant in ["primary","record"]
+    n.caption_size=17 if n.primary else 15
+    if variant=="danger": n.accent=Color("ff5f7e")
+    place(n,parent,l,t,r,b)
+    if variant=="record" and n.material:
+        n.material.set_shader_parameter("start_color",Vector3(.95,.25,.45))
+        n.material.set_shader_parameter("end_color",Vector3(.62,.18,.95))
+    n.pressed.connect(callback)
+    return n
+func card(parent: Node,l: float,t: float,r: float,b: float) -> Panel:
+    var n=Panel.new(); place(n,parent,l,t,r,b); n.mouse_filter=Control.MOUSE_FILTER_IGNORE
+    var box=StyleBoxFlat.new(); box.bg_color=Color(.035,.028,.080,.88); box.border_color=Color("2b263b")
+    box.set_corner_radius_all(20); box.set_border_width_all(1); n.add_theme_stylebox_override("panel",box)
+    return n
+func eyebrow(parent: Node,value: String,l: float,t: float,r: float,b: float) -> Label:
+    var n=caption(parent," ".join(value.split("")),l,t,r,b,12); n.add_theme_color_override("font_color",CYAN)
+    return n
+func field_style(n: Control) -> void:
+    var box=StyleBoxFlat.new(); box.bg_color=Color("09091c"); box.border_color=Color("302a42")
+    box.set_corner_radius_all(14); box.set_border_width_all(1); box.content_margin_left=14; box.content_margin_right=10
+    var focus=box.duplicate(); focus.border_color=CYAN
+    for state in ["normal","read_only"]: n.add_theme_stylebox_override(state,box)
+    for state in ["focus","hover","pressed"]: n.add_theme_stylebox_override(state,focus)
 func spin(parent: Control,title: String,y: float,maximum: float,step: float,callback: Callable) -> SpinBox:
-    caption(parent,title,.06,y,.94,y+.07,14).add_theme_color_override("font_color",Color("af9ccd"))
+    caption(parent,title.capitalize(),.06,y,.94,y+.07,14).add_theme_color_override("font_color",MUTED)
     var input=SpinBox.new(); place(input,parent,.06,y+.075,.94,y+.16)
     input.min_value=0; input.max_value=maximum; input.step=step
-    input.get_line_edit().add_theme_font_size_override("font_size",18)
+    input.get_line_edit().add_theme_font_size_override("font_size",18); field_style(input.get_line_edit())
     input.value_changed.connect(callback)
     return input
 func _ready() -> void:
     set_meta("keep_caption_size",true)
+    safe_content=game.safe_parent("SafeEditorControls",self)
     var style=StyleBoxFlat.new(); style.bg_color=Color("080c20"); add_theme_stylebox_override("panel",style)
-    ScreenStyle.glass(self,Rect2(.115,.095,.87,.08),Color("9274df"),0)
-    ScreenStyle.glass(self,Rect2(.015,.18,.095,.74),Color("65dfff"),0)
-    game.title_label=caption(self,"CHART STUDIO",.025,.018,.32,.075,25)
+    var ambience=ColorRect.new(); add_child(ambience); ambience.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    ambience.mouse_filter=Control.MOUSE_FILTER_IGNORE
+    var mat=preload("res://scripts/background_motion.gd").attach(ambience,preload("res://scripts/song_browser_background.gdshader"))
+    mat.set_shader_parameter("ambience",Color(.1,.07,.24))
+    card(self,.115,.095,.985,.172)
+    card(self,.012,.18,.11,.92)
+    eyebrow(self,"CHART STUDIO",.025,.012,.32,.04)
+    game.title_label=caption(self,"",.025,.035,.32,.085,28)
+    var bold=FontVariation.new(); bold.base_font=preload("res://assets/fonts/FiraSans-Bold.ttf")
+    game.title_label.add_theme_font_override("font",bold)
     action(self,"CHART TOOLS",.325,.02,.45,.075,func(): game.features.open_tools(),"nav")
     game.title_label.clip_text=true; game.title_label.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
     record_button=action(self,"● RECORD",.46,.02,.56,.075,game.record_here,"record")
-    record_button.glare=true; record_button.art_material.set_shader_parameter("glare",1.0)
     action(self,"SETUP",.565,.02,.635,.075,game.recorder.show_setup,"tool")
-    details_button=action(self,"SONG DETAILS",.645,.02,.735,.075,toggle_details,"nav")
     action(self,"SAVE",.75,.02,.85,.075,game.save_editor,"primary")
     action(self,"‹ LIBRARY",.87,.02,.98,.075,game.close_editor,"nav")
     game.play_button=action(self,"PLAY",.12,.103,.205,.16,game.toggle_audition,"secondary")
@@ -66,7 +99,7 @@ func _ready() -> void:
     action(self,"SET A",.84,.103,.905,.16,func(): game.loop_a=game.cursor; game.loop_b=maxf(game.loop_b,minf(game.length(),game.loop_a+4)); game.refresh_editor())
     action(self,"SET B",.915,.103,.98,.16,func(): if game.cursor>game.loop_a+.1: game.loop_b=game.cursor; game.refresh_editor())
     var rail=Control.new(); place(rail,self,.02,.19,.105,.91)
-    caption(rail,"TOOLS",0,0,1,.055,13).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    eyebrow(rail,"TOOLS",0,0,1,.055).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     var names=[["select","SELECT"],["range","RANGE"],["tap","TAP"],["hold","HOLD"],["slide","SLIDE"],["flick","FLICK"]]
     for i in names.size():
         var kind: String=names[i][0]
@@ -83,13 +116,13 @@ func _ready() -> void:
     game.seek.value_changed.connect(func(value): if not game.updating: game.seek_to(value))
     game.info=caption(self,"",.12,.955,.48,.99,14)
     paste_button=action(self,"PASTE",.61,.955,.765,.995,paste_range)
-    var panel=Panel.new(); place(panel,self,.785,.19,.98,.91)
-    var glass=StyleBoxFlat.new(); glass.bg_color=Color("10142c"); glass.set_corner_radius_all(16)
-    glass.border_color=Color("342449"); glass.set_border_width_all(1); panel.add_theme_stylebox_override("panel",glass)
+    var panel=card(self,.785,.19,.98,.91); panel.mouse_filter=Control.MOUSE_FILTER_PASS
     inspector=Control.new(); place(inspector,panel,0,0,1,1)
-    note_title=caption(inspector,"NOTE INSPECTOR",.06,.025,.94,.085,20)
-    help_label=caption(inspector,"",.06,.105,.94,.27,16); help_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
-    type_input=OptionButton.new(); place(type_input,inspector,.06,.105,.94,.17)
+    eyebrow(inspector,"INSPECTOR",.06,.02,.94,.055)
+    note_title=caption(inspector,"Note inspector",.06,.05,.94,.1,22)
+    help_label=caption(inspector,"",.06,.115,.94,.28,16); help_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+    help_label.add_theme_color_override("font_color",MUTED)
+    type_input=OptionButton.new(); place(type_input,inspector,.06,.115,.94,.175); field_style(type_input)
     for kind in SynkChart.TYPES: type_input.add_item(str(kind).to_upper())
     type_input.item_selected.connect(func(index):
         if not updating: game.document.convert(SynkChart.TYPES[index],60.0/game.chart_bpm(),game.length()); game.refresh_editor())
@@ -129,37 +162,14 @@ func _ready() -> void:
     game.status=caption(self,"",.025,.078,.80,.10,12)
     game.mr.register_button(action(self,"MR OFF",.49,.955,.60,.995,game.mr.toggle))
     action(self,"TEST FROM HERE",.785,.935,.98,.985,game.test_editor_here,"primary")
-    build_song_panel(panel)
     set_tool("select")
-func build_song_panel(parent: Control) -> void:
-    song_panel=Control.new(); place(song_panel,parent,0,0,1,1); song_panel.visible=false
-    caption(song_panel,"SONG DETAILS",.06,.025,.94,.085,20)
-    game.studio_cover=TextureRect.new(); place(game.studio_cover,song_panel,.12,.105,.88,.33)
-    game.studio_cover.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; game.studio_cover.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED
-    ScreenStyle.round_cover(game.studio_cover,14)
-    caption(song_panel,"TITLE",.06,.35,.94,.39,13)
-    game.song_title_input=LineEdit.new(); place(game.song_title_input,song_panel,.06,.4,.94,.47)
-    caption(song_panel,"ALBUM",.06,.49,.94,.53,13)
-    game.song_album_input=LineEdit.new(); place(game.song_album_input,song_panel,.06,.54,.94,.61)
-    for input in [game.song_title_input,game.song_album_input]:
-        input.add_theme_font_size_override("font_size",17)
-        input.text_submitted.connect(func(_text): game.apply_song_info())
-        input.focus_exited.connect(game.apply_song_info)
-    caption(song_panel,"Shared by every chart version",.06,.64,.94,.70,13)
-    game.studio_cover_button=action(song_panel,"SET COVER",.06,.72,.94,.79,game.choose_cover)
-    action(song_panel,"IMPORT AUDIO",.06,.81,.94,.88,game.choose_audio,"secondary")
-    action(song_panel,"CHART TIMING",.06,.91,.94,.98,func(): game.features.open_tools("Grid"))
+    move_child(safe_content,get_child_count()-1)
 func set_tool(kind: String) -> void:
     game.editor_tool=kind
     if game.timeline and kind!="range": game.timeline.clear_range()
     elif game.timeline: game.timeline.group_mode=false
     for key in tool_buttons: tool_buttons[key].set_selected(key==kind)
     refresh_inspector()
-func toggle_details() -> void:
-    UiMotion.transition(self,.22)
-    details_open=not details_open
-    song_panel.visible=details_open; inspector.visible=not details_open
-    details_button.set_selected(details_open)
 func refresh_inspector() -> void:
     if overview: overview.rebuild()
     if selected_actions==null: return
@@ -231,6 +241,7 @@ func duplicate_range(at_playhead: bool = false) -> void:
             game.tell("This passage does not fit before the end of the song."); return
         copies.append(n)
     game.stop_audition(); game.document.checkpoint()
+    game.space_authored_notes(copies,game.document.notes)
     game.document.notes.append_array(copies)
     game.document.selected=-1
     timeline.range_start=destination; timeline.range_end=destination+span
@@ -263,7 +274,9 @@ func transform_range(operation: String,amount: float=0) -> bool:
                 if float(p.lane)<0 or float(p.lane)>SynkChart.MAX_LANE: game.tell("Slide path would leave the highway. Nothing changed."); return false
             changes.append(n)
     game.stop_audition(); game.document.checkpoint()
-    if operation=="repeat": game.document.notes.append_array(changes)
+    if operation=="repeat":
+        game.space_authored_notes(changes,game.document.notes)
+        game.document.notes.append_array(changes)
     else:
         for i in timeline.range_indices.size(): game.document.notes[timeline.range_indices[i]]=changes[i]
     if operation=="time": timeline.range_start+=amount; timeline.range_end+=amount
@@ -307,6 +320,7 @@ func paste_range() -> void:
             game.tell("Copied notes do not fit before the end of the song."); return
         copies.append(note)
     game.stop_audition(); game.document.checkpoint()
+    game.space_authored_notes(copies,game.document.notes)
     game.document.notes.append_array(copies); game.document.selected=-1
     game.timeline.range_active=true
     game.timeline.range_start=destination; game.timeline.range_end=destination+clipboard_span

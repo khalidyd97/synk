@@ -34,13 +34,19 @@ func gear_outline(center: Vector2, outer: float, inner: float) -> PackedVector2A
 			points.append(center + Vector2(cos(angle), sin(angle)) * corner[1])
 	return points
 
+# A rounded square button like the other screens' back buttons: dark card, light border that
+# turns cyan on hover, and a solid gear icon with a punched-out centre.
 func _draw() -> void:
-	var center = size * .5
-	var radius = minf(size.x, size.y) * .40
-	var color = accent.lerp(Color.WHITE, hover_amount * .6)
-	var glow = Color(Color("9b5cff"), .22 + hover_amount * .25)
-	draw_circle(center, radius * 1.15, glow)
-	var outline = gear_outline(center, radius, radius * .76)
-	outline.append(outline[0])
-	draw_polyline(outline, color, maxf(2.0, radius * .13), true)
-	draw_arc(center, radius * .30, 0, TAU, 32, color, maxf(2.0, radius * .13), true)
+	var side = minf(size.x, size.y)
+	var rect = Rect2((size - Vector2(side, side)) * .5, Vector2(side, side)).grow(-side * .04)
+	var box = StyleBoxFlat.new(); box.set_corner_radius_all(roundi(side * .22)); box.set_border_width_all(1)
+	box.bg_color = Color(.035, .028, .080, .86).lerp(Color("143443"), hover_amount * .45)
+	box.border_color = Color("302a42").lerp(Color("50daec"), hover_amount * .8)
+	box.shadow_color = Color(Color("50daec"), hover_amount * .14); box.shadow_size = roundi(side * .08)
+	draw_style_box(box, rect)
+	var center = rect.get_center()
+	var radius = side * .25
+	var color = Color("e8e6f6").lerp(Color.WHITE, hover_amount)
+	draw_colored_polygon(gear_outline(center, radius, radius * .78), color)
+	draw_circle(center, radius * .78, color)
+	draw_circle(center, radius * .36, box.bg_color.lerp(Color("0c0b1d"), .3))

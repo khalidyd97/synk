@@ -26,9 +26,8 @@ func run() -> void:
     game.document.load_notes([SynkChart.note(6,2),SynkChart.note(8,1),hold(10,4,1),SynkChart.note(14,7)],{"bpm":120.0,"beat_offset":0.0})
     game.refresh_editor(); game.seek_to(8); game.zoom_seconds=12; game.timeline.view_start=4
     await shot("03-chart-studio")
-    game.studio.toggle_details(); await shot("04-song-details")
     game.features.open_tools("Grid"); await shot("05-chart-timing")
-    game.features.close_tools(); game.studio.toggle_details(); game.studio.set_tool("range")
+    game.features.close_tools(); game.studio.set_tool("range")
     game.timeline.range_active=true; game.timeline.range_start=8; game.timeline.range_end=16; game.timeline.update_range()
     game.refresh_editor(); await shot("06-select-range")
     var r=game.recorder

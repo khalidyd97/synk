@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 220" width="100%" height="100%">
+  <defs>
+    <linearGradient id="logoFill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1a5cff" />
+      <stop offset="45%" stop-color="#3b267b" />
+      <stop offset="55%" stop-color="#61187d" />
+      <stop offset="100%" stop-color="#d827b9" />
+    </linearGradient>
+    <linearGradient id="strokeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5ce1e6" />
+      <stop offset="50%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#ff66c4" />
+    </linearGradient>
+    <linearGradient id="eqCyan" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#00f2fe" />
+      <stop offset="100%" stop-color="#4facfe" stop-opacity="0.2" />
+    </linearGradient>
+    <linearGradient id="eqPink" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#ff0844" />
+      <stop offset="100%" stop-color="#ffb199" stop-opacity="0.2" />
+    </linearGradient>
+    <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur1" />
+      <feGaussianBlur stdDeviation="15" result="blur2" />
+      <feMerge>
+        <feMergeNode in="blur2" />
+        <feMergeNode in="blur1" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background Equalizer Glow Behind Logo -->
+  <g opacity="0.45" filter="url(#neonGlow)">
+    <rect x="220" y="130" width="8" height="40" fill="url(#eqCyan)" />
+    <rect x="234" y="100" width="8" height="70" fill="url(#eqCyan)" />
+    <rect x="248" y="120" width="8" height="50" fill="url(#eqCyan)" />
+    <rect x="262" y="80" width="8" height="90" fill="url(#eqCyan)" />
+    <rect x="276" y="110" width="8" height="60" fill="url(#eqCyan)" />
+    <rect x="360" y="95" width="8" height="75" fill="url(#eqCyan)" />
+    <rect x="374" y="115" width="8" height="55" fill="url(#eqCyan)" />
+    <rect x="388" y="75" width="8" height="95" fill="url(#eqCyan)" />
+    <rect x="402" y="125" width="8" height="45" fill="url(#eqCyan)" />
+    <rect x="450" y="110" width="8" height="60" fill="url(#eqPink)" />
+    <rect x="464" y="85" width="8" height="85" fill="url(#eqPink)" />
+    <rect x="478" y="120" width="8" height="50" fill="url(#eqPink)" />
+    <rect x="540" y="90" width="8" height="80" fill="url(#eqPink)" />
+    <rect x="554" y="115" width="8" height="55" fill="url(#eqPink)" />
+    <rect x="568" y="130" width="8" height="40" fill="url(#eqPink)" />
+  </g>
+
+  <!-- Main SYNK Vector Lettering -->
+  <g filter="url(#neonGlow)" stroke="url(#strokeGrad)" stroke-width="3.5" stroke-linejoin="round" fill="url(#logoFill)">
+    <!-- S -->
+    <path d="M 120 40 L 265 40 L 255 68 L 150 68 L 145 92 L 245 92 L 228 165 L 85 165 L 95 137 L 200 137 L 206 116 L 106 116 Z" />
+    <!-- Y -->
+    <path d="M 280 40 L 320 40 L 348 92 L 395 40 L 435 40 L 362 120 L 350 165 L 312 165 L 324 120 Z" />
+    <!-- N -->
+    <path d="M 445 40 L 485 40 L 520 115 L 538 40 L 575 40 L 545 165 L 505 165 L 470 90 L 452 165 L 415 165 Z" />
+    <!-- K -->
+    <path d="M 595 40 L 633 40 L 620 92 L 685 40 L 730 40 L 660 98 L 705 165 L 660 165 L 628 114 L 612 126 L 602 165 L 565 165 Z" />
+  </g>
+
+  <!-- Internal Letter Detail (Mini Equalizer inside N) -->
+  <g fill="#5ce1e6" opacity="0.9">
+    <rect x="422" y="152" width="10" height="4" />
+    <rect x="422" y="145" width="10" height="4" />
+    <rect x="422" y="138" width="10" height="4" />
+    <rect x="435" y="152" width="10" height="4" />
+    <rect x="435" y="145" width="10" height="4" />
+  </g>
+</svg>

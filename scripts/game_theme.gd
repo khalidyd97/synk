@@ -8,7 +8,7 @@ static func plate(fill: Color,edge: Color,bottom: int=2) -> StyleBoxFlat:
 static func create() -> Theme:
 	var t=Theme.new()
 	var cyan=Color("65dcff"); var muted=Color("536080")
-	var bold=FontVariation.new(); bold.base_font=ThemeDB.fallback_font; bold.variation_embolden=.6
+	var bold=FontVariation.new(); bold.base_font=preload("res://assets/fonts/FiraSans-Bold.ttf")
 	t.default_font=bold; t.default_font_size=18
 	for type in ["Button","OptionButton","LineEdit","PopupMenu","TabContainer","TabBar","SpinBox"]:
 		t.set_color("font_color",type,Color("edf5ff"))

@@ -79,9 +79,13 @@ static func reveal(target: CanvasItem, delay: float = 0.0) -> void:
 	tween.tween_property(target,"modulate:a",1.0,.32).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	target.set_meta("reveal_tween",tween)
 
-# Capture the outgoing frame once, then dissolve it over the live destination.
+# Screen-to-screen motion. The outgoing frame is captured once and animated on top while the
+# live destination slides in underneath (the viewport's canvas is offset, so no screen needs
+# its own animation code). direction 1 = forward: the old screen drifts left and recedes, the
+# new one arrives from the right. -1 = back: the reverse. 0 = a plain dissolve (gameplay).
 # Navigation stays synchronous: audio, focus and game clocks are never delayed.
-static func transition(source: Node, duration: float = .30) -> void:
+const SLIDE = .16
+static func transition(source: Node, duration: float = .30, direction: int = 1) -> void:
 	if not source.is_inside_tree() or Engine.get_frames_drawn()<2: return
 	var viewport=source.get_viewport()
 	var existing=viewport.get_node_or_null("ScreenTransition")
@@ -98,9 +102,30 @@ static func transition(source: Node, duration: float = .30) -> void:
 	picture.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	picture.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
 	picture.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	var tween=layer.create_tween()
-	tween.tween_property(picture,"modulate:a",0.0,duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	tween.tween_callback(layer.queue_free)
+	var tween=layer.create_tween().set_parallel(true)
+	if direction==0:
+		tween.tween_property(picture,"modulate:a",0.0,duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	else:
+		duration=maxf(duration,.38)
+		var width=viewport.get_visible_rect().size.x
+		picture.pivot_offset=viewport.get_visible_rect().size*.5
+		# Outgoing: slides a little, shrinks slightly and fades; a soft shade sells the depth.
+		tween.tween_property(picture,"position:x",-direction*width*SLIDE*.6,duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tween.tween_property(picture,"scale",Vector2.ONE*.94,duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tween.tween_property(picture,"modulate",Color(.55,.55,.62,0.0),duration*.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		# Incoming: the live screen glides in from the side.
+		var start=viewport.canvas_transform
+		var from=start; from.origin.x+=direction*width*SLIDE
+		viewport.canvas_transform=from
+		tween.tween_method(_shift_canvas.bind(viewport),from.origin.x,start.origin.x,duration).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)
+	tween.chain().tween_callback(layer.queue_free)
+
+static func _shift_canvas(x: float, viewport: Viewport) -> void:
+	if not is_instance_valid(viewport): return
+	var t=viewport.canvas_transform; t.origin.x=x; viewport.canvas_transform=t
+
+static func forward(source: Node, duration: float = .38) -> void: transition(source,duration,1)
+static func back(source: Node, duration: float = .38) -> void: transition(source,duration,-1)
 
 # Animate the visual transform, leaving Container layout and hit geometry intact.
 static func pop(target: Control, delay: float = 0.0) -> void:

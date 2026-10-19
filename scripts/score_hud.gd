@@ -6,6 +6,7 @@ const ENERGY_FILL = Color("4ff07c")
 const ENERGY_TRACK = Color(1,1,1,.16)
 const TEXT_COLOR = Color("f4f6ff")
 
+var energy_color=ENERGY_FILL
 var score_label: Label
 var energy = 0.5
 var shown_energy = 0.5
@@ -75,12 +76,12 @@ func _draw() -> void:
 	var bar = Rect2(0,h*.235,size.x,h*.1)
 	draw_rect(bar,ENERGY_TRACK)
 	var fill = Rect2(bar.position,Vector2(bar.size.x*clampf(shown_energy,0,1),bar.size.y))
-	draw_rect(fill,ENERGY_FILL)
+	draw_rect(fill,energy_color)
 	draw_rect(Rect2(fill.position,Vector2(fill.size.x,fill.size.y*.35)),Color(1,1,1,.22))
 	if fill.size.x > 2:
 		# A bright tip glow where the gauge ends.
 		var tip = Vector2(fill.end.x,bar.get_center().y)
-		for i in 4: draw_circle(tip,bar.size.y*(1.6-i*.35),Color(ENERGY_FILL.lightened(.4),.08+i*.06))
+		for i in 4: draw_circle(tip,bar.size.y*(1.6-i*.35),Color(energy_color.lightened(.4),.08+i*.06))
 	# Slim song progress along the bottom of the block.
 	draw_rect(Rect2(0,h*.985,size.x,h*.015),Color(1,1,1,.1))
 	draw_rect(Rect2(0,h*.985,size.x*clampf(progress,0,1),h*.015),Color(1,1,1,.45))

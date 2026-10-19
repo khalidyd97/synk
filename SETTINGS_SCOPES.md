@@ -2,7 +2,7 @@
 
 Global Settings: display/note speed and shape, device timing calibration and Bluetooth compensation, visual effects, song previews, metronome, MR playback preference, recorder speed, ghost guides and alignment guides. These are personal preferences, never chart file data. Recorder/editor quick controls are shortcuts to those preferences or temporary transport tools.
 
-Note size (60–125%) and hold trail width (30–150%) are independent global visual preferences under Settings → Visual Effects. They do not change lane spacing, capture coordinates, hit windows or chart data. Slide widths keep their existing value. Note heads, flick arrows, release rings, recorder ghosts and calibration notes use the selected note size.
+Note size (60–125%) and hold/slide trail width (30–150%) are independent global visual preferences under Settings → Visual Effects. They do not change lane spacing, capture coordinates, hit windows or chart data. Hold and slide trails use the same selected width. Note heads, flick arrows, release rings, recorder ghosts and calibration notes use the selected note size.
 
 Recorder preferences: pre-roll bars, Free/Soft/Strict recording quantization, recording grid subdivision, rhythm-guide subdivision and guide volume are global personal preferences under Settings → Editor Prefs → Recorder Preferences. Session setup exposes shortcuts to the same values.
 

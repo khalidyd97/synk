@@ -1,0 +1,17 @@
+; Standalone generator for the realistic lobby background loop. See README.md in this folder.
+config_version=5
+
+[application]
+config/name="SYNK Lobby Stage Video"
+run/main_scene="res://render.tscn"
+
+[display]
+window/size/viewport_width=1920
+window/size/viewport_height=864
+
+[editor]
+movie_writer/fps=30
+movie_writer/disable_vsync=true
+
+[rendering]
+renderer/rendering_method="gl_compatibility"

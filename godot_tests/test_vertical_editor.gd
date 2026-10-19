@@ -52,17 +52,11 @@ func run():
     timeline._gui_input(drag)
     timeline._gui_input(screen_touch(1,drag.position,false)); timeline._gui_input(screen_touch(0,Vector2.ZERO,false))
     check(game.zoom_seconds<zoom and game.document.notes.size()==count,"Pinch zoom does not create notes")
-    game.studio.toggle_details()
-    check(game.studio.song_panel.visible and not game.studio.inspector.visible,"Song details collapse independently")
-    game.studio.toggle_details()
+    check(not "song_panel" in game.studio and game.studio.inspector.visible,"Song details are edited from the song list, not the editor")
     game.document.selected=2; game.refresh_editor()
     for i in 3: await process_frame
     await RenderingServer.frame_post_draw
     root.get_texture().get_image().save_png("res://.tools/vertical-editor-slide.png")
-    game.studio.toggle_details()
-    await process_frame
-    await RenderingServer.frame_post_draw
-    root.get_texture().get_image().save_png("res://.tools/vertical-editor-details.png")
     game.cursor=4.0
     game.test_editor_here()
     check(game.mode=="play" and game.start_position>3.0 and game.start_position<4.0,"Test starts two beats before cursor")

@@ -1,8 +1,9 @@
 extends Node
 # Recorder preferences are global; punch boundaries and takes belong to this session.
 const Motion=preload("res://scripts/ui_motion.gd")
-const Action=preload("res://scripts/neon_action.gd")
+const Action=preload("res://scripts/recorder_action.gd")
 const Audit=preload("res://scripts/chart_audit.gd")
+var progress: ProgressBar
 var game: Control
 var region=Vector2.ZERO
 var use_range=false
@@ -80,6 +81,13 @@ func snap_time(at: float) -> float:
     var step=60.0/game.chart_bpm()/int(config.get("division",division))
     return game.chart_offset()+roundf((at-game.chart_offset())/step)*step
 
+func spacing_blockers() -> Array:
+    var result: Array=[]
+    for note in game.document.notes:
+        if bool(config.get("replace",replace)) and writable(note) and float(note.time)>=region.x and float(note.time)<region.y: continue
+        result.append(note)
+    return result
+
 func prepare(source: Array) -> Array:
     var result: Array=[]
     for original in source:
@@ -100,6 +108,7 @@ func prepare(source: Array) -> Array:
                 for i in n.checkpoints.size(): n.checkpoints[i]=float(n.checkpoints[i])*ratio
         result.append(n)
     result.sort_custom(func(a,b): return float(a.time)<float(b.time))
+    game.space_authored_notes(result,spacing_blockers())
     return result
 
 func merged(notes: Array) -> Array:
@@ -224,6 +233,8 @@ func stop_preview() -> void:
     if replay_return: replay_return.visible=false
 
 func _process(_delta: float) -> void:
+    if progress and game.mode=="record":
+        progress.value=clampf((game.song_time-region.x)/maxf(.001,region.y-region.x)*100,0,100)
     if active and game.mode=="record" and not game.arranging and game.countdown==0 and game.resume_countdown==0 and game.song_time>=region.y:
         auto_round=true; game.stop_take()
     if reviewing_audio and (game.mode!="editor" or game.chart_time()>=region.y or not game.audio.playing):
@@ -236,16 +247,20 @@ func text(parent: Node,value: String,font_size: int=18) -> Label:
     label.mouse_filter=Control.MOUSE_FILTER_IGNORE
     return label
 func button(parent: Node,title: String,callback: Callable,role: String="tool") -> Button:
-    var b=Action.new(); b.text=title; b.variant=role; b.caption_size=18; b.custom_minimum_size=Vector2(0,48)
+    var b=Action.new(); b.text=title; b.variant=role; b.caption_size=21; b.custom_minimum_size=Vector2(0,60)
     parent.add_child(b); b.pressed.connect(callback); return b
 func choice(parent: Node,title: String,items: Array,current: int,callback: Callable) -> OptionButton:
     text(parent,title,16)
-    var picker=OptionButton.new(); parent.add_child(picker); picker.custom_minimum_size.y=44
+    var picker=OptionButton.new(); parent.add_child(picker); picker.custom_minimum_size.y=56
+    picker.add_theme_font_size_override("font_size",20)
+    picker.get_popup().add_theme_font_size_override("font_size",20)
+    picker.get_popup().add_theme_constant_override("v_separation",16)
     for item in items: picker.add_item(str(item))
     picker.select(clampi(current,0,items.size()-1)); picker.item_selected.connect(callback); return picker
 func number(parent: Node,title: String,value: float,low: float,high: float,step: float,callback: Callable) -> SpinBox:
     text(parent,title,16)
-    var spinner=SpinBox.new(); parent.add_child(spinner); spinner.min_value=low; spinner.max_value=high; spinner.step=step; spinner.value=value; spinner.custom_minimum_size.y=44
+    var spinner=SpinBox.new(); parent.add_child(spinner); spinner.min_value=low; spinner.max_value=high; spinner.step=step; spinner.value=value; spinner.custom_minimum_size.y=56
+    spinner.add_theme_font_size_override("font_size",20)
     spinner.value_changed.connect(callback); return spinner
 func toggle(parent: Node,title: String,value: bool,callback: Callable) -> void:
     var b=button(parent,title+(" · ON" if value else " · OFF"),func(): pass)
@@ -254,19 +269,36 @@ func toggle(parent: Node,title: String,value: bool,callback: Callable) -> void:
 func shell(title: String,narrow: bool=false) -> Dictionary:
     var root=Control.new(); game.ui.add_child(root); root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     var dim=ColorRect.new(); root.add_child(dim); dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); dim.color=Color(0,0,.025,.55)
-    var panel=Panel.new(); game.rect(panel,root,.55 if narrow else .14,.05,.98 if narrow else .86,.95)
+    var safe_content=game.safe_parent("SafeDialogControls",root)
+    var panel=Panel.new(); game.rect(panel,safe_content,.55 if narrow else .14,.05,.98 if narrow else .86,.95)
     var style=StyleBoxFlat.new(); style.bg_color=Color("0c142c"); style.border_color=Color("65dcff"); style.set_border_width_all(1); panel.add_theme_stylebox_override("panel",style)
-    preload("res://scripts/screen_style.gd").chassis(panel)
+    panel.set_meta("keep_caption_size",true)
+    var plate=StyleBoxFlat.new(); plate.bg_color=Color("0c1023"); plate.border_color=Color("3e4663")
+    plate.set_border_width_all(1); plate.set_corner_radius_all(20)
+    panel.add_theme_stylebox_override("panel",plate)
     game.label(panel,title,.04,.02,.76,.105,26)
-    game.button(panel,"KEEP" if narrow else "DONE",.79,.025,.96,.10,func():
+    var done=Action.new(); done.text="KEEP" if narrow else "DONE"; done.variant="primary"; done.caption_size=21
+    game.rect(done,panel,.79,.025,.96,.10)
+    done.pressed.connect(func():
         if narrow: keep()
-        elif setup: setup.queue_free(); setup=null,"primary")
+        elif setup: setup.queue_free(); setup=null)
     var scroll=ScrollContainer.new(); game.rect(scroll,panel,.04,.13,.96,.97)
     scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
     var box=VBoxContainer.new(); scroll.add_child(box); box.size_flags_horizontal=Control.SIZE_EXPAND_FILL; box.add_theme_constant_override("separation",12)
+    preload("res://scripts/interface_life.gd").mount(panel)
     Motion.pop(panel); return {"root":root,"box":box,"panel":panel,"dim":dim}
 func persist(name: String,value: Variant) -> void:
     game.prefs.set_value("recorder",name,value); game.prefs.save("user://preferences.cfg")
+
+func setup_group(parent: Node,title: String) -> VBoxContainer:
+    var card=PanelContainer.new(); parent.add_child(card)
+    var plate=StyleBoxFlat.new(); plate.bg_color=Color("11162b"); plate.border_color=Color("2e354d")
+    plate.set_corner_radius_all(16); plate.set_border_width_all(1)
+    for edge in ["left","right","top","bottom"]: plate.set("content_margin_"+edge,18)
+    card.add_theme_stylebox_override("panel",plate)
+    var contents=VBoxContainer.new(); card.add_child(contents); contents.add_theme_constant_override("separation",12)
+    var heading=text(contents,title,15); heading.add_theme_color_override("font_color",Color("7fd7e7"))
+    return contents
 
 func show_setup(global_only: bool=false) -> void:
     if setup: return
@@ -275,23 +307,27 @@ func show_setup(global_only: bool=false) -> void:
     var s=shell("RECORDING SETUP"); setup=s.root; var box: VBoxContainer=s.box
     text(box,"Global recorder preferences" if global_only else "Applies to your next new session. For punch-in, select a range in the editor or set A / B. Types and locks remain fixed across loop takes.")
     if not global_only:
-        toggle(box,"PUNCH IN · USE SELECTED RANGE / A–B",use_range,func(on): use_range=on)
-        choice(box,"Existing notes in the section",["LAYER · keep existing notes","REPLACE · overwrite unlocked pass types"],1 if replace else 0,func(i): replace=i==1)
-        toggle(box,"LOOP TAKES · stop to review up to 32 attempts",loop_takes,func(on): loop_takes=on)
-    choice(box,"Audible pre-roll · bars of 4 beats",["OFF","1 BAR","2 BARS","3 BARS","4 BARS"],pre_roll,func(i): pre_roll=i; persist("pre_roll",i))
-    choice(box,"Recording timing",["FREE · preserve your timing","SOFT SNAP · 50% toward grid","STRICT SNAP · align to grid"],["free","soft","strict"].find(quantize),func(i): quantize=["free","soft","strict"][i]; persist("quantize",quantize))
-    choice(box,"Grid subdivision per beat",["1 · quarter notes","2 · eighth notes","4 · sixteenth notes","8 · thirty-second notes"],[1,2,4,8].find(division),func(i): division=[1,2,4,8][i]; persist("division",division))
+        var session=setup_group(box,"SESSION RANGE")
+        toggle(session,"PUNCH IN · USE SELECTED RANGE / A–B",use_range,func(on): use_range=on)
+        choice(session,"Existing notes in the section",["LAYER · keep existing notes","REPLACE · overwrite unlocked pass types"],1 if replace else 0,func(i): replace=i==1)
+        toggle(session,"LOOP TAKES · stop to review up to 32 attempts",loop_takes,func(on): loop_takes=on)
+    var timing=setup_group(box,"TIMING & GRID")
+    choice(timing,"Audible pre-roll · bars of 4 beats",["OFF","1 BAR","2 BARS","3 BARS","4 BARS"],pre_roll,func(i): pre_roll=i; persist("pre_roll",i))
+    choice(timing,"Recording timing",["FREE · preserve your timing","SOFT SNAP · 50% toward grid","STRICT SNAP · align to grid"],["free","soft","strict"].find(quantize),func(i): quantize=["free","soft","strict"][i]; persist("quantize",quantize))
+    choice(timing,"Grid subdivision per beat",["1 · quarter notes","2 · eighth notes","4 · sixteenth notes","8 · thirty-second notes"],[1,2,4,8].find(division),func(i): division=[1,2,4,8][i]; persist("division",division))
     if not global_only:
-        choice(box,"Recording pass",["ALL TYPES","TAPS ONLY","HOLDS ONLY","SLIDES ONLY","FLICKS ONLY"],["all","tap","hold","slide","flick"].find(pass_kind),func(i): pass_kind=["all","tap","hold","slide","flick"][i])
-        text(box,"Lock completed types · protects them from replacement and correction",16)
+        var types=setup_group(box,"NOTE TYPES & PROTECTION")
+        choice(types,"Recording pass",["ALL TYPES","TAPS ONLY","HOLDS ONLY","SLIDES ONLY","FLICKS ONLY"],["all","tap","hold","slide","flick"].find(pass_kind),func(i): pass_kind=["all","tap","hold","slide","flick"][i])
+        text(types,"Lock completed types · protects them from replacement and correction",16)
         for kind in SynkChart.TYPES:
-            toggle(box,"LOCK "+str(kind).to_upper(),kind in locked,func(on):
+            toggle(types,"LOCK "+str(kind).to_upper(),kind in locked,func(on):
                 if on and kind not in locked: locked.append(kind)
                 elif not on: locked.erase(kind))
-    toggle(box,"RHYTHM GUIDE · accented downbeat",game.beat_clock.enabled,func(on):
+    var guide=setup_group(box,"RHYTHM GUIDE")
+    toggle(guide,"RHYTHM GUIDE · accented downbeat",game.beat_clock.enabled,func(on):
         game.beat_clock.enabled=on; game.beat_clock.last_time=-1; game.prefs.set_value("editor","metronome",on); game.prefs.save("user://preferences.cfg"))
-    choice(box,"Guide subdivisions",["BEATS","EIGHTHS","SIXTEENTHS"],[1,2,4].find(game.beat_clock.subdivision),func(i): game.beat_clock.subdivision=[1,2,4][i]; persist("guide_subdivision",game.beat_clock.subdivision))
-    number(box,"Guide volume · dB",game.beat_clock.guide_db,-30,0,1,func(v): game.beat_clock.guide_db=v; persist("guide_db",v))
+    choice(guide,"Guide subdivisions",["BEATS","EIGHTHS","SIXTEENTHS"],[1,2,4].find(game.beat_clock.subdivision),func(i): game.beat_clock.subdivision=[1,2,4][i]; persist("guide_subdivision",game.beat_clock.subdivision))
+    number(guide,"Guide volume · dB",game.beat_clock.guide_db,-30,0,1,func(v): game.beat_clock.guide_db=v; persist("guide_db",v))
     button(box,"DONE",func(): setup.queue_free(); setup=null,"primary")
 
 func show_review() -> void:
@@ -299,30 +335,58 @@ func show_review() -> void:
     close_review()
     game.seek_to(region.x)
     if game.timeline: game.timeline.reveal_time(region.x)
-    var s=shell("TAKE REVIEW",true); review=s.root; var box: VBoxContainer=s.box
-    review_panel=s.panel; review_dim=s.dim
-    replay_return=game.button(review,"BACK TO TAKE REVIEW",.35,.02,.65,.085,stop_preview,"secondary")
-    replay_return.visible=false
-    text(box,"%.2f–%.2f s · %s · %s" % [region.x,region.y,"REPLACE" if bool(config.get("replace",replace)) else "LAYER",current_pass().to_upper()],16)
+    review=Control.new(); game.ui.add_child(review); review.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    review_dim=ColorRect.new(); review.add_child(review_dim); review_dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    review_dim.color=Color(0,0,.025,.72)
+    var safe=game.safe_parent("SafeTakeReview",review)
+    review_panel=Panel.new(); game.rect(review_panel,safe,.10,.07,.90,.95); review_panel.set_meta("keep_caption_size",true)
+    var plate=StyleBoxFlat.new(); plate.bg_color=Color("0c1023"); plate.border_color=Color("3e4663")
+    plate.set_border_width_all(1); plate.set_corner_radius_all(22); review_panel.add_theme_stylebox_override("panel",plate)
+    game.label(review_panel,"TAKE REVIEW",.035,.025,.80,.10,30)
+    game.label(review_panel,"%.2f–%.2f s · %s · %s" % [region.x,region.y,"REPLACE" if bool(config.get("replace",replace)) else "LAYER",current_pass().to_upper()],.035,.105,.965,.16,17)
+    var left=review_column(review_panel,Rect2(.035,.20,.445,.58),"TAKE SUMMARY")
+    var right=review_column(review_panel,Rect2(.51,.20,.455,.58),"TAKE SELECTION")
+    compare_label=text(left,"",20)
+    warnings_label=text(left,"",17)
     var titles: Array=[]
     for i in takes.size(): titles.append("TAKE %d · %d notes" % [i+1,takes[i].notes.size()])
-    take_picker=choice(box,"Choose a take",titles,selected_take,select_take)
+    take_picker=choice(right,"Choose the attempt to keep",titles,selected_take,select_take)
     take_picker.disabled=takes.size()<2
-    compare_label=text(box,"")
-    button(box,"▶ REPLAY / STOP · HIGHLIGHTED NOTES",preview,"secondary")
-    button(box,"KEEP TAKE",keep,"primary")
-    button(box,"RETRY SECTION",retry,"record")
-    button(box,"UNDO TAKE",func(): undo_take(); close_review(); game.tell("Take undone. Earlier chart notes restored."),"danger")
-    warnings_label=text(box,"",16)
     if takes.size()>1:
-        text(box,"Combine sections of two takes",20)
-        var first=choice(box,"First half",titles,0,func(_i): pass)
-        var second=choice(box,"Second half",titles,selected_take,func(_i): pass)
-        var split=number(box,"Splice at song time · seconds",(region.x+region.y)*.5,region.x,region.y,.001,func(_v): pass)
-        button(box,"APPLY COMBINED TAKE",func():
+        text(right,"COMBINE TWO TAKES",17)
+        var first=choice(right,"First half",titles,0,func(_i): pass)
+        var second=choice(right,"Second half",titles,selected_take,func(_i): pass)
+        var split=number(right,"Splice at song time · seconds",(region.x+region.y)*.5,region.x,region.y,.001,func(_v): pass)
+        button(right,"APPLY COMBINED TAKE",func():
             var combined=combine(first.selected,second.selected,split.value)
             apply_take(combined); update_review(); compare_label.text="COMBINED · %d notes\n" % combined.size()+compare_label.text)
+    else:
+        text(right,"Replay to check your timing. Retry to record another attempt in the same section.",18)
+        text(right,"Keep Take returns to the editor. Save there when you are ready to publish your chart.",18)
+    game.label(review_panel,"Your take stays in the draft until you SAVE the chart.",.035,.795,.965,.835,16)
+    review_action("UNDO TAKE",.035,.255,func(): undo_take(); close_review(); game.tell("Take undone. Earlier chart notes restored."),"danger")
+    review_action("RETRY SECTION",.275,.495,retry,"record")
+    review_action("REPLAY TAKE",.515,.735,preview,"secondary")
+    review_action("KEEP TAKE",.755,.965,keep,"primary")
+    replay_return=Action.new(); replay_return.text="BACK TO TAKE REVIEW"; replay_return.variant="secondary"; replay_return.caption_size=21
+    game.rect(replay_return,safe,.33,.015,.67,.09); replay_return.pressed.connect(stop_preview); replay_return.visible=false
+    preload("res://scripts/interface_life.gd").mount(review_panel)
+    Motion.pop(review_panel)
     update_review()
+
+func review_action(title: String,left: float,right: float,callback: Callable,role: String) -> void:
+    var action=Action.new(); action.text=title; action.variant=role; action.caption_size=21
+    game.rect(action,review_panel,left,.86,right,.965); action.pressed.connect(callback)
+
+func review_column(parent: Control,bounds: Rect2,title: String) -> VBoxContainer:
+    var panel=Panel.new(); game.rect(panel,parent,bounds.position.x,bounds.position.y,bounds.end.x,bounds.end.y)
+    var plate=StyleBoxFlat.new(); plate.bg_color=Color("11162b"); plate.border_color=Color("2e354d")
+    plate.set_border_width_all(1); plate.set_corner_radius_all(16); panel.add_theme_stylebox_override("panel",plate)
+    var scroll=ScrollContainer.new(); game.rect(scroll,panel,.045,.04,.955,.96); scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+    var drag=preload("res://scripts/song_list_scroll.gd").new(); drag.scroll=scroll; scroll.add_child(drag)
+    var box=VBoxContainer.new(); scroll.add_child(box); box.size_flags_horizontal=Control.SIZE_EXPAND_FILL; box.add_theme_constant_override("separation",16)
+    var heading=text(box,title,15); heading.add_theme_color_override("font_color",Color("7fd7e7"))
+    return box
 
 func update_review() -> void:
     if not review: return

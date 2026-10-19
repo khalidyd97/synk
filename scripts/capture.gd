@@ -3,33 +3,59 @@ extends RefCounted
 
 var gestures: Dictionary = {}
 var notes: Array = []
+var minimum_lane_gap=2.4
+var chord_starts: Array=[]
+var last_spacing_resolved=true
+var onset_bounds=Vector2(0,INF)
+const CHORD_WINDOW=.06
 
 static func lane(x: float) -> float:
 	return clampf((x - .07) / .86 * SynkChart.LANES - .5, 0, SynkChart.MAX_LANE)
 
-func begin(id: int, time: float, p: Vector2, tool = "auto") -> bool:
+func begin(id: int, time: float, p: Vector2, tool = "auto",fixed: Array=[]) -> bool:
 	if time < 0 or p.x < .07 or p.x > .93 or p.y < .6 or p.y > .92 or gestures.has(id): return false
 	var note_lane = roundi(lane(p.x))
-	# Fingers landing together should become a chord, even when touch events arrive on separate frames.
-	for gesture in gestures.values():
-		var neighbor: Dictionary = gesture.note
-		if int(neighbor.lane)!=note_lane and absf(time-float(neighbor.time))<=.06:
-			time=float(neighbor.time); break
-	if not notes.is_empty():
-		var previous: Dictionary = notes.back()
-		if int(previous.lane)!=note_lane and absf(time-float(previous.time))<=.06:
-			time=float(previous.time)
+	var raw_time=time
+	# Use the original onset, not release order. Never chain an entire fast roll into one chord.
+	chord_starts=chord_starts.filter(func(entry): return absf(raw_time-float(entry.input_time))<=CHORD_WINDOW and current_note(entry.note))
+	for entry in chord_starts:
+		if (entry.id!=id or entry.raw_lane!=note_lane) and absf(raw_time-float(entry.note.time))<=CHORD_WINDOW:
+			time=float(entry.note.time); break
+	if time==raw_time:
+		var closest=CHORD_WINDOW+.00001
+		for previous in fixed:
+			if float(previous.time)<onset_bounds.x or float(previous.time)>=onset_bounds.y: continue
+			var distance=absf(raw_time-float(previous.time))
+			if distance<closest: time=float(previous.time); closest=distance
 	var n = SynkChart.note(time, note_lane)
 	n.path.append({"offset": 0.0, "lane": float(n.lane)})
-	gestures[id] = {"note": n, "tool": tool, "start": p, "position": p, "max_delta": 0.0}
+	gestures[id] = {"note": n, "tool": tool, "start": p, "position": p, "max_delta": 0.0,"lane_shift":0,"raw_lane":note_lane,"fixed":fixed}
+	chord_starts.append({"note":n,"id":id,"input_time":raw_time,"raw_lane":note_lane})
+	space_chord(n,fixed)
 	return true
+
+func current_note(n: Dictionary) -> bool:
+	for other in notes:
+		if is_same(n,other): return true
+	for gesture in gestures.values():
+		if is_same(n,gesture.note): return true
+	return false
+
+func space_chord(n: Dictionary,fixed: Array) -> void:
+	var movable=notes.duplicate(); var before: Dictionary={}
+	for id in gestures:
+		movable.append(gestures[id].note); before[id]=int(gestures[id].note.lane)
+	last_spacing_resolved=SynkNoteSpacing.place(n,movable,fixed,minimum_lane_gap).resolved
+	# A moved gesture keeps following its finger with a constant lane offset.
+	for id in gestures: gestures[id].lane_shift+=int(gestures[id].note.lane)-int(before[id])
 
 func move(id: int, time: float, p: Vector2) -> void:
 	if not gestures.has(id): return
 	var g: Dictionary = gestures[id]; var n: Dictionary = g.note
-	g.position = p; g.max_delta = maxf(float(g.max_delta), absf(lane(p.x) - float(n.lane)))
-	n.duration = maxf(0, time - float(n.time)); n.end_lane = roundi(lane(p.x))
-	if n.duration > float(n.path[-1].offset) + .016: n.path.append({"offset": n.duration, "lane": lane(p.x)})
+	g.position = p; g.max_delta = maxf(float(g.max_delta), absf(lane(p.x)-float(g.get("raw_lane",roundi(lane(g.start.x))))))
+	var mapped_lane=clampf(lane(p.x)+float(g.get("lane_shift",0)),0,SynkChart.MAX_LANE)
+	n.duration = maxf(0, time - float(n.time)); n.end_lane = roundi(mapped_lane)
+	if n.duration > float(n.path[-1].offset) + .016: n.path.append({"offset": n.duration, "lane": mapped_lane})
 	n.kind = "slide" if g.max_delta >= .8 else "hold"
 
 func end(id: int, time: float, p: Vector2, canceled = false) -> Dictionary:
@@ -54,7 +80,7 @@ func end(id: int, time: float, p: Vector2, canceled = false) -> Dictionary:
 			n.path.append({"offset": n.duration, "lane": float(n.end_lane)})
 			n.path = snap_path(n.path, float(n.duration))
 			n.end_lane = int(n.path[-1].lane)
-	notes.append(n); return n
+	notes.append(n); space_chord(n,g.get("fixed",[])); return n
 
 # How long (seconds) the finger must stay over a lane for the slide to lock onto it.
 const DWELL = .12

@@ -14,15 +14,15 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 [application]
 
+run/delta_smoothing=true
+
 config/name="SYNK"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
-config/icon="res://assets/brand/icon.png"
 boot_splash/bg_color=Color(0.006, 0.008, 0.025, 1)
-boot_splash/show_image=true
+boot_splash/stretch_mode=0
 boot_splash/image="res://assets/brand/synk_logo.png"
-boot_splash/fullsize=false
-boot_splash/use_filter=true
+config/icon="res://assets/brand/icon.png"
 
 [audio]
 
@@ -36,12 +36,14 @@ window/size/window_width_override=1280
 window/size/window_height_override=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
-window/handheld/orientation=0
 
 [rendering]
 
-textures/vram_compression/import_etc2_astc=true
-
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
 environment/defaults/default_clear_color=Color(0.006, 0.008, 0.025, 1)
+
+[gui]
+
+theme/custom_font="res://assets/fonts/FiraSans-Regular.ttf"

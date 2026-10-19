@@ -132,8 +132,15 @@ func delete_song(id: String) -> Error:
 	if index < 0: return ERR_DOES_NOT_EXIST
 	var entry: Dictionary = songs[index]
 	delete_chart(id)
+	# The creator library exposes separate versions and recoverable drafts.
+	for variant in ["original", "easy", "normal", "hard", "expert"]:
+		var chart_name=id+("" if variant=="original" else "_"+variant)
+		for base in [root_path.path_join("charts/"+chart_name+".json"),root_path.path_join("drafts/"+id+"_"+variant+".json")]:
+			for suffix in ["", ".bak", ".tmp"]:
+				if FileAccess.file_exists(base+suffix): DirAccess.remove_absolute(base+suffix)
 	for path in [root_path.path_join("songs/" + str(entry.file)), root_path.path_join("covers/" + id + ".png")]:
 		if FileAccess.file_exists(path): DirAccess.remove_absolute(path)
+	SynkChartVersions.remove_all(id)
 	songs.remove_at(index)
 	return atomic_write(root_path.path_join("songs/library.json"), songs)
 

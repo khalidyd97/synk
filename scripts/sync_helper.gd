@@ -4,7 +4,7 @@ const ScreenStyle = preload("res://scripts/screen_style.gd")
 # Audio sync helper. A metronome clicks on every beat while notes fall onto a hit line.
 # The player moves the delay until each note lands exactly when they hear its click,
 # or taps along with the clicks and lets the helper measure the delay for them.
-const NeonAction = preload("res://scripts/neon_action.gd")
+const Action = preload("res://scripts/settings_action.gd")
 const SettingsScreen = preload("res://scripts/settings_screen.gd")
 const BACKGROUND = preload("res://assets/lobby/city_background.png")
 const TEXT = Color("eef0ff")
@@ -18,6 +18,7 @@ const TAPS_NEEDED = 8
 const LOOP_PADDING = 1024
 
 var game: Control
+var safe_content: Control
 var player: AudioStreamPlayer
 var lane: Control
 var delay_input: SettingsScreen.Stepper
@@ -58,6 +59,7 @@ static func measured_delay_ms(errors: Array) -> float:
 	return clampf(median*1000.0,0,600)
 
 func place(node: Control, parent: Control, left: float, top: float, right: float, bottom: float) -> void:
+	if parent==self and safe_content!=null: parent=safe_content
 	parent.add_child(node)
 	node.anchor_left = left; node.anchor_top = top; node.anchor_right = right; node.anchor_bottom = bottom
 	node.offset_left = 0; node.offset_top = 0; node.offset_right = 0; node.offset_bottom = 0
@@ -72,8 +74,8 @@ func text(parent: Control, value: String, left: float, top: float, right: float,
 	return result
 
 func action(parent: Control, caption: String, left: float, top: float, right: float, bottom: float, callback: Callable, variant: String = "tool") -> Button:
-	var result = NeonAction.new(); result.caption_text = caption; result.variant = variant
-	result.compact = true; result.caption_size = 18 if variant=="tool" else 20
+	var result=Action.new(); result.text=caption; result.primary=variant=="primary"
+	result.caption_size=18 if variant=="tool" else 22
 	place(result,parent,left,top,right,bottom); result.pressed.connect(callback)
 	return result
 
@@ -82,8 +84,10 @@ func _ready() -> void:
 	var background = TextureRect.new(); place(background,self,0,0,1,1)
 	background.texture = BACKGROUND; background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED; background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preload("res://scripts/background_motion.gd").attach(background,preload("res://scripts/image_atmosphere.gdshader"))
 	var shade = ColorRect.new(); place(shade,self,0,0,1,1); shade.color = Color(.01,.01,.04,.86); shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	action(self,"‹  BACK",.035,.055,.17,.13,close,"nav")
+	safe_content=game.safe_parent("SafeSyncControls",self)
+	action(self,"‹  BACK",.035,.035,.17,.15,close,"nav")
 	text(self,"AUDIO SYNC",.2,.04,.6,.115,42)
 	ScreenStyle.rule(self,.035,.965,.18)
 	text(self,"Wear your headphones. Change the delay until every note lands on the line exactly when you hear its click.",.2,.11,.93,.17,17,MUTED)
@@ -104,21 +108,22 @@ func _ready() -> void:
 	delay_input = SettingsScreen.Stepper.new(0,600,1,game.bluetooth_latency_ms," ms",0)
 	place(delay_input,panel,.22,.2,.78,.34)
 	delay_input.readout.add_theme_font_size_override("font_size",34)
-	action(panel,"−10",.07,.22,.2,.32,func(): delay_input.value -= 10)
-	action(panel,"+10",.8,.22,.93,.32,func(): delay_input.value += 10)
+	action(panel,"−10",.04,.20,.20,.34,func(): delay_input.value -= 10)
+	action(panel,"+10",.80,.20,.96,.34,func(): delay_input.value += 10)
 
-	var rule = ColorRect.new(); place(rule,panel,.07,.4,.93,.403); rule.color = Color(1,1,1,.08); rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	text(panel,"TAP TO MEASURE",.07,.43,.93,.5,16,Color("9b8cff"))
-	text(panel,"Tap the lane each time you hear a click. After %d taps the helper suggests a delay." % TAPS_NEEDED,.07,.5,.93,.6,15,MUTED)
-	tap_result_label = text(panel,"",.07,.6,.93,.69,20)
-	use_tap_button = action(panel,"USE MEASURED DELAY",.07,.7,.6,.79,use_measurement)
-	action(panel,"RESET TAPS",.62,.7,.93,.79,reset_taps)
-	action(panel,"SAVE",.25,.85,.75,.95,save,"primary")
+	var rule = ColorRect.new(); place(rule,panel,.07,.38,.93,.383); rule.color = Color(1,1,1,.08); rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	text(panel,"TAP TO MEASURE",.07,.40,.93,.46,16,Color("9b8cff"))
+	text(panel,"Tap the lane each time you hear a click. After %d taps the helper suggests a delay." % TAPS_NEEDED,.07,.46,.93,.54,15,MUTED)
+	tap_result_label = text(panel,"",.07,.54,.93,.63,20)
+	use_tap_button = action(panel,"USE MEASURED DELAY",.07,.65,.6,.79,use_measurement)
+	action(panel,"RESET TAPS",.62,.65,.93,.79,reset_taps)
+	action(panel,"SAVE",.25,.82,.75,.96,save,"primary")
 
 	player = AudioStreamPlayer.new(); add_child(player)
 	player.stream = metronome_stream()
 	visibility_changed.connect(func(): if not visible: player.stop())
 	refresh_taps()
+	move_child(safe_content,get_child_count()-1)
 
 func open() -> void:
 	delay_input.value = game.bluetooth_latency_ms

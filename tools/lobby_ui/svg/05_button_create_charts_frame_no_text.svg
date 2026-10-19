@@ -1,0 +1,161 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 380" width="100%" height="100%">
+  <defs>
+    <filter id="magentaGlow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="8" result="blur1" />
+      <feGaussianBlur stdDeviation="20" result="blur2" />
+      <feMerge>
+        <feMergeNode in="blur2" />
+        <feMergeNode in="blur1" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <filter id="softShadowMag" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#000000" flood-opacity="0.75" />
+    </filter>
+
+    <linearGradient id="metalFrameMag" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f5c6ff" />
+      <stop offset="25%" stop-color="#5e3b78" />
+      <stop offset="50%" stop-color="#23192d" />
+      <stop offset="75%" stop-color="#482051" />
+      <stop offset="100%" stop-color="#ff2cdf" />
+    </linearGradient>
+
+    <linearGradient id="innerBgMag" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1a0626" />
+      <stop offset="50%" stop-color="#2a083d" />
+      <stop offset="100%" stop-color="#11021a" />
+    </linearGradient>
+
+    <linearGradient id="boxGradMag" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#56147d" />
+      <stop offset="100%" stop-color="#220536" />
+    </linearGradient>
+
+    <linearGradient id="textMetallicMag" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="55%" stop-color="#fae0ff" />
+      <stop offset="60%" stop-color="#a87db8" />
+      <stop offset="100%" stop-color="#fce0fb" />
+    </linearGradient>
+
+    <pattern id="scanlinesMag" width="10" height="4" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="10" y2="0" stroke="#ff2cdf" stroke-width="1" stroke-opacity="0.07" />
+    </pattern>
+  </defs>
+
+  <!-- Top & Bottom Segmented Equalizer Blocks -->
+  <g fill="#d827b9" opacity="0.75" filter="url(#magentaGlow)">
+    <rect x="260" y="42" width="16" height="5" />
+    <rect x="260" y="34" width="16" height="5" />
+    <rect x="282" y="42" width="16" height="5" />
+    <rect x="282" y="34" width="16" height="5" />
+    <rect x="282" y="26" width="16" height="5" />
+    <rect x="282" y="18" width="16" height="5" />
+    <rect x="304" y="42" width="16" height="5" />
+    <rect x="304" y="34" width="16" height="5" />
+    <rect x="304" y="26" width="16" height="5" />
+    <rect x="326" y="42" width="16" height="5" />
+    <rect x="326" y="34" width="16" height="5" />
+    <rect x="326" y="26" width="16" height="5" />
+    <rect x="326" y="18" width="16" height="5" />
+    <rect x="326" y="10" width="16" height="5" />
+    <rect x="348" y="42" width="16" height="5" />
+    <rect x="348" y="34" width="16" height="5" />
+    <rect x="370" y="42" width="16" height="5" />
+    <rect x="370" y="34" width="16" height="5" />
+    <rect x="370" y="26" width="16" height="5" />
+    <rect x="392" y="42" width="16" height="5" />
+    <rect x="392" y="34" width="16" height="5" />
+    <rect x="392" y="26" width="16" height="5" />
+    <rect x="392" y="18" width="16" height="5" />
+    <rect x="392" y="10" width="16" height="5" />
+    <rect x="414" y="42" width="16" height="5" />
+    <rect x="414" y="34" width="16" height="5" />
+    <rect x="414" y="26" width="16" height="5" />
+    <rect x="414" y="18" width="16" height="5" />
+
+    <rect x="220" y="320" width="4" height="25" rx="2" />
+    <rect x="228" y="320" width="4" height="40" rx="2" />
+    <rect x="236" y="320" width="4" height="18" rx="2" />
+    <rect x="244" y="320" width="4" height="32" rx="2" />
+    <rect x="252" y="320" width="4" height="48" rx="2" />
+    <rect x="260" y="320" width="4" height="22" rx="2" />
+    <rect x="268" y="320" width="4" height="36" rx="2" />
+    <rect x="276" y="320" width="4" height="15" rx="2" />
+    <rect x="284" y="320" width="4" height="28" rx="2" />
+    <rect x="292" y="320" width="4" height="42" rx="2" />
+    <rect x="300" y="320" width="4" height="20" rx="2" />
+    <rect x="308" y="320" width="4" height="30" rx="2" />
+    <rect x="316" y="320" width="4" height="16" rx="2" />
+    <rect x="324" y="320" width="4" height="35" rx="2" />
+    <rect x="332" y="320" width="4" height="24" rx="2" />
+  </g>
+
+  <!-- Outer Heavy Mecha Armor Frame -->
+  <g filter="url(#softShadowMag)">
+    <polygon points="85,68 205,68 220,55 625,55 655,85 655,295 625,325 220,325 205,312 85,312 55,282 55,98" 
+             fill="url(#metalFrameMag)" stroke="#ff73fa" stroke-width="2" />
+    <polygon points="565,52 620,52 642,72 642,95 660,110 662,76 628,42 575,42" fill="#ff73fa" opacity="0.85" />
+    <polygon points="565,328 620,328 642,308 642,285 660,270 662,304 628,338 575,338" fill="#482051" stroke="#ff2cdf" stroke-width="1.5" />
+    <polygon points="140,58 80,58 46,92 46,140 58,130 58,96 86,68 130,68" fill="#ff73fa" opacity="0.85" />
+    <polygon points="140,322 80,322 46,288 46,240 58,250 58,284 86,312 130,312" fill="#482051" stroke="#ff2cdf" stroke-width="1.5" />
+  </g>
+
+  <!-- Inner Dark Screen Area -->
+  <polygon points="98,85 213,85 228,72 615,72 636,94 636,286 615,308 228,308 213,295 98,295 74,272 74,108" fill="url(#innerBgMag)" />
+  <polygon points="98,85 213,85 228,72 615,72 636,94 636,286 615,308 228,308 213,295 98,295 74,272 74,108" fill="url(#scanlinesMag)" />
+
+  <!-- Glowing Inner Neon Track Line -->
+  <polygon points="104,93 217,93 232,80 608,80 626,98 626,282 608,300 232,300 217,287 104,287 84,267 84,113" 
+           fill="none" stroke="#ff2cdf" stroke-width="3" filter="url(#magentaGlow)" />
+  <polygon points="104,93 217,93 232,80 608,80 626,98 626,282 608,300 232,300 217,287 104,287 84,267 84,113" 
+           fill="none" stroke="#ffffff" stroke-width="1" opacity="0.9" />
+
+  <!-- HUD Decorative Slashes (Top Right) -->
+  <g fill="#ff73fa" opacity="0.8">
+    <polygon points="555,92 562,92 554,104 547,104" />
+    <polygon points="566,92 573,92 565,104 558,104" />
+    <polygon points="577,92 584,92 576,104 569,104" />
+    <polygon points="588,92 595,92 587,104 580,104" />
+  </g>
+
+  <!-- 3D Beveled Chart Lanes / Sliders Box Icon -->
+  <g transform="translate(110, 108)">
+    <rect x="0" y="0" width="110" height="110" rx="8" fill="url(#boxGradMag)" stroke="#ff73fa" stroke-width="3.5" filter="url(#magentaGlow)" />
+    <rect x="6" y="6" width="98" height="98" rx="5" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.6" />
+    <line x1="28" y1="14" x2="28" y2="96" stroke="#b56bff" stroke-width="2.5" opacity="0.8" />
+    <line x1="55" y1="14" x2="55" y2="96" stroke="#b56bff" stroke-width="2.5" opacity="0.8" />
+    <line x1="82" y1="14" x2="82" y2="96" stroke="#b56bff" stroke-width="2.5" opacity="0.8" />
+    <rect x="16" y="28" width="24" height="10" rx="2" fill="#ffffff" stroke="#ff2cdf" stroke-width="2" filter="url(#magentaGlow)" />
+    <rect x="43" y="50" width="24" height="10" rx="2" fill="#ffffff" stroke="#ff2cdf" stroke-width="2" filter="url(#magentaGlow)" />
+    <rect x="70" y="72" width="24" height="10" rx="2" fill="#ffffff" stroke="#ff2cdf" stroke-width="2" filter="url(#magentaGlow)" />
+  </g>
+
+  <!-- Main Label: CREATE CHARTS (Vector Paths) -->
+  
+  
+
+  <!-- Pill Badge: 02 / CREATION -->
+  <g transform="translate(240, 228)">
+    <path d="M 10 0 L 175 0 L 185 14 L 175 28 L 10 28 L 0 14 Z" fill="#2d0643" stroke="#ff2cdf" stroke-width="2" filter="url(#magentaGlow)" />
+    
+  </g>
+
+  <!-- Divider Line -->
+  <line x1="105" y1="242" x2="240" y2="242" stroke="#ff2cdf" stroke-width="1.5" opacity="0.6" />
+  <line x1="425" y1="242" x2="505" y2="242" stroke="#ff2cdf" stroke-width="1.5" opacity="0.6" />
+
+  <!-- Subtext: Build the rhythm. Make it yours. -->
+  
+
+  <!-- Glowing Double Chevrons (Bottom Right) -->
+  <g transform="translate(505, 222)">
+    <polyline points="0,12 18,32 0,52" fill="none" stroke="#ff2cdf" stroke-width="2" opacity="0.25" />
+    <polyline points="14,12 32,32 14,52" fill="none" stroke="#ff2cdf" stroke-width="2" opacity="0.45" />
+    <g filter="url(#magentaGlow)">
+      <path d="M 32 8 L 56 32 L 32 56 L 42 56 L 66 32 L 42 8 Z" fill="#ff73fa" stroke="#ffffff" stroke-width="1" />
+      <path d="M 55 8 L 79 32 L 55 56 L 65 56 L 89 32 L 65 8 Z" fill="#ffffff" stroke="#ff2cdf" stroke-width="1.5" />
+    </g>
+  </g>
+</svg>

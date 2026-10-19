@@ -105,15 +105,34 @@ func _process(_delta: float) -> void:
 
 func depth(time: float) -> float: return (time-game.song_time)/game.note_travel_seconds()
 func project(lane: float, d: float) -> Vector2:
-	return world.camera.unproject_position(Vector3(world.lane_x(lane),0,-d*world.TRACK_LENGTH))
+	return world.camera.unproject_position(Vector3(world.lane_x(lane),.035,-d*world.TRACK_LENGTH))
+
+func touch_world_position(p: Vector2) -> Vector3:
+	var point=p*Vector2(viewport.size)
+	var hit=Plane(Vector3.UP,.035).intersects_ray(world.camera.project_ray_origin(point),world.camera.project_ray_normal(point))
+	return hit if hit!=null else Vector3(0,.035,0)
 
 func input_position(p: Vector2) -> Vector2:
-	# Map the actual camera projection back to the chart's lane coordinates.
-	var screen_point = Vector2(p.x*viewport.size.x,project(world.CENTER_LANE,0).y)
+	# The whole projected pad is interactive, including its near/far corners.
+	# Resolve its actual ground position instead of measuring against the small
+	# decorative marker or projecting every row onto the bar's center line.
+	var screen_point=p*Vector2(viewport.size)
 	var origin = world.camera.project_ray_origin(screen_point)
 	var direction = world.camera.project_ray_normal(screen_point)
-	var hit = Plane(Vector3.UP,0).intersects_ray(origin,direction)
+	var hit=Plane(Vector3.UP,.035).intersects_ray(origin,direction)
+	var on_pad=hit!=null and absf(hit.z)<=world.JUDGMENT_DEPTH*.5+.001
+	if on_pad:
+		# Preserve the existing normalized input contract for capture and judging.
+		p.y=clampf(p.y,.6001,.9199)
+	else:
+		# Keep the generous approach area and stable vertical-flick coordinates.
+		screen_point=Vector2(p.x*viewport.size.x,project(world.CENTER_LANE,0).y)
+		origin=world.camera.project_ray_origin(screen_point)
+		direction=world.camera.project_ray_normal(screen_point)
+		hit=Plane(Vector3.UP,0).intersects_ray(origin,direction)
 	if hit != null: p.x = .07 + ((hit.x/world.LANE_WIDTH+world.CENTER_LANE)+.5)/SynkChart.LANES*.86
+	if on_pad and absf(hit.x)<=world.PAD_HALF_WIDTH+.001:
+		p.x=clampf(p.x,.070001,.929999)
 	return p
 
 func glow(a: Vector2, b: Vector2, width: float, color: Color) -> void:
@@ -123,6 +142,19 @@ func glow(a: Vector2, b: Vector2, width: float, color: Color) -> void:
 func draw_overlay(overlay: Control) -> void:
 	if game.mode=="record" and game.arranging and not game.arrange_selection.is_empty():
 		var note: Dictionary=game.arrange_selection.note
+		if note.kind in ["hold","slide"]:
+			var centers=world.trail_centers(note,clampi(ceili(float(note.duration)*32),16,256),true)
+			var sides=world.trail_sides(centers)
+			var shift=Vector3(0,0,(float(note.time)-game.song_time)*world.travel_speed())
+			var width=world.TRAIL_HALF*.65*game.hold_trail_width
+			for i in centers.size()-1:
+				var a: Vector3=centers[i]+shift; var b: Vector3=centers[i+1]+shift
+				if maxf(a.z,b.z)<-world.TRACK_LENGTH or minf(a.z,b.z)>world.JUDGMENT_DEPTH: continue
+				if world.camera.is_position_behind(a) or world.camera.is_position_behind(b): continue
+				for side in [-1,1]:
+					var start=world.camera.unproject_position(a+sides[i]*width*side)
+					var finish=world.camera.unproject_position(b+sides[i+1]*width*side)
+					overlay.draw_line(start,finish,Color("7beaff",.8),2,true)
 		var note_position=Vector3(world.lane_x(float(note.lane)),.2,(float(note.time)-game.song_time)*world.travel_speed())
 		var center=world.camera.unproject_position(note_position)
 		if Rect2(Vector2.ZERO,size).has_point(center):

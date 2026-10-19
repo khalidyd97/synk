@@ -1,6 +1,8 @@
 shader_type spatial;
 render_mode unshaded, blend_add, depth_draw_never, cull_disabled, fog_disabled;
 
+#include "res://scripts/highway_clip.gdshaderinc"
+
 uniform sampler2D artwork : source_color, filter_linear_mipmap, repeat_disable;
 uniform vec4 region = vec4(0.0, 0.0, 1.0, 1.0);
 uniform float opacity = 1.0;
@@ -22,10 +24,12 @@ uniform vec3 tint : source_color = vec3(0.6, 0.2, 1.0);
 varying float world_z;
 
 void vertex() {
+	rail_position=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz;
 	world_z = (MODEL_MATRIX * vec4(VERTEX, 1.0)).z;
 }
 
 void fragment() {
+	if(outside_rails(INV_VIEW_MATRIX[3].xyz)) discard;
 	if (world_z > clip_z) discard;
 	vec2 artwork_uv = UV;
 	float mirror_fade = 1.0;

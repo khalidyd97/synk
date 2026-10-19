@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#38D6FF"/>
+      <stop offset="0.38" stop-color="#5B8CFF"/>
+      <stop offset="0.7" stop-color="#9A5CFF"/>
+      <stop offset="1" stop-color="#E45CD8"/>
+    </linearGradient>
+    <radialGradient id="shine" cx="0.3" cy="0.18" r="0.75">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.35"/>
+      <stop offset="0.6" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="shade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0.55" stop-color="#140A3A" stop-opacity="0"/>
+      <stop offset="1" stop-color="#140A3A" stop-opacity="0.35"/>
+    </linearGradient>
+  </defs>
+  <!-- Tile -->
+  <rect x="32" y="32" width="960" height="960" rx="236" fill="url(#bg)"/>
+  <rect x="32" y="32" width="960" height="960" rx="236" fill="url(#shine)"/>
+  <rect x="32" y="32" width="960" height="960" rx="236" fill="url(#shade)"/>
+  <!-- Highway lanes fanning toward the viewer, very faint -->
+  <g stroke="#FFFFFF" stroke-opacity="0.13" stroke-width="10" stroke-linecap="round">
+    <line x1="452" y1="150" x2="250" y2="900"/>
+    <line x1="512" y1="150" x2="512" y2="900"/>
+    <line x1="572" y1="150" x2="774" y2="900"/>
+  </g>
+  <!-- The S: one continuous slide trail, drawn as a thick rounded stroke with a soft shadow -->
+  <path d="M 676 318 C 660 248 590 214 512 214 C 410 214 336 268 336 352 C 336 452 436 478 512 496 C 600 517 688 548 688 652 C 688 748 606 810 506 810 C 424 810 360 776 340 704"
+        fill="none" stroke="#1B0B4A" stroke-opacity="0.28" stroke-width="128" stroke-linecap="round" transform="translate(0 16)"/>
+  <path d="M 676 318 C 660 248 590 214 512 214 C 410 214 336 268 336 352 C 336 452 436 478 512 496 C 600 517 688 548 688 652 C 688 748 606 810 506 810 C 424 810 360 776 340 704"
+        fill="none" stroke="#FFFFFF" stroke-width="118" stroke-linecap="round"/>
+  <!-- Note heads at each end of the trail: a tap note (cyan) and the release ring (pink) -->
+  <circle cx="676" cy="318" r="44" fill="#38D6FF" stroke="#FFFFFF" stroke-width="16"/>
+  <circle cx="340" cy="704" r="44" fill="#E45CD8" stroke="#FFFFFF" stroke-width="16"/>
+  <!-- Judgment line -->
+  <rect x="236" y="884" width="552" height="18" rx="9" fill="#FFFFFF" fill-opacity="0.85"/>
+</svg>

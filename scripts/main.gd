@@ -27,13 +27,17 @@ var recorder: Node
 var audio = AudioStreamPlayer.new()
 var mr: Node
 var beat_clock: Node
+var menu_music: AudioStreamPlayer
 var practice: Node
 var practice_hud: Label
 var timing_label: Label
 var timing_samples: Array=[]
+var performance_samples: Array=[]
 var demo_stream: AudioStream
 var song_metadata: Dictionary = {}
 var song_cover_textures: Dictionary = {}
+var song_background_textures: Dictionary = {}
+var song_details: Control
 var cover_palettes: Dictionary = {}
 var metadata_queue: Array[String] = []
 var metadata_worker = Thread.new()
@@ -65,7 +69,11 @@ var pause_had_audio = false
 var song_time = 0.0
 var visual_song_time = 0.0
 var visual_clock_ready = false
+var visual_clock_target = 0.0
 var live: Array = []
+var live_cursor = 0
+var judgement_total_cache = 0
+var judgement_total_size = -1
 var pointers: Dictionary = {}
 var score = 0
 var displayed_score = 0.0
@@ -94,8 +102,19 @@ var note_speed = 1.0
 var note_shape = "circle"
 # Highway slope in degrees (Settings): low is flat and far-reaching, high looks down steeply.
 var highway_angle = 29.0
+# Highway look: "gold" or "neon", optional custom rail/band colors ("" follows the style),
+# and how dark the see-through highway surface is (1 = the style's default).
+var highway_style = "gold"
+var rail_color = ""
+var band_color = ""
+var highway_opacity = 1.0
+# "adaptive" colors notes and highway from the song's artwork; "theme" keeps the style's own colors.
+var highway_colors = "adaptive"
+var gameplay_colors: Dictionary = {}
+var rail_glow_opacity = .12
 var note_size=1.0
 var hold_trail_width=1.0
+var trail_style="neon"
 var resume_grace = 0.0
 var overdub = false
 var ghost_recording=true
@@ -111,8 +130,6 @@ var countdown_shown = -1
 # How far (in lanes) the finger may be from the trail when a checkpoint dot is judged.
 const CHECKPOINT_LANE_TOLERANCE = 2.0
 var studio_mark_buttons: Dictionary = {}
-var song_title_input: LineEdit
-var song_album_input: LineEdit
 var tool = "auto"
 var cursor = 0.0
 var zoom_seconds = 8.0
@@ -122,11 +139,19 @@ var loop_b = 8.0
 var loop_enabled = false
 var audition_speed = 1.0
 const RECORD_SPEEDS=[1.0,.75,.5,.25,1.25,1.5]
+var recorder_note_speed=1.0
+var recorder_note_speed_button: Button
 var record_speed: float=1.0
 var record_speed_button: Button
 var waveform: PackedFloat32Array = []
 var prefs = ConfigFile.new()
 var field: Control
+signal safe_area_changed
+var safe_area_rect = Rect2()
+var safe_control_roots: Array = []
+
+var toast_layer: CanvasLayer
+var floating_text_input: CanvasLayer
 var ui: Control
 var lobby: Control
 var chart_library: Control
@@ -178,8 +203,6 @@ var stage_intro_enabled = true
 var record_tools: Control
 var record_sidebar: Panel
 var studio: Panel
-var studio_cover: TextureRect
-var studio_cover_button: Button
 var status: Label
 var info: Label
 var title_label: Label
@@ -193,7 +216,6 @@ var timeline: Control
 var editor_tool = "select"
 var song_list: ItemList
 var picker: FileDialog
-var cover_picker: FileDialog
 var updating = false
 var last_play_notes: Array = []
 var record_info: Label
@@ -204,6 +226,12 @@ var studio_kind_buttons: Dictionary = {}
 var arrange_selection: Dictionary = {}
 var arranging = false
 var arrange_touches: Dictionary = {}
+
+# Fira Sans (SIL Open Font Licence, assets/fonts/OFL.txt) is the game's typeface. Every screen
+# builds its fonts from ThemeDB.fallback_font, so it is swapped before any of them is created.
+const GAME_FONT = preload("res://assets/fonts/FiraSans-Regular.ttf")
+func _enter_tree() -> void:
+	ThemeDB.fallback_font=GAME_FONT
 
 func _ready() -> void:
 	mouse_filter=Control.MOUSE_FILTER_IGNORE
@@ -216,19 +244,35 @@ func _ready() -> void:
 	bluetooth_latency_ms=clampf(float(prefs.get_value("audio","bluetooth_latency_ms",180)),0,600)
 	note_lines=bool(prefs.get_value("editor","note_lines",true))
 	ghost_recording=bool(prefs.get_value("editor","ghost_recording",true))
+	recorder_note_speed=clampf(float(prefs.get_value("editor","note_speed",1.0)),.5,3.0)
 	record_speed=float(prefs.get_value("editor","record_speed",1.0))
 	if record_speed not in RECORD_SPEEDS: record_speed=1.0
 	note_speed = clampf(float(prefs.get_value("gameplay","note_speed",1.0)), .5, 3.0)
 	note_shape = str(prefs.get_value("gameplay","note_shape","circle"))
 	if note_shape not in ["rectangle","circle"]: note_shape="rectangle"
 	highway_angle = clampf(float(prefs.get_value("gameplay","highway_angle",29.0)),18.0,44.0)
+	highway_style = str(prefs.get_value("highway","style","gold"))
+	if highway_style not in ["gold","neon"]: highway_style="gold"
+	rail_color = str(prefs.get_value("highway","rail_color",""))
+	band_color = str(prefs.get_value("highway","band_color",""))
+	highway_opacity = clampf(float(prefs.get_value("highway","opacity",1.0)),.3,1.6)
+	highway_colors = str(prefs.get_value("highway","colors","adaptive"))
+	if highway_colors not in ["adaptive","theme"]: highway_colors="adaptive"
+	var saved_colors=prefs.get_value("highway","element_colors",{})
+	if saved_colors is Dictionary:
+		for key in saved_colors:
+			if SynkGameplayColors.valid_key(str(key)) and Color.html_is_valid(str(saved_colors[key])): gameplay_colors[str(key)]=str(saved_colors[key])
+	rail_glow_opacity=clampf(float(prefs.get_value("highway","rail_glow_opacity",.12)),0,.3)
 	note_size=clampf(float(prefs.get_value("gameplay","note_size",1.0)),.6,1.25)
+	trail_style=str(prefs.get_value("gameplay","trail_style","neon"))
+	if trail_style not in ["neon","solid"]: trail_style="neon"
 	hold_trail_width=clampf(float(prefs.get_value("gameplay","hold_trail_width",1.0)),.3,1.5)
 	features=load("res://scripts/workbench.gd").new(); features.game=self; add_child(features)
 	song = eclipse_song()
 	add_child(audio); demo_stream = SynkLibrary.synth_demo(); audio.stream = demo_stream
 	mr=load("res://scripts/mr_audio.gd").new(); mr.game=self; add_child(mr); mr.set_source(demo_stream)
 	beat_clock=load("res://scripts/beat_clock.gd").new(); beat_clock.game=self; add_child(beat_clock)
+	menu_music=load("res://scripts/menu_music.gd").new(); menu_music.game=self; add_child(menu_music)
 	recorder=load("res://scripts/recorder_session.gd").new(); recorder.game=self; add_child(recorder)
 	practice=load("res://scripts/practice_mode.gd").new(); practice.game=self; add_child(practice)
 	add_child(UiSound.new())
@@ -236,6 +280,11 @@ func _ready() -> void:
 	field = Control.new(); field.set_script(load("res://scripts/highway.gd")); field.game = self; add_child(field); field.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui = Control.new(); ui.theme=preload("res://scripts/game_theme.gd").create(); add_child(ui); ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	apply_safe_area(); get_viewport().size_changed.connect(apply_safe_area)
+	toast_layer=preload("res://scripts/toast_notifications.gd").new()
+	toast_layer.game=self; add_child(toast_layer)
+	# Cutout insets may arrive after immersive mode, without a window resize.
+	var safe_poll=Timer.new(); safe_poll.name="SafeAreaPoll"; safe_poll.wait_time=.5; safe_poll.autostart=true
+	safe_poll.timeout.connect(apply_safe_area); add_child(safe_poll)
 	build_combo_digit_textures()
 	build_ui()
 	lobby=Control.new(); lobby.set_script(load("res://scripts/lobby.gd")); lobby.game=self
@@ -248,6 +297,9 @@ func _ready() -> void:
 	settings_panel=Control.new(); settings_panel.set_script(load("res://scripts/settings_screen.gd")); settings_panel.game=self
 	ui.add_child(settings_panel); settings_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.move_child(settings_panel,2); settings_panel.visible=false
+	song_details=Control.new(); song_details.set_script(load("res://scripts/song_details.gd")); song_details.game=self
+	ui.add_child(song_details); song_details.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ui.move_child(song_details,3); song_details.visible=false
 	bluetooth_toggle=settings_panel.bluetooth_toggle; bluetooth_latency_input=settings_panel.bluetooth_latency_input
 	sync_helper=Control.new(); sync_helper.set_script(load("res://scripts/sync_helper.gd")); sync_helper.game=self
 	ui.add_child(sync_helper); sync_helper.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -261,7 +313,10 @@ func _ready() -> void:
 	ui.add_child(finish_overlay)
 	set_mode("menu")
 	build_waveform()
+	floating_text_input=preload("res://scripts/floating_text_input.gd").new()
+	floating_text_input.game=self; add_child(floating_text_input)
 	features.activate_song()
+	for scope in [settings_panel,studio,sync_helper,record_tools]: preload("res://scripts/interface_life.gd").mount(scope)
 	queue_song_metadata()
 
 func _exit_tree() -> void:
@@ -302,6 +357,7 @@ func poll_song_worker() -> void:
 	var result: Dictionary=metadata_worker.wait_to_finish()
 	var id=worker_song_id; worker_song_id=""
 	var selected=loading_song_index>0 and loading_song_index<=library.songs.size() and str(library.songs[loading_song_index-1].id)==id
+	if selected and toast_layer: toast_layer.clear_progress()
 	if result.has("error"):
 		song_metadata[id]={"error":result.error}
 		if chart_library: chart_library.update_card_metadata(id)
@@ -311,7 +367,6 @@ func poll_song_worker() -> void:
 			loading_song_index=-1; loading_open_editor=false; tell(str(result.error))
 			if lobby:
 				lobby.update_selected_track()
-				if mode=="menu": lobby.detail_label.text=str(result.error)
 	else:
 		if not song_metadata.has(id):
 			song_metadata[id]={"duration":result.duration,"waveform":result.waveform,"notes":result.notes,"note_count":result.note_count,"has_chart":result.has_chart}
@@ -330,12 +385,46 @@ func poll_song_worker() -> void:
 		if lobby: lobby.update_track_card(id)
 	start_song_worker()
 
+# Android returns physical display pixels; layouts use stretched scene coordinates.
+func set_safe_area_pixels(display_safe: Rect2, window_pixels: Vector2) -> void:
+	var available=Rect2(Vector2.ZERO,size)
+	if window_pixels.x>0 and window_pixels.y>0 and display_safe.has_area():
+		var clipped=display_safe.intersection(Rect2(Vector2.ZERO,window_pixels))
+		if clipped.has_area(): available=Rect2(clipped.position/window_pixels*size,clipped.size/window_pixels*size)
+	if safe_area_rect.is_equal_approx(available): return
+	safe_area_rect=available
+	refresh_safe_controls()
+	safe_area_changed.emit()
+
+func refresh_safe_controls() -> void:
+	for index in range(safe_control_roots.size()-1,-1,-1):
+		var root=safe_control_roots[index].get_ref()
+		if root==null: safe_control_roots.remove_at(index)
+		else: fit_safe_control(root,root.get_parent())
+
 func apply_safe_area() -> void:
-	var safe = DisplayServer.get_display_safe_area()
-	var window_size = DisplayServer.window_get_size()
-	if OS.has_feature("mobile") and safe.size.x>0 and safe.size.y>0:
-		ui.anchor_left=float(safe.position.x)/window_size.x; ui.anchor_top=float(safe.position.y)/window_size.y
-		ui.anchor_right=float(safe.end.x)/window_size.x; ui.anchor_bottom=float(safe.end.y)/window_size.y
+	# The UI, highway, backgrounds and overlays always cover the full window.
+	ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var safe=Rect2(DisplayServer.get_display_safe_area()) if OS.has_feature("mobile") else Rect2()
+	set_safe_area_pixels(safe,Vector2(DisplayServer.window_get_size()))
+
+func safe_rect_for(parent: Control) -> Rect2:
+	var bounds=safe_area_rect if safe_area_rect.has_area() else Rect2(Vector2.ZERO,size)
+	var local=parent.get_global_transform_with_canvas().affine_inverse()*get_global_transform_with_canvas()
+	return Rect2(local*bounds.position,local.basis_xform(bounds.size))
+
+func fit_safe_control(target: Control,parent: Control) -> void:
+	var bounds=safe_rect_for(parent)
+	target.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	target.position=bounds.position; target.size=bounds.size
+
+func safe_parent(layer_name: String,parent: Control=null) -> Control:
+	if parent==null: parent=ui
+	var layer=Control.new(); layer.name=layer_name; layer.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	parent.add_child(layer); safe_control_roots.append(weakref(layer))
+	fit_safe_control(layer,parent)
+	if not parent.resized.is_connected(refresh_safe_controls): parent.resized.connect(refresh_safe_controls)
+	return layer
 
 func rect(node: Control, parent: Node, x: float, y: float, right: float, bottom: float) -> void:
 	parent.add_child(node); node.anchor_left=x; node.anchor_top=y; node.anchor_right=right; node.anchor_bottom=bottom
@@ -348,11 +437,18 @@ func label(parent: Node, text: String, x: float,y: float,right: float,bottom: fl
 
 # variant picks the button's role in the design system (see NeonAction.VARIANTS).
 func button(parent: Node,text: String,x: float,y: float,right: float,bottom: float,action: Callable,variant: String = "secondary") -> Button:
-	var result=NeonAction.new()
+	var result=load("res://scripts/recorder_action.gd").new() if record_tools!=null and parent==record_tools else NeonAction.new()
 	result.text=text; result.caption_size=19 if variant in ["primary","record"] else 17; result.compact=true
 	result.variant=variant
+	if record_tools!=null and parent==record_tools: result.caption_size=21
 	rect(result,parent,x,y,right,bottom)
 	result.pressed.connect(action)
+	return result
+
+func pause_action(parent: Node,text: String,x: float,y: float,right: float,bottom: float,action: Callable,variant: String) -> Button:
+	var result=load("res://scripts/pause_action.gd").new()
+	result.text=text; result.caption_size=19; result.compact=true; result.variant=variant
+	rect(result,parent,x,y,right,bottom); result.pressed.connect(action)
 	return result
 
 func build_ui() -> void:
@@ -371,13 +467,13 @@ func build_ui() -> void:
 	hud_shadow.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; hud_shadow.stretch_mode=TextureRect.STRETCH_SCALE
 	ui.move_child(hud_shadow,0)
 	# Energy gauge and score stack on the left, next to the pause button.
-	score_panel=SynkScoreHud.new(); rect(score_panel,ui,.1,.025,.34,.205)
+	score_panel=SynkScoreHud.new(); rect(score_panel,safe_parent("SafeScoreHud"),.1,.025,.34,.205)
 	hud=score_panel.score_label
 	combo_hud=Control.new(); rect(combo_hud,ui,.3,.31,.7,.47)
 	combo_hud.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	rank_hud=label(ui,"SS",.925,.015,.99,.12,46); rank_hud.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	rank_hud.add_theme_color_override("font_color",Color("b985ff")); rank_hud.add_theme_color_override("font_outline_color",Color("5921a8")); rank_hud.add_theme_constant_override("outline_size",5)
-	pause_button=button(ui,"II",.02,.025,.08,.105,toggle_pause,"nav")
+	pause_button=button(safe_parent("SafePauseButton"),"II",.02,.025,.08,.105,toggle_pause,"nav")
 	# Judgments are plain bold white text for now, so they suit any cover palette.
 	hit_label=label(ui,"",.3,.235,.7,.305,40); hit_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	timing_label=label(ui,"",.3,.305,.7,.34,18); timing_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
@@ -398,60 +494,94 @@ func build_ui() -> void:
 	countdown_ring.draw.connect(draw_countdown_ring)
 	countdown_label=label(ui,"",.35,.28,.65,.55,128); countdown_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	countdown_label.add_theme_color_override("font_outline_color",Color("5c23ac")); countdown_label.add_theme_constant_override("outline_size",10)
-	guide_button=button(ui,"NOTE GUIDE",.84,.16,.98,.22,func(): set_mode("guide"))
-	guide_back=button(ui,"‹  BACK",.42,.88,.58,.95,func(): set_mode("menu"),"nav")
+	guide_button=button(safe_parent("SafeGuideButton"),"NOTE GUIDE",.84,.16,.98,.22,func(): set_mode("guide"))
+	guide_back=button(safe_parent("SafeGuideBack"),"‹  BACK",.40,.85,.60,.96,func(): set_mode("menu"),"nav")
 	# Song intro sits above the HUD and below the pause/results modal.
 	stage_intro=StageIntro.new(); stage_intro.game=self; ui.add_child(stage_intro)
 	results_screen=ResultsScreen.new(); results_screen.game=self; ui.add_child(results_screen)
-	pause_backdrop=ColorRect.new(); rect(pause_backdrop,ui,0,0,1,1); pause_backdrop.color=Color(0,0,.04,.6)
+	# Pause: the stage behind is blurred and dimmed, with a frosted card on top (same glass as
+	# the lobby cards) holding three icon tiles.
+	pause_backdrop=ColorRect.new(); rect(pause_backdrop,ui,0,0,1,1); pause_backdrop.color=Color.WHITE
 	pause_backdrop.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	modal=Panel.new(); rect(modal,ui,.19,.11,.81,.89)
-	var style=StyleBoxFlat.new(); style.bg_color=Color("0c1028"); style.border_color=Color("8675ba"); style.set_border_width_all(1); style.set_corner_radius_all(20)
-	style.shadow_color=Color(0,0,.02,.55); style.shadow_size=28; modal.add_theme_stylebox_override("panel",style)
-	ScreenStyle.chassis(modal)
+	var blur=ShaderMaterial.new(); blur.shader=preload("res://scripts/frosted_glass.gdshader"); pause_backdrop.material=blur
+	blur.set_shader_parameter("radius",0.0); blur.set_shader_parameter("blur",3.0); blur.set_shader_parameter("tint",Color(0,0,.03,.55))
+	pause_backdrop.resized.connect(func(): blur.set_shader_parameter("rect_size",pause_backdrop.size))
+	modal=Panel.new(); rect(modal,safe_parent("SafeModal"),.19,.11,.81,.89)
+	modal.add_theme_stylebox_override("panel",StyleBoxEmpty.new())
+	var glass=ColorRect.new(); glass.name="FrostedGlass"; modal.add_child(glass); glass.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	glass.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	var glass_material=ShaderMaterial.new(); glass_material.shader=preload("res://scripts/frosted_glass.gdshader"); glass.material=glass_material
+	glass_material.set_shader_parameter("blur",4.0); glass_material.set_shader_parameter("tint",Color(.035,.028,.08,.62))
+	glass.resized.connect(func(): glass_material.set_shader_parameter("rect_size",glass.size); glass_material.set_shader_parameter("radius",28.0))
 	modal_title=label(modal,"S Y N K",.04,.025,.96,.17,48); modal_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	modal_title.add_theme_font_override("font",preload("res://assets/fonts/FiraSans-Bold.ttf"))
 	modal_body=label(modal,"",.06,.17,.94,.43,22); modal_body.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; modal_body.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
-	primary=button(modal,"PLAY",.23,.88,.77,.97,primary_action,"primary")
-	pause_restart=button(modal,"RESTART",.36,.88,.64,.97,restart_from_pause)
-	pause_home=button(modal,"‹  HOME",.66,.88,.94,.97,return_home,"nav")
-	actions=Control.new(); rect(actions,ui,0,0,1,1); actions.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	primary=pause_action(modal,"PLAY",.23,.88,.77,.97,primary_action,"primary")
+	pause_restart=pause_action(modal,"RESTART",.36,.88,.64,.97,restart_from_pause,"secondary")
+	pause_home=pause_action(modal,"HOME",.66,.88,.94,.97,return_home,"nav")
+	actions=Control.new(); rect(actions,safe_parent("SafeActions"),0,0,1,1); actions.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	button(actions,"●  RECORD NEW",.02,.91,.20,.98,start_new_recording,"record")
 	button(actions,"PLAY SAVED",.22,.91,.39,.98,func(): start_game(saved_notes),"primary")
 	button(actions,"AUTO PLAY",.41,.91,.58,.98,start_autoplay)
 	button(actions,"CHART STUDIO / IMPORT AUDIO",.60,.91,.98,.98,open_editor)
-	record_tools=Control.new(); rect(record_tools,ui,0,0,1,1); record_tools.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	ScreenStyle.glass(record_tools,Rect2(.11,.012,.88,.096),Color("ff7ca9"),0)
-	record_sidebar=ScreenStyle.glass(record_tools,Rect2(.015,.112,.195,.268),Color("9274df"),0)
-	ScreenStyle.glass(record_tools,Rect2(.63,.112,.355,.108),Color("65dfff"),0)
-	ScreenStyle.glass(record_tools,Rect2(.025,.895,.95,.10),Color("9274df"),0)
+	record_tools=Control.new(); rect(record_tools,safe_parent("SafeRecorderControls"),0,0,1,1); record_tools.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	record_tools.set_meta("keep_caption_size",true)
+	recorder_plate(Rect2(.11,.008,.88,.117))
+	record_sidebar=recorder_plate(Rect2(.015,.14,.19,.575))
+	recorder_plate(Rect2(.65,.14,.335,.116))
+	recorder_plate(Rect2(.025,.901,.95,.093))
+	var type_heading=label(record_tools,"NOTE TYPE",.125,.012,.57,.043,13)
+	type_heading.add_theme_color_override("font_color",Color("7fd7e7"))
+	label(record_tools,"TAKE CONTROLS",.60,.012,.98,.043,13).add_theme_color_override("font_color",Color("b9b3d4"))
+	label(record_tools,"RECORDING AIDS",.03,.148,.19,.18,13).add_theme_color_override("font_color",Color("7fd7e7"))
 	var kinds=["auto","tap","hold","slide","flick"]
 	for i in kinds.size():
 		var kind=kinds[i]
-		kind_buttons.append(button(record_tools,kind.to_upper(),.12+i*.105,.025,.215+i*.105,.095,func():
+		kind_buttons.append(button(record_tools,kind.to_upper(),.12+i*.094,.047,.205+i*.094,.114,func():
 			if arranging:
 				if kind=="auto": delete_arrange_note()
 				else: change_arrange_note_type(kind)
 			else:
 				tool=kind; judgement=kind.to_upper()+" TOOL"; flash=1; refresh_arrange_controls(),"tool"))
-	arrange_button=button(record_tools,"CORRECT",.65,.025,.76,.095,toggle_arrange)
-	button(record_tools,"UNDO",.77,.025,.87,.095,undo_record_note,"tool")
-	button(record_tools,"■  STOP",.89,.025,.98,.095,stop_take,"record")
-	record_info=label(record_tools,"",.65,.12,.97,.21,24); record_info.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
-	note_lines_button=button(record_tools,"",.02,.12,.15,.19,toggle_note_lines,"tool"); update_note_lines_button()
+		kind_buttons[-1].tooltip_text={"auto":"Detect taps, holds, and slides automatically", "tap":"Record individual taps", "hold":"Press and hold in a lane", "slide":"Hold and drag between lanes", "flick":"Swipe to set the flick direction"}[kind]
+	arrange_button=button(record_tools,"CORRECT",.60,.047,.735,.114,toggle_arrange)
+	arrange_button.tooltip_text="Pause the music to move or correct notes, then resume recording"
+	button(record_tools,"UNDO",.745,.047,.835,.114,undo_record_note,"tool")
+	button(record_tools,"STOP & REVIEW",.845,.047,.98,.114,stop_take,"record")
+	record_info=label(record_tools,"",.67,.148,.97,.228,21); record_info.horizontal_alignment=HORIZONTAL_ALIGNMENT_LEFT
+	recorder.progress=ProgressBar.new(); rect(recorder.progress,record_tools,.67,.235,.967,.245)
+	recorder.progress.show_percentage=false; recorder.progress.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	var track=StyleBoxFlat.new(); track.bg_color=Color("29283f"); track.set_corner_radius_all(4)
+	var fill=track.duplicate(); fill.bg_color=Color("ff6489")
+	recorder.progress.add_theme_stylebox_override("background",track); recorder.progress.add_theme_stylebox_override("fill",fill)
+	note_lines_button=button(record_tools,"",.025,.19,.195,.258,toggle_note_lines,"tool"); update_note_lines_button()
 	# Mark where Verse 2 and the Bridge start while the song plays.
-	record_mark_buttons["verse2"]=button(record_tools,"",.02,.21,.20,.28,func(): mark_section("verse2",song_time),"tool")
-	record_mark_buttons["bridge"]=button(record_tools,"",.02,.30,.20,.37,func(): mark_section("bridge",song_time),"tool")
-	dots_button=button(record_tools,"",.02,.39,.20,.46,toggle_dots_mode,"tool")
-	ghost_button=button(record_tools,"GHOST ON" if ghost_recording else "GHOST OFF",.02,.39,.20,.46,toggle_ghost_recording,"tool")
+	record_mark_buttons["verse2"]=button(record_tools,"",.025,.278,.195,.346,func(): mark_section("verse2",song_time),"tool")
+	record_mark_buttons["bridge"]=button(record_tools,"",.025,.366,.195,.434,func(): mark_section("bridge",song_time),"tool")
+	dots_button=button(record_tools,"",.025,.454,.195,.522,toggle_dots_mode,"tool")
+	ghost_button=button(record_tools,"GHOST ON" if ghost_recording else "GHOST OFF",.025,.454,.195,.522,toggle_ghost_recording,"tool")
 	ghost_button.tooltip_text="Show faded existing chart notes approaching the judgment line while recording a new layer."
-	record_help=label(record_tools,"AUTO records taps, holds and slides. Choose FLICK for a directed swipe.\nRecord near the glowing line. STOP to edit your take.",.04,.91,.65,.99,16); record_help.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-	mr.register_button(button(record_tools,"MR OFF",.67,.915,.785,.985,mr.toggle,"tool"))
-	record_speed_button=button(record_tools,str(record_speed)+"× SPEED",.79,.915,.965,.985,cycle_record_speed,"tool")
+	record_help=label(record_tools,"AUTO records taps, holds and slides. Choose FLICK for a directed swipe.\nRecord near the glowing line. STOP to edit your take.",.04,.91,.625,.985,17); record_help.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	mr.register_button(button(record_tools,"MR OFF",.64,.913,.79,.984,mr.toggle,"tool"))
+	record_speed_button=button(record_tools,str(record_speed)+"× SPEED",.80,.913,.965,.984,cycle_record_speed,"tool")
 	record_speed_button.tooltip_text="Recording playback speed: 1×, 0.75×, 0.5×, 0.25×, 1.25×, 1.5×"
-	button(record_tools,"TAKE SETUP",.02,.49,.20,.56,recorder.show_setup,"tool")
+	button(record_tools,"TAKE SETUP",.025,.542,.195,.61,recorder.show_setup,"tool")
+	recorder_note_speed_button=button(record_tools,"NOTES  "+str(recorder_note_speed)+"×",.025,.63,.195,.698,cycle_recorder_note_speed,"tool")
+	recorder_note_speed_button.tooltip_text="Note travel speed only. Music playback speed stays unchanged."
+
+func recorder_plate(bounds: Rect2) -> Panel:
+	var panel=Panel.new(); rect(panel,record_tools,bounds.position.x,bounds.position.y,bounds.end.x,bounds.end.y)
+	panel.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	var plate=StyleBoxFlat.new(); plate.bg_color=Color(.025,.03,.075,.94)
+	plate.border_color=Color("303349"); plate.set_border_width_all(1); plate.set_corner_radius_all(16)
+	panel.add_theme_stylebox_override("panel",plate); return panel
 
 func set_mode(value: String) -> void:
-	if value!=mode: UiMotion.transition(self,.24 if value in ["play","record","paused"] else .36)
+	if value!=mode:
+		# Menus slide forward and back by depth; entering or leaving the stage dissolves.
+		var depth={"menu":0,"guide":1,"library":1,"editor":2,"results":3}
+		if value in ["play","record","paused"] or mode in ["play","record","paused"]: UiMotion.transition(self,.24,0)
+		else: UiMotion.transition(self,.38,-1 if int(depth.get(value,1))<int(depth.get(mode,1)) else 1)
 	if value in ["play","record"] and loading_song_index>0:
 		loading_song_index=-1; loading_open_editor=false
 	# Moving between menu screens gets a soft whoosh; gameplay screens stay silent.
@@ -469,6 +599,7 @@ func set_mode(value: String) -> void:
 	if mode!="results": results_screen.visible=false
 	lobby.visible=mode=="menu"
 	chart_library.visible=mode=="library"
+	if song_details: song_details.visible=false
 	pause_backdrop.visible=mode=="paused"
 	actions.visible=false; record_tools.visible=mode=="record"
 	hud.visible=mode in ["play","paused"]; score_panel.visible=hud.visible; hud_shadow.visible=hud.visible; hit_label.visible=mode in ["play","record"]; pause_button.visible=mode in ["play","record","paused"]
@@ -484,14 +615,20 @@ func set_mode(value: String) -> void:
 	guide_button.visible=false; guide_back.visible=mode=="guide"
 	pause_home.visible=mode=="paused"; pause_restart.visible=mode=="paused"
 	settings_panel.visible=false; sync_helper.visible=false
-	modal.anchor_top=.36 if mode=="paused" else .11
-	modal.anchor_bottom=.64 if mode=="paused" else .89
-	modal_title.anchor_top=.10 if mode=="paused" else .025
-	modal_title.anchor_bottom=.40 if mode=="paused" else .17
-	var button_top=.58 if mode=="paused" else .88
-	var button_bottom=.88 if mode=="paused" else .97
+	var large_pause=mode=="paused" and paused_mode!="record"
+	# Recorder controls retain their compact layout; enlarge only gameplay pause UI.
+	pause_button.anchor_right=.095 if mode=="play" or large_pause else .08
+	pause_button.anchor_bottom=.125 if mode=="play" or large_pause else .105
+	pause_button.caption_size=22 if mode=="play" or large_pause else 17
+	modal.anchor_top=(.25 if large_pause else .36) if mode=="paused" else .11
+	modal.anchor_bottom=(.75 if large_pause else .64) if mode=="paused" else .89
+	modal_title.anchor_top=(.06 if large_pause else .10) if mode=="paused" else .025
+	modal_title.anchor_bottom=(.30 if large_pause else .40) if mode=="paused" else .17
+	var button_top=(.38 if large_pause else .58) if mode=="paused" else .88
+	var button_bottom=(.90 if large_pause else .88) if mode=="paused" else .97
 	for action_button in [primary,pause_restart,pause_home]:
 		action_button.anchor_top=button_top; action_button.anchor_bottom=button_bottom
+		action_button.caption_size=23 if large_pause else (19 if action_button==primary else 17)
 	modal_body.anchor_bottom=.65 if mode=="paused" else .43
 	primary.anchor_left=.06 if mode=="paused" else .23
 	primary.anchor_right=.34 if mode=="paused" else .77
@@ -518,7 +655,7 @@ func open_lobby_settings() -> void:
 	UiMotion.screen(settings_panel)
 
 func close_lobby_settings() -> void:
-	UiMotion.transition(self)
+	UiMotion.back(self)
 	menu_settings_open=false
 	settings_panel.visible=false
 	if mode=="menu":
@@ -534,7 +671,7 @@ func open_sync_helper() -> void:
 	UiMotion.reveal(sync_helper)
 
 func close_sync_helper() -> void:
-	UiMotion.transition(self)
+	UiMotion.back(self)
 	sync_helper.visible=false
 	if menu_settings_open:
 		settings_panel.visible=true
@@ -562,11 +699,61 @@ func change_highway_angle(value: float) -> void:
 	highway_angle=value
 	prefs.set_value("gameplay","highway_angle",value); prefs.save("user://preferences.cfg")
 
+func change_highway_look(key: String,value: Variant) -> void:
+	match key:
+		"style": highway_style = str(value) if str(value) in ["gold","neon"] else "gold"; value = highway_style
+		"rail_color": rail_color = str(value); value = rail_color
+		"band_color": band_color = str(value); value = band_color
+		"opacity": highway_opacity = clampf(float(value),.3,1.6); value = highway_opacity
+		"colors": highway_colors = str(value) if str(value) in ["adaptive","theme"] else "adaptive"; value = highway_colors
+		_: return
+	# Choosing a rail/band swatch replaces that element's color from the Colors tab.
+	if key in ["rail_color","band_color"]:
+		gameplay_colors.erase("rail" if key=="rail_color" else "band")
+		prefs.set_value("highway","element_colors",gameplay_colors)
+	prefs.set_value("highway",key,value); prefs.save("user://preferences.cfg")
+	if key == "colors": apply_stage_cover()
+	field.world.refresh_highway_look()
+	if settings_panel: settings_panel.refresh()
+
+func change_gameplay_color(key: String,code: String) -> void:
+	if not SynkGameplayColors.valid_key(key) or (code!="" and not Color.html_is_valid(code)): return
+	if code=="": gameplay_colors.erase(key)
+	else: gameplay_colors[key]=code
+	prefs.set_value("highway","element_colors",gameplay_colors); prefs.save("user://preferences.cfg")
+	apply_stage_cover()
+	if settings_panel: settings_panel.refresh()
+
+func change_rail_glow_opacity(value: float) -> void:
+	rail_glow_opacity=clampf(value,0,.3)
+	prefs.set_value("highway","rail_glow_opacity",rail_glow_opacity); prefs.save("user://preferences.cfg")
+	field.world.refresh_highway_look()
+
+func reset_gameplay_colors() -> void:
+	gameplay_colors.clear(); rail_glow_opacity=.12
+	prefs.set_value("highway","element_colors",{}); prefs.set_value("highway","rail_glow_opacity",.12); prefs.save("user://preferences.cfg")
+	apply_stage_cover()
+	if settings_panel: settings_panel.refresh()
+
+func reset_highway_look() -> void:
+	for key in ["style","rail_color","band_color","opacity","colors"]: prefs.set_value("highway",key,null)
+	highway_style = "gold"; rail_color = ""; band_color = ""; highway_opacity = 1.0; highway_colors = "adaptive"
+	prefs.save("user://preferences.cfg")
+	apply_stage_cover()
+	field.world.refresh_highway_look()
+	if settings_panel: settings_panel.refresh()
+
 func change_note_shape(kind: String) -> void:
 	note_shape=kind
 	prefs.set_value("gameplay","note_shape",kind); prefs.save("user://preferences.cfg")
 	field.world.clear_notes()
 	settings_panel.refresh()
+
+func change_trail_style(style: String) -> void:
+	if style not in ["neon","solid"]: return
+	trail_style=style; prefs.set_value("gameplay","trail_style",style); prefs.save("user://preferences.cfg")
+	if field and field.world: field.world.clear_notes()
+	if settings_panel: settings_panel.refresh()
 
 func change_note_sizing(key: String,value: float) -> void:
 	if not is_finite(value): return
@@ -659,20 +846,54 @@ func change_bluetooth_latency(value: float) -> void:
 	apply_timing_change(previous)
 	prefs.set_value("audio","bluetooth_latency_ms",value); prefs.save("user://preferences.cfg")
 func smooth_visual_time(target: float,delta: float) -> void:
-	if not visual_clock_ready or absf(target-visual_song_time)>.12:
-		visual_song_time=target; visual_clock_ready=true; return
-	var predicted=visual_song_time+delta*audio.pitch_scale
-	var correction=(target-predicted)*minf(1.0,delta*10.0)
-	visual_song_time=predicted+clampf(correction,-delta*.5,delta*.5)
-func note_travel_seconds() -> float: return 2.6 / note_speed
+	var step=maxf(0,delta)*maxf(0,audio.pitch_scale)
+	# Detect discontinuities in the audio sample itself, not accumulated phase error.
+	# A temporarily stale mixer sample must never pull an approaching note backward.
+	var seek_limit=maxf(.25,step*4+.1)
+	if not visual_clock_ready or absf(target-visual_clock_target)>seek_limit:
+		visual_song_time=target; visual_clock_target=target; visual_clock_ready=true; return
+	visual_clock_target=target
+	var predicted=visual_song_time+step
+	# Notes advance by exactly one frame of music; drift from the audio clock is folded in
+	# a little each frame (at most 8% of a step) so motion stays even, never jerky.
+	var correction=(target-predicted)*(1.0-exp(-maxf(0,delta)*6.0))
+	visual_song_time=maxf(visual_song_time,predicted+clampf(correction,-step*.08,step*.08))
+func uses_recorder_colors() -> bool:
+	return mode=="record" or (mode=="paused" and paused_mode=="record") or (recorder!=null and recorder.reviewing_audio)
+
+func authoring_lane_gap() -> float:
+	return (field.world.NOTE_WIDTH*note_size+.08)/field.world.LANE_WIDTH
+
+func space_authored_notes(incoming: Array,fixed: Array) -> bool:
+	var resolved=true
+	for note in incoming:
+		if not SynkNoteSpacing.place(note,incoming,fixed,authoring_lane_gap()).resolved: resolved=false
+	if not resolved: tell("This chord is too crowded to separate. Move a note or reduce its size.")
+	return resolved
+
+func note_travel_seconds() -> float: return 2.6 / (recorder_note_speed if uses_recorder_colors() else note_speed)
+
+func cycle_recorder_note_speed() -> void:
+	recorder_note_speed=snappedf(recorder_note_speed+.25,.25)
+	if recorder_note_speed>3: recorder_note_speed=.5
+	recorder_note_speed_button.text="NOTES  "+str(recorder_note_speed)+"×"
+	prefs.set_value("editor","note_speed",recorder_note_speed); prefs.save("user://preferences.cfg")
+	field.world.clear_notes()
 func length() -> float: return audio.stream.get_length()
 func accuracy() -> float: return 100.0 if judged==0 else float(earned)/judged*100
+# Retire completed notes once; keep long sustains active until their tails finish.
+func first_live_index() -> int:
+	while live_cursor<live.size() and live[live_cursor].done: live_cursor+=1
+	return live_cursor
+
 func total_judgements() -> int:
-	var total = live.size()
-	for entry in live:
-		if entry.note.kind=="hold": total+=1
-		total+=entry.note.get("checkpoints",[]).size()
-	return total
+	if judgement_total_size!=live.size():
+		judgement_total_cache=live.size()
+		for entry in live:
+			if entry.note.kind=="hold": judgement_total_cache+=1
+			judgement_total_cache+=entry.note.get("checkpoints",[]).size()
+		judgement_total_size=live.size()
+	return judgement_total_cache
 
 # Checkpoint dots: when one reaches the bar, the finger must be over the trail's lane.
 # Returns false if the hold or slide broke on a missed dot.
@@ -689,6 +910,7 @@ func process_checkpoints(entry: Dictionary, finger_lane: float, automated: bool)
 	return true
 
 func pass_checkpoint(entry: Dictionary, lane: float) -> void:
+	performance_samples.append({"time":song_time,"weight":1.0,"amount":1})
 	field.world.spawn_hit(lane,str(entry.note.kind))
 	judged+=1; earned+=1; judgment_counts.PERFECT+=1
 	combo+=1; combo_pulse=1.0; max_combo=maxi(combo,max_combo)
@@ -701,16 +923,37 @@ func forfeit_checkpoints(entry: Dictionary) -> void:
 	if remaining<=0: return
 	entry.checks_done=entry.note.checkpoints.size()
 	judged+=remaining; judgment_counts.MISS+=remaining
+	for offset in entry.note.checkpoints.slice(entry.note.checkpoints.size()-remaining):
+		performance_samples.append({"time":float(entry.note.time)+float(offset),"weight":0.0,"amount":1})
 func rank_name() -> String:
 	var a=accuracy(); return "SS" if a>=98 else ("S" if a>=95 else ("A" if a>=90 else ("B" if a>=80 else "C")))
 
 # section is a play mode ("full", "verse1", "verse2", "bridge"); empty uses the lobby's choice.
+# Draws every word and digit the gameplay HUD can show once, nearly transparent, behind the
+# loading card, so the font has the glyphs cached before the first PERFECT or score change.
+const HUD_GLYPHS = "PERFECT GREAT GOOD MISS EARLY LATE ON TIME ms 0123456789,.%+-x READY"
+func warm_hud_text() -> void:
+	var targets = [hit_label, timing_label, hud, auto_play_hud]
+	var saved: Array = []
+	for label_node in targets:
+		if label_node == null: continue
+		saved.append([label_node, label_node.text, label_node.visible, label_node.modulate])
+		label_node.text = HUD_GLYPHS; label_node.visible = true; label_node.modulate = Color(1, 1, 1, .01)
+	for i in 3: await get_tree().process_frame
+	for item in saved:
+		if not is_instance_valid(item[0]): continue
+		# Restore only if gameplay hasn't already replaced the warm-up text.
+		if item[0].text == HUD_GLYPHS: item[0].text = item[1]
+		item[0].visible = item[2]; item[0].modulate = item[3]
+
 func start_game(notes: Array,automated: bool = false,section: String = "",is_practice: bool=false) -> void:
+	if lobby and not is_practice: lobby.remember_played(str(song.id))
 	if mode=="editor" or is_practice: play_settings=document.settings.duplicate(true)
 	elif not run_settings_active: play_settings=saved_settings.duplicate(true)
 	run_settings_active=true
-	practice.active=is_practice; timing_samples.clear(); timing_label.text=""
+	practice.active=is_practice; timing_samples.clear(); performance_samples.clear(); timing_label.text=""
 	audio.stop(); audio.pitch_scale=1; pointers.clear(); live.clear()
+	live_cursor=0; judgement_total_size=-1
 	field.world.clear_hit_effects()
 	field.world.clear_notes()
 	auto_play=automated
@@ -742,14 +985,20 @@ func start_game(notes: Array,automated: bool = false,section: String = "",is_pra
 		if last_section!="bridge" and play_finish_time<length():
 			play_finish_time=minf(length(),play_finish_time+SECTION_FADE_OUT)
 			section_fade_out_start=play_finish_time-SECTION_FADE_OUT
-	for n in sorted: live.append({"note":n,"started":false,"done":false,"pointer":-999,"error":0.0})
+	for n in sorted: live.append({"note":n,"started":false,"done":false,"pointer":-999,"error":0.0,"key":"play"+str(live.size())})
+	total_judgements()
 	score=0; displayed_score=0; combo=0; combo_pulse=0; rank_pulse=0; shown_rank="SS"; hold_pulse_time=0; max_combo=0; earned=0; judged=0; score_panel.energy=.5; score_panel.shown_energy=.5; judgment_counts={"PERFECT":0,"GREAT":0,"GOOD":0,"MISS":0}; countdown=3; start_position=play_range.x-lead_in; song_time=start_position-3; judgement="READY"; flash=1
 	update_section_volume()
 	# A restart only replays the stage entrance; coming from a menu shows the loading card first.
 	var restarting=mode in ["play","paused"]
 	set_mode("play")
 	apply_stage_cover()
+	# Build every note of the chart now (behind the loading card); play only shows and hides them.
+	field.world.begin_prebuild()
 	if stage_intro_enabled:
+		# Compile every gameplay shader behind the loading card, not mid-song.
+		if not restarting: field.world.prewarm(); warm_hud_text()
+		field.world.prefill_hits()
 		var tinted=song.id!="eclipse" and not has_custom_cover(str(song.id))
 		stage_intro.begin(cover_texture_for_id(str(song.id)),cover_tint_for_id(str(song.id)) if tinted else Color.WHITE,str(song.title),intro_details(),restarting)
 		judgement=""
@@ -772,16 +1021,28 @@ func update_section_volume() -> void:
 
 func apply_stage_cover() -> void:
 	# The song's cover glows behind the highway during play and recording.
-	var tinted=song.id!="eclipse" and not has_custom_cover(str(song.id))
-	field.world.set_cover(cover_texture_for_id(str(song.id)),cover_tint_for_id(str(song.id)) if tinted else Color.WHITE)
-	var palette=cover_palette_for_id(str(song.id))
+	field.world.set_cover(stage_backdrop_for_id(str(song.id)),Color.WHITE)
+	var palette=cover_palette_for_id(str(song.id)) if highway_colors=="adaptive" and not uses_recorder_colors() else SynkCoverPalette.fallback()
+	palette=palette.duplicate(true)
+	palette.notes=palette.notes.duplicate()
+	palette.notes.append(palette.notes[1])
+	for i in 4: palette.notes[i]=SynkGameplayColors.resolve(self,["tap","hold","flick","slide"][i],palette.notes[i])
 	field.world.apply_palette(palette)
 	# The combo counter runs through the same colors: tap at the top, sustained, then flick.
 	combo_glow.set_shader_parameter("use_gradient",true)
-	combo_glow.set_shader_parameter("gradient_top",palette.notes[0].lightened(.15))
-	combo_glow.set_shader_parameter("gradient_middle",palette.notes[1])
-	combo_glow.set_shader_parameter("gradient_bottom",palette.notes[2])
-	combo_glow.set_shader_parameter("glow_color",palette.notes[1])
+	combo_glow.set_shader_parameter("gradient_top",SynkGameplayColors.resolve(self,"combo",palette.notes[0].lightened(.15)))
+	combo_glow.set_shader_parameter("gradient_middle",SynkGameplayColors.resolve(self,"combo",palette.notes[1]))
+	combo_glow.set_shader_parameter("gradient_bottom",SynkGameplayColors.resolve(self,"combo",palette.notes[2]))
+	combo_glow.set_shader_parameter("glow_color",SynkGameplayColors.resolve(self,"combo",palette.notes[1]))
+	hit_label.add_theme_color_override("font_color",SynkGameplayColors.resolve(self,"judgment",Color("eee9ff")))
+	hud.add_theme_color_override("font_color",SynkGameplayColors.resolve(self,"score",SynkScoreHud.TEXT_COLOR))
+	score_panel.energy_color=SynkGameplayColors.resolve(self,"energy",SynkScoreHud.ENERGY_FILL)
+	var hud_color=SynkGameplayColors.resolve(self,"hud",Color("eee9ff"))
+	for label in [song_hud,difficulty_hud,practice_hud]: label.add_theme_color_override("font_color",hud_color)
+	for child in score_panel.get_children():
+		if child is Label and child!=hud: child.add_theme_color_override("font_color",SynkGameplayColors.resolve(self,"hud",SynkScoreHud.TEXT_COLOR))
+	rank_hud.add_theme_color_override("font_color",SynkGameplayColors.resolve(self,"hud",Color("b985ff")))
+	auto_play_hud.add_theme_color_override("font_color",SynkGameplayColors.resolve(self,"hud",Color("38baff")))
 
 # Gameplay colors come from the song's real cover art; placeholder covers keep the house palette.
 func cover_palette_for_id(id: String) -> Dictionary:
@@ -803,7 +1064,7 @@ static func format_score(value: int) -> String:
 	return ("-" if value<0 else "")+grouped
 
 func countdown_color(number: int) -> Color:
-	return [Color("ff7ad9"),Color("a36aff"),Color("38baff")][clampi(number-1,0,2)]
+	return SynkGameplayColors.resolve(self,"countdown",[Color("ff7ad9"),Color("a36aff"),Color("38baff")][clampi(number-1,0,2)])
 
 func draw_countdown_ring() -> void:
 	var remaining=resume_countdown if resume_countdown>0 else countdown
@@ -820,7 +1081,7 @@ func draw_countdown_ring() -> void:
 		countdown_ring.draw_arc(center,radius,-PI*.5,-PI*.5+sweep,64,Color(color,layer[1]),layer[0],true)
 
 func intro_details() -> String:
-	var difficulty="EXPERT  /  Lv. 12" if song.id=="eclipse" else "CUSTOM CHART"
+	var difficulty=features.current_variant.to_upper()
 	var section="" if last_section=="full" else SECTION_NAMES[last_section]+"   •   "
 	return "%s%s   •   %d BPM%s" % [section,difficulty,roundi(float(chart_bpm())),"   •   AUTO PLAY" if auto_play else ""]
 
@@ -840,7 +1101,7 @@ func save_song_config() -> void:
 	if song.id=="eclipse":
 		# Keep legacy timing values untouched as migration defaults for older charts.
 		var edits=prefs.get_value("songs","eclipse",{}).duplicate(true)
-		for key in ["title","album"]:
+		for key in ["title","album","artist","track"]:
 			if song.has(key): edits[key]=song[key]
 		prefs.set_value("songs","eclipse",edits); prefs.save("user://preferences.cfg")
 	else: library.atomic_write("user://songs/library.json",library.songs)
@@ -889,12 +1150,6 @@ func refresh_section_marks() -> void:
 		var text="◆  "+SECTION_NAMES[name]+("  "+format_clock(at) if at>0 else "")
 		for buttons in [record_mark_buttons,studio_mark_buttons]:
 			if buttons.has(name): buttons[name].text=text; buttons[name].set_selected(at>0)
-
-func apply_song_info() -> void:
-	var title_text=song_title_input.text.strip_edges()
-	if not title_text.is_empty(): song.title=title_text
-	song.album=song_album_input.text.strip_edges()
-	save_song_config(); refresh_editor()
 
 func start_new_recording() -> void:
 	if document.dirty:
@@ -980,7 +1235,7 @@ func refresh_arrange_controls() -> void:
 		if kinds[i] in recorder.locks() or (recorder.current_pass()!="all" and kinds[i]!=recorder.current_pass()): kind_buttons[i].disabled=true
 	dots_button.visible=arranging
 	ghost_button.visible=not arranging; ghost_button.set_selected(ghost_recording)
-	if record_sidebar: record_sidebar.anchor_bottom=.47
+	if record_sidebar: record_sidebar.anchor_bottom=.715
 	dots_button.text="●  ADD POINTS: ON" if dots_mode else "●  ADD POINTS: OFF"
 	dots_button.set_selected(dots_mode)
 	if arranging and dots_mode:
@@ -988,11 +1243,13 @@ func refresh_arrange_controls() -> void:
 		if dots_note.is_empty() or dots_note.kind not in ["hold","slide"]: record_help.text="ADD POINTS: select a hold or slide, then tap along its trail to add points.\nDuring play the finger must be over the trail when each point reaches the bar."
 		else: record_help.text="ADD POINTS: tap the trail to add a point, tap a point to remove it (%d on this note).\nSwipe up or down anywhere to scroll along the note; it stays selected." % dots_note.get("checkpoints",[]).size()
 	elif arranging:
-		if arrange_selection.is_empty(): record_help.text="Tap a note on the highway to select or drag it. Scroll from either side of the highway.\nChoose TAP, HOLD, SLIDE or FLICK to change its type; DELETE removes it."
+		if arrange_selection.is_empty(): record_help.text="Tap a note head or any part of its trail to select and drag it.\nType buttons change the note. Scroll beside the highway."
 		else:
 			var n: Dictionary=arrange_selection.note
 			record_help.text="SELECTED  %s  •  LANE %d  •  %.2f s\nDrag to move. Use the type buttons or DELETE above; scroll outside the highway." % [str(n.kind).to_upper(),int(n.lane)+1,float(n.time)]
-	else: record_help.text=("Faded ghosts show your existing chart." if ghost_recording else "Ghost guides are off. Existing notes are kept.")+" Record near the glowing line.\nCORRECT to move notes. STOP to review this take."
+	else:
+		var hints={"auto":"AUTO · Tap, hold, or drag to record. Choose FLICK for swipes.","tap":"TAP · Touch any lane at the glowing line to place a tap.","hold":"HOLD · Press and keep your finger down; release to end.","slide":"SLIDE · Hold and move across lanes to draw the trail.","flick":"FLICK · Swipe in the direction you want the player to flick."}
+		record_help.text=str(hints.get(tool,hints.auto))+"\nCORRECT pauses for edits. STOP & REVIEW finishes the take."
 
 func toggle_ghost_recording() -> void:
 	ghost_recording=not ghost_recording
@@ -1082,6 +1339,47 @@ func add_point_at(p: Vector2) -> void:
 		if arrange_selection.document: document.dirty=true
 	refresh_arrange_controls()
 
+func arrange_lane_at(p: Vector2) -> float:
+	var world=field.world; var point=p*Vector2(field.viewport.size)
+	var hit=Plane(Vector3.UP,world.trail_height()).intersects_ray(world.camera.project_ray_origin(point),world.camera.project_ray_normal(point))
+	return hit.x/world.LANE_WIDTH+world.CENTER_LANE if hit!=null else world.CENTER_LANE
+
+func arrange_note_distance(n: Dictionary,p: Vector2) -> float:
+	var start=float(n.time); var finish=start+float(n.duration)
+	if start>song_time or song_time-finish>note_travel_seconds(): return INF
+	var world=field.world; var camera=world.camera; var viewport_size=Vector2(field.viewport.size)
+	var origin=Vector3(0,0,(start-song_time)*world.travel_speed())
+	var best=INF
+	if song_time-start<=note_travel_seconds():
+		var head=Vector3(world.lane_x(float(n.lane)),.2,origin.z)
+		if not camera.is_position_behind(head): best=p.distance_to(camera.unproject_position(head)/viewport_size)
+	if n.kind not in ["hold","slide"] or float(n.duration)<=0: return best
+	# Use the renderer's sampled ribbon, including bends and the configured width.
+	var centers=world.trail_centers(n,clampi(ceili(float(n.duration)*32),16,256),true)
+	var sides=world.trail_sides(centers)
+	var half_width=world.TRAIL_HALF*.65*hold_trail_width
+	var pointer=p*viewport_size
+	for i in centers.size()-1:
+		var a: Vector3=centers[i]+origin; var b: Vector3=centers[i+1]+origin
+		if maxf(a.z,b.z)<-world.TRACK_LENGTH or minf(a.z,b.z)>world.JUDGMENT_DEPTH: continue
+		if camera.is_position_behind(a) or camera.is_position_behind(b): continue
+		var screen_a=camera.unproject_position(a); var screen_b=camera.unproject_position(b)
+		var polygon=PackedVector2Array([camera.unproject_position(a-sides[i]*half_width),camera.unproject_position(b-sides[i+1]*half_width),camera.unproject_position(b+sides[i+1]*half_width),camera.unproject_position(a+sides[i]*half_width)])
+		var distance=pointer.distance_to(Geometry2D.get_closest_point_to_segment(pointer,screen_a,screen_b))
+		var inside=Geometry2D.is_point_in_polygon(pointer,polygon)
+		var edge_distance=INF
+		for edge in 4: edge_distance=minf(edge_distance,pointer.distance_to(Geometry2D.get_closest_point_to_segment(pointer,polygon[edge],polygon[(edge+1)%4])))
+		if inside or edge_distance<=12: best=minf(best,minf(.085,distance/viewport_size.length()))
+	if trail_style=="solid":
+		var hit=Plane(Vector3.UP,world.trail_height()+.015).intersects_ray(camera.project_ray_origin(pointer),camera.project_ray_normal(pointer))
+		if hit!=null:
+			for offset in world.solid_trail_offsets(n):
+				var center=Vector3(world.lane_x(SynkChart.lane_at(n,start+offset)),world.trail_height()+.015,(start+offset-song_time)*world.travel_speed())
+				if camera.is_position_behind(center) or center.z < -world.TRACK_LENGTH or center.z>world.JUDGMENT_DEPTH: continue
+				if Vector2(hit.x-center.x,hit.z-center.z).length()<=half_width*1.5:
+					best=minf(best,minf(.085,p.distance_to(camera.unproject_position(center)/viewport_size)))
+	return best
+
 func arrange_pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool) -> void:
 	# Adding points: with a hold or slide selected, a tap on its trail adds or removes a point
 	# and a swipe anywhere on the stage scrolls along the note, keeping it selected.
@@ -1110,16 +1408,13 @@ func arrange_pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: 
 			for note_index in source.size():
 				var n: Dictionary=source[note_index]
 				if n.kind in recorder.locks(): continue
-				if float(n.time)>song_time or song_time-float(n.time)>note_travel_seconds(): continue
-				var position=Vector3(field.world.lane_x(float(n.lane)),.2,(float(n.time)-song_time)*field.world.travel_speed())
-				var screen_point=field.world.camera.unproject_position(position)/Vector2(field.viewport.size)
-				var distance=p.distance_to(screen_point)
+				var distance=arrange_note_distance(n,p)
 				if distance<closest: closest=distance; selected={"note":n,"document":source_index==1,"index":note_index}
 		arrange_selection=selected
 		refresh_arrange_controls()
 		if selected.is_empty(): arrange_touches[id]={"kind":"empty"}
 		else:
-			arrange_touches[id]={"kind":"note","note":selected.note,"document":selected.document,"changed":false,"start_time":float(selected.note.time),"start_lane":int(selected.note.lane),"touch_time":stage_time_at(p)}
+			arrange_touches[id]={"kind":"note","note":selected.note,"document":selected.document,"changed":false,"start_time":float(selected.note.time),"start_lane":int(selected.note.lane),"touch_time":stage_time_at(p),"touch_lane":arrange_lane_at(p)}
 	if canceled or ended:
 		arrange_touches.erase(id); return
 	if not arrange_touches.has(id): return
@@ -1129,8 +1424,7 @@ func arrange_pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: 
 	elif touch.kind=="note":
 		var n: Dictionary=touch.note
 		var target_time=stage_time_at(p)-float(touch.touch_time)+float(touch.start_time)
-		var mapped=field.input_position(p)
-		var lane_delta=clampi(roundi(SynkCapture.lane(mapped.x))-int(touch.start_lane),-SynkChart.MAX_LANE,SynkChart.MAX_LANE)
+		var lane_delta=clampi(roundi(arrange_lane_at(p)-float(touch.touch_lane)),-SynkChart.MAX_LANE,SynkChart.MAX_LANE)
 		var new_lane=clampi(int(touch.start_lane)+lane_delta,0,SynkChart.MAX_LANE)
 		if not touch.changed and (absf(float(n.time)-target_time)>.001 or int(n.lane)!=new_lane):
 			if touch.document: document.checkpoint()
@@ -1159,8 +1453,8 @@ func _process(delta: float) -> void:
 	resume_grace=maxf(0,resume_grace-delta)
 	if finishing: advance_finish(delta)
 	elif mode in ["play","record"] and not arranging:
-		if mode=="play" and stage_intro.running():
-			# Hold the countdown until the stage has finished entering.
+		if mode=="play" and (stage_intro.running() or field.world.prebuilding):
+			# Hold the countdown until the stage has entered and every note is built.
 			visual_song_time=song_time; visual_clock_ready=false
 		elif resume_countdown>0:
 			resume_countdown=maxf(0,resume_countdown-delta)
@@ -1191,7 +1485,7 @@ func _process(delta: float) -> void:
 	timing_label.visible=mode=="play" and not auto_play and not counting and flash>0 and not finishing
 	timing_label.modulate.a=clampf(flash,0,1)
 	if mode=="paused":
-		pause_home.text="REVIEW TAKE" if paused_mode=="record" else ("‹ EDITOR" if practice.active else "‹ HOME")
+		pause_home.text="REVIEW TAKE" if paused_mode=="record" else ("EDITOR" if practice.active else "HOME")
 		pause_restart.text="RETRY TAKE" if paused_mode=="record" else "RESTART"
 		primary.text="RESUME REC" if paused_mode=="record" else "RESUME"
 	var active_hold=mode=="play" and not counting and has_active_hold()
@@ -1208,10 +1502,10 @@ func _process(delta: float) -> void:
 	if countdown_label.visible:
 		var number=ceili(resume_countdown if resume_countdown>0 else countdown)
 		if number!=countdown_shown and number>0: countdown_shown=number; UiSound.play(self,"count")
-		countdown_label.add_theme_color_override("font_color",countdown_color(number).lightened(.45))
+		countdown_label.add_theme_color_override("font_color",SynkGameplayColors.resolve(self,"countdown",countdown_color(number).lightened(.45)))
 		countdown_ring.queue_redraw()
 	else: countdown_shown=-1
-	# The HUD fades in as the stage lands instead of popping in during the swoop.
+	# The HUD fades in as the loading card clears the stationary highway.
 	var hud_alpha=stage_intro.entrance() if intro_running else 1.0
 	for hud_item in [song_hud,difficulty_hud,auto_play_hud]: hud_item.self_modulate.a=hud_alpha
 	if finishing: hud_alpha*=1.0-clampf(finish_elapsed/.35,0,1)
@@ -1247,7 +1541,7 @@ func _process(delta: float) -> void:
 	if auto_play_hud.visible and mode=="play": auto_play_hud.modulate.a=.78+.22*sin(hud_motion_time*2.2)
 	else: auto_play_hud.modulate.a=1.0
 	if combo_art_value!=combo or combo_art_size!=combo_hud.size: update_combo_art()
-	record_info.text=("ARRANGE  %.1f s\n%d NOTES" if arranging else "● RECORDING  %.1f s\n%d NOTES / %s") % ([maxf(0,song_time),capture.notes.size()] if arranging else [maxf(0,song_time),capture.notes.size(),tool.to_upper()])
+	record_info.text=("PAUSED · CORRECT %.1f s\n%d NOTES" if arranging else "● RECORDING  %.1f s\n%d NOTES / %s") % ([maxf(0,song_time),capture.notes.size()] if arranging else [maxf(0,song_time),capture.notes.size(),tool.to_upper()])
 	if mode=="record" and recorder.active:
 		if song_time<recorder.region.x and countdown==0: record_info.text="PRE-ROLL · LISTEN\nREC AT %.2f s" % recorder.region.x
 		elif recorder.looping(): record_info.text+=" · TAKE %d" % (recorder.takes.size()+1)
@@ -1274,7 +1568,9 @@ func _process(delta: float) -> void:
 		hit_label.modulate.a=flash; hit_label.scale=Vector2.ONE
 
 func has_active_hold() -> bool:
-	for entry in live:
+	for live_index in range(first_live_index(),live.size()):
+		var entry: Dictionary=live[live_index]
+		if float(entry.note.time)>song_time+.23: break
 		if entry.done or not entry.started or entry.note.kind!="hold": continue
 		if auto_play or pointers.has(entry.pointer): return true
 	return false
@@ -1291,18 +1587,17 @@ func align_gameplay_hud() -> void:
 
 func update_combo_art() -> void:
 	combo_art_value=combo; combo_art_size=combo_hud.size
-	for child in combo_hud.get_children():
-		combo_hud.remove_child(child)
-		child.queue_free()
 	var digits=str(combo)
+	for child in combo_hud.get_children(): child.hide()
 	var digit_height=minf(combo_hud.size.y*.96,combo_hud.size.x/maxf(1,digits.length())*.82)
 	var digit_width=digit_height*(float(COMBO_ATLAS.get_width())/3.0)/(float(COMBO_ATLAS.get_height())/3.0)
 	var spacing=digit_width*.84
 	var total_width=digit_width+spacing*(digits.length()-1)
 	var left=(combo_hud.size.x-total_width)*.5
 	for i in digits.length():
-		var digit=TextureRect.new()
-		combo_hud.add_child(digit)
+		if i>=combo_hud.get_child_count(): combo_hud.add_child(TextureRect.new())
+		var digit=combo_hud.get_child(i)
+		digit.show()
 		digit.texture=combo_digit_textures[int(digits[i])]
 		digit.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
 		digit.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -1340,6 +1635,7 @@ func glow_reach(texture: Texture2D) -> Vector2:
 	return Vector2(shortest/texture.get_width(),shortest/texture.get_height())
 
 func _unhandled_input(event: InputEvent) -> void:
+	if floating_text_input and floating_text_input.handle_input(event): return
 	if (event is InputEventMouseButton or event is InputEventMouseMotion) and event.device==-1: return
 	if event is InputEventKey and event.pressed and event.keycode==KEY_ESCAPE:
 		if recorder.setup:
@@ -1348,6 +1644,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if mode=="menu" and sync_helper.visible: sync_helper.close()
 		elif mode=="menu" and menu_settings_open: close_lobby_settings()
 		elif mode=="guide": set_mode("menu")
+		elif mode=="library" and song_details.visible: close_song_details()
 		elif mode=="library": set_mode("menu")
 		elif mode=="editor": close_editor()
 		else: toggle_pause()
@@ -1361,21 +1658,28 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool) ->
 	if mode=="play" and auto_play: return
 	if mode=="record" and arranging:
 		arrange_pointer_event(id,p,began,ended,canceled); return
+	var touch_world=field.touch_world_position(p)
 	p = field.input_position(p)
 	if mode=="record":
 		if not recorder.can_capture(song_time): return
-		if began: capture.begin(id,song_time,p,recorder.capture_tool())
+		if began:
+			capture.minimum_lane_gap=authoring_lane_gap()
+			capture.onset_bounds=recorder.region
+			capture.begin(id,song_time,p,recorder.capture_tool(),recorder.spacing_blockers())
 		capture.move(id,song_time,p)
 		if ended:
 			var n=capture.end(id,song_time,p,canceled)
 			if not n.is_empty() and not recorder.writable(n): capture.notes.erase(n); return
-			if not n.is_empty(): judgement=n.kind.to_upper()+" RECORDED"; flash=1; flash_lane=int(n.end_lane)
+			if not n.is_empty():
+				judgement=n.kind.to_upper()+" RECORDED"; flash=1; flash_lane=int(n.end_lane)
+				if not capture.last_spacing_resolved: tell("This chord is too crowded to separate. Move a note or reduce its size.")
 		return
 	if began:
-		pointers[id]={"start":p,"position":p}
+		pointers[id]={"start":p,"position":p,"world":touch_world}
 		if p.y>=.6 and p.y<=.92:
 			var nearest: Dictionary={}; var best=.231
-			for entry in live:
+			for live_index in range(first_live_index(),live.size()):
+				var entry: Dictionary=live[live_index]
 				if float(entry.note.time)>song_time+.23: break
 				if entry.done: continue
 				var n: Dictionary=entry.note
@@ -1390,16 +1694,19 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool) ->
 				nearest.started=true; nearest.pointer=id; nearest.error=best; nearest.timing_error=song_time-float(nearest.note.time)
 				if nearest.note.kind=="tap": judge(nearest,best)
 				elif nearest.note.kind=="hold": judge(nearest,best,false)
-				elif nearest.note.kind=="slide": field.world.spawn_hit(SynkChart.lane_at(nearest.note,song_time),"slide",0,nearest)
-	if pointers.has(id): pointers[id].position=p
+				elif nearest.note.kind=="slide": field.world.spawn_hit(SynkChart.lane_at(nearest.note,song_time),"slide",0,nearest,id)
+	if pointers.has(id):
+		pointers[id].position=p; pointers[id].world=touch_world
 	if ended:
 		# Process final swipe motion before removing the finger.
 		update_game()
-		for entry in live:
+		for live_index in range(first_live_index(),live.size()):
+			var entry: Dictionary=live[live_index]
 			if entry.done or entry.pointer!=id or entry.note.kind!="hold": continue
 			var hold_end=float(entry.note.time)+float(entry.note.duration)
 			judge(entry,absf(song_time-hold_end) if not canceled and absf(song_time-hold_end)<=.16 else -1)
-		for entry in live:
+		for live_index in range(first_live_index(),live.size()):
+			var entry: Dictionary=live[live_index]
 			if entry.done or entry.pointer!=id or entry.note.kind!="slide": continue
 			var end_time=float(entry.note.time)+float(entry.note.duration)
 			var lane_error=absf(SynkCapture.lane(p.x)-SynkChart.lane_at(entry.note,end_time))
@@ -1407,11 +1714,13 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool) ->
 				judge(entry,float(entry.error))
 		pointers.erase(id)
 		if canceled:
-			for entry in live:
+			for live_index in range(first_live_index(),live.size()):
+				var entry: Dictionary=live[live_index]
 				if entry.pointer==id and not entry.done: judge(entry,-1)
 
 func update_autoplay() -> void:
-	for entry in live:
+	for live_index in range(first_live_index(),live.size()):
+		var entry: Dictionary=live[live_index]
 		if float(entry.note.time)>song_time: break
 		if entry.done: continue
 		var n: Dictionary=entry.note
@@ -1425,7 +1734,8 @@ func update_autoplay() -> void:
 			judge(entry,0.0)
 
 func update_game() -> void:
-	for entry in live:
+	for live_index in range(first_live_index(),live.size()):
+		var entry: Dictionary=live[live_index]
 		if float(entry.note.time)>song_time+.23: break
 		if entry.done: continue
 		var n: Dictionary=entry.note
@@ -1455,6 +1765,10 @@ func update_game() -> void:
 			if song_time>=hold_end-.045: judge(entry,absf(song_time-hold_end))
 
 func judge(entry: Dictionary,error: float,complete: bool = true) -> void:
+	var at=float(entry.note.time)
+	if entry.note.kind=="hold" and entry.get("note_hit",false): at=minf(song_time,float(entry.note.time)+float(entry.note.duration))
+	performance_samples.append({"time":at,"weight":0.0 if error<0 else (1.0 if error<=.045 else (.8 if error<=.09 else .5)),"amount":1})
+	if error>=0: entry.note_hit=true
 	if error<0: timing_label.text=""
 	if error>=0 and not auto_play and not entry.get("timing_logged",false):
 		entry.timing_logged=true
@@ -1462,7 +1776,7 @@ func judge(entry: Dictionary,error: float,complete: bool = true) -> void:
 		timing_samples.append({"time":float(entry.note.time),"ms":ms})
 		timing_label.text="ON TIME" if absf(ms)<=10 else ("EARLY %d ms" if ms<0 else "LATE %d ms") % roundi(absf(ms))
 		timing_label.add_theme_color_override("font_color",Color("65dcff") if ms<0 else Color("ff82d2"))
-	if error>=0: field.world.spawn_hit(SynkChart.lane_at(entry.note,song_time),str(entry.note.kind),int(entry.note.direction),entry if entry.note.kind=="hold" and not complete else {})
+	if error>=0: field.world.spawn_hit(SynkChart.lane_at(entry.note,song_time),str(entry.note.kind),int(entry.note.direction),entry if entry.note.kind=="hold" and not complete else {},int(entry.get("pointer",-999)))
 	else: field.world.shake_on_miss()
 	if error<0 and entry.note.kind in ["slide","hold"]:
 		entry.missed_at=song_time
@@ -1493,10 +1807,14 @@ func _audio_finished() -> void:
 		var best=previous_best
 		if not auto_play and not practice.active:
 			best=maxi(score,best); prefs.set_value("scores",chart_key,best); prefs.save("user://preferences.cfg")
+			if score>=previous_best:
+				prefs.set_value("score_ranks",chart_key,rank_name()); prefs.save("user://preferences.cfg")
 		var tinted=song.id!="eclipse" and not has_custom_cover(str(song.id))
 		begin_finish({"cover":cover_texture_for_id(str(song.id)),"tint":cover_tint_for_id(str(song.id)) if tinted else Color.WHITE,
 			"title":str(song.title),"details":intro_details(),"rank":rank_name(),"score":score,"accuracy":accuracy(),"max_combo":max_combo,
-			"counts":judgment_counts.duplicate(),"best":best,"new_best":not auto_play and not practice.active and score>previous_best,"auto_play":auto_play,"practice":practice.active,"timing":timing_samples.duplicate(true)})
+			"counts":judgment_counts.duplicate(),"best":best,"previous_best":previous_best,"new_best":not auto_play and not practice.active and score>previous_best,"auto_play":auto_play,"practice":practice.active,"timing":timing_samples.duplicate(true),
+			"song_id":str(song.id),"artist":str(song.artist) if str(song.get("artist","")).strip_edges()!="" else album_name(song),"difficulty":features.current_variant.capitalize(),"bpm":chart_bpm(),"notes_total":live.size(),"notes_hit":live.filter(func(e): return bool(e.get("note_hit",false))).size(),
+			"performance":performance_samples.duplicate(true),"range_start":play_range.x,"range_end":minf(length(),play_range.y)})
 	elif mode=="editor":
 		if recorder.reviewing_audio: recorder.stop_preview(); refresh_transport()
 		elif loop_enabled and loop_b>loop_a+.1: audio.play(loop_a); cursor=loop_a
@@ -1525,12 +1843,8 @@ func advance_finish(delta: float) -> void:
 func show_pending_results() -> void:
 	set_mode("results")
 	results_screen.show_results(pending_results)
-	# The flying combo lands in the results' MAX COMBO slot and stays there.
-	var slot=results_screen.combo_slot.get_global_rect()
-	var to_local=finish_overlay.get_global_transform().affine_inverse()
-	var landing=Rect2(to_local*slot.position,slot.size)
-	results_screen.combo_value_label.visible=false
-	finish_overlay.set_target(landing)
+	# The new results card owns its typography after the finish transition.
+	finish_overlay.stop()
 
 
 func build_studio() -> void:
@@ -1538,10 +1852,6 @@ func build_studio() -> void:
 	rect(studio,ui,0,0,1,1)
 	picker=FileDialog.new(); add_child(picker); picker.file_mode=FileDialog.FILE_MODE_OPEN_FILE; picker.access=FileDialog.ACCESS_FILESYSTEM; picker.use_native_dialog=true
 	picker.filters=PackedStringArray(["*.mp3,*.wav,*.ogg;Audio;audio/mpeg,audio/wav,audio/ogg"]); picker.file_selected.connect(import_audio)
-	cover_picker=FileDialog.new(); add_child(cover_picker)
-	cover_picker.file_mode=FileDialog.FILE_MODE_OPEN_FILE; cover_picker.access=FileDialog.ACCESS_FILESYSTEM; cover_picker.use_native_dialog=true
-	cover_picker.filters=PackedStringArray(["*.png,*.jpg,*.jpeg;Album art;image/png,image/jpeg"])
-	cover_picker.file_selected.connect(import_cover)
 	refresh_library()
 
 func open_editor() -> void:
@@ -1582,10 +1892,11 @@ func close_editor() -> void:
 		document.dirty=false
 	set_mode("library")
 
-func tell(message: String) -> void:
-	status.text=message
-	UiMotion.reveal(status)
-	if chart_library: chart_library.set_message(message)
+func tell(message: String,kind: String="auto") -> void:
+	# Keep the last message available to chart operations without duplicate inline UI.
+	if status: status.text=message; status.hide()
+	if toast_layer: toast_layer.notify(message,kind)
+
 func refresh_library() -> void:
 	if chart_library: chart_library.refresh()
 
@@ -1606,7 +1917,7 @@ func has_custom_cover(id: String) -> bool:
 	return FileAccess.file_exists(cover_path(id))
 
 func cover_texture_for_id(id: String) -> Texture2D:
-	if id=="eclipse": return ECLIPSE_COVER
+	if id=="eclipse" and not has_custom_cover(id): return ECLIPSE_COVER
 	if song_cover_textures.has(id): return song_cover_textures[id]
 	# A saved cover can be shown before the song's details finish loading.
 	if has_custom_cover(id):
@@ -1619,33 +1930,121 @@ func cover_texture_for_id(id: String) -> Texture2D:
 func cover_tint_for_id(id: String) -> Color:
 	return Color.from_hsv(float(posmod(id.hash(),360))/360.0,.18,1.0)
 
-func choose_cover() -> void:
-	if song.id=="eclipse": return
-	if OS.get_name()=="iOS":
-		cover_picker.access=FileDialog.ACCESS_USERDATA; cover_picker.current_dir="user://"
-	cover_picker.popup_centered_ratio(.75)
+# --- song details: album art and gameplay background ---
+func has_album_art(id: String) -> bool: return id=="eclipse" or has_custom_cover(id)
+func background_path(id: String) -> String: return "user://backgrounds/"+id+".png"
+func has_background(id: String) -> bool: return FileAccess.file_exists(background_path(id))
 
-func import_cover(path: String) -> void:
-	if song.id=="eclipse": return
+func background_texture_for_id(id: String) -> Texture2D:
+	if song_background_textures.has(id): return song_background_textures[id]
+	if not has_background(id): return null
+	var image=Image.new()
+	if image.load(ProjectSettings.globalize_path(background_path(id)))!=OK: return null
+	song_background_textures[id]=ImageTexture.create_from_image(image)
+	return song_background_textures[id]
+
+# Behind the highway: the song's gameplay background, else its album art, else plain black (null).
+func stage_backdrop_for_id(id: String) -> Texture2D:
+	if has_background(id): return background_texture_for_id(id)
+	if has_album_art(id): return cover_texture_for_id(id)
+	return null
+
+# Reads a picked PNG/JPG; returns an Image, or a message explaining why it can't be used.
+func load_picked_image(path: String) -> Variant:
 	var file=FileAccess.open(path,FileAccess.READ)
-	if file==null or file.get_length()>12*1024*1024:
-		tell("Choose a PNG or JPG cover under 12 MB."); return
+	if file==null or file.get_length()>12*1024*1024: return "Choose a PNG or JPG image under 12 MB."
 	var data=file.get_buffer(file.get_length()); file.close()
 	var image=Image.new()
 	if image.load_png_from_buffer(data)!=OK and image.load_jpg_from_buffer(data)!=OK:
-		tell("Choose a valid PNG or JPG cover."); return
-	if image.get_width()<64 or image.get_height()<64:
-		tell("Choose a cover at least 64 × 64 pixels."); return
+		return "Choose a valid PNG or JPG image."
+	if image.get_width()<64 or image.get_height()<64: return "Choose an image at least 64 × 64 pixels."
 	image.convert(Image.FORMAT_RGBA8)
+	return image
+
+# Album art is stored square (center crop) at 512 px. Returns "" on success.
+func save_cover_image(id: String,source: Image) -> String:
+	var image=source.duplicate() as Image
 	var square=mini(image.get_width(),image.get_height())
 	image=image.get_region(Rect2i((image.get_width()-square)/2,(image.get_height()-square)/2,square,square))
 	image.resize(512,512,Image.INTERPOLATE_LANCZOS)
 	DirAccess.make_dir_recursive_absolute("user://covers")
-	if image.save_png(cover_path(str(song.id)))!=OK:
-		tell("Could not save cover art on this device."); return
-	song_cover_textures[str(song.id)]=ImageTexture.create_from_image(image)
-	cover_palettes.erase(str(song.id))
-	refresh_library(); refresh_editor(); tell("Cover art saved for this chart.")
+	if image.save_png(cover_path(id))!=OK: return "Could not save album art on this device."
+	song_cover_textures[id]=ImageTexture.create_from_image(image)
+	cover_palettes.erase(id)
+	return ""
+
+func remove_cover(id: String) -> void:
+	if has_custom_cover(id): DirAccess.remove_absolute(ProjectSettings.globalize_path(cover_path(id)))
+	song_cover_textures.erase(id); cover_palettes.erase(id)
+
+# Gameplay backgrounds keep their shape, scaled down to at most 1920 px on the long side.
+func save_background_image(id: String,source: Image) -> String:
+	var image=source.duplicate() as Image
+	var longest=maxi(image.get_width(),image.get_height())
+	if longest>1920:
+		var k=1920.0/longest
+		image.resize(maxi(1,roundi(image.get_width()*k)),maxi(1,roundi(image.get_height()*k)),Image.INTERPOLATE_LANCZOS)
+	DirAccess.make_dir_recursive_absolute("user://backgrounds")
+	if image.save_png(background_path(id))!=OK: return "Could not save the background on this device."
+	song_background_textures[id]=ImageTexture.create_from_image(image)
+	return ""
+
+func remove_background(id: String) -> void:
+	if has_background(id): DirAccess.remove_absolute(ProjectSettings.globalize_path(background_path(id)))
+	song_background_textures.erase(id)
+
+func song_details_entry(id: String) -> Dictionary:
+	if id=="eclipse": return eclipse_song()
+	for entry in library.songs:
+		if str(entry.id)==id: return entry
+	return {}
+
+# Saves title, artist, album and track number for any song, playing or not.
+func update_song_details(id: String,fields: Dictionary) -> void:
+	var entry: Dictionary=song.duplicate() if str(song.id)==id else song_details_entry(id)
+	if entry.is_empty(): return
+	var title_text=str(fields.get("title","")).strip_edges()
+	if not title_text.is_empty(): entry.title=title_text
+	for key in ["artist","album"]: entry[key]=str(fields.get(key,"")).strip_edges()
+	var track=int(fields.get("track",0))
+	if track>0: entry.track=track
+	else: entry.erase("track")
+	if id=="eclipse":
+		var edits=prefs.get_value("songs","eclipse",{}).duplicate(true)
+		for key in ["title","album","artist"]: edits[key]=entry[key]
+		if entry.has("track"): edits.track=entry.track
+		else: edits.erase("track")
+		prefs.set_value("songs","eclipse",edits); prefs.save("user://preferences.cfg")
+	else:
+		for i in library.songs.size():
+			if str(library.songs[i].id)==id: library.songs[i]=entry
+		library.atomic_write("user://songs/library.json",library.songs)
+	if str(song.id)==id:
+		for key in ["title","artist","album"]: song[key]=entry[key]
+		if entry.has("track"): song.track=entry.track
+		else: song.erase("track")
+		refresh_editor()
+	refresh_library(); lobby.refresh()
+
+# Song details open from the Chart Studio song list and return there.
+func open_song_details(id: String) -> void:
+	if mode!="library" or song_details_entry(id).is_empty(): return
+	UiMotion.transition(self)
+	chart_library.visible=false
+	song_details.open(id); song_details.visible=true
+	UiMotion.screen(song_details)
+
+func open_chart_history(id: String,level: String) -> void:
+	if mode!="library": return
+	var view=load("res://scripts/chart_history.gd").new(); view.game=self; view.song_id=id; view.level=level
+	ui.add_child(view); view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+func close_song_details() -> void:
+	UiMotion.back(self)
+	song_details.visible=false
+	if mode=="library":
+		chart_library.visible=true
+		UiMotion.reveal(chart_library)
 
 func import_audio(path: String) -> void:
 	if document.dirty:
@@ -1706,12 +2105,7 @@ func save_editor() -> void:
 	tell("Chart saved. Open LIBRARY to choose another song, or TEST CHART to play it.")
 
 func refresh_editor() -> void:
-	title_label.text="CHART STUDIO / "+song.title+("  *" if document.dirty else "")
-	studio_cover.texture=cover_texture_for_id(str(song.id))
-	studio_cover.modulate=cover_tint_for_id(str(song.id)) if song.id!="eclipse" and not has_custom_cover(str(song.id)) else Color.WHITE
-	studio_cover_button.visible=song.id!="eclipse"
-	if not song_title_input.has_focus(): song_title_input.text=str(song.title)
-	if not song_album_input.has_focus(): song_album_input.text=str(song.get("album",""))
+	title_label.text=preload("res://scripts/lobby.gd").display_title(str(song.title))+("  •  unsaved" if document.dirty else "")
 	refresh_section_marks()
 	studio.refresh_inspector()
 	info.text="%d NOTES    /    %.2f s    /    %d BPM    /    %s" % [document.notes.size(),cursor,roundi(chart_bpm()),editor_tool.to_upper() if editor_tool in ["select","range"] else "PLACE "+editor_tool.to_upper()]
@@ -1740,7 +2134,7 @@ func resize_note(direction: int) -> void:
 func duplicate_note() -> void:
 	var n=document.selection()
 	if n.is_empty(): return
-	document.checkpoint(); n=n.duplicate(true); n.time=minf(maxf(0,length()-float(n.duration)),float(n.time)+60.0/chart_bpm()); document.notes.append(n); document.selected=document.notes.size()-1; refresh_editor()
+	document.checkpoint(); n=n.duplicate(true); n.time=minf(maxf(0,length()-float(n.duration)),float(n.time)+60.0/chart_bpm()); space_authored_notes([n],document.notes); document.notes.append(n); document.selected=document.notes.size()-1; refresh_editor()
 
 func build_waveform() -> void:
 	waveform=SynkLibrary.waveform_for_stream(audio.stream)

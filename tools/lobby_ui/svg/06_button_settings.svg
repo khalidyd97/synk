@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="100%" height="100%">
+  <defs>
+    <filter id="purpleGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="5" result="blur1" />
+      <feGaussianBlur stdDeviation="12" result="blur2" />
+      <feMerge>
+        <feMergeNode in="blur2" />
+        <feMergeNode in="blur1" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <radialGradient id="orbGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#3b1d5e" stop-opacity="0.9" />
+      <stop offset="75%" stop-color="#1a0933" stop-opacity="0.95" />
+      <stop offset="100%" stop-color="#6a3093" stop-opacity="1" />
+    </radialGradient>
+  </defs>
+
+  <!-- Outer Glowing Orb -->
+  <circle cx="60" cy="60" r="46" fill="url(#orbGrad)" stroke="#b88aff" stroke-width="2.5" filter="url(#purpleGlow)" />
+  <circle cx="60" cy="60" r="40" fill="none" stroke="#ffffff" stroke-width="0.75" opacity="0.4" />
+
+  <!-- Gear Icon -->
+  <g fill="none" stroke="#e5d4ff" stroke-width="3.5" stroke-linejoin="round" filter="url(#purpleGlow)">
+    <path d="M 55 26 L 65 26 L 67 34 L 74 37 L 81 32 L 88 39 L 83 46 L 86 53 L 94 55 L 94 65 L 86 67 L 83 74 L 88 81 L 81 88 L 74 83 L 67 86 L 65 94 L 55 94 L 53 86 L 46 83 L 39 88 L 32 81 L 37 74 L 34 67 L 26 65 L 26 55 L 34 53 L 37 46 L 32 39 L 39 32 L 46 37 L 53 34 Z" fill="#2e144d" />
+    <circle cx="60" cy="60" r="12" fill="#160626" stroke="#ffffff" stroke-width="3" />
+  </g>
+</svg>

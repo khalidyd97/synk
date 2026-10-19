@@ -2,27 +2,31 @@ extends Node3D
 
 # All note positions are in world units. Camera perspective supplies the depth.
 const CENTER_LANE = (SynkChart.LANES-1)*.5
-# Notes, trails and finger beams are 1.3x the size they were tuned at (1.5-unit lanes).
+# Original highway proportions, artwork size and lane spacing.
+const HIGHWAY_HALF_WIDTH = 9.75
+const EDGE_MARGIN = .2
 const NOTE_SCALE = 1.3
 const NOTE_WIDTH = 3.1*NOTE_SCALE
+const FIT = 1.0
+const LANE_WIDTH = (HIGHWAY_HALF_WIDTH-EDGE_MARGIN-NOTE_WIDTH*.5)/CENTER_LANE
+const PAD_HALF_WIDTH = HIGHWAY_HALF_WIDTH
+const FRAME_HALF_WIDTH = HIGHWAY_HALF_WIDTH
 const TRAIL_HALF = .8*NOTE_SCALE
-const TAIL_CAP_SIZE = .5
+const TAIL_CAP_SIZE = .65
 # How far below the hit flash art its mirrored glow extends, as a fraction of the art height.
 const HIT_MIRROR = .35
-# Diameter of the hollow release ring that marks where a hold or slide ends.
-const RELEASE_RING_SIZE = 3.2
 # The glowing band of Hold_Note_Pink.png spans u .225 to .68; using exactly that slice keeps
 # the trail centered on its notes with its bright edges on the trail's outline.
 const TRAIL_REGION = Vector4(.225,.27,.455,.43)
 # The tap note art fades in on its left but is cut off at its right edge; trimming the left
 # glow centers the note body on its lane.
 const CAP_REGION = Vector4(.12,0,.88,1)
-# The highway surface is 19.5 wide. Lanes are spaced so even the outermost notes stay
-# inside the rails, with a small margin.
-const HIGHWAY_HALF_WIDTH = 9.75
-const EDGE_MARGIN = .2
-const LANE_WIDTH = (HIGHWAY_HALF_WIDTH-EDGE_MARGIN-NOTE_WIDTH*.5)/CENTER_LANE
 const BEAM_MAX_X = HIGHWAY_HALF_WIDTH-NOTE_WIDTH*.5
+# Rail thickness for the optional raised style.
+const RAIL_WIDTH = .6
+# Smoky highway and golden judgment band.
+const TRACK_COLOR = Color("050409")
+const JUDGMENT_GOLD = Color(1.0,.86,.34)
 # Depth of the judgment bar along the highway, in world units.
 const JUDGMENT_DEPTH = 2.0
 const TRACK_LENGTH = 60.0
@@ -46,17 +50,27 @@ var finger_beam_material: ShaderMaterial
 var animation_time = 0.0
 var animated_materials: Array = []
 var bursts: Array = []
+var hit_pool: Array = []
+var play_render_cursor = 0
+var reference_note_meshes: Dictionary = {}
 var spark_mesh: SphereMesh
 var miss_shake_remaining = 0.0
 var cover_backdrop: MeshInstance3D
 var ambient_motes: CPUParticles3D
 var ambient_streaks: Array = []
-var sustain_streaks: Array = []
+var rail_atmosphere: Node3D
 var ambient_side_motes: Array = []
 var ambient_mote_material: StandardMaterial3D
 var cover_material: ShaderMaterial
 var ambient_palette: Gradient
 var rail_edge_materials: Array = []
+# Highway looks: the glossy "gold" rails and band, or the earlier "neon" glow rails.
+var gold_nodes: Array = []
+var neon_nodes: Array = []
+var neon_rail_materials: Array = []
+var judgment_borders: Array = []
+var highway_shadow_material: ShaderMaterial
+var highway_shadow: MeshInstance3D
 var judgment_material: ShaderMaterial
 var track_materials: Array = []
 var sky_material: ShaderMaterial
@@ -70,9 +84,8 @@ const BAR_DISTANCE = 14.142136
 const BAR_BELOW_CENTER = 16.0
 const MIN_ANGLE = 18.0
 const MAX_ANGLE = 44.0
-# Lens zoom for the stage entrance; the stage keeps its position and proportions.
+# Fixed gameplay lens, including the loading-card transition.
 const GAMEPLAY_FOV = 45.0
-const INTRO_FOV = 65.0
 
 func material(color: Color, alpha = 1.0) -> StandardMaterial3D:
 	var result = StandardMaterial3D.new()
@@ -147,6 +160,7 @@ func _ready() -> void:
 	build_effects()
 	build_cover_backdrop()
 	build_ambient_particles()
+	rail_atmosphere=preload("res://scripts/stage_rail_effects.gd").new(); rail_atmosphere.world=self; add_child(rail_atmosphere)
 
 func build_cover_backdrop() -> void:
 	# Child of the camera so it always fills the view; drawn first so the highway blends over it.
@@ -222,11 +236,6 @@ func build_ambient_particles() -> void:
 		streak_life.add_point(.3,Color(1,1,1,.7)); streak_life.add_point(.7,Color(1,1,1,.7))
 		streaks.color_ramp = streak_life
 		ambient_streaks.append(streaks)
-		# Extra streams emit only while a hold or slide is being played.
-		var extra = streaks.duplicate() as CPUParticles3D
-		extra.amount=44; extra.preprocess=0.0; extra.emitting=false
-		extra.initial_velocity_min=42; extra.initial_velocity_max=64
-		add_child(extra); sustain_streaks.append(extra)
 
 func update_ambient_particles(beat: float) -> void:
 	# Freeze with the game when paused, follow the note speed, and brighten motes on the beat.
@@ -234,53 +243,44 @@ func update_ambient_particles(beat: float) -> void:
 	ambient_motes.speed_scale = 1.0 if running else 0.0
 	for motes in ambient_side_motes: motes.speed_scale = ambient_motes.speed_scale
 	for streaks in ambient_streaks: streaks.speed_scale = (game.note_speed if running else 0.0)
-	var sustaining=false
-	if game.mode=="play":
-		for entry in game.live:
-			if entry.started and not entry.done and entry.note.kind in ["hold","slide"]:
-				if game.auto_play or game.pointers.has(entry.pointer):
-					sustaining=true; break
-	for streaks in sustain_streaks:
-		streaks.speed_scale=game.note_speed if running else 0.0
-		if game.mode!="paused": streaks.emitting=sustaining
 	ambient_mote_material.albedo_color = Color(1,1,1).lerp(Color(1.8,1.8,1.8),beat)
 	var particles=game.features.effect("Particles")
 	ambient_motes.visible=particles>0; ambient_motes.color=Color(1,1,1,particles)
 	for motes in ambient_side_motes:
 		motes.visible=particles>0; motes.color=Color(1,1,1,particles)
 	var lasers=game.features.effect("Lasers")
-	for streaks in ambient_streaks+sustain_streaks:
-		streaks.visible=lasers>0; streaks.color=Color(1,1,1,lasers)
+	for streaks in ambient_streaks:
+		streaks.visible=lasers>0; streaks.color=Color(element_color("lasers",Color.WHITE),lasers)
 	cover_material.set_shader_parameter("brightness",game.features.effect("Background brightness"))
 
 func set_cover(texture: Texture2D, tint: Color) -> void:
 	cover_material.set_shader_parameter("cover",texture)
 	cover_material.set_shader_parameter("tint",tint)
 	cover_material.set_shader_parameter("strength",1.0)
-	cover_backdrop.visible = texture != null
+	# With no background or album art, the stage behind the highway is plain black.
+	cover_material.set_shader_parameter("plain",texture == null)
+	cover_material.set_shader_parameter("image_aspect",float(texture.get_width())/maxf(1.0,texture.get_height()) if texture else 1.0)
+	cover_backdrop.visible = true
 
 # Recolors notes, rails, the judgment bar, track, sky and particles to the cover's colors.
 func apply_palette(palette: Dictionary) -> void:
+	# Cached hit materials belong to the previous palette.
+	clear_hit_effects()
 	colors = palette.notes.duplicate()
+	if colors.size()==3: colors.append(colors[1])
 	cover_palette_active = palette.from_cover
 	stage_color = palette.stage
 	materials.clear(); note_meshes.clear()
 	for color in colors:
 		materials.append(material(color))
 		note_meshes.append(make_note_mesh(color))
-	# Tap on the left rail, sustained on the right, as with the house palette.
-	for i in rail_edge_materials.size():
-		rail_edge_materials[i].set_shader_parameter("tint",colors[1] if i==1 else colors[0])
-	judgment_material.set_shader_parameter("base_color",colors[1].lerp(Color.WHITE,.15) if cover_palette_active else Color(.60,.36,1.0))
-	judgment_material.set_shader_parameter("sweep_color",colors[0].lerp(Color.WHITE,.45) if cover_palette_active else Color(.68,.91,1.0))
-	track_materials[0].set_shader_parameter("color",stage_color.darkened(.45) if cover_palette_active else Color("080b25"))
-	track_materials[1].set_shader_parameter("color",stage_color if cover_palette_active else Color("0b1030"))
+	refresh_highway_look()
 	ambient_palette.offsets = PackedFloat32Array([0.0,.5,1.0])
-	ambient_palette.colors = PackedColorArray([colors[1],colors[1].lerp(colors[2],.5) if cover_palette_active else Color("ff7ad9"),colors[0]])
-	finger_beam_material.set_shader_parameter("tint",colors[0])
+	ambient_palette.colors = PackedColorArray([element_color("particles",colors[1]),element_color("particles",colors[1].lerp(colors[2],.5) if cover_palette_active else Color("ff7ad9")),element_color("particles",colors[0])])
+	finger_beam_material.set_shader_parameter("tint",element_color("beams",colors[0]))
 	for beam in active_beams:
 		var mat: ShaderMaterial = beam.get_child(0).material_override
-		mat.set_shader_parameter("tint",colors[1]); mat.set_shader_parameter("recolor",true)
+		mat.set_shader_parameter("tint",element_color("beams",colors[1])); mat.set_shader_parameter("recolor",true)
 	# Notes already on screen were built with the old colors.
 	clear_notes()
 
@@ -291,11 +291,20 @@ func update_cover_backdrop() -> void:
 	var height = 2.0*COVER_DISTANCE*tan(deg_to_rad(camera.fov*.5))*1.04
 	(cover_backdrop.mesh as QuadMesh).size = Vector2(height*aspect,height)
 	cover_material.set_shader_parameter("screen_aspect",aspect)
+	# Track the projected rail silhouette without moving the camera or highway geometry.
+	for side in [-1,1]:
+		var far_point=camera.unproject_position(Vector3(side*FRAME_HALF_WIDTH,0,-50))/viewport_size
+		var near_point=camera.unproject_position(Vector3(side*FRAME_HALF_WIDTH,0,0))/viewport_size
+		var slope=(near_point.x-far_point.x)/maxf(.001,near_point.y-far_point.y)
+		var top_x=far_point.x-far_point.y*slope
+		cover_material.set_shader_parameter("glow_left_rail" if side==-1 else "glow_right_rail",Vector2(top_x,top_x+slope))
 	# A soft brightness kick on every beat while the song plays.
 	var beat = 0.0
 	if game.mode=="play" and game.audio.playing:
 		var beats = maxf(0.0,game.song_time)*float(game.chart_bpm())/60.0
 		beat = exp(-(beats-floorf(beats))*5.0)
+		cover_material.set_shader_parameter("glow_beat",.5+.5*cos(beats*TAU))
+	elif game.mode!="paused": cover_material.set_shader_parameter("glow_beat",0.0)
 	cover_material.set_shader_parameter("beat",beat)
 	update_ambient_particles(beat)
 
@@ -332,50 +341,148 @@ func track_material(color: Color, opacity: float) -> ShaderMaterial:
 func build_track() -> void:
 	# The highway is see-through so the cover art behind the stage glows through the lanes.
 	# Low render priority draws it before the notes and effects, which stay crisp on top.
-	var base_material = track_material(Color("080b25"),.36); base_material.render_priority = -10
+	var base_material = track_material(TRACK_COLOR,.30); base_material.render_priority = -10
 	track_materials.append(base_material)
 	box(self,Vector3(0,-.15,-28),Vector3(19.65,.25,64),base_material)
-	var surface = PlaneMesh.new(); surface.size = Vector2(19.50,60)
-	var surface_material = track_material(Color("0b1030"),.42); surface_material.render_priority = -9
+	var surface = PlaneMesh.new(); surface.size = Vector2(FRAME_HALF_WIDTH*2.0,60)
+	var surface_material = track_material(TRACK_COLOR,.55); surface_material.render_priority = -9
 	track_materials.append(surface_material)
 	var rail = mesh_node(surface,self,surface_material); rail.position = Vector3(0,.008,-30)
+	# A translucent, darkened echo of the judgment color sits beneath the rails.
+	highway_shadow_material=ShaderMaterial.new()
+	highway_shadow_material.shader=preload("res://scripts/highway_shadow.gdshader")
+	highway_shadow_material.render_priority=-8
+	var shadow_plane=PlaneMesh.new(); shadow_plane.size=Vector2(FRAME_HALF_WIDTH*2.0,TRACK_LENGTH)
+	highway_shadow=mesh_node(shadow_plane,self,highway_shadow_material)
+	highway_shadow.name="HighwayColorShadow"; highway_shadow.position=Vector3(0,.014,-TRACK_LENGTH*.5)
 	# Recording-only guides make lane targets readable without adding lines to gameplay.
 	recorder_guides = Node3D.new(); recorder_guides.name = "RecorderGuides"; add_child(recorder_guides)
 	var guide_material = material(Color("777bd5"),.38)
 	for boundary in range(1,SynkChart.LANES):
-		var guide_mesh = PlaneMesh.new(); guide_mesh.size = Vector2(.035,60)
+		var guide_mesh = PlaneMesh.new(); guide_mesh.size = Vector2(.035,60+JUDGMENT_DEPTH*.5)
 		var guide = mesh_node(guide_mesh,recorder_guides,guide_material)
-		guide.position = Vector3(lane_x(boundary-.5),.048,-30)
+		guide.position = Vector3(lane_x(boundary-.5),.055,(-60+JUDGMENT_DEPTH*.5)*.5)
 	var marker_material = material(Color("8be8ff"),.72)
 	for lane in SynkChart.LANES:
 		var marker_mesh = PlaneMesh.new(); marker_mesh.size = Vector2(.22,.62)
 		var marker = mesh_node(marker_mesh,recorder_guides,marker_material)
 		marker.position = Vector3(lane_x(lane),.052,-.03)
 	recorder_guides.visible = false
+	# Gold look: raised glossy rails, each casting a soft shadow onto the lanes beside it.
 	for side in [-1,1]:
-		var edge_mesh = PlaneMesh.new(); edge_mesh.size = Vector2(.28,64)
-		var edge_material = ShaderMaterial.new(); edge_material.shader = preload("res://scripts/rail_edge.gdshader")
+		var tube = CylinderMesh.new(); tube.top_radius = RAIL_WIDTH*.5; tube.bottom_radius = RAIL_WIDTH*.5
+		tube.height = 64; tube.radial_segments = 24; tube.rings = 1; tube.cap_top = false; tube.cap_bottom = false
+		var edge_material = ShaderMaterial.new(); edge_material.shader = preload("res://scripts/rail_tube.gdshader")
 		edge_material.set_shader_parameter("tint",colors[1] if side==1 else colors[0])
-		animated_materials.append(weakref(edge_material))
+		edge_material.set_shader_parameter("tint_amount",.12 if cover_palette_active else 0.0)
 		rail_edge_materials.append(edge_material)
-		var edge = mesh_node(edge_mesh,self,edge_material)
-		edge.position = Vector3(side*9.72,.035,-28)
+		var edge = mesh_node(tube,self,edge_material)
+		edge.position = Vector3(side*(FRAME_HALF_WIDTH+RAIL_WIDTH*.5),RAIL_WIDTH*.32,-28); edge.rotation_degrees.x = 90
+		gold_nodes.append(edge)
+		var shadow_mesh = PlaneMesh.new(); shadow_mesh.size = Vector2(.9,60)
+		var shadow_material = ShaderMaterial.new(); shadow_material.shader = preload("res://scripts/rail_shadow.gdshader")
+		shadow_material.set_shader_parameter("flip",side==1); shadow_material.render_priority = -8
+		var shadow = mesh_node(shadow_mesh,self,shadow_material)
+		shadow.position = Vector3(side*(FRAME_HALF_WIDTH-.45),.02,-30)
+		gold_nodes.append(shadow)
+	# Neon look: flat glowing rail strips with light running along them.
+	for side in [-1,1]:
+		var strip = PlaneMesh.new(); strip.size = Vector2(.28,64)
+		var strip_material = ShaderMaterial.new(); strip_material.shader = preload("res://scripts/rail_edge.gdshader")
+		animated_materials.append(weakref(strip_material))
+		neon_rail_materials.append(strip_material)
+		var neon_edge = mesh_node(strip,self,strip_material)
+		neon_edge.position = Vector3(side*9.72,.035,-28)
+		neon_nodes.append(neon_edge)
 	# A bit deeper than the visible note face so the hit line reads clearly.
-	var judgment_mesh = QuadMesh.new(); judgment_mesh.size = Vector2(19.50,JUDGMENT_DEPTH)
+	var judgment_mesh = QuadMesh.new(); judgment_mesh.size = Vector2(PAD_HALF_WIDTH*2.0,JUDGMENT_DEPTH)
 	judgment_material = ShaderMaterial.new(); judgment_material.shader = preload("res://scripts/judgment_bar.gdshader")
 	animated_materials.append(weakref(judgment_material))
 	var judgment_bar = mesh_node(judgment_mesh,self,judgment_material)
+	judgment_bar.name = "JudgmentPads"
 	judgment_bar.position = Vector3(0,.035,0); judgment_bar.rotation_degrees.x = -90
 	for edge in [-1,1]:
-		var edge_mesh = QuadMesh.new(); edge_mesh.size = Vector2(19.50,.025)
-		var border = mesh_node(edge_mesh,judgment_bar,material(Color("ead6ff")))
+		var edge_mesh = QuadMesh.new(); edge_mesh.size = Vector2(PAD_HALF_WIDTH*2.0,.025)
+		var border = mesh_node(edge_mesh,judgment_bar,material(Color("fff1cf"),.85))
 		border.position = Vector3(0,edge*JUDGMENT_DEPTH*.5,.005)
+		judgment_borders.append(border.material_override)
+	refresh_highway_look()
+
+# A player's custom color, or null to follow the style and song palette.
+func custom_color(key: String) -> Variant:
+	if game!=null and game.uses_recorder_colors(): return null
+	var role="rail" if key=="rail_color" else "band"
+	if game!=null and game.highway_colors=="theme" and game.gameplay_colors.has(role): return element_color(role,Color.WHITE)
+	var value = str(game.get(key)) if game != null and game.get(key) != null else ""
+	return Color.from_string(value,Color.BLACK) if value != "" else null
+
+func element_color(key: String,fallback: Color) -> Color:
+	return SynkGameplayColors.resolve(game,key,fallback) if game!=null else fallback
+
+func trail_color(palette: int) -> Color:
+	return element_color("slide_trail" if palette==3 else "hold_trail",colors[palette])
+
+func rail_glow_colors() -> Array:
+	var custom=custom_color("rail_color")
+	var gold=game.uses_recorder_colors() or game.highway_style=="gold"
+	var left: Color=custom if custom!=null else (JUDGMENT_GOLD if gold and not cover_palette_active else colors[0])
+	var right: Color=custom if custom!=null else (JUDGMENT_GOLD if gold and not cover_palette_active else colors[1])
+	return [element_color("glow",left),element_color("glow",right)]
+
+# Applies the chosen highway style, custom rail/band colors and highway darkness.
+func refresh_highway_look() -> void:
+	if judgment_material == null or track_materials.size() < 2: return
+	var gold = game == null or game.uses_recorder_colors() or str(game.get("highway_style")) != "neon"
+	var darkness = clampf(float(game.get("highway_opacity")),.3,1.6) if game != null and game.get("highway_opacity") != null else 1.0
+	if game.uses_recorder_colors(): darkness=1.0
+	for node in gold_nodes: node.visible = gold
+	for node in neon_nodes: node.visible = not gold
+	var rail = custom_color("rail_color")
+	var band = custom_color("band_color")
+	# Tap color on the left rail, sustained on the right, unless the player picked one color.
+	for i in 2:
+		var tint: Color = rail if rail != null else (colors[1] if i==1 else colors[0])
+		rail_edge_materials[i].set_shader_parameter("tint",tint)
+		rail_edge_materials[i].set_shader_parameter("tint_amount",1.0 if rail != null else (.45 if cover_palette_active else 0.0))
+		neon_rail_materials[i].set_shader_parameter("tint",tint)
+	if gold:
+		judgment_material.shader = preload("res://scripts/judgment_bar.gdshader")
+		# Adaptive colors pull the band toward the artwork's main color; the theme keeps it golden.
+		var base: Color = band if band != null else (JUDGMENT_GOLD.lerp(colors[1].lightened(.15),.6) if cover_palette_active else JUDGMENT_GOLD)
+		judgment_material.set_shader_parameter("base_color",base)
+		judgment_material.set_shader_parameter("sweep_color",base.lerp(Color.WHITE,.6))
+		track_materials[0].set_shader_parameter("color",stage_color.darkened(.88) if cover_palette_active else TRACK_COLOR)
+		track_materials[1].set_shader_parameter("color",stage_color.darkened(.85) if cover_palette_active else TRACK_COLOR)
+		track_materials[0].set_shader_parameter("opacity",minf(.95,.30*darkness))
+		track_materials[1].set_shader_parameter("opacity",minf(.95,.55*darkness))
+		for m in track_materials: m.set_shader_parameter("near_fraction",.72)
+	else:
+		judgment_material.shader = preload("res://scripts/judgment_neon.gdshader")
+		judgment_material.set_shader_parameter("base_color",band if band != null else (colors[1].lerp(Color.WHITE,.15) if cover_palette_active else Color(.60,.36,1.0)))
+		judgment_material.set_shader_parameter("sweep_color",band.lerp(Color.WHITE,.45) if band != null else (colors[0].lerp(Color.WHITE,.45) if cover_palette_active else Color(.68,.91,1.0)))
+		track_materials[0].set_shader_parameter("color",stage_color.darkened(.45) if cover_palette_active else Color("080b25"))
+		track_materials[1].set_shader_parameter("color",stage_color if cover_palette_active else Color("0b1030"))
+		track_materials[0].set_shader_parameter("opacity",minf(.95,.36*darkness))
+		track_materials[1].set_shader_parameter("opacity",minf(.95,.42*darkness))
+		for m in track_materials: m.set_shader_parameter("near_fraction",1.0)
+	for m in judgment_borders: m.albedo_color = Color(Color("fff1cf") if gold else Color("ead6ff"),.85 if gold else 1.0)
+	var judgment_color: Color=judgment_material.get_shader_parameter("base_color")
+	highway_shadow_material.set_shader_parameter("tint",judgment_color.darkened(.65))
+	highway_shadow_material.set_shader_parameter("opacity",.2)
+	for m in track_materials:
+		m.set_shader_parameter("color",element_color("track",m.get_shader_parameter("color")))
+	if cover_material:
+		var glow=rail_glow_colors()
+		cover_material.set_shader_parameter("rail_glow_left",glow[0])
+		cover_material.set_shader_parameter("rail_glow_right",glow[1])
+		cover_material.set_shader_parameter("rail_glow_opacity",0.0 if game.uses_recorder_colors() else game.rail_glow_opacity)
 
 func build_effects() -> void:
 	spark_mesh = SphereMesh.new(); spark_mesh.radius = .065; spark_mesh.height = .13
 	finger_beam_material = ShaderMaterial.new(); finger_beam_material.shader = preload("res://scripts/finger_beam.gdshader")
 	# Drawn over the judgment bar so the lit lane reads all the way down to the bar's near edge.
 	finger_beam_material.render_priority = 2
+	finger_beam_material.set_shader_parameter("rail_half_width",FRAME_HALF_WIDTH)
 	var beam_mesh = PlaneMesh.new(); beam_mesh.size = Vector2(NOTE_WIDTH,58+JUDGMENT_DEPTH*.5)
 	for i in 10:
 		var finger_beam = mesh_node(beam_mesh,self,finger_beam_material)
@@ -383,7 +490,7 @@ func build_effects() -> void:
 		finger_beams.append(finger_beam)
 	for lane in SynkChart.LANES:
 		var beam = Node3D.new(); add_child(beam); beam.position = Vector3(lane_x(lane),.08,0)
-		artwork(beam,"Hit_Effect_Pink",1,Vector3(0,1.35,0),Vector2(4.4,3.3),Vector4(0,0,1,1),.75)
+		artwork(beam,"Hit_Effect_Pink",1,Vector3(0,1.35*FIT,0),Vector2(4.4,3.3)*FIT,Vector4(0,0,1,1),.75)
 		beam.visible = false; active_beams.append(beam)
 
 func asset_material(name: String, palette: int, region = Vector4(0,0,1,1), opacity = 1.0) -> ShaderMaterial:
@@ -391,32 +498,65 @@ func asset_material(name: String, palette: int, region = Vector4(0,0,1,1), opaci
 	mat.set_shader_parameter("artwork",load("res://assets/neon/"+name+".png"))
 	mat.set_shader_parameter("region",region); mat.set_shader_parameter("opacity",opacity)
 	# Blue tap artwork keeps its gradient; sustained and flick art takes its type color.
-	mat.set_shader_parameter("recolor",palette!=0 or cover_palette_active); mat.set_shader_parameter("tint",colors[palette])
+	mat.set_shader_parameter("recolor",palette!=0 or cover_palette_active or (game.highway_colors=="theme" and game.gameplay_colors.has("tap"))); mat.set_shader_parameter("tint",colors[palette])
 	mat.set_shader_parameter("motion",.7 if name.begins_with("Hold_") else (.35 if name.begins_with("Flick_") else .12))
 	if name.begins_with("Tap_") or name.begins_with("Hold_") or name.begins_with("Flick_") or name.begins_with("Slide_"):
 		mat.set_shader_parameter("glow_pulse",.18)
 	animated_materials.append(weakref(mat))
 	return mat
 
-func spawn_hit(lane: float, kind: String, direction: int = 0, sustain_entry: Dictionary = {}) -> void:
+func touch_hit_position(lane: float,pointer_id: int) -> Vector3:
+	var x=lane_x(lane)
+	if game.pointers.has(pointer_id) and game.pointers[pointer_id].has("world"):
+		x=game.pointers[pointer_id].world.x
+	# Follow horizontal touch movement, but never let the burst drift up/down the track.
+	return Vector3(clampf(x,-HIGHWAY_HALF_WIDTH,HIGHWAY_HALF_WIDTH),.035,0)
+
+func spawn_hit(lane: float, kind: String, direction: int = 0, sustain_entry: Dictionary = {},pointer_id: int=-999) -> void:
 	if bursts.size() >= 32:
-		bursts.pop_front().node.queue_free()
+		recycle_hit(bursts.pop_front())
 	var palette = palette_for_kind("tap" if kind in ["slide","flick"] else kind)
-	var node = Node3D.new(); add_child(node); node.position = Vector3(lane_x(lane),.1,0)
+	var hit_color=element_color("hits",colors[palette])
+	var pool_key=str(palette)+("flick"+str(direction) if kind=="flick" else "normal")
+	for index in hit_pool.size():
+		if hit_pool[index].pool_key!=pool_key: continue
+		var reused: Dictionary=hit_pool.pop_at(index)
+		reused.age=0.0; reused.kind=kind; reused.sustain_entry=sustain_entry; reused.pointer_id=pointer_id
+		reused.node.position=touch_hit_position(lane,pointer_id)+Vector3(0,.065,0)
+		reused.flash.rotation=camera.rotation; reused.fill.rotation=camera.rotation
+		reused.flash.position=Vector3(0,(2.25-4.0*HIT_MIRROR*.5)*FIT,0)
+		reused.fill.position=Vector3(0,2.25*FIT,0)
+		reused.flash.material_override.set_shader_parameter("opacity",0.0)
+		reused.fill.material_override.set_shader_parameter("opacity",0.0)
+		reused.ring.material_override.albedo_color.a=0.0
+		for particle_index in reused.particles.size():
+			var particle=reused.particles[particle_index]
+			particle.node.hide()
+			if kind=="flick":
+				var axis=camera.basis*[Vector3.UP,Vector3.RIGHT,Vector3.DOWN,Vector3.LEFT][clampi(direction,0,3)]
+				var sideways=camera.basis*[Vector3.RIGHT,Vector3.DOWN,Vector3.LEFT,Vector3.UP][clampi(direction,0,3)]
+				particle.velocity=axis*(5.0+float(particle_index%7)*1.4)+sideways*sin(particle_index*TAU/24.0)*4.8
+				particle.node.quaternion=Quaternion(Vector3.BACK,particle.velocity.normalized())
+		reused.node.show()
+		bursts.append(reused)
+		return
+	var node = Node3D.new(); add_child(node); node.position = touch_hit_position(lane,pointer_id)+Vector3(0,.065,0)
 	# Share the regular hit flash across taps, slides and flicks.
-	var flash = artwork(node,"Hit_Effect_Blue" if palette==0 else "Hit_Effect_Pink",palette,Vector3(0,2.25-4.0*HIT_MIRROR*.5,0),Vector2(5.8,4.0*(1.0+HIT_MIRROR)))
+	var flash = artwork(node,"Hit_Effect_Blue" if palette==0 else "Hit_Effect_Pink",palette,Vector3(0,(2.25-4.0*HIT_MIRROR*.5)*FIT,0),Vector2(5.8,4.0*(1.0+HIT_MIRROR))*FIT)
 	flash.material_override.set_shader_parameter("mirror_extra",HIT_MIRROR)
-	var fill_mesh = QuadMesh.new(); fill_mesh.size = Vector2(5.9,4.2)
+	flash.material_override.set_shader_parameter("tint",hit_color)
+	flash.material_override.set_shader_parameter("recolor",palette!=0 or cover_palette_active or (game.highway_colors=="theme" and game.gameplay_colors.has("hits")))
+	var fill_mesh = QuadMesh.new(); fill_mesh.size = Vector2(5.9,4.2)*FIT
 	var fill_material = ShaderMaterial.new(); fill_material.shader = preload("res://scripts/hit_fill.gdshader")
-	fill_material.set_shader_parameter("tint",colors[palette])
+	fill_material.set_shader_parameter("tint",hit_color)
 	var fill = mesh_node(fill_mesh,node,fill_material)
-	fill.position = Vector3(0,2.25,0); fill.rotation = camera.rotation
+	fill.position = Vector3(0,2.25*FIT,0); fill.rotation = camera.rotation
 	var flick_axis = camera.basis * [Vector3.UP,Vector3.RIGHT,Vector3.DOWN,Vector3.LEFT][clampi(direction,0,3)]
-	var ring_mesh = TorusMesh.new(); ring_mesh.inner_radius=.9; ring_mesh.outer_radius=.97; ring_mesh.rings=32; ring_mesh.ring_segments=6
-	var ring = mesh_node(ring_mesh,node,material(colors[palette],.8))
+	var ring_mesh = TorusMesh.new(); ring_mesh.inner_radius=.9*FIT; ring_mesh.outer_radius=.97*FIT; ring_mesh.rings=32; ring_mesh.ring_segments=6
+	var ring = mesh_node(ring_mesh,node,material(hit_color,.8))
 	var particles: Array = []
 	var particle_count = 24 if kind=="flick" else 12
-	var particle_material = material(colors[palette].lightened(.65)) if kind=="flick" else materials[palette]
+	var particle_material = material(element_color("sparks",colors[palette].lightened(.65) if kind=="flick" else colors[palette]))
 	var streak_mesh = BoxMesh.new(); streak_mesh.size=Vector3(.035,.035,.42)
 	for i in particle_count:
 		var particle=mesh_node(streak_mesh if kind=="flick" else spark_mesh,node,particle_material)
@@ -428,13 +568,68 @@ func spawn_hit(lane: float, kind: String, direction: int = 0, sustain_entry: Dic
 			# Align each fine streak with its own flight path in the camera plane.
 			particle.quaternion=Quaternion(Vector3.BACK,velocity.normalized())
 		particles.append({"node":particle,"velocity":velocity})
-	bursts.append({"node":node,"age":0.0,"flash":flash,"fill":fill,"ring":ring,"particles":particles,"kind":kind,"flick_axis":flick_axis,"sustain_entry":sustain_entry})
+	bursts.append({"node":node,"age":0.0,"flash":flash,"fill":fill,"ring":ring,"particles":particles,"kind":kind,"flick_axis":flick_axis,"sustain_entry":sustain_entry,"pointer_id":pointer_id,"pool_key":pool_key})
 
-func clear_hit_effects() -> void:
-	for burst in bursts: burst.node.queue_free()
+func recycle_hit(burst: Dictionary) -> void:
+	burst.node.hide(); burst.sustain_entry={}
+	if hit_pool.size()<HIT_POOL_LIMIT: hit_pool.append(burst)
+	else: burst.node.queue_free()
+
+# Shader warm-up. The Compatibility renderer compiles a shader the first time a material is
+# drawn, which on phones stalls a frame or more; doing it mid-song reads as random stutter.
+# While the loading card covers the stage, draw one of every note look, trail, ring and hit
+# effect far down the highway for a few frames so every shader is ready before play starts.
+var prewarmed: Dictionary = {}
+func prewarm() -> void:
+	var key = str(game.note_shape) + str(game.get("trail_style"))
+	if prewarmed.has(key): return
+	prewarmed[key] = true
+	var group = Node3D.new(); group.name = "ShaderPrewarm"; add_child(group); group.position.z = -30.0
+	make_cap(group, 1, 0, 0)
+	var flick = SynkChart.note(0, 3, "flick"); flick.direction = 1; make_flick(group, flick, 2)
+	var hold = SynkChart.note(0, 5, "hold"); hold.duration = .5; make_ribbon(group, hold, 1)
+	var slide = SynkChart.note(0, 7, "slide"); slide.duration = .5; slide.end_lane = 9
+	slide.path = [{"offset": 0.0, "lane": 7.0}, {"offset": .5, "lane": 9.0}]; make_ribbon(group, slide, 1)
+	for kind in ["tap", "hold", "flick"]: spawn_hit(5, kind, 1)
+	for beam in finger_beams.slice(0, 1): beam.visible = true
+	for i in 4: await get_tree().process_frame
+	if is_instance_valid(group): group.queue_free()
+	# Keep the warm-up hits: they go back into the pool for the song to reuse.
+	for burst in bursts: recycle_hit(burst)
 	bursts.clear()
 
+# Fill the hit-effect pool for the chart before play, so even a dense opening never builds a
+# flash, ring and spark set mid-song. Counts cover the most hits of each kind that can be on
+# screen at once (a hit lasts about 0.65 s); every flick direction the chart uses gets its own.
+const HIT_POOL_LIMIT = 48
+func prefill_hits() -> void:
+	var counts = {"tap": 0, "hold": 0}
+	var flick_dirs = {}
+	for entry in game.live:
+		var kind = str(entry.note.kind)
+		if kind == "flick": flick_dirs[int(entry.note.get("direction", 1))] = true
+		elif kind == "hold": counts.hold += 1
+		else: counts.tap += 1
+	var wanted = {"0normal": mini(10, counts.tap), "1normal": mini(6, counts.hold)}
+	for dir in flick_dirs: wanted["0flick" + str(dir)] = 3
+	var have = {}
+	for burst in hit_pool: have[burst.pool_key] = int(have.get(burst.pool_key, 0)) + 1
+	var made: Array = []
+	for pool_key in wanted:
+		var kind = "hold" if pool_key == "1normal" else ("flick" if pool_key.begins_with("0flick") else "tap")
+		var dir = int(pool_key.trim_prefix("0flick")) if kind == "flick" else 0
+		for i in maxi(0, int(wanted[pool_key]) - int(have.get(pool_key, 0))):
+			spawn_hit(5, kind, dir); made.append(bursts.pop_back())
+	for burst in made: recycle_hit(burst)
+
+func clear_hit_effects() -> void:
+	# Pooled effects for the previous chart are freed; prefill_hits builds the next set.
+	for burst in bursts+hit_pool: burst.node.queue_free()
+	bursts.clear(); hit_pool.clear()
+
 func clear_notes() -> void:
+	play_render_cursor=0
+	prebuilding=false; prebuild_queue.clear(); prebuild_total=0
 	for entry in notes.values(): entry.node.queue_free()
 	notes.clear()
 
@@ -453,14 +648,17 @@ func animate_effects(delta: float) -> void:
 			burst.age=.45
 		if running: burst.age += delta
 		if (not sustained and burst.age>=.65) or game.mode not in ["play","record","paused"]:
-			burst.node.queue_free(); bursts.remove_at(i); continue
+			recycle_hit(burst); bursts.remove_at(i); continue
 		var t = minf(float(burst.age)/.65,1.0)
 		# A quick, full flash that holds its body before fading out.
 		var fade = pow(1.0-smoothstep(.10,1.0,t),1.5)
 		var attack = minf(1.0,burst.age/.018)
 		var hold_wave = .5+.5*sin(animation_time*TAU*2.8)
 		var hold_blend = smoothstep(0.0,.18,burst.age) if sustained else 0.0
-		if sustained and burst.kind=="slide":
+		if sustained: burst.pointer_id=int(burst.sustain_entry.get("pointer",burst.pointer_id))
+		if sustained and game.pointers.has(burst.pointer_id) and game.pointers[burst.pointer_id].has("world"):
+			burst.node.position=touch_hit_position(0,burst.pointer_id)+Vector3(0,.065,0)
+		elif sustained and burst.kind=="slide":
 			# Keep the normal hit burst on the moving slide head, with repeated flashes.
 			burst.node.position.x = lane_x(SynkChart.lane_at(burst.sustain_entry.note,game.song_time))
 		burst.flash.material_override.set_shader_parameter("opacity",lerpf(attack*fade,.60+hold_wave*.26,hold_blend))
@@ -492,60 +690,53 @@ func artwork(parent: Node3D, name: String, palette: int, position_value: Vector3
 
 func palette_for_kind(kind: String) -> int:
 	if kind=="flick": return 2
-	if kind in ["hold","slide"]: return 1
+	if kind=="slide": return 3
+	if kind=="hold": return 1
 	return 0
 
-# size scales the cap; hold and slide tails use a half-size cap so their end reads clearly.
-func make_cap(parent: Node3D, lane: float, offset: float, palette: int, recording = false, size = 1.0) -> void:
+# Tails reuse the exact head artwork, with their own relative size.
+func make_cap(parent: Node3D, lane: float, offset: float, palette: int, recording = false, size = 1.0) -> MeshInstance3D:
 	size*=game.note_size
 	var position_value = Vector3(lane_x(lane),.2,offset*travel_speed()*(1 if recording else -1))
 	if game.note_shape=="circle":
-		make_circle_cap(parent,position_value,palette,size); return
-	artwork(parent,"Tap_Note_Blue" if palette==0 else "Tap_Note_Pink",palette,position_value,Vector2(NOTE_WIDTH,1.4)*size,CAP_REGION)
+		return make_circle_cap(parent,position_value,palette,size)
+	return artwork(parent,"Tap_Note_Blue" if palette==0 else "Tap_Note_Pink",palette,position_value,Vector2(NOTE_WIDTH,1.4*FIT)*size,CAP_REGION)
 
 func make_circle_cap(parent: Node3D, position_value: Vector3, palette: int, size = 1.0) -> MeshInstance3D:
-	# A thick puck lying flat on the highway: a domed top face over a shaded edge wall.
-	# Both meshes are direct children of the note so hold clipping and miss graying reach them.
-	var RADIUS = 1.16*NOTE_SCALE*size
-	var THICKNESS = .65*size
-	var mat = ShaderMaterial.new(); mat.shader = preload("res://scripts/circle_note.gdshader")
-	mat.set_shader_parameter("tint",colors[palette]); mat.set_shader_parameter("recolor",palette!=0 or cover_palette_active)
-	mat.set_shader_parameter("glow_pulse",.09); mat.render_priority = 1
-	animated_materials.append(weakref(mat))
-	var quad = QuadMesh.new(); quad.size = Vector2(RADIUS/.4,RADIUS/.4)
-	var top = mesh_node(quad,parent,mat)
-	top.position = Vector3(position_value.x,.06+THICKNESS,position_value.z); top.rotation_degrees.x = -90
-	var side_material = ShaderMaterial.new(); side_material.shader = preload("res://scripts/circle_side.gdshader")
-	side_material.set_shader_parameter("tint",colors[palette]); side_material.set_shader_parameter("half_height",THICKNESS*.5)
-	side_material.set_shader_parameter("recolor",palette!=0 or cover_palette_active)
-	side_material.set_shader_parameter("glow_pulse",.07)
-	animated_materials.append(weakref(side_material))
-	var wall = CylinderMesh.new(); wall.top_radius = RADIUS; wall.bottom_radius = RADIUS*.94; wall.height = THICKNESS
-	wall.cap_top = false; wall.cap_bottom = false; wall.radial_segments = 40; wall.rings = 1
-	var side = mesh_node(wall,parent,side_material)
-	side.position = Vector3(position_value.x,.06+THICKNESS*.5,position_value.z)
-	return top
+	# The supplied artwork already contains its perspective and thickness.
+	# Face the camera once so it keeps that silhouette rather than flattening twice.
+	var radius = 1.16*NOTE_SCALE*size
+	var mat = ShaderMaterial.new(); mat.shader = preload("res://scripts/reference_note.gdshader")
+	mat.set_shader_parameter("artwork",preload("res://assets/neon/Circle_Note_Reference.png"))
+	mat.set_shader_parameter("hue_shift",colors[palette].h-.53)
+	var role=["tap","hold","flick","slide"][palette]
+	if game.highway_colors=="theme" and not game.uses_recorder_colors() and game.gameplay_colors.has(role):
+		mat.set_shader_parameter("saturation_scale",colors[palette].s/.78)
+		mat.set_shader_parameter("value_scale",colors[palette].v)
+	if not reference_note_meshes.has(size):
+		var quad = QuadMesh.new(); quad.size = Vector2(radius/.4,radius/.4*797.0/1388.0)
+		reference_note_meshes[size]=quad
+	var head = mesh_node(reference_note_meshes[size],parent,mat)
+	head.position = Vector3(position_value.x,.38*size,position_value.z)
+	head.rotation = camera.rotation
+	return head
 
-# The end of a hold or slide: a hollow ring on the highway marking where to let go.
-func make_release_ring(parent: Node3D, lane: float, offset: float, palette: int, recording = false) -> MeshInstance3D:
-	var mat = ShaderMaterial.new(); mat.shader = preload("res://scripts/release_ring.gdshader")
-	mat.set_shader_parameter("tint",colors[palette].lightened(.15))
-	animated_materials.append(weakref(mat))
-	var quad = QuadMesh.new(); quad.size = Vector2(RELEASE_RING_SIZE,RELEASE_RING_SIZE)*game.note_size
-	var ring = mesh_node(quad,parent,mat)
-	ring.position = Vector3(lane_x(lane),trail_height()+.03,offset*travel_speed()*(1 if recording else -1))
-	ring.rotation_degrees.x = -90
-	return ring
+func make_tail_cap(parent: Node3D, lane: float, offset: float, palette: int, recording = false) -> MeshInstance3D:
+	var cap=make_cap(parent,lane,offset,palette,recording,TAIL_CAP_SIZE)
+	# Keep its filled center above the ribbon instead of sinking with the smaller sprite.
+	if game.note_shape=="circle": cap.position.y=.38*game.note_size
+	cap.name="SustainEndCap"
+	return cap
 
 func make_flick(parent: Node3D, note: Dictionary, palette: int) -> void:
 	make_cap(parent,float(note.lane),0,palette)
 	# One bold chevron keeps the direction clear without overlapping arrows.
 	var axis = camera.basis*[Vector3.UP,Vector3.RIGHT,Vector3.DOWN,Vector3.LEFT][clampi(int(note.direction),0,3)]
 	for i in 1:
-		var base = Vector3(lane_x(note.lane),2.0*game.note_size,0)
-		var arrow_mesh = QuadMesh.new(); arrow_mesh.size=Vector2(3.22,1.6)*game.note_size
+		var base = Vector3(lane_x(note.lane),2.0*FIT*game.note_size,0)
+		var arrow_mesh = QuadMesh.new(); arrow_mesh.size=Vector2(3.22,1.6)*FIT*game.note_size
 		var arrow_material = ShaderMaterial.new(); arrow_material.shader=preload("res://scripts/flick_arrow.gdshader")
-		arrow_material.set_shader_parameter("tint",colors[palette])
+		arrow_material.set_shader_parameter("tint",element_color("arrows",colors[palette]))
 		var arrow = mesh_node(arrow_mesh,parent,arrow_material)
 		arrow.position=base; arrow.rotation=camera.rotation
 		arrow.rotate_object_local(Vector3.FORWARD,float(note.direction)*PI*.5)
@@ -584,7 +775,7 @@ func trail_sides(centers: Array) -> Array:
 
 func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = false) -> void:
 	var duration = float(note.duration)
-	var half_width = TRAIL_HALF*.65*game.hold_trail_width if note.kind=="hold" else TRAIL_HALF
+	var half_width = TRAIL_HALF*.65*game.hold_trail_width
 	var count = clampi(ceili(duration*32),16,256)
 	var st = SurfaceTool.new(); st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var edge = SurfaceTool.new(); edge.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -600,28 +791,63 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 			var lift = Vector3(0,.01,0)
 			for index in [0,1,2,0,2,3]:
 				edge.add_vertex([a+sa*(side*half_width-.012),b+sb*(side*half_width-.012),b+sb*(side*half_width+.012),a+sa*(side*half_width+.012)][index]+lift)
-	var trail_material = asset_material("Hold_Note_Pink",palette,TRAIL_REGION,.85)
-	if note.kind=="hold":
-		trail_material.set_shader_parameter("motion",0.0)
-		trail_material.set_shader_parameter("glow_pulse",0.0)
+	var solid=game.trail_style=="solid"
+	var trail_material: ShaderMaterial
+	if solid:
+		trail_material=ShaderMaterial.new(); trail_material.shader=preload("res://scripts/solid_trail.gdshader")
+		trail_material.set_shader_parameter("tint",trail_color(palette))
+	else:
+		trail_material=asset_material("Hold_Note_Pink",palette,TRAIL_REGION,.85)
+		trail_material.set_shader_parameter("tint",trail_color(palette))
+		if note.kind=="hold":
+			trail_material.set_shader_parameter("motion",0.0)
+			trail_material.set_shader_parameter("glow_pulse",0.0)
 	st.set_material(trail_material); mesh_node(st.commit(),parent)
-	var edge_material = ShaderMaterial.new(); edge_material.shader = preload("res://scripts/ribbon_edge.gdshader")
-	edge_material.set_shader_parameter("color",colors[palette].lightened(.4))
-	edge.set_material(edge_material); mesh_node(edge.commit(),parent)
+	if solid:
+		make_solid_trail_joints(parent,note,palette,recording,half_width)
+	else:
+		var edge_material = ShaderMaterial.new(); edge_material.shader = preload("res://scripts/ribbon_edge.gdshader")
+		edge_material.set_shader_parameter("color",trail_color(palette).lightened(.4))
+		edge.set_material(edge_material); mesh_node(edge.commit(),parent)
 	# Checkpoint dots: glowing beads where the finger must be when they reach the bar.
-	if note.has("checkpoints"):
+	if note.has("checkpoints") and not solid:
 		var dot_material = ShaderMaterial.new(); dot_material.shader = preload("res://scripts/ribbon_edge.gdshader")
 		dot_material.set_shader_parameter("color",Color("fff4ff"))
 		var halo_material = ShaderMaterial.new(); halo_material.shader = preload("res://scripts/ribbon_edge.gdshader")
-		halo_material.set_shader_parameter("color",colors[palette].lightened(.55))
+		halo_material.set_shader_parameter("color",trail_color(palette).lightened(.55))
 		for offset in note.checkpoints:
 			var at = float(offset)
 			var dot_position = Vector3(lane_x(SynkChart.lane_at(note,note.time+at)),trail_height()+.07,-at*travel_speed()*(-1 if recording else 1))
-			var halo_mesh = CylinderMesh.new(); halo_mesh.top_radius=.62; halo_mesh.bottom_radius=.62; halo_mesh.height=.02; halo_mesh.radial_segments=24
+			var halo_mesh = CylinderMesh.new(); halo_mesh.top_radius=.62*FIT; halo_mesh.bottom_radius=.62*FIT; halo_mesh.height=.02; halo_mesh.radial_segments=24
 			var halo = mesh_node(halo_mesh,parent,halo_material); halo.position = dot_position
-			var bead_mesh = SphereMesh.new(); bead_mesh.radius=.34; bead_mesh.height=.24; bead_mesh.radial_segments=16; bead_mesh.rings=6
+			var bead_mesh = SphereMesh.new(); bead_mesh.radius=.34*FIT; bead_mesh.height=.24*FIT; bead_mesh.radial_segments=16; bead_mesh.rings=6
 			var bead = mesh_node(bead_mesh,parent,dot_material); bead.position = dot_position+Vector3(0,.06,0)
-	make_release_ring(parent,SynkChart.lane_at(note,note.time+duration),duration,palette,recording)
+	var end_cap=make_tail_cap(parent,SynkChart.lane_at(note,note.time+duration),duration,palette,recording)
+	if solid:
+		end_cap.set_meta("solid_trail_joint",true); end_cap.set_meta("checkpoint_offset",duration)
+
+func solid_trail_offsets(note: Dictionary) -> Array:
+	# Recorded slide path samples describe its shape, not extra playable points.
+	var duration=float(note.duration)
+	var offsets: Array=[duration] if duration>0 else []
+	for value in note.get("checkpoints",[]):
+		var offset=float(value)
+		if not is_finite(offset) or offset<=0 or offset>=duration: continue
+		if not offsets.any(func(existing): return is_equal_approx(float(existing),offset)): offsets.append(offset)
+	offsets.sort()
+	return offsets
+
+func make_solid_trail_joints(parent: Node3D,note: Dictionary,palette: int,recording: bool,half_width: float) -> void:
+	var offsets=solid_trail_offsets(note)
+	var material=ShaderMaterial.new(); material.shader=preload("res://scripts/solid_trail.gdshader")
+	material.set_shader_parameter("tint",trail_color(palette)); material.set_shader_parameter("joint",true)
+	var disc=PlaneMesh.new(); disc.size=Vector2.ONE*half_width*3.0
+	for offset in offsets:
+		# The endpoint is the smaller note cap, rather than a second disc beneath it.
+		if is_equal_approx(float(offset),float(note.duration)): continue
+		var joint=mesh_node(disc,parent,material)
+		joint.set_meta("solid_trail_joint",true); joint.set_meta("checkpoint_offset",offset)
+		joint.position=Vector3(lane_x(SynkChart.lane_at(note,float(note.time)+offset)),trail_height()+.015,offset*travel_speed()*(1 if recording else -1))
 
 func make_alignment_lines(parent: Node3D, note: Dictionary, palette: int) -> Array:
 	# Recording-only rows across the highway at each note's head (and tail) for lining notes up.
@@ -630,13 +856,60 @@ func make_alignment_lines(parent: Node3D, note: Dictionary, palette: int) -> Arr
 	var offsets = [0.0]
 	if note.kind in ["hold","slide"]: offsets.append(float(note.duration))
 	for offset in offsets:
-		var line_mesh = PlaneMesh.new(); line_mesh.size = Vector2(19.50,.07)
+		var line_mesh = PlaneMesh.new(); line_mesh.size = Vector2(PAD_HALF_WIDTH*2.0,.07)
 		var row = mesh_node(line_mesh,parent,line_material)
 		row.position = Vector3(0,.06,offset*travel_speed())
 		result.append(row)
 	return result
 
 # held: the note is a hold or slide being held, so its trail is eaten up at the judgment bar.
+# --- Chart prebuild -------------------------------------------------------------------
+# During the loading screen every note of the chart is built once (head, trail mesh, ring,
+# materials) and kept hidden. Play then only shows, moves and hides notes, so nothing is
+# created mid-song and high note speeds cannot cause spawn spikes. Work is done in small
+# time-boxed batches per frame, so the loading animation never stalls.
+const PREBUILD_BUDGET_MS = 6.0
+var prebuilding = false
+var prebuild_queue: Array = []
+var prebuild_total = 0
+
+func build_note_node(key: String, note: Dictionary, recording = false) -> void:
+	# Materials this note creates are animated with the note (only while it's visible),
+	# not by the global per-frame list, so hundreds of hidden prebuilt notes cost nothing.
+	var first_material = animated_materials.size()
+	var node = Node3D.new(); add_child(node)
+	var palette = palette_for_kind(str(note.kind))
+	if note.kind=="flick": make_flick(node,note,palette)
+	else: make_cap(node,float(note.lane),0,palette,recording)
+	if note.kind in ["hold","slide"]: make_ribbon(node,note,palette,recording)
+	var lines: Array = []
+	if recording: lines = make_alignment_lines(node,note,palette)
+	var signature = (hash(note) if recording or game.mode=="record" else 0)^hash([game.note_speed,game.note_shape,game.note_size,game.hold_trail_width,game.trail_style])
+	var own_materials = animated_materials.slice(first_material); animated_materials.resize(first_material)
+	notes[key] = {"node":node,"signature":signature,"lines":lines,"held":false,"prebuilt":false,"materials":own_materials}
+
+func begin_prebuild() -> void:
+	clear_notes()
+	prebuild_queue = range(game.live.size())
+	prebuild_total = prebuild_queue.size()
+	prebuilding = prebuild_total > 0
+
+func step_prebuild() -> void:
+	if not prebuilding: return
+	var start = Time.get_ticks_usec()
+	while not prebuild_queue.is_empty() and (Time.get_ticks_usec() - start) < PREBUILD_BUDGET_MS * 1000.0:
+		var i: int = prebuild_queue.pop_front()
+		if i >= game.live.size(): continue
+		var key: String = game.live[i].key
+		if notes.has(key): continue
+		build_note_node(key, game.live[i].note)
+		notes[key].node.visible = false; notes[key].prebuilt = true
+	if prebuild_queue.is_empty(): prebuilding = false
+
+func prebuild_progress() -> float:
+	if prebuild_total <= 0: return 1.0
+	return 1.0 - float(prebuild_queue.size()) / float(prebuild_total)
+
 func sync_note(key: String, note: Dictionary, visible_keys: Dictionary, recording = false, freeze_time: float = -1.0, held = false) -> void:
 	var tail = float(note.time)+float(note.duration)
 	var visible_time=freeze_time if freeze_time>=0 else render_time()
@@ -645,18 +918,14 @@ func sync_note(key: String, note: Dictionary, visible_keys: Dictionary, recordin
 			if note.time>visible_time or visible_time-tail>game.note_travel_seconds(): return
 		elif note.time-visible_time > game.note_travel_seconds() or (visible_time-tail)*travel_speed()>5: return
 	visible_keys[key] = true
-	var signature = hash(note)^hash([game.note_speed,game.note_shape,game.note_size,game.hold_trail_width])
+	var signature = (hash(note) if recording or game.mode=="record" else 0)^hash([game.note_speed,game.note_shape,game.note_size,game.hold_trail_width,game.trail_style])
 	if notes.has(key) and notes[key].signature != signature:
 		notes[key].node.queue_free(); notes.erase(key)
-	if not notes.has(key):
-		var node = Node3D.new(); add_child(node)
-		var palette = palette_for_kind(str(note.kind))
-		if note.kind=="flick": make_flick(node,note,palette)
-		else: make_cap(node,float(note.lane),0,palette,recording)
-		if note.kind in ["hold","slide"]: make_ribbon(node,note,palette,recording)
-		var lines: Array = []
-		if recording: lines = make_alignment_lines(node,note,palette)
-		notes[key] = {"node":node,"signature":signature,"lines":lines,"held":false}
+	if not notes.has(key): build_note_node(key, note, recording)
+	notes[key].node.visible = true
+	for ref in notes[key].materials:
+		var mat = ref.get_ref()
+		if mat: mat.set_shader_parameter("animation_time",animation_time)
 	if notes[key].held != held:
 		notes[key].held = held
 		set_trail_clip(notes[key].node, 0.02 if held else 1000.0)
@@ -677,7 +946,7 @@ func update_finger_beams() -> void:
 		var beam: MeshInstance3D = finger_beams[i]
 		beam.visible = i < touches.size()
 		# Beams snap to whole lanes rather than following the finger smoothly.
-		# Edge lanes are clamped so the beam never spills past the highway's rails.
+		# Keep the full note-width glow centered on its lane, including outer notes.
 		if beam.visible: beam.position.x = clampf(lane_x(roundi(SynkCapture.lane(touches[i].position.x))),-BEAM_MAX_X,BEAM_MAX_X)
 
 func set_trail_clip(node: Node3D, clip_z: float) -> void:
@@ -716,18 +985,29 @@ func shake_on_miss() -> void:
 
 func animate_miss_shake(delta: float) -> void:
 	if game.mode=="paused": return
-	if game.mode!="play": miss_shake_remaining=0
+	if game.mode!="play" or (game.stage_intro and game.stage_intro.running()): miss_shake_remaining=0
 	miss_shake_remaining=maxf(0,miss_shake_remaining-delta)
 	var strength=miss_shake_remaining/.22
 	var phase=(.22-miss_shake_remaining)*90.0
 	camera.position=camera_rest_position()+Vector3(sin(phase)*.065,sin(phase*1.3)*.025,0)*strength
-	# Zoom the lens into the stage without moving or tilting the camera.
-	var away=1.0-game.stage_intro.entrance() if game.stage_intro and game.mode in ["play","paused"] else 0.0
-	camera.fov=lerpf(GAMEPLAY_FOV,INTRO_FOV,away)
+	# The loading card fades away over a stationary highway. No entrance zoom.
+	camera.fov=GAMEPLAY_FOV
 	camera.rotation_degrees.x=-highway_angle()
+
+# A missed sustain remains visible until its tail exits, even after judgment retires it.
+func first_visible_play_index() -> int:
+	while play_render_cursor<game.live.size():
+		var entry: Dictionary=game.live[play_render_cursor]
+		if not entry.done: break
+		if entry.note.kind in ["hold","slide"] and entry.has("missed_at"):
+			if (render_time()-float(entry.note.time)-float(entry.note.duration))*travel_speed()<=5: break
+		play_render_cursor+=1
+	return play_render_cursor
 
 func _process(delta: float) -> void:
 	if game==null: return
+	step_prebuild()
+	if rail_atmosphere: rail_atmosphere.update(delta)
 	recorder_guides.visible = game.mode=="record" or (game.mode=="paused" and game.paused_mode=="record")
 	animate_miss_shake(delta)
 	update_cover_backdrop()
@@ -736,21 +1016,21 @@ func _process(delta: float) -> void:
 	for beam in active_beams: beam.visible = false
 	update_finger_beams()
 	if game.mode=="play" or (game.mode=="paused" and game.paused_mode=="play"):
-		for i in game.live.size():
+		for i in range(first_visible_play_index(),game.live.size()):
 			if game.live[i].note.time>render_time()+game.note_travel_seconds(): break
 			if not game.live[i].done:
 				var held = game.live[i].started and game.live[i].note.kind in ["hold","slide"]
-				sync_note("play"+str(i),game.live[i].note,visible_keys,false,-1.0,held)
+				sync_note(game.live[i].key,game.live[i].note,visible_keys,false,-1.0,held)
 				if game.live[i].started and game.live[i].note.kind=="slide":
 					var lane = SynkChart.lane_at(game.live[i].note,render_time())
 					var beam = active_beams[clampi(roundi(lane),0,SynkChart.MAX_LANE)]
-					beam.position.x = lane_x(lane); beam.visible = true
+					beam.position=touch_hit_position(lane,int(game.live[i].pointer))+Vector3(0,.045,0); beam.visible = true
 					var pulse = .5+.5*sin(animation_time*TAU*3.0)
 					beam.get_child(0).scale = Vector3(1+pulse*.12,.9+pulse*.25,1)
 					beam.get_child(0).material_override.set_shader_parameter("opacity",.45+pulse*.3)
 			elif game.live[i].note.kind in ["hold","slide"] and game.live[i].has("missed_at"):
 				# A missed hold or slide turns gray and keeps travelling down the highway until it leaves.
-				var key="play"+str(i)
+				var key: String=game.live[i].key
 				sync_note(key,game.live[i].note,visible_keys)
 				if notes.has(key) and visible_keys.has(key):
 					fade_missed_slide(key,maxf(0,game.song_time-float(game.live[i].missed_at)),false)
@@ -763,9 +1043,33 @@ func _process(delta: float) -> void:
 					sync_note(key,game.document.notes[i],visible_keys)
 					if notes.has(key) and visible_keys.has(key): style_record_ghost(notes[key].node)
 		for i in game.capture.notes.size(): sync_note("captured"+str(i),game.capture.notes[i],visible_keys,true)
-		for id in game.capture.gestures: sync_note("gesture"+str(id),game.capture.gestures[id].note,visible_keys,true)
+		for id in game.capture.gestures:
+			sync_note("gesture"+str(id),recording_preview(game.capture.gestures[id]),visible_keys,true)
 	for key in notes.keys():
-		if not visible_keys.has(key): notes[key].node.queue_free(); notes.erase(key)
+		if visible_keys.has(key): continue
+		# Prebuilt chart notes are kept and hidden; anything built on the fly is freed.
+		if notes[key].get("prebuilt", false): notes[key].node.visible = false
+		else: notes[key].node.queue_free(); notes.erase(key)
+
+# A stationary touch emits no drag events. Advance its visual tail using the song
+# clock, without changing captured notes, gesture classification or saved timing.
+# Only build the visible portion so a minute-long hold stays cheap to render.
+func recording_preview(gesture: Dictionary) -> Dictionary:
+	var preview: Dictionary=gesture.note.duplicate(true)
+	var now=maxf(float(preview.time)+float(preview.duration),render_time())
+	preview.duration=now-float(preview.time)
+	if preview.kind=="slide":
+		preview.path.append({"offset":preview.duration,"lane":clampf(SynkCapture.lane(gesture.position.x)+float(gesture.get("lane_shift",0)),0,SynkChart.MAX_LANE)})
+	var start=maxf(float(preview.time),now-game.note_travel_seconds())
+	if start>float(preview.time):
+		var start_lane=SynkChart.lane_at(preview,start)
+		var shift=start-float(preview.time)
+		var path: Array=[{"offset":0.0,"lane":start_lane}]
+		for point in preview.path:
+			if float(point.offset)>shift: path.append({"offset":float(point.offset)-shift,"lane":point.lane})
+		preview.path=path if preview.kind=="slide" else []
+		preview.time=start; preview.duration=now-start; preview.lane=start_lane
+	return preview
 
 func style_record_ghost(node: Node3D) -> void:
 	for mesh in node.get_children():

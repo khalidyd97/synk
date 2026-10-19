@@ -1,0 +1,62 @@
+extends SceneTree
+var failures=0
+func check(ok: bool,message: String) -> void:
+    if not ok: failures+=1; push_error(message)
+func _initialize() -> void: run.call_deferred()
+func run() -> void:
+    AudioServer.set_bus_mute(0,true)
+    var g=load("res://scenes/main.tscn").instantiate(); root.add_child(g); await process_frame
+    g.set_process(false); g.field.world.set_process(false); g.stage_intro_enabled=false
+    var w=g.field.world; var s=g.settings_panel
+    var original_notes=g.document.notes.duplicate(true); var original_settings=g.document.settings.duplicate(true)
+    g.set_mode("play"); g.change_highway_look("colors","theme")
+    for role in {"tap":"ff5566","hold":"55ff66","slide":"ffaa33","flick":"8855ff","hold_trail":"44ccff","slide_trail":"ff44aa","rail":"44ffcc","band":"dd44ff","glow":"ff6633","track":"182034","hits":"ee3366","sparks":"ffee11","beams":"33bbff","combo":"ff8822","energy":"ccff44"}:
+        var values={"tap":"ff5566","hold":"55ff66","slide":"ffaa33","flick":"8855ff","hold_trail":"44ccff","slide_trail":"ff44aa","rail":"44ffcc","band":"dd44ff","glow":"ff6633","track":"182034","hits":"ee3366","sparks":"ffee11","beams":"33bbff","combo":"ff8822","energy":"ccff44"}
+        g.change_gameplay_color(role,values[role])
+    check(w.colors[0]==Color("ff5566") and w.colors[1]==Color("55ff66") and w.colors[3]==Color("ffaa33"),"Tap, hold and slide heads have independent colors")
+    check(w.trail_color(1)==Color("44ccff") and w.trail_color(3)==Color("ff44aa"),"Hold and slide trail colors are independent of heads")
+    check(w.judgment_material.get_shader_parameter("base_color")==Color("dd44ff"),"Judgment band color applies")
+    check(w.rail_edge_materials[0].get_shader_parameter("tint")==Color("44ffcc"),"Arbitrary custom rail color applies")
+    check(w.cover_material.get_shader_parameter("rail_glow_left")==Color("ff6633"),"Custom glow reaches the full-screen backdrop")
+    check(w.track_materials[0].get_shader_parameter("color")==Color("182034"),"Highway surface uses its own color")
+    check(g.score_panel.energy_color==Color("ccff44"),"Energy HUD is customizable")
+    check(g.combo_glow.get_shader_parameter("gradient_top")==Color("ff8822"),"Combo artwork and glow both use the chosen color")
+    g.change_highway_look("rail_color","ffaa11")
+    check(w.custom_color("rail_color")==Color("ffaa11") and not g.gameplay_colors.has("rail"),"Highway swatches can replace a color chosen in Colors")
+    g.change_highway_look("rail_color",""); g.change_gameplay_color("rail","44ffcc")
+    w.spawn_hit(2,"tap")
+    check(w.bursts.back().fill.material_override.get_shader_parameter("tint")==Color("ee3366"),"Hit burst uses its own color")
+    g.change_gameplay_color("glow","")
+    check(w.rail_glow_colors()[0]==Color("44ffcc"),"Default glow follows the selected rail color")
+    g.change_rail_glow_opacity(.07)
+    check(is_equal_approx(w.cover_material.get_shader_parameter("rail_glow_opacity"),.07),"Vertical glow opacity is adjustable")
+    var saved=g.gameplay_colors.duplicate()
+    g.change_highway_look("colors","adaptive")
+    check(SynkGameplayColors.resolve(g,"hits",Color.WHITE)==Color.WHITE,"Adaptive mode ignores custom overrides")
+    check(g.gameplay_colors==saved,"Adaptive mode preserves saved custom colors")
+    g.set_mode("menu"); g.open_lobby_settings(); s.show_page("visuals",false); s.show_section("colors",false)
+    check(s.color_pickers.tap.disabled,"Color pickers explain and respect adaptive mode")
+    g.change_highway_look("colors","theme")
+    check(not s.color_pickers.tap.disabled,"Theme mode enables color editing")
+    await create_timer(.6).timeout; await RenderingServer.frame_post_draw
+    root.get_texture().get_image().save_png("res://.tools/gameplay-custom-colors.png")
+    var config=ConfigFile.new(); config.load("user://preferences.cfg")
+    check(config.get_value("highway","element_colors",{})==saved,"Per-element colors persist")
+    g.close_lobby_settings(); g.set_mode("record"); g.apply_stage_cover(); g.refresh_arrange_controls()
+    await process_frame
+    check(g.record_sidebar.get_global_rect().encloses(g.recorder_note_speed_button.get_global_rect()),"Recorder note speed stays inside its controls panel")
+    check(w.colors[0]==SynkCoverPalette.DEFAULT[0] and w.colors[1]==SynkCoverPalette.DEFAULT[1],"Recorder keeps original note colors")
+    check(w.custom_color("rail_color")==null and w.judgment_material.shader==load("res://scripts/judgment_bar.gdshader"),"Recorder keeps original gold rails and judgment band")
+    check(is_zero_approx(w.cover_material.get_shader_parameter("rail_glow_opacity")),"Custom glow stays out of the recorder")
+    var music_speed=g.audio.pitch_scale; var play_speed=g.note_speed; var old_travel=g.note_travel_seconds()
+    g.cycle_recorder_note_speed()
+    check(g.note_travel_seconds()!=old_travel,"Recorder note travel control changes travel speed")
+    check(g.audio.pitch_scale==music_speed and g.note_speed==play_speed,"Recorder note speed does not affect playback or Play settings")
+    check(g.prefs.get_value("editor","note_speed",0)==g.recorder_note_speed,"Recorder note speed persists separately")
+    g.set_mode("play"); g.apply_stage_cover()
+    check(w.colors[0]==Color("ff5566") and is_equal_approx(g.note_travel_seconds(),2.6/play_speed),"Returning to Play restores custom colors and Play note speed")
+    check(g.document.notes==original_notes and g.document.settings==original_settings,"Visual preferences leave the chart unchanged")
+    g.change_gameplay_color("tap","not-a-color")
+    check(g.gameplay_colors==saved,"Invalid colors cannot corrupt the saved theme")
+    print("Gameplay colors and recorder isolation: "+("PASS" if failures==0 else "FAIL"))
+    g.queue_free(); await process_frame; quit(failures)
