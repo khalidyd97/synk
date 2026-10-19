@@ -41,9 +41,9 @@ func _ready() -> void:
 	for i in VOICES:
 		var player = AudioStreamPlayer.new(); add_child(player); players.append(player)
 	milestone_label = Label.new(); game.ui.add_child(milestone_label)
-	milestone_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); milestone_label.anchor_top = .40; milestone_label.anchor_bottom = .50
+	milestone_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); milestone_label.anchor_top = .47; milestone_label.anchor_bottom = .53
 	milestone_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; milestone_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	milestone_label.add_theme_font_override("font", BOLD); milestone_label.add_theme_font_size_override("font_size", 44)
+	milestone_label.add_theme_font_override("font", BOLD); milestone_label.add_theme_font_size_override("font_size", 30)
 	milestone_label.add_theme_color_override("font_color", Color("fff1cf"))
 	milestone_label.add_theme_color_override("font_outline_color", Color(1, .6, .2, .55)); milestone_label.add_theme_constant_override("outline_size", 10)
 	milestone_label.mouse_filter = Control.MOUSE_FILTER_IGNORE; milestone_label.modulate.a = 0
@@ -89,11 +89,11 @@ func show_milestone(combo: int) -> void:
 # --- Song intro card -----------------------------------------------------------------
 func build_intro_card() -> void:
 	intro_card = Control.new(); game.ui.add_child(intro_card); intro_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	intro_card.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); intro_card.anchor_top = .2; intro_card.anchor_bottom = .4
+	intro_card.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); intro_card.anchor_top = .08; intro_card.anchor_bottom = .22
 	intro_title = Label.new(); intro_card.add_child(intro_title)
 	intro_title.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); intro_title.anchor_bottom = .62
 	intro_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; intro_title.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-	intro_title.add_theme_font_override("font", BOLD); intro_title.add_theme_font_size_override("font_size", 56)
+	intro_title.add_theme_font_override("font", BOLD); intro_title.add_theme_font_size_override("font_size", 46)
 	intro_artist = Label.new(); intro_card.add_child(intro_artist)
 	intro_artist.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); intro_artist.anchor_top = .64
 	intro_artist.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; intro_artist.vertical_alignment = VERTICAL_ALIGNMENT_TOP

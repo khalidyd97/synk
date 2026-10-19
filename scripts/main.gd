@@ -471,7 +471,7 @@ func build_ui() -> void:
 	# Energy gauge and score stack on the left, next to the pause button.
 	score_panel=SynkScoreHud.new(); rect(score_panel,safe_parent("SafeScoreHud"),.1,.025,.34,.205)
 	hud=score_panel.score_label
-	combo_hud=Control.new(); rect(combo_hud,ui,.3,.31,.7,.47)
+	combo_hud=Control.new(); rect(combo_hud,ui,.36,.355,.64,.455)
 	combo_hud.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	rank_hud=label(ui,"SS",.925,.015,.99,.12,46); rank_hud.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	rank_hud.add_theme_color_override("font_color",Color("b985ff")); rank_hud.add_theme_color_override("font_outline_color",Color("5921a8")); rank_hud.add_theme_constant_override("outline_size",5)
@@ -1502,7 +1502,7 @@ func _process(delta: float) -> void:
 	var displayed_pulse=maxf(combo_pulse,hold_pulse)
 	align_gameplay_hud()
 	combo_hud.pivot_offset=combo_hud.size*.5
-	combo_hud.scale=Vector2.ONE*(1.0+displayed_pulse*.28)
+	combo_hud.scale=Vector2.ONE*(1.0+displayed_pulse*.12)
 	combo_hud.modulate=Color.WHITE.lerp(Color("fff0ff"),displayed_pulse)
 	combo_glow.set_shader_parameter("boost",displayed_pulse)
 	countdown_label.visible=counting and not intro_running
@@ -1593,29 +1593,32 @@ func align_gameplay_hud() -> void:
 	for element in [countdown_label,countdown_ring]:
 		element.position=countdown_center-element.size*.5
 
+# The combo is set in Fira Sans Bold like the rest of the UI: a number with a small "COMBO"
+# caption beneath it, coloured from the song palette. Both labels are built once and reused.
+var combo_number: Label
+var combo_caption: Label
 func update_combo_art() -> void:
 	combo_art_value=combo; combo_art_size=combo_hud.size
-	var digits=str(combo)
-	for child in combo_hud.get_children(): child.hide()
-	var digit_height=minf(combo_hud.size.y*.96,combo_hud.size.x/maxf(1,digits.length())*.82)
-	var digit_width=digit_height*(float(COMBO_ATLAS.get_width())/3.0)/(float(COMBO_ATLAS.get_height())/3.0)
-	var spacing=digit_width*.84
-	var total_width=digit_width+spacing*(digits.length()-1)
-	var left=(combo_hud.size.x-total_width)*.5
-	for i in digits.length():
-		if i>=combo_hud.get_child_count(): combo_hud.add_child(TextureRect.new())
-		var digit=combo_hud.get_child(i)
-		digit.show()
-		digit.texture=combo_digit_textures[int(digits[i])]
-		digit.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
-		digit.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		digit.mouse_filter=Control.MOUSE_FILTER_IGNORE
-		digit.material=combo_glow
-		# The glow shader draws the digit inside a padded quad, so grow the rect to keep the digit's size.
-		var content=Vector2(digit_width,digit_height)
-		var padded=content/(1.0-2.0*HUD_GLOW_PAD)
-		digit.position=Vector2(left+i*spacing,(combo_hud.size.y-digit_height)*.5)-(padded-content)*.5
-		digit.size=padded
+	if combo_number==null:
+		for child in combo_hud.get_children(): child.queue_free()
+		combo_number=Label.new(); combo_hud.add_child(combo_number); combo_number.name="ComboNumber"
+		combo_caption=Label.new(); combo_hud.add_child(combo_caption); combo_caption.name="ComboCaption"
+		for label_node in [combo_number,combo_caption]:
+			label_node.mouse_filter=Control.MOUSE_FILTER_IGNORE
+			label_node.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; label_node.vertical_alignment=VERTICAL_ALIGNMENT_CENTER
+			label_node.add_theme_font_override("font",preload("res://assets/fonts/FiraSans-Bold.ttf"))
+			label_node.add_theme_color_override("font_shadow_color",Color(0,0,.02,.7)); label_node.add_theme_constant_override("shadow_offset_y",3)
+		combo_caption.text="C O M B O"
+	var h=combo_hud.size.y
+	combo_number.position=Vector2.ZERO; combo_number.size=Vector2(combo_hud.size.x,h*.74)
+	combo_caption.position=Vector2(0,h*.72); combo_caption.size=Vector2(combo_hud.size.x,h*.28)
+	combo_number.add_theme_font_size_override("font_size",maxi(12,roundi(h*.62)))
+	combo_caption.add_theme_font_size_override("font_size",maxi(9,roundi(h*.16)))
+	combo_number.text=str(combo)
+	var tint: Color=combo_glow.get_shader_parameter("gradient_middle") if combo_glow and combo_glow.get_shader_parameter("gradient_middle") is Color else Color("b985ff")
+	combo_number.add_theme_color_override("font_color",Color.WHITE)
+	combo_number.add_theme_color_override("font_outline_color",Color(tint,.85)); combo_number.add_theme_constant_override("outline_size",maxi(4,roundi(h*.06)))
+	combo_caption.add_theme_color_override("font_color",tint.lerp(Color.WHITE,.45))
 
 func build_combo_digit_textures() -> void:
 	combo_digit_textures.clear()
