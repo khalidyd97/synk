@@ -80,12 +80,7 @@ func play_hit(kind: String) -> void:
 # Milestones light up the combo's own caption, so the flare stays part of the combo group.
 func show_milestone(combo: int) -> void:
 	game.update_combo_art()
-	var caption: Label = game.combo_caption
-	caption.text = "★  %d  COMBO  ★" % combo
-	caption.add_theme_color_override("font_color", Color("ffe08a"))
-	caption.set_meta("milestone_until", Time.get_ticks_msec() + 1400)
-	caption.pivot_offset = caption.size * .5; caption.scale = Vector2.ONE * 1.35
-	create_tween().tween_property(caption, "scale", Vector2.ONE, .4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	game.combo_view.milestone(combo)
 	if game.field: game.field.world.rail_flare()
 
 # --- Song intro card -----------------------------------------------------------------

@@ -37,7 +37,7 @@ func run():
     check(w.hit_pool.is_empty(),"Theme changes discard stale cached hit colors")
     g.combo=12; g.update_combo_art(); var digit=g.combo_hud.get_child(0).get_instance_id()
     g.combo=13; g.update_combo_art()
-    check(g.combo_hud.get_child(0).get_instance_id()==digit and g.combo_number.text=="13","Combo label is reused during dense hits")
+    check(g.combo_hud.get_child(0).get_instance_id()==digit and g.combo_view.combo==13,"Combo label is reused during dense hits")
     for speed in [.25,.5,1.0,1.5]:
         g.audio.pitch_scale=speed; g.visual_clock_ready=false
         var elapsed=0.0; var previous=0.0

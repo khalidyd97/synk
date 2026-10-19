@@ -40,7 +40,7 @@ func run() -> void:
 	check(g.combo==3,"Touch assist hits a note 1.3 lanes away when nothing is closer")
 	g.song_time=12.5; g.update_game()
 	check(g.judgment_counts.MISS==1 and w.miss_flashes[1].amount>0,"A miss flashes its lane")
-	g.combo=50; x.on_judged(g.live[0],"PERFECT",50); check(g.combo_caption.text.contains("50") and g.combo_caption.text.contains("COMBO"),"Combo milestones light up the combo caption")
+	g.combo=50; x.on_judged(g.live[0],"PERFECT",50); check(g.combo_view.caption=="50 COMBO" and g.combo_view.flare>0,"Combo milestones flare the combo display")
 	# Lenient hold and slide ends
 	var hold=SynkChart.note(20,4,"hold"); hold.duration=2.0
 	g.start_game([hold],false); g.countdown=0; g.song_time=20.0
