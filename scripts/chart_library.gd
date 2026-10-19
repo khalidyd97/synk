@@ -133,7 +133,7 @@ func _ready() -> void:
     message_label=label(panel,"Continue your draft or record a new take",24,584,528,20,11,Color("aaa8c1"),p)
     message_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     version_popup=PopupMenu.new(); add_child(version_popup); version_popup.id_pressed.connect(create_version)
-    version_popup.add_theme_font_size_override("font_size",18)
+    version_popup.add_theme_font_size_override("font_size",22)
     version_popup.add_theme_constant_override("v_separation",16)
     recent=game.prefs.get_value("chart_library","recent",{})
     build_confirm(); refresh()
@@ -261,8 +261,12 @@ func show_new_version() -> void:
         var key: String=game.features.VARIANTS[i]
         if not data.versions.any(func(v): return v.key==key): version_popup.add_item(key.capitalize(),i)
     if version_popup.item_count==0: set_message("All five chart versions exist. Select one to continue."); return
-    version_popup.position=Vector2i(new_button.get_global_rect().position+Vector2(0,new_button.size.y*canvas.scale.y))
+    # Opens under + NEW, right-aligned to it, at least as wide as the button.
+    var k=canvas.scale.x
     version_popup.popup()
+    version_popup.size=Vector2i(maxi(version_popup.size.x,roundi(new_button.size.x*k*1.6)),version_popup.size.y)
+    var right=new_button.get_screen_position().x+new_button.size.x*k
+    version_popup.position=Vector2i(roundi(right-version_popup.size.x),roundi(new_button.get_screen_position().y+new_button.size.y*k+6))
 func create_version(index: int) -> void:
     selected_variant=game.features.VARIANTS[index]; open_selected("editor")
 func open_selected(action: String) -> void:
@@ -299,14 +303,16 @@ func fraction_place(node: Control,parent: Control,l: float,t: float,r: float,b: 
 func fraction_label(parent: Control,value: String,l: float,t: float,r: float,b: float,font_size: int,tint: Color=Color("f5edff")) -> Label:
     return label(parent,value,l*1456,t*819,(r-l)*1456,(b-t)*819,font_size,tint)
 func fraction_button(parent: Control,value: String,l: float,t: float,r: float,b: float,callback: Callable,_variant: String="") -> Button:
-    return button(parent,value,l*1456,t*819,(r-l)*1456,(b-t)*819,callback)
+    var n=button(parent,value,l*1456,t*819,(r-l)*1456,(b-t)*819,callback)
+    if _variant=="danger": n.accent=Color("ff5f7e"); n.add_theme_color_override("font_color",Color("ff9db0"))
+    return n
 func build_confirm() -> void:
     # Deleting is permanent, so it always asks first.
     confirm=Control.new(); fraction_place(confirm,canvas,0,0,1,1); confirm.mouse_filter=Control.MOUSE_FILTER_STOP
     var dim=ColorRect.new(); fraction_place(dim,confirm,0,0,1,1); dim.color=Color(0.006,0.006,0.006,.72); dim.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var panel=Panel.new(); fraction_place(panel,confirm,.27,.28,.73,.72)
-    var style=StyleBoxFlat.new(); style.bg_color=Color("101010"); style.border_color=Color("ff4d6a")
-    style.set_border_width_all(2); style.set_corner_radius_all(16); style.shadow_color=Color(Color("ff4d6a"),.25); style.shadow_size=20
+    var style=StyleBoxFlat.new(); style.bg_color=Color(.04,.04,.04,.97); style.border_color=Color(1,1,1,.12)
+    style.set_border_width_all(1); style.set_corner_radius_all(24); style.shadow_color=Color(0,0,0,.55); style.shadow_size=24
     panel.add_theme_stylebox_override("panel",style)
     confirm_title=fraction_label(panel,"",.06,.06,.94,.24,30); confirm_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     confirm_body=fraction_label(panel,"",.08,.24,.92,.58,18,Color("cfc6ea")); confirm_body.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER

@@ -126,6 +126,11 @@ func _ready() -> void:
     sections.add_theme_stylebox_override("normal",section_style)
     var section_focus=section_style.duplicate(); section_focus.border_color=Color("50daec")
     for state in ["hover","pressed","focus"]: sections.add_theme_stylebox_override(state,section_focus)
+    sections.get_popup().about_to_popup.connect(func():
+        var r=sections.get_global_rect(); var k=sections.get_global_transform_with_canvas().get_scale()
+        var popup=sections.get_popup()
+        popup.position=Vector2i(sections.get_screen_position()+Vector2(0,sections.size.y*k.y+6))
+        popup.min_size=Vector2i(roundi(sections.size.x*k.x),0))
     sections.item_selected.connect(func(index): game.set_play_mode(["full","verse1","verse2","bridge"][index]); update_best())
     var types=[["easy","Easy","Relaxed"],["normal","Normal","Standard"],["hard","Hard","Fast notes"],["expert","Expert","No mercy"]]
     for i in types.size():

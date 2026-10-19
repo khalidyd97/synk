@@ -169,8 +169,16 @@ func ui_text(parent: Node,text: String,size: int=18) -> Label:
     label.size_flags_horizontal=Control.SIZE_EXPAND_FILL
     return label
 func ui_button(parent: Node,text: String,callback: Callable,variant: String="tool") -> Button:
-    var button=load("res://scripts/neon_action.gd").new(); button.caption_text=text; button.caption_size=18; button.compact=true; button.variant=variant
-    button.custom_minimum_size=Vector2(0,48); parent.add_child(button); button.pressed.connect(callback); return button
+    return app_button(parent,text,callback,variant)
+# The app's rounded button (settings_action). Gradient for primary actions, red edge for danger.
+func app_button(parent: Node,text: String,callback: Callable,variant: String="tool",fraction: Rect2=Rect2()) -> Button:
+    var button=load("res://scripts/settings_action.gd").new(); button.text=text; button.caption_size=17
+    button.primary=variant in ["primary","record"]
+    if variant=="danger": button.accent=Color("ff5f7e")
+    if fraction.has_area(): game.rect(button,parent,fraction.position.x,fraction.position.y,fraction.end.x,fraction.end.y)
+    else: button.custom_minimum_size=Vector2(0,56); parent.add_child(button)
+    button.pressed.connect(func(): if not load("res://scripts/settings_action.gd").was_dragged(button): callback.call())
+    return button
 func ui_field(parent: Node,title: String,low: float,high: float,step: float,value: float) -> SpinBox:
     var row=HBoxContainer.new(); parent.add_child(row); row.add_theme_constant_override("separation",20)
     var label=ui_text(row,title); label.custom_minimum_size.x=300
@@ -187,9 +195,9 @@ func open_tools(selected_tab: String="Drafts") -> void:
     var dim=ColorRect.new(); overlay.add_child(dim); dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); dim.color=Color(0.006,0.006,0.006,.88)
     var safe_content=game.safe_parent("SafeDialogControls",overlay)
     var panel=Panel.new(); game.rect(panel,safe_content,.055,.06,.945,.94)
-    var style=StyleBoxFlat.new(); style.bg_color=Color("171717"); style.set_corner_radius_all(20); style.border_color=Color("7b60af"); style.set_border_width_all(1)
+    var style=StyleBoxFlat.new(); style.bg_color=Color(.035,.035,.035,.95); style.set_corner_radius_all(26); style.border_color=Color(1,1,1,.1); style.set_border_width_all(1)
+    style.shadow_color=Color(0,0,0,.5); style.shadow_size=24
     panel.add_theme_stylebox_override("panel",style)
-    preload("res://scripts/screen_style.gd").chassis(panel)
 
     preload("res://scripts/interface_life.gd").mount(panel)
     UiMotion.reveal(dim)
@@ -198,13 +206,13 @@ func open_tools(selected_tab: String="Drafts") -> void:
     game.label(panel,("VISUAL EFFECTS" if selected_tab=="Effects" else "EDITOR PREFERENCES") if global_settings else "CHART TOOLS",.025,.01,.75,.08,28)
     tools_context=game.label(panel,"",.025,.075,.79,.125,17)
     tools_context.clip_text=true; tools_context.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
-    game.button(panel,"CLOSE",.82,.02,.975,.085,close_tools,"nav")
+    app_button(panel,"CLOSE",close_tools,"nav",Rect2(.82,.02,.155,.065))
     scope_buttons={}
     scope_refresh={}
     if not global_settings:
         var index=0
         for scope in TOOL_SCOPES:
-            var button=game.button(panel,scope,.025+index*.24,.15,.25+index*.24,.225,func(): show_scope(scope),"tool")
+            var button=app_button(panel,scope,func(): show_scope(scope),"tool",Rect2(.025+index*.24,.15,.225,.075))
             button.caption_size=16; scope_buttons[scope]=button; index+=1
     tabs=TabContainer.new(); game.rect(tabs,panel,.025,.15 if global_settings else .255,.975,.88)
     tabs.get_tab_bar().add_theme_font_size_override("font_size",19)
