@@ -33,7 +33,7 @@ func run() -> void:
 	# Chords, judging hooks, miss flash, milestone, touch assist
 	var chart=[SynkChart.note(10,2),SynkChart.note(10,6),SynkChart.note(11,4),SynkChart.note(12,1)]
 	g.start_game(chart,false); g.countdown=0; g.song_time=10
-	check(w.chords.size()==1 and w.chords[0].indices.size()==2,"Simultaneous notes get one chord line")
+	check(w.chords.is_empty(),"Gameplay draws no chord lines (recorder only)")
 	tap_at(g,1,2); tap_at(g,2,6)
 	check(g.combo==2 and g.judgment_counts.PERFECT==2,"Chord taps are judged")
 	g.song_time=11; tap_at(g,3,5.3)

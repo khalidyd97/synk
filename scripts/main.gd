@@ -1689,7 +1689,8 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 		return
 	if began:
 		pointers[id]={"start":p,"position":p,"world":touch_world}
-		if p.y>=.6 and p.y<=.92:
+		# Taps anywhere on the lower highway count; the grade comes only from timing at the judgement bar.
+		if p.y>=.35:
 			var nearest: Dictionary={}; var best=.231
 			for live_index in range(first_live_index(),live.size()):
 				var entry: Dictionary=live[live_index]

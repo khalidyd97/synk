@@ -731,6 +731,7 @@ func chord_done(chord: Dictionary) -> bool:
 func build_chords() -> void:
 	for chord in chords: chord.node.queue_free()
 	chords.clear()
+	if not game.uses_recorder_colors(): return  # Chord lines only in the recorder.
 	var by_time: Dictionary = {}
 	for i in game.live.size():
 		var key = roundi(float(game.live[i].note.time) * 1000.0)
