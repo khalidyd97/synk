@@ -38,6 +38,8 @@ var timing_button: Button
 var detail_panel: Panel
 var buttons: Array=[]
 var next_button: Button
+var replay_button: Button
+var practice_button: Button
 var pending_next_id=""
 var pending_next_variant="original"
 
@@ -127,6 +129,8 @@ func _ready() -> void:
     buttons.append(button("☷  S O N G  L I S T",68,994,350,128,open_song_list))
     buttons.append(button("↶  R E T R Y",440,994,290,128,retry))
     next_button=button("N E X T   S O N G   →",1460,994,520,128,next_song,true); buttons.append(next_button)
+    replay_button=button("▶  R E P L A Y",752,994,300,128,func(): game.extras.start_replay()); buttons.append(replay_button)
+    practice_button=button("⟲  P R A C T I C E  M I S S",1074,994,364,128,practice_first_miss); buttons.append(practice_button)
     visible=false
 func layout() -> void:
     if not canvas: return
@@ -182,12 +186,33 @@ func show_results(data: Dictionary) -> void:
     timing_graph.queue_redraw(); accuracy_graph.visible=true; timing_graph.visible=false; timing_button.text="TIMING"
     graph_title.text="ACCURACY OVER THE SONG"; breakdown.visible=true
     next_button.disabled=practice or next_candidate().is_empty()
+    replay_button.disabled=not bool(info.get("replay",false))
+    replay_button.tooltip_text="Watch your last run" if not replay_button.disabled else "No replay for this run"
+    practice_button.disabled=automated or not info.get("performance",[]).any(func(s): return float(s.get("weight",1.0))<=0.0)
+    var stats: Dictionary=info.get("stats",{})
+    var extra: Array=[]
+    if not automated and not practice:
+        if int(counts.get("MISS",0))==0 and total_judgments>0: extra.append("ALL PERFECT" if int(counts.get("GREAT",0))+int(counts.get("GOOD",0))==0 else "FULL COMBO")
+        if int(stats.get("plays",0))>0: extra.append("Play %d" % int(stats.plays))
+    if not str(info.get("mods","")).is_empty(): extra.append(str(info.mods))
+    if game.extras and game.extras.replaying: extra.append("Replay")
+    if not extra.is_empty(): note_label.text+="   ·   "+"  ·  ".join(extra)
     next_button.tooltip_text="Play the next available chart in this song list" if not next_button.disabled else "No other playable song in this list"
     visible=true; animate()
 func toggle_graph() -> void:
     timing_graph.visible=not timing_graph.visible; accuracy_graph.visible=not timing_graph.visible
     graph_title.text="HIT TIMING OVER THE SONG" if timing_graph.visible else "ACCURACY OVER THE SONG"
     timing_button.text="ACCURACY" if timing_graph.visible else "TIMING"
+# Loops the stretch around the first miss at 0.75x so the hard part can be learned.
+func practice_first_miss() -> void:
+    var first=-1.0
+    for sample in info.get("performance",[]):
+        if float(sample.get("weight",1.0))<=0.0: first=float(sample.time); break
+    if first<0: return
+    var a=maxf(0.0,first-3.0); var b=minf(game.length(),first+6.0)
+    pending_next_id=""
+    game.practice.active=true
+    if not game.practice.launch(game.last_play_notes,a,b,.75,true): game.practice.active=false
 func open_song_list() -> void:
     pending_next_id=""; game.set_mode("menu"); game.lobby.show_play_browser()
 func retry() -> void:

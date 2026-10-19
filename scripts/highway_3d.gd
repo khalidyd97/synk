@@ -158,6 +158,7 @@ func _ready() -> void:
 		note_meshes.append(make_note_mesh(color))
 	build_track()
 	build_effects()
+	build_play_aids()
 	build_cover_backdrop()
 	build_ambient_particles()
 	rail_atmosphere=preload("res://scripts/stage_rail_effects.gd").new(); rail_atmosphere.world=self; add_child(rail_atmosphere)
@@ -305,7 +306,9 @@ func update_cover_backdrop() -> void:
 		beat = exp(-(beats-floorf(beats))*5.0)
 		cover_material.set_shader_parameter("glow_beat",.5+.5*cos(beats*TAU))
 	elif game.mode!="paused": cover_material.set_shader_parameter("glow_beat",0.0)
+	beat = clampf(maxf(beat * .6, loudness) + flare * .8, 0.0, 1.5)
 	cover_material.set_shader_parameter("beat",beat)
+	if flare > 0.0: cover_material.set_shader_parameter("glow_beat", 1.0)
 	update_ambient_particles(beat)
 
 func make_note_mesh(color: Color) -> ArrayMesh:
@@ -622,6 +625,110 @@ func prefill_hits() -> void:
 			spawn_hit(5, kind, dir); made.append(bursts.pop_back())
 	for burst in made: recycle_hit(burst)
 
+# --- Play aids -------------------------------------------------------------------------
+# Lane hints, the hit-window preview, miss lane flashes, combo flares, chord lines,
+# Hidden/Sudden modifiers and a loudness-driven stage pulse. Settings live in game.extras.
+var window_bands: Array = []
+var miss_flashes: Array = []
+var flare = 0.0
+var chords: Array = []
+var loudness = 0.0
+var spectrum: AudioEffectSpectrumAnalyzerInstance
+
+func extras_setting(key: String, fallback: Variant) -> Variant:
+	if game == null or game.get("extras") == null: return fallback
+	return game.extras.settings.get(key, fallback)
+
+func build_play_aids() -> void:
+	# PERFECT and GREAT bands on the judgment line, shown during the countdown.
+	for i in 2:
+		var band = mesh_node(PlaneMesh.new(), self, material(Color("7dffcf") if i == 0 else Color("6fc8ff"), .22 if i == 0 else .12))
+		band.position = Vector3(0, .05 + i * .002, 0); band.visible = false; window_bands.append(band)
+	# One red flash per lane for misses.
+	for lane in SynkChart.LANES:
+		var mesh = PlaneMesh.new(); mesh.size = Vector2(LANE_WIDTH * .96, 9.0)
+		var flash_material = material(Color("ff3355"), 0.0); flash_material.render_priority = 3
+		var node = mesh_node(mesh, self, flash_material); node.position = Vector3(lane_x(lane), .06, -4.5); node.visible = false
+		miss_flashes.append({"node": node, "material": flash_material, "amount": 0.0})
+	# Loudness from the master bus, for a stage that pulses with the music rather than a metronome.
+	var analyzer = AudioEffectSpectrumAnalyzer.new(); analyzer.buffer_length = .1; analyzer.fft_size = AudioEffectSpectrumAnalyzer.FFT_SIZE_512
+	AudioServer.add_bus_effect(0, analyzer)
+	spectrum = AudioServer.get_bus_effect_instance(0, AudioServer.get_bus_effect_count(0) - 1)
+
+func refresh_play_aids() -> void:
+	pass  # Settings are read every frame; nothing needs rebuilding.
+
+func flash_miss_lane(lane: float) -> void:
+	if miss_flashes.is_empty(): return
+	var flash_entry: Dictionary = miss_flashes[clampi(roundi(lane), 0, SynkChart.MAX_LANE)]
+	flash_entry.amount = 1.0; flash_entry.node.visible = true
+
+func rail_flare() -> void:
+	flare = 1.0
+
+func update_play_aids(delta: float) -> void:
+	var playing = game.mode == "play" or (game.mode == "paused" and game.paused_mode == "play")
+	var counting = game.mode == "play" and game.countdown > 0
+	var show_bands = counting and bool(extras_setting("window_preview", true)) and game.get("extras") != null
+	for i in window_bands.size():
+		window_bands[i].visible = show_bands
+		if show_bands:
+			var window = game.extras.perfect_window() if i == 0 else game.extras.great_window()
+			(window_bands[i].mesh as PlaneMesh).size = Vector2(HIGHWAY_HALF_WIDTH * 2.0, maxf(.05, window * travel_speed() * 2.0))
+	for flash_entry in miss_flashes:
+		if flash_entry.amount <= 0.0: continue
+		flash_entry.amount = maxf(0.0, flash_entry.amount - delta * 3.0)
+		flash_entry.material.albedo_color.a = .35 * flash_entry.amount
+		flash_entry.node.visible = flash_entry.amount > 0.0
+	flare = maxf(0.0, flare - delta * 1.6)
+	if spectrum and game.audio.playing:
+		var low = spectrum.get_magnitude_for_frequency_range(30, 180).length()
+		var target = clampf(low * 6.0, 0.0, 1.0)
+		loudness = lerpf(loudness, target, 1.0 - exp(-delta * (18.0 if target > loudness else 5.0)))
+	else: loudness = lerpf(loudness, 0.0, 1.0 - exp(-delta * 5.0))
+	# Chord lines follow their notes.
+	if playing:
+		for chord in chords:
+			var t = float(chord.time)
+			var visible_now = t - render_time() <= game.note_travel_seconds() and render_time() - t < .2 and not chord_done(chord)
+			chord.node.visible = visible_now
+			if visible_now: chord.node.position.z = (render_time() - t) * travel_speed()
+	else:
+		for chord in chords: chord.node.visible = false
+
+func chord_done(chord: Dictionary) -> bool:
+	for index in chord.indices:
+		if index < game.live.size() and not game.live[index].done: return false
+	return true
+
+func build_chords() -> void:
+	for chord in chords: chord.node.queue_free()
+	chords.clear()
+	var by_time: Dictionary = {}
+	for i in game.live.size():
+		var key = roundi(float(game.live[i].note.time) * 1000.0)
+		if not by_time.has(key): by_time[key] = []
+		by_time[key].append(i)
+	var line_material = material(Color("f2ecff"), .55); line_material.render_priority = 1
+	for key in by_time:
+		var indices: Array = by_time[key]
+		if indices.size() < 2: continue
+		var low = 99.0; var high = -1.0
+		for i in indices:
+			low = minf(low, float(game.live[i].note.lane)); high = maxf(high, float(game.live[i].note.lane))
+		if high - low < 1.0: continue
+		var mesh = BoxMesh.new(); mesh.size = Vector3((high - low) * LANE_WIDTH, .04, .14)
+		var node = mesh_node(mesh, self, line_material)
+		node.position = Vector3((lane_x(low) + lane_x(high)) * .5, .16, 0); node.visible = false
+		chords.append({"time": key / 1000.0, "indices": indices, "node": node})
+
+# Hidden: notes vanish as they approach the line. Sudden: notes appear late, partway down.
+func modifier_hides(z: float) -> bool:
+	var distance = -z
+	if bool(extras_setting("sudden", false)) and distance > TRACK_LENGTH * .5: return true
+	if bool(extras_setting("hidden", false)) and distance < TRACK_LENGTH * .28 and distance > .5: return true
+	return false
+
 func clear_hit_effects() -> void:
 	# Pooled effects for the previous chart are freed; prefill_hits builds the next set.
 	for burst in bursts+hit_pool: burst.node.queue_free()
@@ -890,6 +997,7 @@ func build_note_node(key: String, note: Dictionary, recording = false) -> void:
 
 func begin_prebuild() -> void:
 	clear_notes()
+	build_chords()
 	prebuild_queue = range(game.live.size())
 	prebuild_total = prebuild_queue.size()
 	prebuilding = prebuild_total > 0
@@ -938,6 +1046,7 @@ func sync_note(key: String, note: Dictionary, visible_keys: Dictionary, recordin
 				arrow.position=arrow.get_meta("flick_base")+arrow.get_meta("flick_axis")*nudge
 	notes[key].node.position.z = (visible_time-float(note.time))*travel_speed()
 	if recording: notes[key].node.position.z *= -1
+	elif not held and modifier_hides(notes[key].node.position.z): notes[key].node.visible = false
 
 func update_finger_beams() -> void:
 	# Each finger on the stage lights a column up the highway that slides with it.
@@ -1008,7 +1117,9 @@ func _process(delta: float) -> void:
 	if game==null: return
 	step_prebuild()
 	if rail_atmosphere: rail_atmosphere.update(delta)
-	recorder_guides.visible = game.mode=="record" or (game.mode=="paused" and game.paused_mode=="record")
+	var in_play = game.mode=="play" or (game.mode=="paused" and game.paused_mode=="play")
+	recorder_guides.visible = game.mode=="record" or (game.mode=="paused" and game.paused_mode=="record") or (in_play and bool(extras_setting("lane_hints", false)))
+	update_play_aids(delta)
 	animate_miss_shake(delta)
 	update_cover_backdrop()
 	animate_effects(delta)

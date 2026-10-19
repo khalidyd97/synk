@@ -101,6 +101,15 @@ def main():
                     (0.0, 0.7, tone(1975.5, 1975.5, 0.3, decay=4.5, harmonics=(1.0,)))), peak=0.55)
     # Screen changes: a soft airy sweep.
     write("transition", whoosh(0.32, 250, 2800), peak=0.32)
+    # Gameplay hit sounds: very short and percussive so they sit on the beat, not over the music.
+    # Tap: a crisp tick with a soft body.
+    write("hit_tap", mix((0, 1.0, tone(1760, 1320, 0.05, attack=0.001, decay=7.0, harmonics=(1.0, 0.3))),
+                         (0, 0.45, whoosh(0.03, 3000, 6000, seed=3))), peak=0.5)
+    # Hold start: a rounder, lower tick.
+    write("hit_hold", tone(988, 784, 0.07, attack=0.001, decay=6.5, harmonics=(1.0, 0.4, 0.15)), peak=0.48)
+    # Flick: an airy upward snap.
+    write("hit_flick", mix((0, 1.0, whoosh(0.07, 1200, 7000, seed=11)),
+                           (0, 0.6, tone(1320, 2640, 0.06, attack=0.001, decay=6.0, harmonics=(1.0,)))), peak=0.5)
 
 
 if __name__ == "__main__":

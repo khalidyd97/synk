@@ -44,6 +44,12 @@ func _draw() -> void:
 		draw_style_box(box, rect)
 		draw_rounded_gradient(rect, radius, Color("38baff").lerp(Color.WHITE, .08 * hover_amount), Color("8a4dff").lerp(Color.WHITE, .08 * hover_amount))
 	else: draw_style_box(box, rect)
+	# Outline: a crisp light edge on every tile, brighter and cyan-tinted when highlighted.
+	var outline = StyleBoxFlat.new(); outline.set_corner_radius_all(radius); outline.bg_color = Color(0, 0, 0, 0)
+	outline.set_border_width_all(maxi(2, roundi(minf(size.x, size.y) * .018)))
+	var edge = Color(1, 1, 1, .55) if primary_action else Color(1, 1, 1, .26)
+	outline.border_color = edge.lerp(Color("8ff0ff"), hover_amount * .8).lerp(Color.WHITE, press_amount * .5)
+	draw_style_box(outline, rect)
 	var center = Vector2(size.x * .5, size.y * .36)
 	var r = minf(size.x * .14, size.y * .17) * (1.0 + .06 * hover_amount - .06 * press_amount)
 	draw_icon(icon_kind(), center, r, Color.WHITE)

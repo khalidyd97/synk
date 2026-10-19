@@ -78,7 +78,7 @@ func _ready() -> void:
     var auto=preload("res://scripts/autoplay_toggle.gd").new(); place(auto,canvas,884,23,96,76)
     auto.toggled.connect(func(enabled): lobby.auto_enabled=enabled)
     lobby.settings_button=gear; lobby.auto_button=auto
-    var tab_data=[["all","All songs",48,120],["favorites","Favorites",184,126],["recent","Recently played",326,184],["new","New",526,82]]
+    var tab_data=[["all","All songs",48,120],["favorites","Favorites",184,126],["recent","Recently played",326,184],["new","New",526,82],["daily","★ Daily",624,112]]
     for item in tab_data:
         var key: String=item[0]; var n=button(canvas,item[1],item[2],96,item[3],56,func(): lobby.set_filter(key))
         n.tab=true; n.caption_size=21; tabs[key]=n
@@ -224,6 +224,16 @@ func update_best() -> void:
     var key=(str(game.song.id)+JSON.stringify(notes)).sha256_text()
     best_value.text=str(int(game.prefs.get_value("scores",key,0)))
     rank_value.text=str(game.prefs.get_value("score_ranks",key,"—"))
+    # Full combo / all perfect badges, play count and any active modifiers.
+    if game.extras:
+        var stats: Dictionary=game.extras.stats_for(key)
+        var badges: Array=[]
+        if bool(stats.get("all_perfect",false)): badges.append("ALL PERFECT")
+        elif bool(stats.get("full_combo",false)): badges.append("FULL COMBO")
+        if int(stats.get("plays",0))>0: badges.append("%d play%s" % [int(stats.plays),"" if int(stats.plays)==1 else "s"])
+        var mods: String=game.extras.mods_text()
+        if not mods.is_empty(): badges.append(mods)
+        if not badges.is_empty(): best_label.text+="  ·  "+"  ·  ".join(badges)
 func show_empty() -> void:
     title_label.text="Choose a track"; artist_label.text="Try another filter or search."
     metadata.visible=false; play.visible=true; play.disabled=true; create.visible=false; details_label.text=""

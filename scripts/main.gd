@@ -28,6 +28,7 @@ var audio = AudioStreamPlayer.new()
 var mr: Node
 var beat_clock: Node
 var menu_music: AudioStreamPlayer
+var extras: Node
 var practice: Node
 var practice_hud: Label
 var timing_label: Label
@@ -294,6 +295,7 @@ func _ready() -> void:
 	chart_library=Control.new(); chart_library.set_script(load("res://scripts/chart_library.gd")); chart_library.game=self
 	ui.add_child(chart_library); chart_library.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.move_child(chart_library,1)
+	extras=preload("res://scripts/gameplay_extras.gd").new(); extras.game=self; add_child(extras)
 	settings_panel=Control.new(); settings_panel.set_script(load("res://scripts/settings_screen.gd")); settings_panel.game=self
 	ui.add_child(settings_panel); settings_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.move_child(settings_panel,2); settings_panel.visible=false
@@ -947,6 +949,10 @@ func warm_hud_text() -> void:
 		item[0].visible = item[2]; item[0].modulate = item[3]
 
 func start_game(notes: Array,automated: bool = false,section: String = "",is_practice: bool=false) -> void:
+	# Mirror and other note modifiers apply to real runs; a replay reuses the exact notes it recorded.
+	if extras:
+		if not extras.replay_pending and not automated: notes=extras.apply_mods(notes)
+		extras.begin_run(notes,extras.replay_pending)
 	if lobby and not is_practice: lobby.remember_played(str(song.id))
 	if mode=="editor" or is_practice: play_settings=document.settings.duplicate(true)
 	elif not run_settings_active: play_settings=saved_settings.duplicate(true)
@@ -1466,7 +1472,9 @@ func _process(delta: float) -> void:
 			countdown=maxf(0,countdown-delta); song_time=start_position-countdown
 			visual_song_time=song_time; visual_clock_ready=false
 			judgement="READY "+str(ceili(countdown)); flash=1
-			if countdown==0: audio.stream_paused=false; audio.play(start_position); UiSound.play(self,"go")
+			if countdown==0:
+				audio.stream_paused=false; audio.play(start_position); UiSound.play(self,"go")
+				if extras and mode=="play": extras.on_song_start()
 		else:
 			song_time=maxf(song_time,chart_time())
 			smooth_visual_time(song_time,delta)
@@ -1654,8 +1662,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT: pointer_event(-1,event.position/size,event.pressed,not event.pressed,false)
 	elif event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT): pointer_event(-1,event.position/size,false,false,false)
 
-func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool) -> void:
+func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,from_replay: bool=false) -> void:
 	if mode=="play" and auto_play: return
+	# During a replay, real touches are ignored; the recorded ones arrive with from_replay.
+	if mode=="play" and extras and extras.replaying and not from_replay: return
+	if extras and not from_replay: extras.record_input(id,p,began,ended,canceled)
 	if mode=="record" and arranging:
 		arrange_pointer_event(id,p,began,ended,canceled); return
 	var touch_world=field.touch_world_position(p)
@@ -1687,9 +1698,18 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool) ->
 					if entry.pointer==-999 and absf(SynkCapture.lane(p.x)-SynkChart.lane_at(n,song_time))<.85: entry.pointer=id
 					continue
 				var error=absf(song_time-float(n.time))
-				var timing_limit=.23 if n.kind=="slide" else .16
+				var timing_limit=.23*extras.scale() if n.kind=="slide" else extras.good_window()
 				var lane_limit=1.8 if n.kind=="slide" else .85
 				if error<=minf(best,timing_limit) and absf(SynkCapture.lane(p.x)-float(n.lane))<lane_limit: best=error; nearest=entry
+			if nearest.is_empty() and bool(extras.settings.touch_assist):
+				# Touch assist: accept a touch up to 1.6 lanes away when no note sits closer.
+				for live_index in range(first_live_index(),live.size()):
+					var entry: Dictionary=live[live_index]
+					if float(entry.note.time)>song_time+.23: break
+					if entry.done or entry.started: continue
+					var n: Dictionary=entry.note
+					var error=absf(song_time-float(n.time))
+					if error<=minf(best,extras.good_window()) and absf(SynkCapture.lane(p.x)-float(n.lane))<1.6: best=error; nearest=entry
 			if not nearest.is_empty():
 				nearest.started=true; nearest.pointer=id; nearest.error=best; nearest.timing_error=song_time-float(nearest.note.time)
 				if nearest.note.kind=="tap": judge(nearest,best)
@@ -1704,7 +1724,7 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool) ->
 			var entry: Dictionary=live[live_index]
 			if entry.done or entry.pointer!=id or entry.note.kind!="hold": continue
 			var hold_end=float(entry.note.time)+float(entry.note.duration)
-			judge(entry,absf(song_time-hold_end) if not canceled and absf(song_time-hold_end)<=.16 else -1)
+			judge(entry,absf(song_time-hold_end) if not canceled and absf(song_time-hold_end)<=extras.good_window() else -1)
 		for live_index in range(first_live_index(),live.size()):
 			var entry: Dictionary=live[live_index]
 			if entry.done or entry.pointer!=id or entry.note.kind!="slide": continue
@@ -1740,7 +1760,7 @@ func update_game() -> void:
 		if entry.done: continue
 		var n: Dictionary=entry.note
 		if not entry.started:
-			if song_time>float(n.time)+(.23 if n.kind=="slide" else .16):
+			if song_time>float(n.time)+(.23*extras.scale() if n.kind=="slide" else extras.good_window()):
 				judge(entry,-1)
 				if n.kind=="hold": judged+=1
 			continue
@@ -1751,7 +1771,7 @@ func update_game() -> void:
 			var displacement: Vector2=p.position-p.start
 			var direction: Vector2=[Vector2.UP,Vector2.RIGHT,Vector2.DOWN,Vector2.LEFT][int(n.direction)]
 			if displacement.dot(direction)>.035 and displacement.dot(direction)>absf(displacement.dot(direction.orthogonal())): judge(entry,float(entry.error))
-			elif song_time>float(n.time)+.16: judge(entry,-1)
+			elif song_time>float(n.time)+extras.good_window(): judge(entry,-1)
 		elif n.kind in ["hold","slide"] and not process_checkpoints(entry,SynkCapture.lane(p.position.x),false):
 			continue
 		elif n.kind=="slide":
@@ -1767,7 +1787,7 @@ func update_game() -> void:
 func judge(entry: Dictionary,error: float,complete: bool = true) -> void:
 	var at=float(entry.note.time)
 	if entry.note.kind=="hold" and entry.get("note_hit",false): at=minf(song_time,float(entry.note.time)+float(entry.note.duration))
-	performance_samples.append({"time":at,"weight":0.0 if error<0 else (1.0 if error<=.045 else (.8 if error<=.09 else .5)),"amount":1})
+	performance_samples.append({"time":at,"weight":0.0 if error<0 else (1.0 if error<=extras.perfect_window() else (.8 if error<=extras.great_window() else .5)),"amount":1})
 	if error>=0: entry.note_hit=true
 	if error<0: timing_label.text=""
 	if error>=0 and not auto_play and not entry.get("timing_logged",false):
@@ -1787,12 +1807,13 @@ func judge(entry: Dictionary,error: float,complete: bool = true) -> void:
 	if error<0: judgement="MISS"; combo=0; combo_pulse=0; forfeit_checkpoints(entry); score_panel.energy=maxf(0,score_panel.energy-.08)
 	else:
 		combo+=1; combo_pulse=1.0; max_combo=maxi(combo,max_combo)
-		score_panel.energy=minf(1,score_panel.energy+(.02 if error<=.045 else (.012 if error<=.09 else .004)))
-		if error<=.045: judgement="PERFECT"; earned+=1
-		elif error<=.09: judgement="GREAT"; earned+=.8
+		score_panel.energy=minf(1,score_panel.energy+(.02 if error<=extras.perfect_window() else (.012 if error<=extras.great_window() else .004)))
+		if error<=extras.perfect_window(): judgement="PERFECT"; earned+=1
+		elif error<=extras.great_window(): judgement="GREAT"; earned+=.8
 		else: judgement="GOOD"; earned+=.5
 	judgment_counts[judgement]+=1
 	score=roundi(1000000*earned/maxi(1,total_judgements()))
+	if extras: extras.on_judged(entry,judgement,combo)
 
 func _audio_finished() -> void:
 	if mode=="record": stop_take()
@@ -1809,8 +1830,13 @@ func _audio_finished() -> void:
 			best=maxi(score,best); prefs.set_value("scores",chart_key,best); prefs.save("user://preferences.cfg")
 			if score>=previous_best:
 				prefs.set_value("score_ranks",chart_key,rank_name()); prefs.save("user://preferences.cfg")
+		var stats: Dictionary={}
+		if extras:
+			if not auto_play and not practice.active and not extras.replaying: stats=extras.record_result(chart_key,judgment_counts,live.size())
+			else: stats=extras.stats_for(chart_key)
+			extras.finish_run()
 		var tinted=song.id!="eclipse" and not has_custom_cover(str(song.id))
-		begin_finish({"cover":cover_texture_for_id(str(song.id)),"tint":cover_tint_for_id(str(song.id)) if tinted else Color.WHITE,
+		begin_finish({"stats":stats,"replay":extras and extras.has_replay() and not auto_play,"mods":extras.mods_text() if extras else "","cover":cover_texture_for_id(str(song.id)),"tint":cover_tint_for_id(str(song.id)) if tinted else Color.WHITE,
 			"title":str(song.title),"details":intro_details(),"rank":rank_name(),"score":score,"accuracy":accuracy(),"max_combo":max_combo,
 			"counts":judgment_counts.duplicate(),"best":best,"previous_best":previous_best,"new_best":not auto_play and not practice.active and score>previous_best,"auto_play":auto_play,"practice":practice.active,"timing":timing_samples.duplicate(true),
 			"song_id":str(song.id),"artist":str(song.artist) if str(song.get("artist","")).strip_edges()!="" else album_name(song),"difficulty":features.current_variant.capitalize(),"bpm":chart_bpm(),"notes_total":live.size(),"notes_hit":live.filter(func(e): return bool(e.get("note_hit",false))).size(),

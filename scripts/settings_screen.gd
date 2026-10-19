@@ -399,11 +399,29 @@ func animate_page() -> void:
     page_tween.tween_property(root,"modulate:a",1,.22)
 func build_gameplay(items: VBoxContainer,browsing: VBoxContainer) -> void:
     note_speed_input=Stepper.new(.5,3,.25,game.note_speed,"×",2)
-    add_control(row(items,"Note speed","Controls note travel speed without changing the music."),note_speed_input)
+    add_control(row(items,"Note speed","Same feel on every song: notes take 2.6 s ÷ speed to reach the line."),note_speed_input)
     note_speed_input.value_changed.connect(game.change_note_speed)
+    extras_switch(items,"judgement","Easy judging","Wider timing windows for PERFECT, GREAT and GOOD.",true)
+    extras_switch(items,"touch_assist","Touch assist","A tap just beside an empty lane still hits the nearby note.")
+    extras_switch(items,"lane_hints","Lane lines","Show faint lane lines while you play.")
+    extras_switch(items,"window_preview","Timing window preview","Show the PERFECT and GREAT zones on the line during the countdown.")
+    extras_switch(items,"mirror","Mirror","Flip every chart left to right.")
+    extras_switch(items,"hidden","Hidden","Notes fade out as they near the line.")
+    extras_switch(items,"sudden","Sudden","Notes appear late, partway down the highway.")
     song_preview_toggle=Switch.new(); add_control(row(browsing,"Song previews","Play a short preview while browsing songs."),song_preview_toggle,152)
     song_preview_toggle.button_pressed=game.lobby.preview_enabled; connect_switch(song_preview_toggle,game.lobby.set_preview_enabled)
+# A switch bound to a gameplay_extras setting. judgement maps on/off to "easy"/"normal".
+func extras_switch(items: VBoxContainer,key: String,title: String,hint: String,judgement: bool=false) -> Switch:
+    var control=Switch.new(); add_control(row(items,title,hint),control,152)
+    var value=game.extras.settings.get(key,false)
+    control.button_pressed=(str(value)=="easy") if judgement else bool(value)
+    connect_switch(control,func(on): game.extras.set_setting(key,("easy" if on else "normal") if judgement else on))
+    return control
 func build_audio(items: VBoxContainer,headset: VBoxContainer) -> void:
+    var hits=Stepper.new(0,100,10,float(game.extras.settings.hit_volume)*100,"%",0)
+    add_control(row(items,"Hit sounds","A soft tick on every hit. 0% turns it off."),hits)
+    hits.value_changed.connect(func(v): game.extras.set_setting("hit_volume",v/100))
+    extras_switch(items,"vibration","Vibration","A short buzz on PERFECT hits and flicks.")
     var music=Stepper.new(0,100,10,game.menu_music.volume*100,"%",0)
     add_control(row(items,"Menu music","Background music on the menus. 0% turns it off."),music)
     music.value_changed.connect(func(v): game.menu_music.set_volume(v/100))

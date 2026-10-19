@@ -132,8 +132,11 @@ func all_entries() -> Array:
     for i in game.library.songs.size(): entries.append(entry_for(game.library.songs[i],i+1))
     return entries
 func set_filter(value: String) -> void:
-    if value not in ["all","favorites","recent","new"]: return
-    track_filter=value; refresh_tracks()
+    if value not in ["all","favorites","recent","new","daily"]: return
+    track_filter=value
+    # The daily challenge sets today's modifier as it opens.
+    if value=="daily" and game.extras: game.extras.start_daily()
+    refresh_tracks()
 func refresh_tracks() -> void:
     if not browser: return
     var was_empty=filtered_entries.is_empty()
@@ -143,6 +146,7 @@ func refresh_tracks() -> void:
         if track_filter=="favorites" and entry.id not in favorites: continue
         if track_filter=="recent" and not recent.has(entry.id): continue
         if track_filter=="new" and (entry.id=="eclipse" or recent.has(entry.id)): continue
+        if track_filter=="daily" and (game.extras==null or entry.id!=str(game.extras.daily().get("id",""))): continue
         if not query.is_empty() and not (entry.title+" "+entry.artist+" "+entry.genre).to_lower().contains(query): continue
         filtered_entries.append(entry)
     if track_filter=="recent": filtered_entries.sort_custom(func(a,b): return float(recent.get(a.id,0))>float(recent.get(b.id,0)))
