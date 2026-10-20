@@ -96,14 +96,6 @@ func resize_viewport() -> void:
 	if viewport: viewport.size = Vector2i(maxi(1,roundi(size.x)),maxi(1,roundi(size.y)))
 
 func _process(_delta: float) -> void:
-	if viewport and game.automatic_render_quality() and game.mode=="play" and game.countdown<=0 and not (game.gameplay_loading and game.gameplay_loading.preparing):
-		var target=float(game.display_refresh_rate())
-		if Engine.max_fps>0: target=minf(target,float(Engine.max_fps))
-		var quality=game.frame_quality.sample(_delta,target,game.render_scale())
-		# Resizing the 3D render target mid-song can crash some Android GPU drivers, so on phones
-		# the measured quality is only applied when the next song starts (see main.start_game).
-		if OS.has_feature("mobile"): game.pending_render_scale=quality
-		elif not is_equal_approx(viewport.scaling_3d_scale,quality): viewport.scaling_3d_scale=quality
 	if viewport:
 		viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED if game.mode in ["menu","guide","library","editor"] else SubViewport.UPDATE_ALWAYS
 	if screen: screen.visible = game.mode not in ["guide","menu","library"]
@@ -115,32 +107,29 @@ func depth(time: float) -> float: return (time-game.song_time)/game.note_travel_
 func project(lane: float, d: float) -> Vector2:
 	return world.camera.unproject_position(Vector3(world.lane_x(lane),.035,-d*world.visible_length()))
 
-var input_mapping=preload("res://scripts/input_projection.gd").new()
-func prepare_input_mapping() -> void:
-	input_mapping.prepare(world.camera,viewport.size,world)
-
-func ground_hit(p: Vector2,height: float) -> Variant:
-	prepare_input_mapping()
-	if not input_mapping.planes.get(height,PackedFloat64Array()).is_empty(): return input_mapping.hit(p,height)
-	var point=p*Vector2(viewport.size)
-	return Plane(Vector3.UP,height).intersects_ray(world.camera.project_ray_origin(point),world.camera.project_ray_normal(point))
-
 func touch_world_position(p: Vector2) -> Vector3:
-	var hit=ground_hit(p,.035)
+	var point=p*Vector2(viewport.size)
+	var hit=Plane(Vector3.UP,.035).intersects_ray(world.camera.project_ray_origin(point),world.camera.project_ray_normal(point))
 	return hit if hit!=null else Vector3(0,.035,0)
 
 func input_position(p: Vector2) -> Vector2:
 	# The whole projected pad is interactive, including its near/far corners.
 	# Resolve its actual ground position instead of measuring against the small
 	# decorative marker or projecting every row onto the bar's center line.
-	var hit=ground_hit(p,.035)
+	var screen_point=p*Vector2(viewport.size)
+	var origin = world.camera.project_ray_origin(screen_point)
+	var direction = world.camera.project_ray_normal(screen_point)
+	var hit=Plane(Vector3.UP,.035).intersects_ray(origin,direction)
 	var on_pad=hit!=null and absf(hit.z)<=world.JUDGMENT_DEPTH*.5+.001
 	if on_pad:
 		# Preserve the existing normalized input contract for capture and judging.
 		p.y=clampf(p.y,.6001,.9199)
 	else:
 		# Keep the generous approach area and stable vertical-flick coordinates.
-		hit=ground_hit(Vector2(p.x,input_mapping.judgment_y),0.0)
+		screen_point=Vector2(p.x*viewport.size.x,project(world.CENTER_LANE,0).y)
+		origin=world.camera.project_ray_origin(screen_point)
+		direction=world.camera.project_ray_normal(screen_point)
+		hit=Plane(Vector3.UP,0).intersects_ray(origin,direction)
 	if hit != null: p.x = .07 + ((hit.x/world.LANE_WIDTH+world.CENTER_LANE)+.5)/SynkChart.LANES*.86
 	if on_pad and absf(hit.x)<=world.PAD_HALF_WIDTH+.001:
 		p.x=clampf(p.x,.070001,.929999)

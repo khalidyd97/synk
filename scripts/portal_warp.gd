@@ -72,15 +72,6 @@ func _draw() -> void:
 				var s = 40.0 + x * .08
 				draw_polyline(PackedVector2Array([c + Vector2(-s * .5, -s), c + Vector2(s * .5, 0), c + Vector2(-s * .5, s)]), Color(1, 1, 1, icon_a * (1.0 - i * .2)), 8.0, true)
 		else:
-			# The sequencer lanes expand out of the pad into Chart Studio.
-			var spread = lerpf(start_radius * .45, far * .85, open)
-			var top = origin - Vector2(0, spread * .48)
-			for lane in [-1.0, -.333, .333, 1.0]:
-				var from = top + Vector2(lane * spread * .26, 0)
-				var to = origin + Vector2(lane * spread, spread * .55)
-				draw_line(from, to, Color(accent, icon_a * .2), 12.0, true)
-				draw_line(from, to, Color(1, .6, .8, icon_a * .85), 2.5, true)
-			draw_line(origin + Vector2(-spread, spread * .55), origin + Vector2(spread, spread * .55), Color(1, .8, .9, icon_a), 5.0, true)
 			# Notes rushing toward the camera from the portal's heart.
 			for i in 6:
 				var a = TAU * i / 6.0 + .4

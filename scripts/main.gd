@@ -32,12 +32,8 @@ var extras: Node
 var practice: Node
 var practice_hud: Label
 var timing_label: Label
-var run_samples=preload("res://scripts/run_sample_buffer.gd").new()
-var judgment_lookup: RefCounted
-var timing_samples: Array:
-	get: return run_samples.timing_snapshot()
-var performance_samples: Array:
-	get: return run_samples.performance_snapshot()
+var timing_samples: Array=[]
+var performance_samples: Array=[]
 var demo_stream: AudioStream
 var song_metadata: Dictionary = {}
 var song_cover_textures: Dictionary = {}
@@ -202,7 +198,6 @@ var guide_back: Button
 var hit_label: Label
 var hit_art: TextureRect
 var pause_button: Button
-var gameplay_loading: Node
 var stage_intro: Control
 # Tests turn this off so they can drive gameplay frames directly.
 var stage_intro_enabled = true
@@ -263,20 +258,7 @@ const RENDER_SCALES = [1.0, .85, .75]
 func render_scale() -> float:
 	var value=float(prefs.get_value("gameplay","render_scale",1.0))
 	return value if RENDER_SCALES.has(value) else 1.0
-var frame_quality=preload("res://scripts/frame_quality.gd").new()
-func automatic_render_quality() -> bool:
-	return bool(prefs.get_value("gameplay","automatic_render_quality",OS.has_feature("mobile")))
-func change_automatic_render_quality(enabled: bool) -> void:
-	prefs.set_value("gameplay","automatic_render_quality",enabled); prefs.save("user://preferences.cfg")
-	apply_render_scale()
-# Phones: automatic quality measured during a song, applied when the next one starts.
-var pending_render_scale=-1.0
-func apply_pending_render_scale() -> void:
-	if pending_render_scale>0.0 and field and field.viewport and not is_equal_approx(field.viewport.scaling_3d_scale,pending_render_scale):
-		field.viewport.scaling_3d_scale=pending_render_scale
-	pending_render_scale=-1.0
 func apply_render_scale() -> void:
-	frame_quality.reset(render_scale())
 	if field and field.viewport: field.viewport.scaling_3d_scale=render_scale()
 func change_render_scale(value: float) -> void:
 	prefs.set_value("gameplay","render_scale",value); prefs.save("user://preferences.cfg")
@@ -296,9 +278,6 @@ func _ready() -> void:
 	intro.finished.connect(func(): intro_layer.queue_free())
 	# The lobby animates in as the intro clears, on every launch.
 	intro.revealing.connect(func(): if lobby: lobby.play_launch_entrance())
-	# First launch: offer the tap-along timing test once the lobby has arrived.
-	if not bool(prefs.get_value("audio","calibrated",false)):
-		intro.finished.connect(func(): get_tree().create_timer(1.4).timeout.connect(func(): if mode=="menu": open_timing_calibration()))
 	# Debug builds: a one-shot gameplay stress test, only when its trigger file exists.
 	if OS.is_debug_build() and FileAccess.file_exists("user://stress_test.json"):
 		var stress=preload("res://scripts/stress_test.gd").new(); stress.game=self; add_child.call_deferred(stress)
@@ -306,7 +285,6 @@ func _ready() -> void:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	prefs.load("user://preferences.cfg"); timing_ms = float(prefs.get_value("audio","offset_ms",0))
 	bluetooth_mode=bool(prefs.get_value("audio","bluetooth_mode",false))
-	record_aids_enabled=bool(prefs.get_value("editor","record_aids",false))
 	bluetooth_latency_ms=clampf(float(prefs.get_value("audio","bluetooth_latency_ms",180)),0,600)
 	note_lines=bool(prefs.get_value("editor","note_lines",true))
 	ghost_recording=bool(prefs.get_value("editor","ghost_recording",true))
@@ -403,10 +381,7 @@ func song_entry_for_id(id: String) -> Dictionary:
 		if str(entry.id)==id: return entry
 	return {}
 
-var background_work_suspended=false
-var suspended_branches: Dictionary={}
 func start_song_worker() -> void:
-	if background_work_suspended: return
 	if not worker_song_id.is_empty(): return
 	if loading_song_index<0 and mode in ["play","record","paused"]: return
 	var id=""
@@ -425,8 +400,7 @@ func start_song_worker() -> void:
 		worker_song_id=""
 		if loading_song_index>0: loading_song_index=-1; tell("Could not start the song loader.")
 
-func poll_song_worker(force: bool=false) -> void:
-	if background_work_suspended and not force: return
+func poll_song_worker() -> void:
 	if worker_song_id.is_empty() or metadata_worker.is_alive(): return
 	var result: Dictionary=metadata_worker.wait_to_finish()
 	var id=worker_song_id; worker_song_id=""
@@ -511,11 +485,10 @@ func label(parent: Node, text: String, x: float,y: float,right: float,bottom: fl
 
 # variant picks the button's role in the design system (see NeonAction.VARIANTS).
 func button(parent: Node,text: String,x: float,y: float,right: float,bottom: float,action: Callable,variant: String = "secondary") -> Button:
-	var recorder_part=record_tools!=null and (parent==record_tools or (aids_drawer!=null and parent==aids_drawer))
-	var result=load("res://scripts/recorder_action.gd").new() if recorder_part else NeonAction.new()
+	var result=load("res://scripts/recorder_action.gd").new() if record_tools!=null and parent==record_tools else NeonAction.new()
 	result.text=text; result.caption_size=19 if variant in ["primary","record"] else 17; result.compact=true
 	result.variant=variant
-	if recorder_part: result.caption_size=19
+	if record_tools!=null and parent==record_tools: result.caption_size=21
 	rect(result,parent,x,y,right,bottom)
 	result.pressed.connect(action)
 	return result
@@ -576,7 +549,6 @@ func build_ui() -> void:
 	guide_back=button(safe_parent("SafeGuideBack"),"‹  BACK",.40,.85,.60,.96,func(): set_mode("menu"),"nav")
 	# Song intro sits above the HUD and below the pause/results modal.
 	stage_intro=StageIntro.new(); stage_intro.game=self; ui.add_child(stage_intro)
-	gameplay_loading=preload("res://scripts/gameplay_loading.gd").new(); gameplay_loading.game=self; add_child(gameplay_loading)
 	results_screen=ResultsScreen.new(); results_screen.game=self; ui.add_child(results_screen)
 	# Pause: the stage behind is blurred and dimmed, with a frosted card on top (same glass as
 	# the lobby cards) holding three icon tiles.
@@ -605,76 +577,49 @@ func build_ui() -> void:
 	button(actions,"CHART STUDIO / IMPORT AUDIO",.60,.91,.98,.98,open_editor)
 	record_tools=Control.new(); rect(record_tools,safe_parent("SafeRecorderControls"),0,0,1,1); record_tools.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	record_tools.set_meta("keep_caption_size",true)
-	# Layout keeps the highway clear: note types in a column at the left; STOP & REVIEW at the
-	# top right with AIDS, CORRECT, UNDO and REDO in a column under it; a small status line, a
-	# short help line at the bottom, and every other aid in the AIDS drawer.
-	recorder_plate(Rect2(.012,.135,.105,.5))
-	recorder_plate(Rect2(.883,.135,.105,.405))
+	recorder_plate(Rect2(.11,.008,.88,.117))
+	record_sidebar=recorder_plate(Rect2(.015,.14,.19,.575))
+	recorder_plate(Rect2(.65,.14,.335,.116))
+	recorder_plate(Rect2(.025,.901,.95,.093))
+	var type_heading=label(record_tools,"NOTE TYPE",.125,.012,.57,.043,13)
+	type_heading.add_theme_color_override("font_color",Color("7fd7e7"))
+	label(record_tools,"TAKE CONTROLS",.60,.012,.98,.043,13).add_theme_color_override("font_color",Color("b9b3d4"))
+	label(record_tools,"RECORDING AIDS",.03,.148,.19,.18,13).add_theme_color_override("font_color",Color("7fd7e7"))
 	var kinds=["auto","tap","hold","slide","flick"]
 	for i in kinds.size():
 		var kind=kinds[i]
-		kind_buttons.append(button(record_tools,kind.to_upper(),.02,.15+i*.096,.11,.228+i*.096,func():
+		kind_buttons.append(button(record_tools,kind.to_upper(),.12+i*.094,.047,.205+i*.094,.114,func():
 			if arranging:
 				if kind=="auto": delete_arrange_note()
 				else: change_arrange_note_type(kind)
 			else:
 				tool=kind; judgement=kind.to_upper()+" TOOL"; flash=1; refresh_arrange_controls(),"tool"))
 		kind_buttons[-1].tooltip_text={"auto":"Detect taps, holds, and slides automatically", "tap":"Record individual taps", "hold":"Press and hold in a lane", "slide":"Hold and drag between lanes", "flick":"Swipe to set the flick direction"}[kind]
-	button(record_tools,"STOP & REVIEW",.84,.022,.988,.105,stop_take,"record")
-	var side=func(i: int) -> Array: return [.89,.15+i*.096,.98,.228+i*.096]
-	var b=side.call(0); aids_toggle=button(record_tools,"AIDS  ◂",b[0],b[1],b[2],b[3],toggle_record_aids,"tool")
-	b=side.call(1); arrange_button=button(record_tools,"CORRECT",b[0],b[1],b[2],b[3],toggle_arrange)
+	arrange_button=button(record_tools,"CORRECT",.60,.047,.735,.114,toggle_arrange)
 	arrange_button.tooltip_text="Pause the music to move or correct notes, then resume recording"
-	b=side.call(2); take_undo_button=button(record_tools,"UNDO",b[0],b[1],b[2],b[3],undo_record_note,"tool")
-	b=side.call(3); take_redo_button=button(record_tools,"REDO",b[0],b[1],b[2],b[3],redo_record_note,"tool")
-	# Status: a small line under the right of the top bar, with a thin progress line.
-	record_info=label(record_tools,"",.55,.03,.83,.1,15); record_info.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
-	recorder.progress=ProgressBar.new(); rect(recorder.progress,record_tools,.12,.115,.87,.119)
+	button(record_tools,"UNDO",.745,.047,.835,.114,undo_record_note,"tool")
+	button(record_tools,"STOP & REVIEW",.845,.047,.98,.114,stop_take,"record")
+	record_info=label(record_tools,"",.67,.148,.97,.228,21); record_info.horizontal_alignment=HORIZONTAL_ALIGNMENT_LEFT
+	recorder.progress=ProgressBar.new(); rect(recorder.progress,record_tools,.67,.235,.967,.245)
 	recorder.progress.show_percentage=false; recorder.progress.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	var track=StyleBoxFlat.new(); track.bg_color=Color(1,1,1,.08); track.set_corner_radius_all(2)
+	var track=StyleBoxFlat.new(); track.bg_color=Color("292929"); track.set_corner_radius_all(4)
 	var fill=track.duplicate(); fill.bg_color=Color("ff6489")
 	recorder.progress.add_theme_stylebox_override("background",track); recorder.progress.add_theme_stylebox_override("fill",fill)
-	# Short help line, bottom centre, no plate.
-	record_help=label(record_tools,"",.2,.925,.8,.985,15); record_help.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-	record_help.add_theme_color_override("font_color",Color(1,1,1,.72))
-	# AIDS drawer: hidden until its button (in the top bar) is tapped; drops down below it.
-	record_sidebar=recorder_plate(Rect2(.685,.135,.19,.775))
-	aids_drawer=Control.new(); rect(aids_drawer,record_tools,0,0,1,1); aids_drawer.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	record_sidebar.reparent(aids_drawer)
-	label(aids_drawer,"RECORDING AIDS",.7,.145,.87,.18,13).add_theme_color_override("font_color",Color("7fd7e7"))
-	var row=func(i: int) -> Array: return [.695,.19+i*.078,.865,.255+i*.078]
-	var r=row.call(0); note_lines_button=button(aids_drawer,"",r[0],r[1],r[2],r[3],toggle_note_lines,"tool"); update_note_lines_button()
+	note_lines_button=button(record_tools,"",.025,.19,.195,.258,toggle_note_lines,"tool"); update_note_lines_button()
 	# Mark where Verse 2 and the Bridge start while the song plays.
-	r=row.call(1); record_mark_buttons["verse2"]=button(aids_drawer,"",r[0],r[1],r[2],r[3],func(): mark_section("verse2",song_time),"tool")
-	r=row.call(2); record_mark_buttons["bridge"]=button(aids_drawer,"",r[0],r[1],r[2],r[3],func(): mark_section("bridge",song_time),"tool")
-	r=row.call(3); dots_button=button(aids_drawer,"",r[0],r[1],r[2],r[3],toggle_dots_mode,"tool")
-	ghost_button=button(aids_drawer,"GHOST ON" if ghost_recording else "GHOST OFF",r[0],r[1],r[2],r[3],toggle_ghost_recording,"tool")
+	record_mark_buttons["verse2"]=button(record_tools,"",.025,.278,.195,.346,func(): mark_section("verse2",song_time),"tool")
+	record_mark_buttons["bridge"]=button(record_tools,"",.025,.366,.195,.434,func(): mark_section("bridge",song_time),"tool")
+	dots_button=button(record_tools,"",.025,.454,.195,.522,toggle_dots_mode,"tool")
+	ghost_button=button(record_tools,"GHOST ON" if ghost_recording else "GHOST OFF",.025,.454,.195,.522,toggle_ghost_recording,"tool")
 	ghost_button.tooltip_text="Show faded existing chart notes approaching the judgment line while recording a new layer."
-	r=row.call(4); button(aids_drawer,"TAKE SETUP",r[0],r[1],r[2],r[3],recorder.show_setup,"tool")
-	r=row.call(5); recorder_note_speed_button=button(aids_drawer,"NOTES  "+str(recorder_note_speed)+"×",r[0],r[1],r[2],r[3],cycle_recorder_note_speed,"tool")
-	recorder_note_speed_button.tooltip_text="Note travel speed only. Music playback speed stays unchanged."
-	r=row.call(6); record_speed_button=button(aids_drawer,str(record_speed)+"× SPEED",r[0],r[1],r[2],r[3],cycle_record_speed,"tool")
+	record_help=label(record_tools,"AUTO records taps, holds and slides. Choose FLICK for a directed swipe.\nRecord near the glowing line. STOP to edit your take.",.04,.91,.625,.985,17); record_help.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	mr.register_button(button(record_tools,"MR OFF",.64,.913,.79,.984,mr.toggle,"tool"))
+	record_speed_button=button(record_tools,str(record_speed)+"× SPEED",.80,.913,.965,.984,cycle_record_speed,"tool")
 	record_speed_button.tooltip_text="Recording playback speed: 1×, 0.75×, 0.5×, 0.25×, 1.25×, 1.5×"
-	r=row.call(7); mr.register_button(button(aids_drawer,"MR OFF",r[0],r[1],r[2],r[3],mr.toggle,"tool"))
-	r=row.call(8); record_aids_button=button(aids_drawer,"",r[0],r[1],r[2],r[3],toggle_record_aids_display,"tool")
-	update_record_aids_button()
-	aids_drawer.visible=false
+	button(record_tools,"TAKE SETUP",.025,.542,.195,.61,recorder.show_setup,"tool")
+	recorder_note_speed_button=button(record_tools,"NOTES  "+str(recorder_note_speed)+"×",.025,.63,.195,.698,cycle_recorder_note_speed,"tool")
+	recorder_note_speed_button.tooltip_text="Note travel speed only. Music playback speed stays unchanged."
 
-var aids_drawer: Control
-# Beat grid and waveform lane while recording (record_aids.gd); off by default.
-var record_aids_enabled=false
-var record_aids_button: Button
-func toggle_record_aids_display() -> void:
-	record_aids_enabled=not record_aids_enabled
-	prefs.set_value("editor","record_aids",record_aids_enabled); prefs.save("user://preferences.cfg")
-	update_record_aids_button()
-func update_record_aids_button() -> void:
-	if record_aids_button: record_aids_button.text="GRID & WAVE: "+("ON" if record_aids_enabled else "OFF"); record_aids_button.set_selected(record_aids_enabled)
-var aids_toggle: Button
-func toggle_record_aids() -> void:
-	aids_drawer.visible=not aids_drawer.visible
-	aids_toggle.text="AIDS  ▸" if aids_drawer.visible else "AIDS  ◂"
-	aids_toggle.set_selected(aids_drawer.visible)
 func recorder_plate(bounds: Rect2) -> Panel:
 	var panel=Panel.new(); rect(panel,record_tools,bounds.position.x,bounds.position.y,bounds.end.x,bounds.end.y)
 	panel.mouse_filter=Control.MOUSE_FILTER_IGNORE
@@ -682,22 +627,7 @@ func recorder_plate(bounds: Rect2) -> Panel:
 	plate.border_color=Color("303349"); plate.set_border_width_all(1); plate.set_corner_radius_all(16)
 	panel.add_theme_stylebox_override("panel",plate); return panel
 
-func set_background_suspension(active: bool) -> void:
-	background_work_suspended=active
-	for node in suspended_branches:
-		if is_instance_valid(node): node.process_mode=suspended_branches[node]
-	suspended_branches.clear()
-	if active:
-		if is_instance_valid(mr):
-			suspended_branches[mr]=mr.process_mode; mr.process_mode=Node.PROCESS_MODE_DISABLED
-		for node in [lobby,chart_library,studio,results_screen]:
-			if is_instance_valid(node) and not node.is_visible_in_tree():
-				suspended_branches[node]=node.process_mode
-				node.process_mode=Node.PROCESS_MODE_DISABLED
-
 func set_mode(value: String) -> void:
-	set_background_suspension(false)
-	if gameplay_loading and value not in ["play","paused"]: gameplay_loading.cancel()
 	if value!=mode:
 		# Menus slide forward and back by depth; entering or leaving the stage dissolves.
 		var depth={"menu":0,"guide":1,"library":1,"editor":2,"results":3}
@@ -766,8 +696,6 @@ func set_mode(value: String) -> void:
 		UiMotion.screen(studio)
 	if mr: mr.sync_mode()
 
-	set_background_suspension(value=="play" or (value=="paused" and paused_mode=="play"))
-
 func open_lobby_settings() -> void:
 	if mode!="menu": return
 	UiMotion.transition(self)
@@ -786,12 +714,6 @@ func close_lobby_settings() -> void:
 		UiMotion.reveal(lobby)
 
 # The audio sync helper replaces the settings page while it is open; BACK or SAVE return to it.
-# Tap-along timing test (timing_calibration.gd), on its own top layer.
-func open_timing_calibration() -> void:
-	if get_tree().root.has_node("TimingCalibration"): return
-	var layer=CanvasLayer.new(); layer.layer=96; layer.name="TimingCalibration"; get_tree().root.add_child(layer)
-	var view=preload("res://scripts/timing_calibration.gd").new(); view.game=self; layer.add_child(view)
-	view.closed.connect(func(): layer.queue_free())
 func open_sync_helper() -> void:
 	if not menu_settings_open: return
 	UiMotion.transition(self)
@@ -1020,14 +942,6 @@ func add_points(grade: String) -> void:
 	score += roundi(NOTE_POINTS.get(grade, 0) * combo_multiplier())
 func accuracy() -> float: return 100.0 if judged==0 else float(earned)/judged*100
 # Retire completed notes once; keep long sustains active until their tails finish.
-func judgment_candidates() -> Variant:
-	if judgment_lookup: return judgment_lookup.candidates(song_time)
-	return range(first_live_index(),live.size())
-
-func play_note_end(entry: Dictionary) -> float:
-	if entry.has("end_time"): return float(entry.end_time)
-	return float(entry.note.time)+float(entry.note.duration)
-
 func first_live_index() -> int:
 	while live_cursor<live.size() and live[live_cursor].done: live_cursor+=1
 	return live_cursor
@@ -1043,10 +957,6 @@ func total_judgements() -> int:
 
 # Checkpoint dots: when one reaches the bar, the finger must be over the trail's lane.
 # Returns false if the hold or slide broke on a missed dot.
-func play_lane_at(entry: Dictionary,at: float) -> float:
-	if entry.has("curve"): return entry.curve.lane_at(at)
-	return SynkChart.lane_at(entry.note,at)
-
 func process_checkpoints(entry: Dictionary, finger_lane: float, automated: bool) -> bool:
 	var checks: Array=entry.note.get("checkpoints",[])
 	while int(entry.get("checks_done",0))<checks.size():
@@ -1054,13 +964,13 @@ func process_checkpoints(entry: Dictionary, finger_lane: float, automated: bool)
 		var at=float(entry.note.time)+float(checks[index])
 		if song_time<at: break
 		entry.checks_done=index+1
-		var lane=float(entry.checkpoint_lanes[index]) if entry.has("checkpoint_lanes") else play_lane_at(entry,at)
+		var lane=SynkChart.lane_at(entry.note,at)
 		if automated or absf(finger_lane-lane)<=CHECKPOINT_LANE_TOLERANCE: pass_checkpoint(entry,lane)
 		else: judge(entry,-1); return false
 	return true
 
 func pass_checkpoint(entry: Dictionary, lane: float) -> void:
-	run_samples.add_performance(song_time,1.0)
+	performance_samples.append({"time":song_time,"weight":1.0,"amount":1})
 	field.world.spawn_hit(lane,str(entry.note.kind))
 	judged+=1; earned+=1; judgment_counts.PERFECT+=1
 	combo+=1; combo_pulse=1.0; max_combo=maxi(combo,max_combo)
@@ -1074,43 +984,29 @@ func forfeit_checkpoints(entry: Dictionary) -> void:
 	entry.checks_done=entry.note.checkpoints.size()
 	judged+=remaining; judgment_counts.MISS+=remaining
 	for offset in entry.note.checkpoints.slice(entry.note.checkpoints.size()-remaining):
-		run_samples.add_performance(float(entry.note.time)+float(offset),0.0)
+		performance_samples.append({"time":float(entry.note.time)+float(offset),"weight":0.0,"amount":1})
 func rank_name() -> String:
 	var a=accuracy(); return "SS" if a>=98 else ("S" if a>=95 else ("A" if a>=90 else ("B" if a>=80 else "C")))
 
 # section is a play mode ("full", "verse1", "verse2", "bridge"); empty uses the lobby's choice.
-# Independent warm-up widgets sit behind the opaque loading card, without replacing live HUD text.
-const HUD_GLYPHS = "0123456789,.%+-×\nPERFECT GREAT GOOD MISS READY\nEARLY LATE ON TIME ms COMBO SCORE\n25 50 100 200 300 500 750 1000 ×1.1 ×2.0"
-func create_hud_warmup() -> Control:
-	var root=Control.new(); root.name="HudWarmup"; root.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	ui.add_child(root); ui.move_child(root,stage_intro.get_index())
-	root.size=size
-	for source in [hit_label,timing_label,hud,auto_play_hud,countdown_label]:
-		var sample=Label.new(); root.add_child(sample); sample.size=size
-		sample.text="0123456789" if source==countdown_label else HUD_GLYPHS
-		sample.add_theme_font_override("font",source.get_theme_font("font"))
-		sample.add_theme_font_size_override("font_size",source.get_theme_font_size("font_size"))
-		sample.add_theme_constant_override("outline_size",source.get_theme_constant("outline_size"))
-		sample.add_theme_constant_override("shadow_outline_size",source.get_theme_constant("shadow_outline_size"))
-		sample.add_theme_color_override("font_shadow_color",Color(0,0,0,.7))
-	var combo=preload("res://scripts/combo_view.gd").new(); root.add_child(combo)
-	combo.size=combo_hud.size; combo.position=Vector2(size.x*.35,size.y*.3)
-	combo.combo=1000; combo.caption="1000 COMBO"; combo.wave=.5; combo.badge_age=.2; combo.badge_text="×2.0"
-	combo.set_process(false)
-	for factor in [.58,.15,.17,.264]:
-		for outline in [0,3,5,9,14]:
-			var sample=Label.new(); root.add_child(sample); sample.size=size
-			sample.text=HUD_GLYPHS; sample.add_theme_font_override("font",combo.BOLD)
-			sample.add_theme_font_size_override("font_size",maxi(1,roundi(combo.size.y*factor)))
-			sample.add_theme_constant_override("outline_size",outline)
-	for child in root.get_children(): child.visible=false
-	return root
+# Draws every word and digit the gameplay HUD can show once, nearly transparent, behind the
+# loading card, so the font has the glyphs cached before the first PERFECT or score change.
+const HUD_GLYPHS = "PERFECT GREAT GOOD MISS EARLY LATE ON TIME ms 0123456789,.%+-x READY"
+func warm_hud_text() -> void:
+	var targets = [hit_label, timing_label, hud, auto_play_hud]
+	var saved: Array = []
+	for label_node in targets:
+		if label_node == null: continue
+		saved.append([label_node, label_node.text, label_node.visible, label_node.modulate])
+		label_node.text = HUD_GLYPHS; label_node.visible = true; label_node.modulate = Color(1, 1, 1, .01)
+	for i in 3: await get_tree().process_frame
+	for item in saved:
+		if not is_instance_valid(item[0]): continue
+		# Restore only if gameplay hasn't already replaced the warm-up text.
+		if item[0].text == HUD_GLYPHS: item[0].text = item[1]
+		item[0].visible = item[2]; item[0].modulate = item[3]
 
 func start_game(notes: Array,automated: bool = false,section: String = "",is_practice: bool=false) -> void:
-	apply_pending_render_scale()
-	var validation=preload("res://scripts/gameplay_validation.gd").inspect(notes,audio.stream)
-	if not validation.is_empty(): tell(validation); return
-	gameplay_loading.cancel()
 	# Mirror and other note modifiers apply to real runs; a replay reuses the exact notes it recorded.
 	if extras:
 		if not extras.replay_pending and not automated: notes=extras.apply_mods(notes)
@@ -1119,7 +1015,7 @@ func start_game(notes: Array,automated: bool = false,section: String = "",is_pra
 	if mode=="editor" or is_practice: play_settings=document.settings.duplicate(true)
 	elif not run_settings_active: play_settings=saved_settings.duplicate(true)
 	run_settings_active=true
-	practice.active=is_practice; run_samples.reset(); judgment_lookup=null; timing_label.text=""
+	practice.active=is_practice; timing_samples.clear(); performance_samples.clear(); timing_label.text=""
 	audio.stop(); audio.pitch_scale=1; pointers.clear(); live.clear()
 	live_cursor=0; judgement_total_size=-1
 	field.world.clear_hit_effects()
@@ -1164,9 +1060,11 @@ func start_game(notes: Array,automated: bool = false,section: String = "",is_pra
 	# Build every note of the chart now (behind the loading card); play only shows and hides them.
 	field.world.begin_prebuild()
 	if stage_intro_enabled:
+		# Compile every gameplay shader behind the loading card, not mid-song.
+		if not restarting: field.world.prewarm(); warm_hud_text()
+		field.world.prefill_hits()
 		var tinted=song.id!="eclipse" and not has_custom_cover(str(song.id))
 		stage_intro.begin(cover_texture_for_id(str(song.id)),cover_tint_for_id(str(song.id)) if tinted else Color.WHITE,str(song.title),intro_details(),restarting)
-		gameplay_loading.begin()
 		judgement=""
 	else: stage_intro.skip()
 	for banner in [song_hud,difficulty_hud]:
@@ -1329,7 +1227,6 @@ func record_here() -> void:
 	arranging=false; arrange_touches.clear(); arrange_selection.clear(); arrange_button.text="CORRECT"
 	overdub=true; start_position=clampf(cursor,0,maxf(0,length()-.02)); countdown=3; song_time=start_position-3; set_mode("record")
 	recorder.begin()
-	reset_take_history()
 	apply_stage_cover()
 	refresh_arrange_controls()
 	refresh_section_marks()
@@ -1358,7 +1255,7 @@ func toggle_pause() -> void:
 	if finishing: return
 	if mode in ["play","record"]:
 		resume_countdown=0
-		if mode=="record": recorder.seal_gestures(); commit_take_history()
+		if mode=="record": recorder.seal_gestures()
 		paused_mode=mode; pause_had_audio=audio.playing; audio.stream_paused=true; pointers.clear(); capture.gestures.clear()
 		for entry in live:
 			if entry.started and not entry.done: entry.pointer=-999
@@ -1376,30 +1273,10 @@ func toggle_pause() -> void:
 		if paused_mode=="record" and arranging:
 			set_mode("record"); modal.scale=Vector2.ONE; modal.modulate.a=1; return
 		resume_start_audio=not pause_had_audio
-		if paused_mode=="record":
-			# Rewind to the lead-in; the countdown then plays the song in from there.
-			begin_resume_lead(); start_position=clampf(song_time-effective_timing_ms()/1000.0,0,maxf(0,length()-.02))
-			resume_start_audio=true; audio.stop()
 		countdown=0; resume_countdown=3.0; judgement=""; flash=0
 		set_mode(paused_mode)
 		modal.scale=Vector2.ONE; modal.modulate.a=1
 
-# Resume lead-in: when recording continues after CORRECT or a pause, the song jumps back to a
-# few seconds (recorder setting, 1-3 s) before the point where the chart runs out of notes,
-# so there is time to get ready; a marker shows that point and the HUD counts down to it.
-var ready_point=-1.0
-func chart_empty_point() -> float:
-	var last=-1.0
-	for source in [document.notes,capture.notes]:
-		for n in source:
-			var end_time=float(n.time)+float(n.get("duration",0.0))
-			if float(n.time)<=song_time+.01: last=maxf(last,end_time)
-	return last if last>=0.0 else song_time
-func begin_resume_lead() -> float:
-	ready_point=chart_empty_point() if capture.notes.size()+document.notes.size()>0 else song_time
-	var target=maxf(maxf(0.0,recorder.region.x if recorder.active else 0.0),ready_point-float(recorder.resume_lead))
-	song_time=target; visual_song_time=target; visual_clock_ready=false
-	return target
 func toggle_arrange() -> void:
 	if mode!="record": return
 	arranging=not arranging; arrange_touches.clear(); arrange_selection.clear(); capture.gestures.clear()
@@ -1408,7 +1285,6 @@ func toggle_arrange() -> void:
 	if arranging:
 		countdown=0; audio.stream_paused=true
 	else:
-		begin_resume_lead()
 		var playback_time=clampf(song_time-effective_timing_ms()/1000.0,0,maxf(0,length()-.02))
 		if audio.playing: audio.seek(playback_time); audio.stream_paused=false
 		else: audio.play(playback_time)
@@ -1423,6 +1299,7 @@ func refresh_arrange_controls() -> void:
 		if kinds[i] in recorder.locks() or (recorder.current_pass()!="all" and kinds[i]!=recorder.current_pass()): kind_buttons[i].disabled=true
 	dots_button.visible=arranging
 	ghost_button.visible=not arranging; ghost_button.set_selected(ghost_recording)
+	if record_sidebar: record_sidebar.anchor_bottom=.715
 	dots_button.text="●  ADD POINTS: ON" if dots_mode else "●  ADD POINTS: OFF"
 	dots_button.set_selected(dots_mode)
 	if arranging and dots_mode:
@@ -1436,7 +1313,7 @@ func refresh_arrange_controls() -> void:
 			record_help.text="SELECTED  %s  •  LANE %d  •  %.2f s\nDrag to move. Use the type buttons or DELETE above; scroll outside the highway." % [str(n.kind).to_upper(),int(n.lane)+1,float(n.time)]
 	else:
 		var hints={"auto":"AUTO · Tap, hold, or drag to record. Choose FLICK for swipes.","tap":"TAP · Touch any lane at the glowing line to place a tap.","hold":"HOLD · Press and keep your finger down; release to end.","slide":"SLIDE · Hold and move across lanes to draw the trail.","flick":"FLICK · Swipe in the direction you want the player to flick."}
-		record_help.text=str(hints.get(tool,hints.auto))
+		record_help.text=str(hints.get(tool,hints.auto))+"\nCORRECT pauses for edits. STOP & REVIEW finishes the take."
 
 func toggle_ghost_recording() -> void:
 	ghost_recording=not ghost_recording
@@ -1444,43 +1321,10 @@ func toggle_ghost_recording() -> void:
 	prefs.set_value("editor","ghost_recording",ghost_recording); prefs.save("user://preferences.cfg")
 	refresh_arrange_controls()
 
-# Take history: every change while recording (a recorded note, delete, type change, drag,
-# added point) is a step. UNDO and REDO walk those steps, covering both the new take and the
-# chart notes corrected in CORRECT mode.
-var take_undo: Array=[]
-var take_redo: Array=[]
-var take_state: Dictionary={}
-var take_undo_button: Button
-var take_redo_button: Button
-func take_snapshot() -> Dictionary:
-	return {"capture":capture.notes.duplicate(true),"document":document.notes.duplicate(true)}
-func reset_take_history() -> void:
-	take_undo.clear(); take_redo.clear(); take_state=take_snapshot(); refresh_take_history_buttons()
-func commit_take_history() -> void:
-	var now=take_snapshot()
-	if take_state.is_empty() or JSON.stringify(now)==JSON.stringify(take_state): take_state=now; return
-	take_undo.append(take_state); take_redo.clear(); take_state=now
-	if take_undo.size()>200: take_undo.pop_front()
-	refresh_take_history_buttons()
-func restore_take(state: Dictionary) -> void:
-	capture.notes=state.capture.duplicate(true)
-	if JSON.stringify(state.document)!=JSON.stringify(document.notes):
-		document.notes=state.document.duplicate(true); document.selected=-1; document.dirty=true
-	take_state=state.duplicate(true)
-	arrange_selection.clear(); arrange_touches.clear()
-	refresh_arrange_controls(); refresh_take_history_buttons()
 func undo_record_note() -> void:
-	commit_take_history()
-	if take_undo.is_empty(): return
-	take_redo.append(take_state); restore_take(take_undo.pop_back())
-	judgement="UNDO"; flash=1
-func redo_record_note() -> void:
-	if take_redo.is_empty(): return
-	take_undo.append(take_state); restore_take(take_redo.pop_back())
-	judgement="REDO"; flash=1
-func refresh_take_history_buttons() -> void:
-	if take_undo_button: take_undo_button.disabled=take_undo.is_empty()
-	if take_redo_button: take_redo_button.disabled=take_redo.is_empty()
+	if not capture.notes.is_empty(): capture.notes.pop_back()
+	arrange_selection.clear()
+	refresh_arrange_controls()
 
 func delete_arrange_note() -> void:
 	if not arranging or arrange_selection.is_empty(): return
@@ -1491,7 +1335,7 @@ func delete_arrange_note() -> void:
 		document.delete()
 	elif index>=0 and index<capture.notes.size(): capture.notes.remove_at(index)
 	arrange_selection.clear(); arrange_touches.clear()
-	refresh_arrange_controls(); commit_take_history()
+	refresh_arrange_controls()
 
 func change_arrange_note_type(kind: String) -> void:
 	if not arranging or arrange_selection.is_empty() or kind not in SynkChart.TYPES: return
@@ -1510,7 +1354,7 @@ func change_arrange_note_type(kind: String) -> void:
 			if kind=="hold": n.path=[]; n.end_lane=n.lane
 		n.time=clampf(float(n.time),0,maxf(0,length()-float(n.duration)))
 		if kind=="flick" and int(n.direction)==2: n.direction=0
-	refresh_arrange_controls(); commit_take_history()
+	refresh_arrange_controls()
 
 func stage_time_at(p: Vector2) -> float:
 	var point=p*Vector2(field.viewport.size)
@@ -1557,7 +1401,7 @@ func add_point_at(p: Vector2) -> void:
 	var at=stage_time_at(p)
 	if absf(lane-SynkChart.lane_at(selected_note,at))<=2.0 and toggle_checkpoint(selected_note,at,bool(arrange_selection.document)):
 		if arrange_selection.document: document.dirty=true
-	refresh_arrange_controls(); commit_take_history()
+	refresh_arrange_controls()
 
 func arrange_lane_at(p: Vector2) -> float:
 	var world=field.world; var point=p*Vector2(field.viewport.size)
@@ -1634,31 +1478,15 @@ func arrange_pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: 
 		refresh_arrange_controls()
 		if selected.is_empty(): arrange_touches[id]={"kind":"empty"}
 		else:
-			arrange_touches[id]={"kind":"note","note":selected.note,"document":selected.document,"changed":false,"start_time":float(selected.note.time),"start_lane":int(selected.note.lane),"touch_time":stage_time_at(p),"touch_lane":arrange_lane_at(p),"start_p":p,"gesture":""}
+			arrange_touches[id]={"kind":"note","note":selected.note,"document":selected.document,"changed":false,"start_time":float(selected.note.time),"start_lane":int(selected.note.lane),"touch_time":stage_time_at(p),"touch_lane":arrange_lane_at(p)}
 	if canceled or ended:
-		arrange_touches.erase(id); commit_take_history(); return
+		arrange_touches.erase(id); return
 	if not arrange_touches.has(id): return
 	var touch: Dictionary=arrange_touches[id]
 	if touch.kind=="scroll":
 		song_time=clampf(float(touch.start_time)+(float(touch.start_y)-p.y)*note_travel_seconds()*1.3,0,length())
 	elif touch.kind=="note":
 		var n: Dictionary=touch.note
-		# The first clear movement decides the gesture: a sideways swipe that starts on a hold or
-		# slide trail (not its head) bends the trail at that point; anything else moves the note.
-		if touch.gesture=="":
-			var delta: Vector2=p-touch.start_p
-			if delta.length()<.012: return
-			var offset=float(touch.touch_time)-float(n.time)
-			var on_trail=n.kind in ["hold","slide"] and offset>.06 and offset<=float(n.duration)+.02
-			var bend_allowed=n.kind=="slide" or ("slide" not in recorder.locks() and recorder.current_pass() in ["all","slide"])
-			touch.gesture="bend" if on_trail and bend_allowed and absf(delta.x)>absf(delta.y)*1.2 else "move"
-			if touch.gesture=="bend": begin_trail_bend(touch,n,minf(offset,float(n.duration)))
-		if touch.gesture=="bend":
-			var lane=clampf(float(touch.bend_lane)+arrange_lane_at(p)-float(touch.touch_lane),0,SynkChart.MAX_LANE)
-			var point: Dictionary=n.path[int(touch.bend_index)]
-			point.lane=snappedf(lane,.05)
-			if int(touch.bend_index)==n.path.size()-1: n.end_lane=clampi(roundi(lane),0,SynkChart.MAX_LANE)
-			refresh_arrange_controls(); return
 		var target_time=stage_time_at(p)-float(touch.touch_time)+float(touch.start_time)
 		var lane_delta=clampi(roundi(arrange_lane_at(p)-float(touch.touch_lane)),-SynkChart.MAX_LANE,SynkChart.MAX_LANE)
 		var new_lane=clampi(int(touch.start_lane)+lane_delta,0,SynkChart.MAX_LANE)
@@ -1671,24 +1499,6 @@ func arrange_pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: 
 		for point in n.path: point.lane=clampf(float(point.lane)+change,0,SynkChart.MAX_LANE)
 		if touch.changed: refresh_arrange_controls()
 
-# Prepares a trail bend: a hold becomes a slide, the slide gets an explicit path, and the path
-# point at the touched time is found (within 0.08 s) or inserted there on the current curve.
-func begin_trail_bend(touch: Dictionary,n: Dictionary,offset: float) -> void:
-	if touch.document: document.checkpoint()
-	if n.kind=="hold": n.kind="slide"; n.path=[]; n.end_lane=n.lane
-	if n.path.size()<2:
-		n.path=[{"offset":0.0,"lane":float(n.lane)},{"offset":float(n.duration),"lane":float(n.end_lane)}]
-	var index=-1
-	for i in range(1,n.path.size()):
-		if absf(float(n.path[i].offset)-offset)<=.08: index=i; break
-	if index<0:
-		var lane=SynkChart.lane_at(n,float(n.time)+offset)
-		index=n.path.size()
-		for i in n.path.size():
-			if float(n.path[i].offset)>offset: index=i; break
-		n.path.insert(index,{"offset":snappedf(offset,.001),"lane":lane})
-	touch.bend_index=index; touch.bend_lane=float(n.path[index].lane); touch.changed=true
-
 func _notification(what: int) -> void:
 	if what in [NOTIFICATION_APPLICATION_FOCUS_OUT,NOTIFICATION_APPLICATION_PAUSED]:
 		if features and mode=="editor": features.autosave()
@@ -1698,11 +1508,6 @@ func _notification(what: int) -> void:
 		if document.dirty: set_mode("editor"); tell("Save your draft or RELOAD to discard edits before closing.")
 		else: get_tree().quit()
 
-var hud_layout_state: Array = []
-var hud_layout_updates = 0
-var displayed_score_integer = -1
-var score_font_color = Color(-1,-1,-1,-1)
-var practice_caption_state: Array = []
 func _process(delta: float) -> void:
 	poll_song_worker()
 	hud_motion_time+=delta if mode=="play" else 0.0
@@ -1712,8 +1517,8 @@ func _process(delta: float) -> void:
 	resume_grace=maxf(0,resume_grace-delta)
 	if finishing: advance_finish(delta)
 	elif mode in ["play","record"] and not arranging:
-		if mode=="play" and (stage_intro.running() or field.world.prebuilding or gameplay_loading.preparing):
-			# Hold countdown until loading work and the stage entrance both finish.
+		if mode=="play" and (stage_intro.running() or field.world.prebuilding):
+			# Hold the countdown until the stage has entered and every note is built.
 			visual_song_time=song_time; visual_clock_ready=false
 		elif resume_countdown>0:
 			resume_countdown=maxf(0,resume_countdown-delta)
@@ -1732,11 +1537,6 @@ func _process(delta: float) -> void:
 			song_time=maxf(song_time,chart_time())
 			smooth_visual_time(song_time,delta)
 			update_section_volume()
-			if mode=="record" and ready_point>=0.0:
-				# Lead-in countdown to where the chart runs out.
-				var left=ready_point-song_time
-				if left>0.0: judgement="GET READY  %d" % ceili(left); flash=1
-				else: ready_point=-1.0; judgement="GO"; flash=1
 			if mode=="play":
 				if auto_play: update_autoplay()
 				else: update_game()
@@ -1747,10 +1547,7 @@ func _process(delta: float) -> void:
 	var intro_running=mode in ["play","paused"] and stage_intro.running()
 	var counting=mode in ["play","record"] and (countdown>0 or resume_countdown>0)
 	practice_hud.visible=practice.active and mode in ["play","paused"]
-	var practice_state = [practice.speed,practice.repeat_enabled,practice.round_number]
-	if practice_state!=practice_caption_state:
-		practice_caption_state=practice_state
-		practice_hud.text="PRACTICE · %s× · %s%d" % [str(practice.speed),"LOOP " if practice.repeat_enabled else "TAKE ",practice.round_number]
+	practice_hud.text="PRACTICE · %s× · %s%d" % [str(practice.speed),"LOOP " if practice.repeat_enabled else "TAKE ",practice.round_number]
 	timing_label.visible=mode=="play" and not auto_play and not counting and flash>0 and not finishing
 	timing_label.modulate.a=clampf(flash,0,1)
 	if mode=="paused":
@@ -1796,28 +1593,22 @@ func _process(delta: float) -> void:
 	if mode=="play":
 		displayed_score=lerpf(displayed_score,float(score),clampf(delta*11.0,0,1))
 		if absf(displayed_score-score)<1.0: displayed_score=score
-	var score_integer=roundi(displayed_score)
-	if score_integer!=displayed_score_integer:
-		displayed_score_integer=score_integer
-		hud.text=format_score(score_integer)
+	hud.text=format_score(roundi(displayed_score))
 	# The score counter glows gold while a combo multiplier is active, brighter as it climbs.
 	var boost=clampf((combo_multiplier()-1.0)/1.0,0.0,1.0) if mode in ["play","paused"] else 0.0
-	var font_color=Color.WHITE.lerp(Color("ffd257"),.35+.65*boost) if boost>0 else Color.WHITE
-	if font_color!=score_font_color:
-		score_font_color=font_color
-		hud.add_theme_color_override("font_color",font_color)
+	hud.add_theme_color_override("font_color",Color.WHITE.lerp(Color("ffd257"),.35+.65*boost) if boost>0 else Color.WHITE)
 	var current_rank=rank_name()
 	if current_rank!=shown_rank:
 		if mode=="play" and judged>0: rank_pulse=1.0
 		shown_rank=current_rank
-	if rank_hud.text!=current_rank: rank_hud.text=current_rank
+	rank_hud.text=current_rank
 	rank_hud.pivot_offset=rank_hud.size*.5
 	rank_hud.scale=Vector2.ONE*(1.0+rank_pulse*.22)
 	rank_hud.modulate=Color.WHITE.lerp(Color("fff1ff"),rank_pulse)
 	if auto_play_hud.visible and mode=="play": auto_play_hud.modulate.a=.78+.22*sin(hud_motion_time*2.2)
 	else: auto_play_hud.modulate.a=1.0
 	if combo_art_value!=combo or combo_art_size!=combo_hud.size: update_combo_art()
-	if mode=="record": record_info.text=("PAUSED · CORRECT %.1f s\n%d NOTES" if arranging else "● RECORDING  %.1f s\n%d NOTES / %s") % ([maxf(0,song_time),capture.notes.size()] if arranging else [maxf(0,song_time),capture.notes.size(),tool.to_upper()])
+	record_info.text=("PAUSED · CORRECT %.1f s\n%d NOTES" if arranging else "● RECORDING  %.1f s\n%d NOTES / %s") % ([maxf(0,song_time),capture.notes.size()] if arranging else [maxf(0,song_time),capture.notes.size(),tool.to_upper()])
 	if mode=="record" and recorder.active:
 		if song_time<recorder.region.x and countdown==0: record_info.text="PRE-ROLL · LISTEN\nREC AT %.2f s" % recorder.region.x
 		elif recorder.looping(): record_info.text+=" · TAKE %d" % (recorder.takes.size()+1)
@@ -1844,7 +1635,7 @@ func _process(delta: float) -> void:
 		hit_label.modulate.a=flash; hit_label.scale=Vector2.ONE
 
 func has_active_hold() -> bool:
-	for live_index in judgment_candidates():
+	for live_index in range(first_live_index(),live.size()):
 		var entry: Dictionary=live[live_index]
 		if float(entry.note.time)>song_time+.23: break
 		if entry.done or not entry.started or entry.note.kind!="hold": continue
@@ -1852,21 +1643,12 @@ func has_active_hold() -> bool:
 	return false
 
 func align_gameplay_hud() -> void:
-	if mode not in ["play","record","paused"]: return
-	var camera=field.world.camera
-	var field_transform=field.get_global_transform_with_canvas()
-	var ui_transform=ui.get_global_transform_with_canvas()
-	var state=[field_transform,ui_transform,field.viewport.size,camera.global_transform,camera.projection,camera.fov,camera.size,camera.h_offset,camera.v_offset,camera.keep_aspect,hit_art.size,hit_label.size,countdown_label.size,countdown_ring.size]
-	if state==hud_layout_state: return
-	hud_layout_state=state; hud_layout_updates+=1
-	var inverse=ui_transform.affine_inverse()
-	var near=field.project(field.world.CENTER_LANE,0)
-	var screen_center=field_transform*near
-	var center_x=(inverse*screen_center).x
+	var screen_center=field.get_global_transform_with_canvas()*field.project(field.world.CENTER_LANE,0)
+	var center_x=(ui.get_global_transform_with_canvas().affine_inverse()*screen_center).x
 	for element in [hit_art,hit_label]:
 		element.position.x=center_x-element.size.x*.5
-	var highway_center=field_transform*((near+field.project(field.world.CENTER_LANE,1))*.5)
-	var countdown_center=inverse*highway_center
+	var highway_center=field.get_global_transform_with_canvas()*((field.project(field.world.CENTER_LANE,0)+field.project(field.world.CENTER_LANE,1))*.5)
+	var countdown_center=ui.get_global_transform_with_canvas().affine_inverse()*highway_center
 	for element in [countdown_label,countdown_ring]:
 		element.position=countdown_center-element.size*.5
 
@@ -1954,7 +1736,6 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 			if not n.is_empty():
 				judgement=n.kind.to_upper()+" RECORDED"; flash=1; flash_lane=int(n.end_lane)
 				if not capture.last_spacing_resolved: tell("This chord is too crowded to separate. Move a note or reduce its size.")
-				commit_take_history()
 		return
 	if began:
 		pointers[id]={"start":p,"position":p,"world":touch_world}
@@ -1964,13 +1745,13 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 			# Where the finger is across the judgement bar, in world units: notes are hit by touching
 			# the note itself (its drawn width), whatever lane it is in.
 			var world=field.world; var touch_x=world.lane_x(SynkCapture.lane(p.x)); var reach=world.note_reach()
-			for live_index in judgment_candidates():
+			for live_index in range(first_live_index(),live.size()):
 				var entry: Dictionary=live[live_index]
 				if float(entry.note.time)>song_time+.23: break
 				if entry.done: continue
 				var n: Dictionary=entry.note
 				if entry.started:
-					if entry.pointer==-999 and absf(touch_x-world.note_x(play_lane_at(entry,song_time)))<=reach: entry.pointer=id
+					if entry.pointer==-999 and absf(touch_x-world.note_x(SynkChart.lane_at(n,song_time)))<=reach: entry.pointer=id
 					continue
 				var error=absf(song_time-float(n.time))
 				var timing_limit=.23*extras.scale() if n.kind=="slide" else extras.good_window()
@@ -1980,7 +1761,7 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 				if error<best-.001 or (absf(error-best)<=.001 and gap<best_gap): best=error; best_gap=gap; nearest=entry
 			if nearest.is_empty() and bool(extras.settings.touch_assist):
 				# Touch assist: accept a touch a little beyond the note's edge when nothing else is hit.
-				for live_index in judgment_candidates():
+				for live_index in range(first_live_index(),live.size()):
 					var entry: Dictionary=live[live_index]
 					if float(entry.note.time)>song_time+.23: break
 					if entry.done or entry.started: continue
@@ -1991,33 +1772,33 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 				nearest.started=true; nearest.pointer=id; nearest.error=best; nearest.timing_error=song_time-float(nearest.note.time)
 				if nearest.note.kind=="tap": judge(nearest,best)
 				elif nearest.note.kind=="hold": judge(nearest,best,false)
-				elif nearest.note.kind=="slide": field.world.spawn_hit(play_lane_at(nearest,song_time),"slide",0,nearest,id)
+				elif nearest.note.kind=="slide": field.world.spawn_hit(SynkChart.lane_at(nearest.note,song_time),"slide",0,nearest,id)
 	if pointers.has(id):
 		pointers[id].position=p; pointers[id].world=touch_world
 	if ended:
 		# Process final swipe motion before removing the finger.
 		update_game()
-		for live_index in judgment_candidates():
+		for live_index in range(first_live_index(),live.size()):
 			var entry: Dictionary=live[live_index]
 			if entry.done or entry.pointer!=id or entry.note.kind!="hold": continue
-			var hold_end=play_note_end(entry)
+			var hold_end=float(entry.note.time)+float(entry.note.duration)
 			# Letting go a little early still completes the hold; the score keeps the head's accuracy.
 			judge(entry,tail_error(entry) if not canceled and song_time>=hold_end-tail_grace(entry) else -1)
-		for live_index in judgment_candidates():
+		for live_index in range(first_live_index(),live.size()):
 			var entry: Dictionary=live[live_index]
 			if entry.done or entry.pointer!=id or entry.note.kind!="slide": continue
-			var end_time=play_note_end(entry)
-			var lane_error=absf(SynkCapture.lane(p.x)-play_lane_at(entry,end_time))
+			var end_time=float(entry.note.time)+float(entry.note.duration)
+			var lane_error=absf(SynkCapture.lane(p.x)-SynkChart.lane_at(entry.note,end_time))
 			if not canceled and lane_error<=SLIDE_END_LANES and p.y>=.4 and song_time>=end_time-tail_grace(entry) and song_time<=end_time+.30:
 				judge(entry,float(entry.error))
 		pointers.erase(id)
 		if canceled:
-			for live_index in judgment_candidates():
+			for live_index in range(first_live_index(),live.size()):
 				var entry: Dictionary=live[live_index]
 				if entry.pointer==id and not entry.done: judge(entry,-1)
 
 func update_autoplay() -> void:
-	for live_index in judgment_candidates():
+	for live_index in range(first_live_index(),live.size()):
 		var entry: Dictionary=live[live_index]
 		if float(entry.note.time)>song_time: break
 		if entry.done: continue
@@ -2025,10 +1806,10 @@ func update_autoplay() -> void:
 		if not entry.started and song_time>=float(n.time):
 			entry.started=true
 			if n.kind=="hold": judge(entry,0.0,false)
-			elif n.kind=="slide": field.world.spawn_hit(play_lane_at(entry,song_time),"slide",0,entry)
+			elif n.kind=="slide": field.world.spawn_hit(SynkChart.lane_at(n,song_time),"slide",0,entry)
 			elif n.kind in ["tap","flick"]: judge(entry,0.0)
 		if entry.started and not entry.done: process_checkpoints(entry,0.0,true)
-		if entry.started and not entry.done and song_time>=play_note_end(entry):
+		if entry.started and not entry.done and song_time>=float(n.time)+float(n.duration):
 			judge(entry,0.0)
 
 # Hold and slide ends: a release this early still completes the note (20% of its length,
@@ -2041,7 +1822,7 @@ func tail_error(entry: Dictionary) -> float:
 	return minf(float(entry.get("error",0.0)),extras.great_window())
 
 func update_game() -> void:
-	for live_index in judgment_candidates():
+	for live_index in range(first_live_index(),live.size()):
 		var entry: Dictionary=live[live_index]
 		if float(entry.note.time)>song_time+.23: break
 		if entry.done: continue
@@ -2062,36 +1843,34 @@ func update_game() -> void:
 		elif n.kind in ["hold","slide"] and not process_checkpoints(entry,SynkCapture.lane(p.position.x),false):
 			continue
 		elif n.kind=="slide":
-			var end_time=play_note_end(entry)
+			var end_time=float(n.time)+float(n.duration)
 			if song_time>=end_time-.045:
-				var lane_error=absf(SynkCapture.lane(p.position.x)-play_lane_at(entry,end_time))
+				var lane_error=absf(SynkCapture.lane(p.position.x)-SynkChart.lane_at(n,end_time))
 				if lane_error<=SLIDE_END_LANES and p.position.y>=.4: judge(entry,tail_error(entry))
 				elif song_time>end_time+.30: judge(entry,-1)
 		elif n.kind=="hold":
-			var hold_end=play_note_end(entry)
+			var hold_end=float(n.time)+float(n.duration)
 			if song_time>=hold_end-.045: judge(entry,tail_error(entry))
 
 func judge(entry: Dictionary,error: float,complete: bool = true) -> void:
 	var at=float(entry.note.time)
-	if entry.note.kind=="hold" and entry.get("note_hit",false): at=minf(song_time,play_note_end(entry))
-	run_samples.add_performance(at,0.0 if error<0 else (1.0 if error<=extras.perfect_window() else (.8 if error<=extras.great_window() else .5)))
+	if entry.note.kind=="hold" and entry.get("note_hit",false): at=minf(song_time,float(entry.note.time)+float(entry.note.duration))
+	performance_samples.append({"time":at,"weight":0.0 if error<0 else (1.0 if error<=extras.perfect_window() else (.8 if error<=extras.great_window() else .5)),"amount":1})
 	if error>=0: entry.note_hit=true
 	if error<0: timing_label.text=""
 	if error>=0 and not auto_play and not entry.get("timing_logged",false):
 		entry.timing_logged=true
 		var ms=float(entry.get("timing_error",song_time-float(entry.note.time)))*1000
-		run_samples.add_timing(float(entry.note.time),ms)
+		timing_samples.append({"time":float(entry.note.time),"ms":ms})
 		timing_label.text="ON TIME" if absf(ms)<=10 else ("EARLY %d ms" if ms<0 else "LATE %d ms") % roundi(absf(ms))
 		timing_label.add_theme_color_override("font_color",Color("65dcff") if ms<0 else Color("ff82d2"))
-	if error>=0: field.world.spawn_hit(play_lane_at(entry,song_time),str(entry.note.kind),int(entry.note.direction),entry if entry.note.kind=="hold" and not complete else {},int(entry.get("pointer",-999)))
+	if error>=0: field.world.spawn_hit(SynkChart.lane_at(entry.note,song_time),str(entry.note.kind),int(entry.note.direction),entry if entry.note.kind=="hold" and not complete else {},int(entry.get("pointer",-999)))
 	else: field.world.shake_on_miss()
 	if error<0 and entry.note.kind in ["slide","hold"]:
 		entry.missed_at=song_time
 		entry.missed_visual_time=field.world.render_time()
 	judgement_kind = str(entry.note.kind)
-	entry.done=complete
-	if complete and judgment_lookup: judgment_lookup.retire(int(entry.get("judgment_index",-1)))
-	judged+=1; flash=1; flash_lane=roundi(play_lane_at(entry,song_time))
+	entry.done=complete; judged+=1; flash=1; flash_lane=roundi(SynkChart.lane_at(entry.note,song_time))
 	# Energy is a performance gauge only: hits refill it, misses drain it, the song never fails.
 	if error<0: judgement="MISS"; combo=0; combo_pulse=0; forfeit_checkpoints(entry); score_panel.energy=maxf(0,score_panel.energy-.08)
 	else:
@@ -2127,9 +1906,9 @@ func _audio_finished() -> void:
 		var tinted=song.id!="eclipse" and not has_custom_cover(str(song.id))
 		begin_finish({"stats":stats,"replay":extras and extras.has_replay() and not auto_play,"mods":extras.mods_text() if extras else "","cover":cover_texture_for_id(str(song.id)),"tint":cover_tint_for_id(str(song.id)) if tinted else Color.WHITE,
 			"title":str(song.title),"details":intro_details(),"rank":rank_name(),"score":score,"accuracy":accuracy(),"max_combo":max_combo,
-			"counts":judgment_counts.duplicate(),"best":best,"previous_best":previous_best,"new_best":not auto_play and not practice.active and score>previous_best,"auto_play":auto_play,"practice":practice.active,"timing":run_samples.timing_snapshot(),
+			"counts":judgment_counts.duplicate(),"best":best,"previous_best":previous_best,"new_best":not auto_play and not practice.active and score>previous_best,"auto_play":auto_play,"practice":practice.active,"timing":timing_samples.duplicate(true),
 			"song_id":str(song.id),"artist":str(song.artist) if str(song.get("artist","")).strip_edges()!="" else album_name(song),"difficulty":preload("res://scripts/chart_levels.gd").label(features.current_variant),"bpm":chart_bpm(),"notes_total":live.size(),"notes_hit":live.filter(func(e): return bool(e.get("note_hit",false))).size(),
-			"performance":run_samples.performance_snapshot(),"range_start":play_range.x,"range_end":minf(length(),play_range.y)})
+			"performance":performance_samples.duplicate(true),"range_start":play_range.x,"range_end":minf(length(),play_range.y)})
 	elif mode=="editor":
 		if recorder.reviewing_audio: recorder.stop_preview(); refresh_transport()
 		elif loop_enabled and loop_b>loop_a+.1: audio.play(loop_a); cursor=loop_a

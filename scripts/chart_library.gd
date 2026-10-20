@@ -36,8 +36,6 @@ var level_input: Control
 var level_title: Label
 var level_hint: Label
 var level_action="editor"
-var suggest_button: Button
-var suggested_level=0
 var pending_action=""
 var pending_id=""
 var pending_variant=""
@@ -121,12 +119,7 @@ func _ready() -> void:
     var version_scroll=ScrollContainer.new(); place(version_scroll,panel,24,246,528,140,p)
     version_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
     versions=VBoxContainer.new(); version_scroll.add_child(versions); versions.size_flags_horizontal=Control.SIZE_EXPAND_FILL; versions.add_theme_constant_override("separation",8)
-    chart_label=label(panel,"",24,402,262,22,11,Color("50daec"),p)
-    # Level suggestion from the chart's density and patterns; tap to move the chart to it.
-    suggest_button=Button.new(); place(suggest_button,panel,24,424,262,26,p); suggest_button.flat=true
-    suggest_button.alignment=HORIZONTAL_ALIGNMENT_LEFT; suggest_button.add_theme_font_size_override("font_size",14)
-    suggest_button.add_theme_color_override("font_color",Color("ffd257")); suggest_button.add_theme_color_override("font_hover_color",Color("ffe9a8"))
-    suggest_button.pressed.connect(apply_suggested_level)
+    chart_label=label(panel,"",24,417,262,24,11,Color("50daec"),p)
     # Saved versions of the selected level: browse and switch.
     var history=button(panel,"HISTORY",298,392,122,64,func():
         if not selected_id.is_empty(): game.open_chart_history(selected_id,selected_variant),p); history.caption_size=17
@@ -256,13 +249,6 @@ func update_panel() -> void:
         var hint=Label.new(); versions.add_child(hint); hint.text="No charts yet. Record or edit to begin, and choose its level."; hint.add_theme_font_size_override("font_size",16)
     var notes: Array=current.get("notes",[])
     chart_label.text=Levels.label(selected_variant).to_upper()+" CHART" if not current.is_empty() else "NEW CHART"
-    suggested_level=0
-    if not notes.is_empty():
-        suggested_level=int(preload("res://scripts/difficulty_analysis.gd").analyze(notes,maxf(1,entry.duration)).level)
-    var differs=suggested_level>0 and Levels.key(suggested_level)!=selected_variant
-    suggest_button.visible=suggested_level>0
-    suggest_button.text=("Suggested Lv %d  ·  tap to use" % suggested_level) if differs else ("Suggested Lv %d  ✓" % suggested_level)
-    suggest_button.disabled=not differs
     var holds=notes.filter(func(n): return n.kind in ["hold","slide"]).size()
     var flicks=notes.filter(func(n): return n.kind=="flick").size()
     stats_label.text="%d Notes   ·   %d Holds   ·   %d Flicks" % [notes.size(),holds,flicks]
@@ -272,27 +258,6 @@ func update_panel() -> void:
     record_button.disabled=busy; edit_button.disabled=busy; new_button.disabled=busy
     delete_button.disabled=busy
     if not busy: message_label.text="Continue your draft or record a new take"
-# Moves the selected chart (its file, draft and version history) to the suggested level.
-func apply_suggested_level() -> void:
-    if suggested_level<=0 or selected_id.is_empty() or not Levels.is_level(selected_variant): return
-    var target=Levels.key(suggested_level)
-    if target==selected_variant: return
-    if FileAccess.file_exists(chart_file(selected_id,target)) or FileAccess.file_exists(draft_file(selected_id,target)):
-        game.tell("Lv %d already has a chart for this song. Delete or move it first." % suggested_level); return
-    if str(game.song.id)==selected_id and game.features.current_variant==selected_variant and game.document.dirty:
-        game.tell("Save this chart first, then apply the suggested level."); return
-    for pair in [[chart_file(selected_id,selected_variant),chart_file(selected_id,target)],[draft_file(selected_id,selected_variant),draft_file(selected_id,target)],
-            [SynkChartVersions.folder(selected_id,selected_variant),SynkChartVersions.folder(selected_id,target)]]:
-        for suffix in (["", ".bak"] if str(pair[0]).ends_with(".json") else [""]):
-            var from=ProjectSettings.globalize_path(str(pair[0])+suffix)
-            if FileAccess.file_exists(str(pair[0])+suffix) or DirAccess.dir_exists_absolute(from):
-                DirAccess.rename_absolute(from,ProjectSettings.globalize_path(str(pair[1])+suffix))
-    var old=Levels.label(selected_variant)
-    if str(game.song.id)==selected_id and game.features.current_variant==selected_variant:
-        game.features.current_variant=target
-        game.prefs.set_value("charts",selected_id,target); game.prefs.save("user://preferences.cfg")
-    selected_variant=target; cache.clear(); refresh(); game.lobby.refresh()
-    game.tell("Moved %s chart to Lv %d." % [old,suggested_level])
 func update_card_metadata(_id: String) -> void:
     if grid: refresh()
 func set_message(value: String) -> void:

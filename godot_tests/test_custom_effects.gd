@@ -18,7 +18,7 @@ func run():
     check(is_zero_approx(float(burst.flash.material_override.get_shader_parameter("opacity"))) and is_zero_approx(float(burst.fill.material_override.get_shader_parameter("opacity"))),"Zero hit intensity hides flash and fill")
     check(is_zero_approx(burst.ring.material_override.albedo_color.a),"Hit intensity also controls impact ring")
     features.set_effect("Particles",0); world.animate_effects(.01); world.update_ambient_particles(0)
-    check(burst.particle_batch.multimesh.visible_instance_count==0,"Batched particles can be turned off")
+    for particle in burst.particles: check(not particle.node.visible,"Particles can be turned off")
     check(not world.ambient_motes.visible,"Ambient particles can be turned off")
     features.set_effect("Lasers",0); world.update_ambient_particles(0)
     for stream in world.ambient_streaks: check(not stream.visible,"Laser streams can be turned off independently")
@@ -26,7 +26,9 @@ func run():
     check(is_equal_approx(float(world.cover_material.get_shader_parameter("brightness")),.35),"Background brightness reaches shader")
     features.set_effect("Hit flashes",.5); features.set_effect("Particles",.5); features.set_effect("Lasers",.5)
     world.animate_effects(.01); world.update_ambient_particles(0)
-    var visible_count=burst.particle_batch.multimesh.visible_instance_count
+    var visible_count=0
+    for particle in burst.particles:
+        if particle.node.visible: visible_count+=1
     check(visible_count==burst.particles.size()/2,"Particle density follows intensity")
     check(world.ambient_streaks[0].visible,"Restoring laser intensity shows streams again")
     var prefs=ConfigFile.new(); prefs.load("user://preferences.cfg")
