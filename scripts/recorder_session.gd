@@ -10,6 +10,8 @@ var use_range=false
 var replace=false
 var loop_takes=false
 var pre_roll=0
+# Seconds of play-in before the chart runs out when recording resumes after a pause or CORRECT.
+var resume_lead=2
 var quantize="free"
 var division=4
 var pass_kind="all"
@@ -38,6 +40,7 @@ var config: Dictionary={}
 
 func _ready() -> void:
     pre_roll=clampi(int(game.prefs.get_value("recorder","pre_roll",0)),0,4)
+    resume_lead=clampi(int(game.prefs.get_value("recorder","resume_lead",2)),1,3)
     quantize=str(game.prefs.get_value("recorder","quantize","free"))
     if quantize not in ["free","soft","strict"]: quantize="free"
     division=clampi(int(game.prefs.get_value("recorder","division",4)),1,8)
@@ -314,6 +317,7 @@ func show_setup(global_only: bool=false) -> void:
         toggle(session,"LOOP TAKES · stop to review up to 32 attempts",loop_takes,func(on): loop_takes=on)
     var timing=setup_group(box,"TIMING & GRID")
     choice(timing,"Audible pre-roll · bars of 4 beats",["OFF","1 BAR","2 BARS","3 BARS","4 BARS"],pre_roll,func(i): pre_roll=i; persist("pre_roll",i))
+    choice(timing,"Resume lead-in · play-in before the chart runs out",["1 SECOND","2 SECONDS","3 SECONDS"],resume_lead-1,func(i): resume_lead=i+1; persist("resume_lead",i+1))
     choice(timing,"Recording timing",["FREE · preserve your timing","SOFT SNAP · 50% toward grid","STRICT SNAP · align to grid"],["free","soft","strict"].find(quantize),func(i): quantize=["free","soft","strict"][i]; persist("quantize",quantize))
     choice(timing,"Grid subdivision per beat",["1 · quarter notes","2 · eighth notes","4 · sixteenth notes","8 · thirty-second notes"],[1,2,4,8].find(division),func(i): division=[1,2,4,8][i]; persist("division",division))
     if not global_only:

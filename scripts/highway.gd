@@ -96,6 +96,11 @@ func resize_viewport() -> void:
 	if viewport: viewport.size = Vector2i(maxi(1,roundi(size.x)),maxi(1,roundi(size.y)))
 
 func _process(_delta: float) -> void:
+	if viewport and game.automatic_render_quality() and game.mode=="play" and game.countdown<=0 and not (game.gameplay_loading and game.gameplay_loading.preparing):
+		var target=float(game.display_refresh_rate())
+		if Engine.max_fps>0: target=minf(target,float(Engine.max_fps))
+		var quality=game.frame_quality.sample(_delta,target,game.render_scale())
+		if not is_equal_approx(viewport.scaling_3d_scale,quality): viewport.scaling_3d_scale=quality
 	if viewport:
 		viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED if game.mode in ["menu","guide","library","editor"] else SubViewport.UPDATE_ALWAYS
 	if screen: screen.visible = game.mode not in ["guide","menu","library"]

@@ -402,6 +402,10 @@ func build_gameplay(items: VBoxContainer,browsing: VBoxContainer) -> void:
     match_display.button_pressed=game.frame_rate_setting()<=0; fps.editable=not match_display.button_pressed
     connect_switch(match_display,func(on): fps.editable=not on; game.change_frame_rate(0 if on else roundi(fps.value)))
     fps.value_changed.connect(func(v): if not match_display.button_pressed: game.change_frame_rate(roundi(v)))
+    var automatic_quality=Switch.new()
+    add_control(row(items,"Automatic 3D quality","Adjust highway resolution to sustain frame rate. UI stays sharp."),automatic_quality,152)
+    automatic_quality.button_pressed=game.automatic_render_quality()
+    connect_switch(automatic_quality,game.change_automatic_render_quality)
     # Highway render resolution: three choices, the current one highlighted.
     var resolution=row(items,"Highway resolution","Lower is a little softer, but smoother on phones.")
     var choices=HBoxContainer.new(); choices.add_theme_constant_override("separation",10); add_control(resolution,choices,330)

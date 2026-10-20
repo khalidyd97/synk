@@ -107,6 +107,7 @@ func _ready() -> void:
         tool_buttons[kind]=b
     action(rail,"UNDO",0,.64,1,.72,func(): game.document.undo(); game.refresh_editor())
     action(rail,"REDO",0,.74,1,.82,func(): game.document.redo(); game.refresh_editor())
+    action(rail,"STAMPS",0,.835,1,.89,open_stamps)
     action(rail,"DELETE",0,.90,1,.98,delete_selection,"danger")
     game.timeline=Control.new(); game.timeline.set_script(load("res://scripts/timeline.gd")); game.timeline.game=game
     place(game.timeline,self,.16,.19,.765,.91)
@@ -151,12 +152,13 @@ func _ready() -> void:
     range_panel=Control.new(); place(range_panel,inspector,0,.11,1,.88)
     range_info=caption(range_panel,"",.06,0,.94,.19,17)
     range_info.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
-    action(range_panel,"COPY RANGE",.06,.21,.94,.29,copy_range,"primary")
-    action(range_panel,"DUPLICATE AFTER",.06,.32,.94,.40,func(): duplicate_range(false))
-    range_paste_button=action(range_panel,"PASTE AT PLAYHEAD",.06,.43,.94,.51,paste_range)
-    action(range_panel,"TRANSFORM",.06,.54,.94,.62,func(): game.features.open_tools("Arrange"))
-    group_move_button=action(range_panel,"MOVE GROUP",.06,.65,.94,.73,func(): game.timeline.toggle_group_move())
-    action(range_panel,"CLEAR SELECTION",.06,.75,.94,.84,func(): game.timeline.clear_range(); set_tool("select"))
+    action(range_panel,"COPY RANGE",.06,.21,.94,.28,copy_range,"primary")
+    action(range_panel,"DUPLICATE AFTER",.06,.30,.94,.37,func(): duplicate_range(false))
+    range_paste_button=action(range_panel,"PASTE AT PLAYHEAD",.06,.39,.94,.46,paste_range)
+    action(range_panel,"SAVE AS STAMP",.06,.48,.94,.55,func(): preload("res://scripts/pattern_stamps.gd").save_range(game))
+    action(range_panel,"TRANSFORM",.06,.57,.94,.64,func(): game.features.open_tools("Arrange"))
+    group_move_button=action(range_panel,"MOVE GROUP",.06,.66,.94,.73,func(): game.timeline.toggle_group_move())
+    action(range_panel,"CLEAR SELECTION",.06,.75,.94,.83,func(): game.timeline.clear_range(); set_tool("select"))
     var range_help=caption(range_panel,"Copy, move the playhead, then use PASTE below the timeline. Copies keep timing, paths and directions.",.06,.86,.94,1.04,13)
     range_help.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
     game.status=caption(self,"",.025,.078,.80,.10,12)
@@ -294,6 +296,8 @@ func delete_selection() -> void:
     else:
         game.document.delete(); game.refresh_editor()
 
+func open_stamps() -> void:
+    var popup=preload("res://scripts/pattern_stamps.gd").new(); popup.game=game; game.ui.add_child(popup)
 func copy_range() -> void:
     var timeline=game.timeline
     timeline.collect_range()

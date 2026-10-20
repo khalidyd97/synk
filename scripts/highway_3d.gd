@@ -184,6 +184,8 @@ func _ready() -> void:
 	build_cover_backdrop()
 	build_ambient_particles()
 	rail_atmosphere=preload("res://scripts/stage_rail_effects.gd").new(); rail_atmosphere.world=self; add_child(rail_atmosphere)
+	# Recorder aids: beat grid and waveform lane (record_aids.gd).
+	var aids=preload("res://scripts/record_aids.gd").new(); aids.world=self; add_child(aids)
 
 func build_cover_backdrop() -> void:
 	# Child of the camera so it always fills the view; drawn first so the highway blends over it.
@@ -817,7 +819,20 @@ func update_multiplier_wave(delta: float) -> void:
 		gold_age = -1.0
 		for node in [gold_wave, gold_bar]: node.visible = false
 
+# Resume lead-in marker: a bright line across the highway where the chart runs out of notes.
+var ready_marker: MeshInstance3D
+func update_ready_marker() -> void:
+	var at: float = float(game.get("ready_point")) if game.get("ready_point") != null else -1.0
+	var show = game.mode == "record" and at >= 0.0
+	if show and ready_marker == null:
+		var m = PlaneMesh.new(); m.size = Vector2(HIGHWAY_HALF_WIDTH * 2.0, .35)
+		var mat = material(Color("ffd257"), .85); mat.render_priority = 4
+		ready_marker = mesh_node(m, self, mat)
+	if ready_marker:
+		ready_marker.visible = show
+		if show: ready_marker.position = Vector3(0, .06, (render_time() - at) * travel_speed())
 func update_play_aids(delta: float) -> void:
+	update_ready_marker()
 	var playing = game.mode == "play" or (game.mode == "paused" and game.paused_mode == "play")
 	var counting = game.mode == "play" and game.countdown > 0
 	var show_bands = counting and bool(extras_setting("window_preview", true)) and game.get("extras") != null

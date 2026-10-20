@@ -47,7 +47,16 @@ func _notification(what: int) -> void:
 
 # Circular outline, inset by `inset` pixels, closed (last point repeats the first).
 func radius() -> float: return minf(size.x, size.y) * .5
+var outline_cache: Dictionary={}
+var outline_size=Vector2(-1,-1)
 func hex(inset: float) -> PackedVector2Array:
+	if outline_size!=size:
+		outline_cache.clear(); outline_size=size
+	if outline_cache.has(inset): return outline_cache[inset]
+	var points=build_outline(inset)
+	outline_cache[inset]=points
+	return points
+func build_outline(inset: float) -> PackedVector2Array:
 	var c = size * .5; var r = radius() - inset
 	var pts = PackedVector2Array()
 	for i in 97: pts.append(c + Vector2.from_angle(TAU * i / 96.0) * r)
@@ -73,12 +82,14 @@ func _process(delta: float) -> void:
 		emit_spark()
 	for s in sparks:
 		s.pos += s.vel * delta; s.vel.y += 260.0 * delta; s.vel *= pow(.35, delta); s.life -= delta
-	sparks = sparks.filter(func(s): return s.life > 0.0)
+	for i in range(sparks.size()-1,-1,-1):
+		if sparks[i].life<=0.0: sparks.remove_at(i)
 	if randf() < delta * 6.0:
 		var right = randf() < .5
 		glitches.append({"y": randf_range(.15, .85), "x": (1.0 + randf_range(.02, .1)) if right else randf_range(-.1, -.02), "w": randf_range(10, 46), "life": randf_range(.08, .3)})
 	for g in glitches: g.life -= delta
-	glitches = glitches.filter(func(g): return g.life > 0.0)
+	for i in range(glitches.size()-1,-1,-1):
+		if glitches[i].life<=0.0: glitches.remove_at(i)
 	queue_redraw()
 
 func _draw() -> void:
@@ -88,8 +99,7 @@ func _draw() -> void:
 	var fill = inner.duplicate(); fill.remove_at(fill.size() - 1)
 	if kind == "play":
 		draw_note_button()
-		fill = PackedVector2Array()
-		for i in 96: fill.append(size * .5 + Vector2.from_angle(TAU * i / 96.0) * radius())
+		fill = hex(0).slice(0,96)
 	else:
 		draw_sequencer_pad()
 		fill = PackedVector2Array()
