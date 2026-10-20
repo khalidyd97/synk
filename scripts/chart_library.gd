@@ -13,7 +13,7 @@ var message_label: Label
 var filter_buttons: Dictionary={}
 var library_filter="all"
 var selected_id=""
-var selected_variant="original"
+var selected_variant=""
 var entries: Array=[]
 var summaries: Dictionary={}
 var cache: Dictionary={}
@@ -31,7 +31,11 @@ var edit_button: Button
 var new_button: Button
 var delete_button: Button
 var empty: Label
-var version_popup: PopupMenu
+var level_popup: Control
+var level_input: Control
+var level_title: Label
+var level_hint: Label
+var level_action="editor"
 var pending_action=""
 var pending_id=""
 var pending_variant=""
@@ -132,21 +136,20 @@ func _ready() -> void:
     edit_button.material.set_shader_parameter("middle_color",Vector3(.65,.10,.94))
     message_label=label(panel,"Continue your draft or record a new take",24,584,528,20,11,Color("aaa8c1"),p)
     message_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-    version_popup=PopupMenu.new(); add_child(version_popup); version_popup.id_pressed.connect(create_version)
-    version_popup.add_theme_font_size_override("font_size",22)
-    version_popup.add_theme_constant_override("v_separation",16)
     recent=game.prefs.get_value("chart_library","recent",{})
-    build_confirm(); refresh()
+    build_confirm(); build_level_popup(); refresh()
     visibility_changed.connect(func():
-        if not is_visible_in_tree(): pending_action="")
+        if not is_visible_in_tree(): pending_action=""
+        elif stale: refresh())
 
 func layout_cards() -> void:
     if not canvas: return
     var available=game.safe_rect_for(self)
     var k=maxf(.1,minf(available.size.x/1456.0,available.size.y/819.0)); canvas.position=available.position; canvas.scale=Vector2.ONE*k; canvas.size=available.size/k
 
+const Levels=preload("res://scripts/chart_levels.gd")
 func chart_file(id: String,variant: String) -> String:
-    return "user://charts/"+id+("" if variant=="original" else "_"+variant)+".json"
+    return Levels.chart_path(id,variant)
 func draft_file(id: String,variant: String) -> String:
     return "user://drafts/"+id+"_"+variant+".json"
 func read_chart(path: String,id: String) -> Dictionary:
@@ -162,9 +165,8 @@ func read_chart(path: String,id: String) -> Dictionary:
     cache[path]={"stamp":stamp,"data":data}; return data
 func summary(id: String) -> Dictionary:
     var result={"versions":[],"draft":false,"charted":false,"modified":0}
-    for variant in ["original","easy","normal","hard","expert"]:
+    for variant in Levels.all_keys():
         var saved=read_chart(chart_file(id,variant),id); var draft=read_chart(draft_file(id,variant),id)
-        if id=="eclipse" and variant=="original" and saved.is_empty(): saved={"notes":SynkChart.demo(),"time":0}
         var live=str(game.song.id)==id and game.features.current_variant==variant and game.document.dirty
         if saved.is_empty() and draft.is_empty() and not live: continue
         var notes: Array=game.document.notes if live else draft.get("notes",saved.get("notes",[]))
@@ -184,8 +186,13 @@ func matches(entry: Dictionary) -> bool:
     if library_filter=="new" and not data.versions.is_empty(): return false
     var query=search.text.strip_edges().to_lower()
     return query.is_empty() or (str(entry.title)+" "+str(entry.artist)+" "+" ".join(data.versions.map(func(v): return str(v.key)))).to_lower().contains(query)
+# While this screen is hidden (e.g. switching songs in the song list), refreshes are
+# postponed and done once when it opens, so they never stall another screen.
+var stale=false
 func refresh() -> void:
     if not grid or not game.lobby: return
+    if not is_visible_in_tree() and is_inside_tree() and grid.get_child_count()>0: stale=true; return
+    stale=false
     cache.clear()
     entries=game.lobby.all_entries(); summaries.clear()
     for entry in entries: summaries[entry.id]=summary(entry.id)
@@ -211,10 +218,11 @@ func refresh() -> void:
     update_selection()
 func select_entry(id: String) -> void:
     pending_action=""; selected_id=id
-    selected_variant=str(game.prefs.get_value("charts",id,"original"))
+    selected_variant=str(game.prefs.get_value("charts",id,""))
     update_selection()
     UiMotion.reveal(panel)
 func update_selection() -> void:
+    if stale or (not is_visible_in_tree() and is_inside_tree() and grid and grid.get_child_count()>0): stale=true; return
     for row in chart_cards: row.set_selected(row.entry.id==selected_id)
     update_panel()
 func update_panel() -> void:
@@ -227,20 +235,20 @@ func update_panel() -> void:
     cover.texture=game.lobby.cover_for(selected_id); game.lobby.style_cover(cover,selected_id,18)
     var found=data.versions.any(func(v): return v.key==selected_variant)
     if not found:
-        selected_variant=data.versions[0].key if not data.versions.is_empty() else "original"
+        selected_variant=data.versions[0].key if not data.versions.is_empty() else ""
     for child in versions.get_children(): versions.remove_child(child); child.queue_free()
     var current: Dictionary={}
     for version in data.versions:
         var key: String=version.key
         var n=ButtonArt.new(); n.menu_motion=true; versions.add_child(n); n.custom_minimum_size=Vector2(0,76)
-        n.text=key.capitalize()+"   ·   %d notes   ·   " % version.notes.size()+("Unsaved edits" if version.live else ("Draft saved" if version.draft else "Saved"))
+        n.text=Levels.label(key)+"   ·   %d notes   ·   " % version.notes.size()+("Unsaved edits" if version.live else ("Draft saved" if version.draft else "Saved"))
         n.caption_size=19; n.set_selected(key==selected_variant)
         n.pressed.connect(func(): selected_variant=key; update_panel())
         if key==selected_variant: current=version
     if data.versions.is_empty():
-        var hint=Label.new(); versions.add_child(hint); hint.text="No charts yet. Record or edit to begin."; hint.add_theme_font_size_override("font_size",16)
+        var hint=Label.new(); versions.add_child(hint); hint.text="No charts yet. Record or edit to begin, and choose its level."; hint.add_theme_font_size_override("font_size",16)
     var notes: Array=current.get("notes",[])
-    chart_label.text=selected_variant.to_upper()+" CHART" if not current.is_empty() else "NEW ORIGINAL CHART"
+    chart_label.text=Levels.label(selected_variant).to_upper()+" CHART" if not current.is_empty() else "NEW CHART"
     var holds=notes.filter(func(n): return n.kind in ["hold","slide"]).size()
     var flicks=notes.filter(func(n): return n.kind=="flick").size()
     stats_label.text="%d Notes   ·   %d Holds   ·   %d Flicks" % [notes.size(),holds,flicks]
@@ -254,23 +262,46 @@ func update_card_metadata(_id: String) -> void:
     if grid: refresh()
 func set_message(value: String) -> void:
     game.tell(value)
-func show_new_version() -> void:
-    version_popup.clear()
-    var data=summary(selected_id)
-    for i in game.features.VARIANTS.size():
-        var key: String=game.features.VARIANTS[i]
-        if not data.versions.any(func(v): return v.key==key): version_popup.add_item(key.capitalize(),i)
-    if version_popup.item_count==0: set_message("All five chart versions exist. Select one to continue."); return
-    # Opens under + NEW, right-aligned to it, at least as wide as the button.
-    var k=canvas.scale.x
-    version_popup.popup()
-    version_popup.size=Vector2i(maxi(version_popup.size.x,roundi(new_button.size.x*k*1.6)),version_popup.size.y)
-    var right=new_button.get_screen_position().x+new_button.size.x*k
-    version_popup.position=Vector2i(roundi(right-version_popup.size.x),roundi(new_button.get_screen_position().y+new_button.size.y*k+6))
-func create_version(index: int) -> void:
-    selected_variant=game.features.VARIANTS[index]; open_selected("editor")
+# Creating a chart asks for its level (intensity 1-30) in a small popup.
+func show_new_version() -> void: ask_level("editor")
+func ask_level(action: String) -> void:
+    if selected_entry().is_empty(): return
+    level_action=action
+    var taken=Levels.existing(selected_id)
+    var suggestion=1
+    while suggestion<Levels.MAX_LEVEL and Levels.key(suggestion) in taken: suggestion+=1
+    level_input.value=suggestion
+    level_title.text="Chart level for “%s”" % str(selected_entry().title)
+    update_level_hint(); level_popup.visible=true
+func update_level_hint() -> void:
+    var variant=Levels.key(roundi(level_input.value))
+    var exists=Levels.existing(selected_id).has(variant)
+    if exists: level_hint.text="Lv %d already has a chart. CREATE opens it." % roundi(level_input.value)
+    else: level_hint.text="1 is the gentlest, %d the most intense." % Levels.MAX_LEVEL
+func confirm_level() -> void:
+    level_popup.visible=false
+    selected_variant=Levels.key(roundi(level_input.value)); open_selected(level_action)
+func build_level_popup() -> void:
+    level_popup=Control.new(); fraction_place(level_popup,canvas,0,0,1,1); level_popup.mouse_filter=Control.MOUSE_FILTER_STOP
+    var dim=ColorRect.new(); fraction_place(dim,level_popup,0,0,1,1); dim.color=Color(0.006,0.006,0.006,.72); dim.mouse_filter=Control.MOUSE_FILTER_IGNORE
+    var card=Panel.new(); fraction_place(card,level_popup,.3,.24,.7,.76)
+    var style=StyleBoxFlat.new(); style.bg_color=Color(.04,.04,.04,.97); style.border_color=Color(1,1,1,.12)
+    style.set_border_width_all(1); style.set_corner_radius_all(24); style.shadow_color=Color(0,0,0,.55); style.shadow_size=24
+    card.add_theme_stylebox_override("panel",style)
+    fraction_label(card," ".join("CHART LEVEL".split("")),.08,.06,.92,.16,14,Color("50daec")).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    level_title=fraction_label(card,"",.06,.16,.94,.30,22); level_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    level_input=preload("res://scripts/settings_screen.gd").Stepper.new(1,Levels.MAX_LEVEL,1,1,"",0)
+    fraction_place(level_input,card,.18,.34,.82,.56)
+    level_input.readout.add_theme_font_size_override("font_size",40)
+    level_input.value_changed.connect(func(_v): update_level_hint())
+    level_hint=fraction_label(card,"",.06,.58,.94,.70,16,Color("a7aac6")); level_hint.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    fraction_button(card,"CREATE",.08,.76,.58,.93,confirm_level,"primary")
+    fraction_button(card,"CANCEL",.62,.76,.92,.93,func(): level_popup.visible=false,"nav")
+    level_popup.visible=false
 func open_selected(action: String) -> void:
     if selected_entry().is_empty() or not pending_action.is_empty(): return
+    # A song with no chart picked yet asks for the new chart's level first.
+    if not Levels.is_level(selected_variant): ask_level(action); return
     pending_id=selected_id; pending_variant=selected_variant
     var index=int(selected_entry().index)
     if str(game.song.id)==pending_id and game.loading_song_index<0:
@@ -328,7 +359,7 @@ func ask_delete(entry: Dictionary) -> void:
     var built_in=str(entry.id)=="eclipse"
     var has_chart=FileAccess.file_exists(chart_file(str(entry.id),selected_variant)) or FileAccess.file_exists(draft_file(str(entry.id),selected_variant))
     confirm_title.text="Delete \u201c%s\u201d?" % str(entry.title)
-    if built_in: confirm_body.text="Delete chart removes this version and its draft. Deleting Original restores the built-in chart. This can't be undone."
+    if built_in: confirm_body.text="Delete chart removes this level's chart and its draft. This can't be undone."
     else: confirm_body.text="Delete chart removes only this version and its draft. Delete song removes the audio and all its chart versions. This can't be undone."
     confirm_chart_button.disabled=not has_chart
     confirm_song_button.visible=not built_in
@@ -345,7 +376,7 @@ func finish_delete(whole_song: bool) -> void:
                 if FileAccess.file_exists(base+suffix): DirAccess.remove_absolute(base+suffix)
         if str(game.song.id)==id and game.features.current_variant==variant:
             game.document.dirty=false; game.features.load_variant()
-        if variant=="original" and game.song_metadata.has(id):
+        if Levels.existing(id).is_empty() and game.song_metadata.has(id):
             game.song_metadata[id].has_chart=false; game.song_metadata[id].notes=[]; game.song_metadata[id].note_count=0
         game.tell("Chart version deleted.")
     cache.clear(); refresh(); game.lobby.refresh()

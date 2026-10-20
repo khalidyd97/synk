@@ -2,7 +2,9 @@ shader_type spatial;
 render_mode unshaded, blend_add, depth_draw_never, cull_disabled, fog_disabled;
 
 uniform vec3 tint : source_color = vec3(0.65, 0.4, 1.0);
-uniform float animation_time = 0.0;
+// One global clock for every highway shader (set once per frame by highway_3d.gd).
+global uniform float synk_time;
+#define animation_time synk_time
 uniform float strength = 1.0;
 
 // Fades toward the far end of the highway (world z -60), matching track_surface.gdshader.

@@ -10,6 +10,7 @@ var gateway: Control
 var browser: Control
 var browser_visibility: Array=[]
 var gateway_entrance_items: Array=[]
+var launch_items: Array=[]
 var home_video: VideoStreamPlayer
 var background_video: VideoStreamPlayer
 var title_label: Label
@@ -99,11 +100,11 @@ func style_cover(rect: TextureRect,id: String,radius: float) -> void:
     rect.material.set_shader_parameter("secondary",Color.from_hsv(fmod(hue+.22,1),.8,.95))
     rect.material.set_shader_parameter("rect_size",rect.size); rect.material.set_shader_parameter("radius",radius)
 func has_variant(id: String,variant: String) -> bool:
-    if id=="eclipse" and variant=="original": return true
-    return FileAccess.file_exists("user://charts/"+id+("" if variant=="original" else "_"+variant)+".json")
+    return preload("res://scripts/chart_levels.gd").is_level(variant) and FileAccess.file_exists(preload("res://scripts/chart_levels.gd").chart_path(id,variant))
+func levels_for(id: String) -> Array: return preload("res://scripts/chart_levels.gd").existing(id)
 func playable_variant(id: String,variant: String) -> bool:
-    if id=="eclipse" and variant=="original": return true
-    var path="user://charts/"+id+("" if variant=="original" else "_"+variant)+".json"
+    if not preload("res://scripts/chart_levels.gd").is_level(variant): return false
+    var path=preload("res://scripts/chart_levels.gd").chart_path(id,variant)
     if not FileAccess.file_exists(path): return false
     var data=JSON.parse_string(FileAccess.get_file_as_string(path))
     if not data is Dictionary or str(data.get("song_id",""))!=id: return false
@@ -113,12 +114,10 @@ func entry_for(source: Dictionary,index: int) -> Dictionary:
     var id=str(source.id); var meta: Dictionary=game.song_metadata.get(id,{})
     var duration=float(meta.get("duration",game.length() if id==str(game.song.id) else 0.0))
     if id=="eclipse" and game.demo_stream: duration=game.demo_stream.get_length()
-    var notes: Array=meta.get("notes",[])
-    if id=="eclipse": notes=SynkChart.demo()
-    var signature=hash(notes)
-    if not ratings.has(id) or ratings[id].signature!=signature:
-        var level=int(preload("res://scripts/difficulty_analysis.gd").analyze(notes,maxf(duration,1)).level)
-        ratings[id]={"signature":signature,"rating":clampi(ceili(level/6.0),0,5)}
+    # Row intensity bars follow the song's highest chart level (Lv 30 fills all five).
+    var song_levels=levels_for(id)
+    var top=preload("res://scripts/chart_levels.gd").number(song_levels[-1]) if not song_levels.is_empty() else 0
+    ratings[id]={"signature":top,"rating":clampi(ceili(top/6.0),0,5)}
     var accent=game.cover_palette_for_id(id).notes[0] if id=="eclipse" or game.has_custom_cover(id) else Color.from_hsv(float(posmod(id.hash(),360))/360.0,.65,.95)
     return {"index":index,"id":id,"title":display_title(str(source.title)),"artist":artist_line(source),"genre":str(source.get("genre","")),"duration":duration,"bpm":float(source.get("bpm",128)),"rating":ratings[id].rating,"accent":accent}
 # "Artist · Album" when the song has details; otherwise the album or library name.
@@ -261,20 +260,43 @@ func build_gateway() -> void:
     var logo=LobbyWordmark.new(); design_rect(logo,gateway,460,40,1000,250)
     logo.name="LobbyWordmark"
     var safe_buttons=game.safe_parent("SafeLobbyButtons",gateway)
-    var play=lobby_card(safe_buttons,560,330,360,420,"play","01 · PLAY","Play","Find your track and chase your best score.",Color("50daec"),[Color("38baff"),Color("753cf0")],"play")
+    # Two round neon portals drawn in code (hex_portal_button.gd).
+    var Portal=preload("res://scripts/hex_portal_button.gd")
+    var play=Portal.new(); play.kind="play"; play.caption="PLAY"; design_rect(play,safe_buttons,370,300,380,380)
     play.name="PlayCard"; play.tooltip_text="Choose a song and play"
-    play.pressed.connect(show_play_browser)
-    var create=lobby_card(safe_buttons,1000,330,360,420,"create","02 · CREATE","Create charts","Build the rhythm. Import music, record and edit charts.",Color("d77cff"),[Color("8a4dff"),Color("e04fb0")],"confirm")
+    play.activated.connect(func(): show_play_browser(false))  # the portal warp is the transition
+    var create=Portal.new(); create.kind="create"; create.caption="CREATE CHARTS"; design_rect(create,safe_buttons,1170,300,380,380)
     create.name="CreateCard"; create.tooltip_text="Edit charts, import music, and record notes"
-    create.pressed.connect(func(): game.open_editor())
+    create.activated.connect(func(): game.open_editor())
     var settings=preload("res://scripts/gear_button.gd").new(); design_rect(settings,safe_buttons,1756,32,120,120)
     settings.name="SettingsButton"; settings.accent=Color("bcb2d4")
     settings.pressed.connect(func(): game.open_lobby_settings())
     var footer=text(gateway,"Play your charts. Create your sound.",.2,.885,.8,.94,22,Color("b4b6d2"))
     footer.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    # Launch entrance (after the start-up intro): node, offset it arrives from, delay, bounce.
+    launch_items=[[logo,Vector2(0,-140),0.0,true],[play,Vector2(-520,0),.14,false],[create,Vector2(520,0),.22,false],
+        [settings,Vector2(60,0),.6,false],[footer,Vector2(0,24),.66,false]]
     gateway_entrance_items=[{"node":logo,"delay":.02},{"node":play,"delay":.10},{"node":create,"delay":.16},{"node":footer,"delay":.24}]
     gateway.visible=false
 
+# Plays every time the app launches, as the start-up intro clears: the wordmark drops in with
+# a bounce, PLAY sweeps in from the left and CREATE CHARTS from the right, then the labels,
+# settings and footer follow.
+func play_launch_entrance() -> void:
+    if not gateway or not gateway.visible: return
+    for item in launch_items:
+        var node: Control=item[0]; var from: Vector2=item[1]; var delay: float=item[2]; var bounce: bool=item[3]
+        if not is_instance_valid(node): continue
+        var previous: Variant=node.get_meta("reveal_tween") if node.has_meta("reveal_tween") else null
+        if previous is Tween and previous.is_running(): previous.kill()
+        var home=node.position
+        node.position=home+from; node.modulate.a=0.0
+        node.pivot_offset=node.size*.5; node.scale=Vector2.ONE*(.86 if not bounce else 1.0)
+        var tween=node.create_tween().set_parallel(true)
+        tween.tween_property(node,"position",home,.62 if bounce else .55).set_delay(delay).set_trans(Tween.TRANS_BACK if bounce else Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+        tween.tween_property(node,"modulate:a",1.0,.35).set_delay(delay)
+        tween.tween_property(node,"scale",Vector2.ONE,.5).set_delay(delay).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+        node.set_meta("reveal_tween",tween)
 func show_gateway() -> void:
     if not gateway or gateway.visible: return
     if is_visible_in_tree(): UiMotion.back(self)
@@ -292,8 +314,8 @@ func show_gateway() -> void:
     UiMotion.reveal(gateway)
     for item in gateway_entrance_items: UiMotion.reveal(item.node,item.delay)
 
-func show_play_browser() -> void:
-    UiMotion.transition(self,.36)
+func show_play_browser(slide: bool=true) -> void:
+    if slide: UiMotion.transition(self,.36)
     if gateway: gateway.visible=false
     if background_video: background_video.paused=false
     if home_video: home_video.paused=true

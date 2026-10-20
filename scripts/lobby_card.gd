@@ -90,3 +90,7 @@ func draw_icon(center: Vector2, r: float) -> void:
 			var y = center.y + [-.55, .35, -.1][i] * r
 			var knob = StyleBoxFlat.new(); knob.bg_color = Color.WHITE; knob.set_corner_radius_all(roundi(r * .18))
 			draw_style_box(knob, Rect2(Vector2(x - r * .32, y - r * .17), Vector2(r * .64, r * .34)))
+
+# Hidden widgets stop their per-frame update (screens keep many of them alive offscreen).
+func _notification(what: int) -> void:
+	if what==NOTIFICATION_VISIBILITY_CHANGED or what==NOTIFICATION_READY: set_process(is_visible_in_tree())

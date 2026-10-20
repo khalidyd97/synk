@@ -185,7 +185,7 @@ func run() -> void:
 	game.start_game([auto_tap,auto_hold,auto_slide,auto_flick],true); game.countdown=0
 	check(game.auto_play and game.auto_play_hud.visible,"Auto Play is clearly marked as a preview")
 	game.song_time=1; game.update_autoplay()
-	check(game.live[0].done and game.score==200000,"Auto Play hits tap notes")
+	check(game.live[0].done and game.score==1000,"Auto Play hits tap notes")
 	game._process(.016)
 	check(game.displayed_score>0 and game.displayed_score<game.score,"Score rolls toward the earned value after a hit")
 	game.pointer_event(1,Vector2(.5,.765),true,false,false)
@@ -196,7 +196,7 @@ func run() -> void:
 	check(game.live[2].started and not game.live[2].done,"Auto Play follows slides to their end")
 	game.song_time=3.2; game.update_autoplay()
 	game.song_time=4; game.update_autoplay()
-	check(game.live.all(func(entry): return entry.done) and game.judged==5 and game.score==1000000,"Auto Play completes every note type and both hold endpoints")
+	check(game.live.all(func(entry): return entry.done) and game.judged==5 and game.score==5000,"Auto Play completes every note type and both hold endpoints")
 	game._audio_finished(); game._process(0.0)
 	check(game.finishing and game.finish_overlay.visible and game.mode=="play" and not game.combo_hud.visible,"The song's end plays the finish animation first")
 	check(not game.hit_label.visible,"The last judgment is hidden during the finish")
@@ -355,7 +355,7 @@ func run() -> void:
 	game.start_game([SynkChart.note(1,5)])
 	game.countdown=0; game.song_time=1
 	game.pointer_event(1,Vector2(.5,.765),true,false,false)
-	check(game.score==1000000 and game.combo==1,"Perfect tap scores correctly")
+	check(game.score==1000 and game.combo==1,"Perfect tap scores correctly")
 	game._process(0.0)
 	check(game.combo_art_value==1 and game.combo_hud.get_child_count()==1 and game.combo_pulse>0,"Counter uses the digit art and pulses on a hit")
 	check(game.combo_digit_textures.size()==10 and game.combo_hud.get_child(0).texture==game.combo_digit_textures[1],"Combo uses the generated sprite atlas")
@@ -383,7 +383,7 @@ func run() -> void:
 	var hold_judgement=SynkChart.note(1,5,"hold"); hold_judgement.duration=1.0
 	game.start_game([hold_judgement]); game.countdown=0; game.song_time=1
 	game.pointer_event(1,Vector2(.5,.765),true,false,false)
-	check(game.judged==1 and not game.live[0].done and game.score==500000,"Hold start is judged independently")
+	check(game.judged==1 and not game.live[0].done and game.score==1000,"Hold start is judged independently")
 	var held_impact=world.bursts.back()
 	check(held_impact.sustain_entry==game.live[0],"Hold start keeps its own hit artwork alive")
 	world.animate_effects(.9)
@@ -397,17 +397,17 @@ func run() -> void:
 	game.song_time=1.5; game.pointers[1].position=Vector2(.9,.3); game.update_game()
 	check(not game.live[0].done and game.judged==1,"Hold trail drift is not judged")
 	game.song_time=2; game.update_game()
-	check(game.live[0].done and game.judged==2 and game.score==1000000,"Held tail receives its own judgement")
+	check(game.live[0].done and game.judged==2 and game.score==2000,"Held tail receives its own judgement")
 	world.animate_effects(.25)
 	check(not world.bursts.any(func(burst): return burst.node==held_impact.node),"Sustained hit fades after the hold ends")
 	game.start_game([hold_judgement]); game.countdown=0; game.song_time=1
 	game.pointer_event(2,Vector2(.5,.765),true,false,false)
 	game.song_time=1.5; game.pointer_event(2,Vector2(.5,.765),false,true,false)
-	check(game.live[0].done and game.judged==2 and game.score==500000,"Early hold release misses only the tail")
+	check(game.live[0].done and game.judged==2 and game.score==1000,"Early hold release misses only the tail")
 	var flick=SynkChart.note(1,5,"flick"); flick.direction=1
 	game.start_game([flick]); game.countdown=0; game.song_time=1
 	game.pointer_event(1,Vector2(.5,.765),true,false,false); game.pointer_event(1,Vector2(.6,.765),false,true,false)
-	check(game.score==1000000,"Final flick motion judges on release")
+	check(game.score==1000,"Final flick motion judges on release")
 	var forgiving_slide=SynkChart.note(2,5,"slide")
 	forgiving_slide.duration=1.0; forgiving_slide.end_lane=9
 	game.start_game([forgiving_slide]); game.countdown=0; game.song_time=2.5
@@ -419,7 +419,7 @@ func run() -> void:
 	game.update_game()
 	check(not game.live[0].done,"Returning to the slide path remains active")
 	game.song_time=2.98; game.update_game()
-	check(game.live[0].done and game.score==1000000,"Recovered slide scores at the end")
+	check(game.live[0].done and game.score==1000,"Recovered slide scores at the end")
 	var early_slide=SynkChart.note(2,5,"slide")
 	early_slide.duration=1.0; early_slide.end_lane=5
 	game.start_game([early_slide]); game.countdown=0; game.song_time=2.9

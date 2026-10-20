@@ -10,6 +10,7 @@ var accent=Color("4bdaed")
 var hover_amount=0.0
 var press_amount=0.0
 var menu_motion=false
+var pulse=false   # primary buttons only: breathing glow plus a ring that ripples outward
 var motion: RefCounted
 func _ready() -> void:
     if menu_motion: motion=preload("res://scripts/menu_button_motion.gd").new()
@@ -51,8 +52,18 @@ func _draw() -> void:
             # Native gradient plate, clipped with the same rounded silhouette as the reference.
             style.bg_color=Color("753cf0") if not disabled else Color("232323")
             style.shadow_color=Color(.7,.1,.75,.24+hover_amount*.1+press_amount*.08); style.shadow_size=15
+            if pulse and not disabled:
+                var beat=.5+.5*sin(Time.get_ticks_msec()/1000.0*TAU/1.6)
+                style.shadow_size=15+roundi(10*beat); style.shadow_color.a+=.12*beat
         elif amount>.02:
             style.shadow_color=Color(accent,amount*.15); style.shadow_size=8
+        if primary and pulse and not disabled:
+            # A soft outline ring leaves the button every 1.6 s and fades as it grows.
+            var phase=fmod(Time.get_ticks_msec()/1000.0,1.6)/1.6
+            var ring=StyleBoxFlat.new(); ring.draw_center=false; ring.set_border_width_all(2)
+            ring.set_corner_radius_all(16+roundi(phase*14))
+            ring.border_color=Color(Color("5fdcff").lerp(Color("e86bff"),phase),(1.0-phase)*.75)
+            draw_style_box(ring,Rect2(Vector2.ZERO,size).grow(phase*14))
         draw_style_box(style,Rect2(Vector2.ZERO,size))
         if press_amount>.01:
             var feedback=StyleBoxFlat.new(); feedback.set_corner_radius_all(16 if primary else 15)
@@ -70,6 +81,10 @@ func _draw() -> void:
     if not subtitle.is_empty(): y=size.y*.39+5
     draw_string(font,Vector2((size.x-width)*.5,y),caption,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,tint)
     if not subtitle.is_empty():
-        var small=font.get_string_size(subtitle,HORIZONTAL_ALIGNMENT_LEFT,-1,12).x
-        draw_string(font,Vector2((size.x-small)*.5,size.y*.74),subtitle,HORIZONTAL_ALIGNMENT_LEFT,-1,12,Color("b7b2cd") if not disabled else Color("57546a"))
+        var small=font.get_string_size(subtitle,HORIZONTAL_ALIGNMENT_LEFT,-1,15).x
+        draw_string(font,Vector2((size.x-small)*.5,size.y*.76),subtitle,HORIZONTAL_ALIGNMENT_LEFT,-1,15,Color("c9c4dd") if not disabled else Color("6f6c84"))
     if motion: draw_set_transform(Vector2.ZERO)
+
+# Hidden widgets stop their per-frame update (screens keep many of them alive offscreen).
+func _notification(what: int) -> void:
+    if what==NOTIFICATION_VISIBILITY_CHANGED or what==NOTIFICATION_READY: set_process(is_visible_in_tree())

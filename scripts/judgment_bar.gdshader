@@ -3,7 +3,9 @@ render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, fog_disabled;
 
 // A flat golden band across the highway where notes are hit. A faint sheen drifts across
 // it, and the near half is a touch brighter so the band reads as lit from the front.
-uniform float animation_time = 0.0;
+// One global clock for every highway shader (set once per frame by highway_3d.gd).
+global uniform float synk_time;
+#define animation_time synk_time
 uniform vec3 base_color : source_color = vec3(1.0, 0.86, 0.34);
 uniform vec3 sweep_color : source_color = vec3(1.0, 0.95, 0.72);
 

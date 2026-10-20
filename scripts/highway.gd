@@ -105,7 +105,7 @@ func _process(_delta: float) -> void:
 
 func depth(time: float) -> float: return (time-game.song_time)/game.note_travel_seconds()
 func project(lane: float, d: float) -> Vector2:
-	return world.camera.unproject_position(Vector3(world.lane_x(lane),.035,-d*world.TRACK_LENGTH))
+	return world.camera.unproject_position(Vector3(world.lane_x(lane),.035,-d*world.visible_length()))
 
 func touch_world_position(p: Vector2) -> Vector3:
 	var point=p*Vector2(viewport.size)

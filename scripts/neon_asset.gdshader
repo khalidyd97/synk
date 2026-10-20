@@ -8,7 +8,9 @@ uniform vec4 region = vec4(0.0, 0.0, 1.0, 1.0);
 uniform float opacity = 1.0;
 uniform bool recolor = false;
 uniform bool rail_warp = false;
-uniform float animation_time = 0.0;
+// One global clock for every highway shader (set once per frame by highway_3d.gd).
+global uniform float synk_time;
+#define animation_time synk_time
 uniform float motion = 0.0;
 uniform float glow_pulse = 0.0;
 uniform float desaturate = 0.0;
@@ -57,5 +59,5 @@ void fragment() {
 	ALBEDO *= 1.0 + glow_pulse * pulse;
 	float gray = dot(ALBEDO, vec3(0.299, 0.587, 0.114));
 	ALBEDO = mix(ALBEDO, vec3(gray * 0.52), desaturate);
-	ALPHA = sample_color.a * mirror_fade * smoothstep(0.025, 0.13, peak) * opacity * ghost_fade * smoothstep(-60.0, -40.0, world_z);
+	ALPHA = sample_color.a * mirror_fade * smoothstep(0.025, 0.13, peak) * opacity * ghost_fade * smoothstep(-60.0, -55.0, world_z);
 }

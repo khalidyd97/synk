@@ -99,7 +99,7 @@ var timing_ms = 0.0
 var bluetooth_mode = false
 var bluetooth_latency_ms = 180.0
 var note_speed = 1.0
-# "rectangle" or "circle"; chosen in Settings.
+# "rectangle", "circle" or "puck" (the purple glass puck); chosen in Settings.
 var note_shape = "circle"
 # Highway slope in degrees (Settings): low is flat and far-reaching, high looks down steeply.
 var highway_angle = 29.0
@@ -245,6 +245,25 @@ func apply_frame_rate() -> void:
 	var chosen=frame_rate_setting()
 	Engine.max_fps=display_refresh_rate() if chosen<=0 else chosen
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
+# Hit effect style (Settings > Visual effects > Hit effects): "classic" bursts or "bloom".
+const HIT_STYLES = ["classic","bloom"]
+var hit_style = "classic"
+func change_hit_style(value: String) -> void:
+	hit_style=value if value in HIT_STYLES else "classic"
+	prefs.set_value("effects","hit_style",hit_style); prefs.save("user://preferences.cfg")
+	if settings_panel: settings_panel.refresh()
+# Highway render resolution (Settings): the 3D highway is drawn at 100%, 85% or 75% of the
+# screen's resolution and scaled up. Lower is softer but much lighter on phone GPUs.
+const RENDER_SCALES = [1.0, .85, .75]
+func render_scale() -> float:
+	var value=float(prefs.get_value("gameplay","render_scale",1.0))
+	return value if RENDER_SCALES.has(value) else 1.0
+func apply_render_scale() -> void:
+	if field and field.viewport: field.viewport.scaling_3d_scale=render_scale()
+func change_render_scale(value: float) -> void:
+	prefs.set_value("gameplay","render_scale",value); prefs.save("user://preferences.cfg")
+	apply_render_scale()
+	if settings_panel: settings_panel.refresh()
 func change_frame_rate(value: int) -> void:
 	prefs.set_value("gameplay","frame_rate",value); prefs.save("user://preferences.cfg")
 	apply_frame_rate()
@@ -253,6 +272,15 @@ func _ready() -> void:
 	mouse_filter=Control.MOUSE_FILTER_IGNORE
 	process_priority=-10
 	apply_frame_rate()
+	# Start-up intro (scripts/app_intro.gd) on its own top layer, over the lobby; tap skips it.
+	var intro_layer=CanvasLayer.new(); intro_layer.layer=100; add_child.call_deferred(intro_layer)
+	var intro=preload("res://scripts/app_intro.gd").new(); intro_layer.add_child(intro)
+	intro.finished.connect(func(): intro_layer.queue_free())
+	# The lobby animates in as the intro clears, on every launch.
+	intro.revealing.connect(func(): if lobby: lobby.play_launch_entrance())
+	# Debug builds: a one-shot gameplay stress test, only when its trigger file exists.
+	if OS.is_debug_build() and FileAccess.file_exists("user://stress_test.json"):
+		var stress=preload("res://scripts/stress_test.gd").new(); stress.game=self; add_child.call_deferred(stress)
 	if OS.has_feature("android"):
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	prefs.load("user://preferences.cfg"); timing_ms = float(prefs.get_value("audio","offset_ms",0))
@@ -264,8 +292,10 @@ func _ready() -> void:
 	record_speed=float(prefs.get_value("editor","record_speed",1.0))
 	if record_speed not in RECORD_SPEEDS: record_speed=1.0
 	note_speed = clampf(float(prefs.get_value("gameplay","note_speed",1.0)), .5, 3.0)
+	hit_style = str(prefs.get_value("effects","hit_style","classic"))
+	if hit_style not in HIT_STYLES: hit_style="classic"
 	note_shape = str(prefs.get_value("gameplay","note_shape","circle"))
-	if note_shape not in ["rectangle","circle"]: note_shape="rectangle"
+	if note_shape not in ["rectangle","circle","puck"]: note_shape="rectangle"
 	highway_angle = clampf(float(prefs.get_value("gameplay","highway_angle",29.0)),18.0,44.0)
 	highway_style = str(prefs.get_value("highway","style","gold"))
 	if highway_style not in ["gold","neon"]: highway_style="gold"
@@ -294,6 +324,7 @@ func _ready() -> void:
 	add_child(UiSound.new())
 	audio.finished.connect(_audio_finished)
 	field = Control.new(); field.set_script(load("res://scripts/highway.gd")); field.game = self; add_child(field); field.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	apply_render_scale()
 	ui = Control.new(); ui.theme=preload("res://scripts/game_theme.gd").create(); add_child(ui); ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	apply_safe_area(); get_viewport().size_changed.connect(apply_safe_area)
 	toast_layer=preload("res://scripts/toast_notifications.gd").new()
@@ -486,7 +517,8 @@ func build_ui() -> void:
 	# Energy gauge and score stack on the left, next to the pause button.
 	score_panel=SynkScoreHud.new(); rect(score_panel,safe_parent("SafeScoreHud"),.1,.025,.34,.205)
 	hud=score_panel.score_label
-	combo_hud=Control.new(); rect(combo_hud,ui,.34,.335,.66,.445)
+	# The combo sits in the empty space to the right of the highway, clear of the notes.
+	combo_hud=Control.new(); rect(combo_hud,ui,.765,.24,.995,.45)
 	combo_hud.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	rank_hud=label(ui,"SS",.925,.015,.99,.12,46); rank_hud.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	rank_hud.add_theme_color_override("font_color",Color("b985ff")); rank_hud.add_theme_color_override("font_outline_color",Color("5921a8")); rank_hud.add_theme_constant_override("outline_size",5)
@@ -510,7 +542,9 @@ func build_ui() -> void:
 	countdown_ring=Control.new(); rect(countdown_ring,ui,.35,.24,.65,.59); countdown_ring.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	countdown_ring.draw.connect(draw_countdown_ring)
 	countdown_label=label(ui,"",.35,.28,.65,.55,128); countdown_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-	countdown_label.add_theme_color_override("font_outline_color",Color("5c23ac")); countdown_label.add_theme_constant_override("outline_size",10)
+	# Plain white numbers; a faint dark edge keeps them readable over bright highways.
+	countdown_label.add_theme_color_override("font_color",Color.WHITE)
+	countdown_label.add_theme_color_override("font_outline_color",Color(0,0,0,.35)); countdown_label.add_theme_constant_override("outline_size",6)
 	guide_button=button(safe_parent("SafeGuideButton"),"NOTE GUIDE",.84,.16,.98,.22,func(): set_mode("guide"))
 	guide_back=button(safe_parent("SafeGuideBack"),"‹  BACK",.40,.85,.60,.96,func(): set_mode("menu"),"nav")
 	# Song intro sits above the HUD and below the pause/results modal.
@@ -760,6 +794,8 @@ func reset_highway_look() -> void:
 	field.world.refresh_highway_look()
 	if settings_panel: settings_panel.refresh()
 
+# Circle and puck are both round artwork notes; they share sizes and placement.
+func round_notes() -> bool: return note_shape in ["circle","puck"]
 func change_note_shape(kind: String) -> void:
 	note_shape=kind
 	prefs.set_value("gameplay","note_shape",kind); prefs.save("user://preferences.cfg")
@@ -814,7 +850,7 @@ func primary_action() -> void:
 	elif mode=="results":
 		if practice.active: practice.restart()
 		else: start_game(last_play_notes,auto_play,last_section)
-	else: start_game(SynkChart.demo() if song.id=="eclipse" else saved_notes)
+	else: start_game(saved_notes)
 
 func start_autoplay() -> void:
 	var notes=baseline_notes()
@@ -824,7 +860,7 @@ func start_autoplay() -> void:
 	start_game(notes,true)
 
 func baseline_notes() -> Array:
-	return saved_notes if features.chart_exists() else (SynkChart.demo() if song.id=="eclipse" and features.current_variant=="original" else [])
+	return saved_notes if features.chart_exists() else []
 
 func audio_time() -> float:
 	return maxf(0,audio.get_playback_position()+(AudioServer.get_time_since_last_mix()-AudioServer.get_output_latency())*audio.pitch_scale)
@@ -897,6 +933,13 @@ func cycle_recorder_note_speed() -> void:
 	prefs.set_value("editor","note_speed",recorder_note_speed); prefs.save("user://preferences.cfg")
 	field.world.clear_notes()
 func length() -> float: return audio.stream.get_length()
+# Score: fixed points per judgement, not divided by the chart's note count, times a combo
+# multiplier that rises 0.1x for every full 100 combo (x1.1 at 100, x1.2 at 200, ...),
+# capped at x2.0. A miss resets the combo and so the multiplier.
+const NOTE_POINTS = {"PERFECT": 1000, "GREAT": 800, "GOOD": 500}
+func combo_multiplier() -> float: return minf(2.0, 1.0 + .1 * floori(combo / 100.0))
+func add_points(grade: String) -> void:
+	score += roundi(NOTE_POINTS.get(grade, 0) * combo_multiplier())
 func accuracy() -> float: return 100.0 if judged==0 else float(earned)/judged*100
 # Retire completed notes once; keep long sustains active until their tails finish.
 func first_live_index() -> int:
@@ -932,7 +975,7 @@ func pass_checkpoint(entry: Dictionary, lane: float) -> void:
 	judged+=1; earned+=1; judgment_counts.PERFECT+=1
 	combo+=1; combo_pulse=1.0; max_combo=maxi(combo,max_combo)
 	judgement="PERFECT"; flash=1; flash_lane=roundi(lane)
-	score=roundi(1000000*earned/maxi(1,total_judgements()))
+	add_points("PERFECT")
 
 func forfeit_checkpoints(entry: Dictionary) -> void:
 	# A missed or broken note also misses any dots it had not reached.
@@ -1102,7 +1145,7 @@ func draw_countdown_ring() -> void:
 		countdown_ring.draw_arc(center,radius,-PI*.5,-PI*.5+sweep,64,Color(color,layer[1]),layer[0],true)
 
 func intro_details() -> String:
-	var difficulty=features.current_variant.to_upper()
+	var difficulty=preload("res://scripts/chart_levels.gd").label(features.current_variant).to_upper()
 	var section="" if last_section=="full" else SECTION_NAMES[last_section]+"   •   "
 	return "%s%s   •   %d BPM%s" % [section,difficulty,roundi(float(chart_bpm())),"   •   AUTO PLAY" if auto_play else ""]
 
@@ -1521,12 +1564,10 @@ func _process(delta: float) -> void:
 	combo_hud.modulate=Color.WHITE.lerp(Color("fff0ff"),displayed_pulse)
 	combo_glow.set_shader_parameter("boost",displayed_pulse)
 	countdown_label.visible=counting and not intro_running
-	countdown_ring.visible=countdown_label.visible
+	countdown_ring.visible=false  # no ring around the countdown
 	if countdown_label.visible:
 		var number=ceili(resume_countdown if resume_countdown>0 else countdown)
 		if number!=countdown_shown and number>0: countdown_shown=number; UiSound.play(self,"count")
-		countdown_label.add_theme_color_override("font_color",SynkGameplayColors.resolve(self,"countdown",countdown_color(number).lightened(.45)))
-		countdown_ring.queue_redraw()
 	else: countdown_shown=-1
 	# The HUD fades in as the loading card clears the stationary highway.
 	var hud_alpha=stage_intro.entrance() if intro_running else 1.0
@@ -1553,6 +1594,9 @@ func _process(delta: float) -> void:
 		displayed_score=lerpf(displayed_score,float(score),clampf(delta*11.0,0,1))
 		if absf(displayed_score-score)<1.0: displayed_score=score
 	hud.text=format_score(roundi(displayed_score))
+	# The score counter glows gold while a combo multiplier is active, brighter as it climbs.
+	var boost=clampf((combo_multiplier()-1.0)/1.0,0.0,1.0) if mode in ["play","paused"] else 0.0
+	hud.add_theme_color_override("font_color",Color.WHITE.lerp(Color("ffd257"),.35+.65*boost) if boost>0 else Color.WHITE)
 	var current_rank=rank_name()
 	if current_rank!=shown_rank:
 		if mode=="play" and judged>0: rank_pulse=1.0
@@ -1601,7 +1645,7 @@ func has_active_hold() -> bool:
 func align_gameplay_hud() -> void:
 	var screen_center=field.get_global_transform_with_canvas()*field.project(field.world.CENTER_LANE,0)
 	var center_x=(ui.get_global_transform_with_canvas().affine_inverse()*screen_center).x
-	for element in [combo_hud,hit_art,hit_label]:
+	for element in [hit_art,hit_label]:
 		element.position.x=center_x-element.size.x*.5
 	var highway_center=field.get_global_transform_with_canvas()*((field.project(field.world.CENTER_LANE,0)+field.project(field.world.CENTER_LANE,1))*.5)
 	var countdown_center=ui.get_global_transform_with_canvas().affine_inverse()*highway_center
@@ -1611,7 +1655,13 @@ func align_gameplay_hud() -> void:
 # The live combo display (scripts/combo_view.gd): punches on every hit, glows in its tier
 # colour, and fills a bar toward the next milestone.
 var combo_view: Control
+var multiplier_step=0
 func update_combo_art() -> void:
+	# Each new score multiplier step (every 100 combo, up to x2.0) also lights up the highway.
+	var step=mini(10,floori(combo/100.0))
+	if step>multiplier_step and mode=="play":
+		field.world.multiplier_wave(); UiSound.play(self,"bonus")
+	multiplier_step=step
 	combo_art_value=combo; combo_art_size=combo_hud.size
 	if combo_view==null:
 		for child in combo_hud.get_children(): child.queue_free()
@@ -1691,28 +1741,33 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 		pointers[id]={"start":p,"position":p,"world":touch_world}
 		# Taps anywhere on the lower highway count; the grade comes only from timing at the judgement bar.
 		if p.y>=.35:
-			var nearest: Dictionary={}; var best=.231
+			var nearest: Dictionary={}; var best=.231; var best_gap=INF
+			# Where the finger is across the judgement bar, in world units: notes are hit by touching
+			# the note itself (its drawn width), whatever lane it is in.
+			var world=field.world; var touch_x=world.lane_x(SynkCapture.lane(p.x)); var reach=world.note_reach()
 			for live_index in range(first_live_index(),live.size()):
 				var entry: Dictionary=live[live_index]
 				if float(entry.note.time)>song_time+.23: break
 				if entry.done: continue
 				var n: Dictionary=entry.note
 				if entry.started:
-					if entry.pointer==-999 and absf(SynkCapture.lane(p.x)-SynkChart.lane_at(n,song_time))<.85: entry.pointer=id
+					if entry.pointer==-999 and absf(touch_x-world.note_x(SynkChart.lane_at(n,song_time)))<=reach: entry.pointer=id
 					continue
 				var error=absf(song_time-float(n.time))
 				var timing_limit=.23*extras.scale() if n.kind=="slide" else extras.good_window()
-				var lane_limit=1.8 if n.kind=="slide" else .85
-				if error<=minf(best,timing_limit) and absf(SynkCapture.lane(p.x)-float(n.lane))<lane_limit: best=error; nearest=entry
+				var gap=absf(touch_x-world.note_x(float(n.lane)))
+				if gap>reach*(1.4 if n.kind=="slide" else 1.0) or error>timing_limit: continue
+				# Best timing wins; between notes timed alike (a chord), the one under the finger.
+				if error<best-.001 or (absf(error-best)<=.001 and gap<best_gap): best=error; best_gap=gap; nearest=entry
 			if nearest.is_empty() and bool(extras.settings.touch_assist):
-				# Touch assist: accept a touch up to 1.6 lanes away when no note sits closer.
+				# Touch assist: accept a touch a little beyond the note's edge when nothing else is hit.
 				for live_index in range(first_live_index(),live.size()):
 					var entry: Dictionary=live[live_index]
 					if float(entry.note.time)>song_time+.23: break
 					if entry.done or entry.started: continue
 					var n: Dictionary=entry.note
 					var error=absf(song_time-float(n.time))
-					if error<=minf(best,extras.good_window()) and absf(SynkCapture.lane(p.x)-float(n.lane))<1.6: best=error; nearest=entry
+					if error<=minf(best,extras.good_window()) and absf(touch_x-world.note_x(float(n.lane)))<=reach*1.6: best=error; nearest=entry
 			if not nearest.is_empty():
 				nearest.started=true; nearest.pointer=id; nearest.error=best; nearest.timing_error=song_time-float(nearest.note.time)
 				if nearest.note.kind=="tap": judge(nearest,best)
@@ -1825,7 +1880,7 @@ func judge(entry: Dictionary,error: float,complete: bool = true) -> void:
 		elif error<=extras.great_window(): judgement="GREAT"; earned+=.8
 		else: judgement="GOOD"; earned+=.5
 	judgment_counts[judgement]+=1
-	score=roundi(1000000*earned/maxi(1,total_judgements()))
+	if error>=0: add_points(judgement)
 	if extras: extras.on_judged(entry,judgement,combo)
 
 func _audio_finished() -> void:
@@ -1852,7 +1907,7 @@ func _audio_finished() -> void:
 		begin_finish({"stats":stats,"replay":extras and extras.has_replay() and not auto_play,"mods":extras.mods_text() if extras else "","cover":cover_texture_for_id(str(song.id)),"tint":cover_tint_for_id(str(song.id)) if tinted else Color.WHITE,
 			"title":str(song.title),"details":intro_details(),"rank":rank_name(),"score":score,"accuracy":accuracy(),"max_combo":max_combo,
 			"counts":judgment_counts.duplicate(),"best":best,"previous_best":previous_best,"new_best":not auto_play and not practice.active and score>previous_best,"auto_play":auto_play,"practice":practice.active,"timing":timing_samples.duplicate(true),
-			"song_id":str(song.id),"artist":str(song.artist) if str(song.get("artist","")).strip_edges()!="" else album_name(song),"difficulty":features.current_variant.capitalize(),"bpm":chart_bpm(),"notes_total":live.size(),"notes_hit":live.filter(func(e): return bool(e.get("note_hit",false))).size(),
+			"song_id":str(song.id),"artist":str(song.artist) if str(song.get("artist","")).strip_edges()!="" else album_name(song),"difficulty":preload("res://scripts/chart_levels.gd").label(features.current_variant),"bpm":chart_bpm(),"notes_total":live.size(),"notes_hit":live.filter(func(e): return bool(e.get("note_hit",false))).size(),
 			"performance":performance_samples.duplicate(true),"range_start":play_range.x,"range_end":minf(length(),play_range.y)})
 	elif mode=="editor":
 		if recorder.reviewing_audio: recorder.stop_preview(); refresh_transport()
@@ -2136,7 +2191,7 @@ func save_editor() -> void:
 	var sorted=document.notes.duplicate(true); sorted.sort_custom(func(a,b):return a.time<b.time)
 	if features.save_chart(sorted)!=OK: tell("Could not save. Your draft is still here; check storage."); return
 	saved_notes=sorted; saved_settings=document.settings.duplicate(true); document.dirty=false
-	if features.current_variant=="original" and song_metadata.has(str(song.id)):
+	if song_metadata.has(str(song.id)):
 		song_metadata[str(song.id)].notes=sorted.duplicate(true)
 		song_metadata[str(song.id)].note_count=sorted.size()
 		song_metadata[str(song.id)].has_chart=true

@@ -6,7 +6,9 @@ render_mode unshaded, blend_add, depth_draw_never, cull_disabled, fog_disabled;
 // Hollow glowing ring lying on the highway where a hold or slide ends: "let go here".
 // Shares the hold/miss uniforms with neon_asset.gdshader so clipping and graying still work.
 uniform vec3 tint : source_color = vec3(0.64, 0.42, 1.0);
-uniform float animation_time = 0.0;
+// One global clock for every highway shader (set once per frame by highway_3d.gd).
+global uniform float synk_time;
+#define animation_time synk_time
 uniform float desaturate = 0.0;
 uniform float ghost_fade = 1.0;
 uniform float clip_z = 1000.0;
@@ -31,5 +33,5 @@ void fragment() {
 	vec3 color = mix(tint, vec3(1.0), band * 0.45) * pulse;
 	float gray = dot(color, vec3(0.299, 0.587, 0.114));
 	ALBEDO = mix(color, vec3(gray * 0.5), desaturate);
-	ALPHA = clamp(band + halo, 0.0, 1.0) * ghost_fade * smoothstep(-60.0, -40.0, world_z);
+	ALPHA = clamp(band + halo, 0.0, 1.0) * ghost_fade * smoothstep(-60.0, -55.0, world_z);
 }

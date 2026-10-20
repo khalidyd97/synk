@@ -41,7 +41,7 @@ var next_button: Button
 var replay_button: Button
 var practice_button: Button
 var pending_next_id=""
-var pending_next_variant="original"
+var pending_next_variant=""
 
 func style(fill: Color,edge: Color,radius: int=24) -> StyleBoxFlat:
     var s=StyleBoxFlat.new(); s.bg_color=fill; s.border_color=edge; s.set_corner_radius_all(radius); s.set_border_width_all(1); return s
@@ -151,7 +151,7 @@ func show_results(data: Dictionary) -> void:
         game.lobby.style_cover(card_art,str(info.song_id),27)
     song_title.text=str(info.get("title",game.song.title))
     song_meta.text=str(info.get("artist",game.song.get("artist",game.album_name(game.song))))
-    var variant=str(info.get("difficulty",game.features.current_variant.capitalize()))
+    var variant=str(info.get("difficulty",preload("res://scripts/chart_levels.gd").label(game.features.current_variant)))
     difficulty_label.text=variant; bpm_label.text="%d BPM" % roundi(float(info.get("bpm",game.chart_bpm())))
     # Header badges follow the artist instead of reserving a large fixed gap.
     var artist_width=minf(390,song_meta.get_theme_font("font").get_string_size(song_meta.text,HORIZONTAL_ALIGNMENT_LEFT,-1,song_meta.get_theme_font_size("font_size")).x+20)
@@ -228,8 +228,8 @@ func next_candidate() -> Dictionary:
     var count=entries.size()-1 if current>=0 else entries.size()
     for step in range(1,count+1):
         var candidate: Dictionary=entries[posmod(current+step,entries.size())]
-        var preferred=str(game.prefs.get_value("charts",str(candidate.id),"original"))
-        for variant in [preferred,"original","easy","normal","hard","expert"]:
+        var preferred=str(game.prefs.get_value("charts",str(candidate.id),""))
+        for variant in [preferred]+game.lobby.levels_for(str(candidate.id)):
             if game.lobby.playable_variant(str(candidate.id),variant): return {"id":str(candidate.id),"index":int(candidate.index),"variant":variant}
     return {}
 func next_song() -> void:

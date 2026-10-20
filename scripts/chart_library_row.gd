@@ -67,3 +67,7 @@ func _draw() -> void:
     style.shadow_color=Color(.05,.75,.9,.12*amount); style.shadow_size=8
     draw_style_box(style,Rect2(Vector2.ONE,size-Vector2.ONE*2))
     motion.paint(self,Color("4bdaed"),maxf(amount*.65,hover_amount),18)
+
+# Hidden widgets stop their per-frame update (screens keep many of them alive offscreen).
+func _notification(what: int) -> void:
+    if what==NOTIFICATION_VISIBILITY_CHANGED or what==NOTIFICATION_READY: set_process(is_visible_in_tree())

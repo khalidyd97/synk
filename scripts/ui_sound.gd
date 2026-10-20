@@ -1,6 +1,7 @@
 extends Node
 
-# Plays the UI sound effects in assets/sfx (synthesized by tools/ui_sounds/generate.py).
+# Plays the UI sound effects in assets/sfx: recorded sounds from Kenney's CC0 packs
+# (Interface, Impact and Sci-fi Sounds; see assets/sfx/CREDITS.txt).
 # main.gd adds one instance; buttons reach it through the static helpers below.
 const SOUNDS = {
 	"click": preload("res://assets/sfx/click.wav"),
@@ -13,6 +14,8 @@ const SOUNDS = {
 	"transition": preload("res://assets/sfx/transition.wav"),
 	"count": preload("res://assets/sfx/count.wav"),
 	"go": preload("res://assets/sfx/go.wav"),
+	"whoosh": preload("res://assets/sfx/whoosh.wav"),
+	"bonus": preload("res://assets/sfx/bonus.wav"),
 }
 # Each button role in the design system (NeonAction.VARIANTS) has its own sound.
 const VARIANT_SOUNDS = {"primary":"confirm","record":"record","secondary":"click","tool":"toggle","danger":"danger","nav":"back"}

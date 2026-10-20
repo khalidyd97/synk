@@ -13,7 +13,9 @@ uniform float image_aspect = 1.0;
 // No artwork: draw solid black.
 uniform bool plain = false;
 uniform float beat = 0.0;
-uniform float animation_time = 0.0;
+// One global clock for every highway shader (set once per frame by highway_3d.gd).
+global uniform float synk_time;
+#define animation_time synk_time
 uniform vec3 rail_glow_left : source_color = vec3(0.4,0.7,1.0);
 uniform vec3 rail_glow_right : source_color = vec3(0.8,0.4,1.0);
 uniform float rail_glow_opacity : hint_range(0.0,0.3) = 0.12;

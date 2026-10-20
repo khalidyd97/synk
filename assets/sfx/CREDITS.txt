@@ -1,0 +1,12 @@
+Sound effects in this folder come from Kenney (www.kenney.nl), released under
+Creative Commons CC0 1.0 (public domain); see KENNEY_LICENSE.txt. Attribution is not
+required but appreciated.
+
+  Interface Sounds  : click (select_002), toggle (toggle_002), confirm (confirmation_001),
+                      back (back_002), danger (error_004), record (maximize_007),
+                      play (confirmation_004), transition (minimize_003), count (tick_004),
+                      go (maximize_006), bonus (confirmation_002)
+  Impact Sounds     : hit_tap (impactGlass_light_002), hit_hold (impactPlate_light_000, trimmed)
+  Sci-fi Sounds     : hit_flick (laserSmall_003), whoosh (shaped from thrusterFire_002 noise)
+
+All files were converted to mono 44.1 kHz WAV, trimmed and level-matched.

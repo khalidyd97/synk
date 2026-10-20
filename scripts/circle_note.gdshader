@@ -9,7 +9,9 @@ render_mode unshaded, blend_mix, depth_prepass_alpha, cull_disabled, fog_disable
 uniform vec3 tint : source_color = vec3(0.22, 0.73, 1.0);
 uniform bool recolor = true;
 uniform float opacity = 1.0;
-uniform float animation_time = 0.0;
+// One global clock for every highway shader (set once per frame by highway_3d.gd).
+global uniform float synk_time;
+#define animation_time synk_time
 uniform float motion = 0.0;
 uniform float glow_pulse = 0.0;
 uniform float desaturate = 0.0;
@@ -45,5 +47,5 @@ void fragment() {
 	vec3 final_color = mix(pigment, color, disc);
 	float gray = dot(final_color, vec3(0.299, 0.587, 0.114));
 	ALBEDO = mix(final_color, vec3(gray * 0.52), desaturate);
-	ALPHA = (disc + halo * 0.12) * opacity * ghost_fade * smoothstep(-60.0, -40.0, world_z);
+	ALPHA = (disc + halo * 0.12) * opacity * ghost_fade * smoothstep(-60.0, -55.0, world_z);
 }

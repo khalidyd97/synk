@@ -89,7 +89,7 @@ static func strip(data: Dictionary) -> Dictionary:
 	return clean
 
 static func remove_all(song_id: String) -> void:
-	for level in ["original", "easy", "normal", "hard", "expert"]:
+	for level in preload("res://scripts/chart_levels.gd").every_variant():
 		var dir = DirAccess.open(folder(song_id, level))
 		if dir == null: continue
 		for name in dir.get_files(): dir.remove(name)

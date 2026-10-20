@@ -133,7 +133,7 @@ func delete_song(id: String) -> Error:
 	var entry: Dictionary = songs[index]
 	delete_chart(id)
 	# The creator library exposes separate versions and recoverable drafts.
-	for variant in ["original", "easy", "normal", "hard", "expert"]:
+	for variant in preload("res://scripts/chart_levels.gd").every_variant():
 		var chart_name=id+("" if variant=="original" else "_"+variant)
 		for base in [root_path.path_join("charts/"+chart_name+".json"),root_path.path_join("drafts/"+id+"_"+variant+".json")]:
 			for suffix in ["", ".bak", ".tmp"]:

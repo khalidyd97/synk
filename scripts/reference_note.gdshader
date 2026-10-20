@@ -32,5 +32,5 @@ void fragment(){
     vec3 color=hsv_to_rgb(hsv);
     float gray=dot(color,vec3(0.299,0.587,0.114));
     ALBEDO=mix(color,vec3(gray*0.52),desaturate);
-    ALPHA=art.a*opacity*ghost_fade*smoothstep(-60.0,-40.0,world_z);
+    ALPHA=art.a*opacity*ghost_fade*smoothstep(-60.0,-55.0,world_z);
 }

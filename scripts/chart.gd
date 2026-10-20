@@ -23,8 +23,21 @@ static func lane_at(n: Dictionary, time: float) -> float:
 	var path: Array = n.get("path", [])
 	for i in range(1, path.size()):
 		if elapsed <= float(path[i].offset):
-			var t = (elapsed - float(path[i-1].offset)) / maxf(.0001, float(path[i].offset) - float(path[i-1].offset))
-			return lerpf(float(path[i-1].lane), float(path[i].lane), t)
+			# Smooth curve through the slide's points: a monotone cubic (Fritsch-Carlson), so
+			# trails bend round corners instead of kinking, flat runs stay exactly flat and the
+			# curve never overshoots a point. Drawing, judging and auto play share this curve.
+			var t0 = float(path[i-1].offset); var t1 = float(path[i].offset)
+			var span = maxf(.0001, t1 - t0)
+			var t = (elapsed - t0) / span
+			var l0 = float(path[i-1].lane); var l1 = float(path[i].lane)
+			var d1 = (l1 - l0) / span
+			var d0 = (l0 - float(path[i-2].lane)) / maxf(.0001, t0 - float(path[i-2].offset)) if i >= 2 else d1
+			var d2 = (float(path[i+1].lane) - l1) / maxf(.0001, float(path[i+1].offset) - t1) if i + 1 < path.size() else d1
+			var m0 = 0.0 if d0 * d1 <= 0.0 else 2.0 * d0 * d1 / (d0 + d1)
+			var m1 = 0.0 if d1 * d2 <= 0.0 else 2.0 * d1 * d2 / (d1 + d2)
+			var t2 = t * t; var t3 = t2 * t
+			var lane = (2*t3 - 3*t2 + 1) * l0 + (t3 - 2*t2 + t) * m0 * span + (-2*t3 + 3*t2) * l1 + (t3 - t2) * m1 * span
+			return clampf(lane, 0.0, float(MAX_LANE))
 	if path.size() > 1: return float(path[-1].lane)
 	return lerpf(float(n.lane), float(n.end_lane), smoothstep(0, maxf(.01, float(n.duration)), elapsed))
 

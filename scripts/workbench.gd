@@ -2,8 +2,10 @@ extends Node
 const UiMotion=preload("res://scripts/ui_motion.gd")
 # Authoring services; saved charts and recoverable drafts stay separate.
 var game: Control
-var current_variant="original"
-const VARIANTS=["original","easy","normal","expert","hard"]
+const Levels=preload("res://scripts/chart_levels.gd")
+# The chart being edited or played: a level key "lv1".."lv30" (see chart_levels.gd).
+var current_variant="lv1"
+var VARIANTS: Array=Levels.all_keys()
 var autosave_elapsed=0.0
 var draft_hash=0
 var recovery_checked=""
@@ -103,8 +105,7 @@ func save_chart(notes: Array) -> Error:
     # The first save of a level with no history keeps what was there before as version 1.
     if SynkChartVersions.list(song_id,current_variant).is_empty():
         var previous=SynkChartVersions.read(chart_path())
-        if previous.is_empty() and song_id=="eclipse" and current_variant=="original": previous=payload(SynkChart.demo())
-        if not previous.is_empty(): SynkChartVersions.record(song_id,current_variant,SynkChartVersions.strip(previous),"Built-in chart" if song_id=="eclipse" and not chart_exists() else "Before version history")
+        if not previous.is_empty(): SynkChartVersions.record(song_id,current_variant,SynkChartVersions.strip(previous),"Before version history")
     var error=SynkLibrary.atomic_write(chart_path(),payload(notes))
     if error==OK:
         SynkChartVersions.record(song_id,current_variant,payload(notes))
@@ -113,8 +114,11 @@ func save_chart(notes: Array) -> Error:
     return error
 func chart_exists() -> bool: return FileAccess.file_exists(chart_path())
 func activate_song() -> void:
-    current_variant=str(game.prefs.get_value("charts",str(game.song.id),"original"))
-    if current_variant not in VARIANTS: current_variant="original"
+    # Last level used for this song, else its lowest saved level, else Lv 1 (no chart yet).
+    current_variant=str(game.prefs.get_value("charts",str(game.song.id),""))
+    var saved_levels=Levels.existing(str(game.song.id))
+    if not Levels.is_level(current_variant) or (not saved_levels.is_empty() and current_variant not in saved_levels):
+        current_variant=saved_levels[0] if not saved_levels.is_empty() else Levels.key(1)
     load_variant()
     refresh_tools_context()
 func load_variant() -> void:
@@ -128,13 +132,15 @@ func load_variant() -> void:
             notes=parsed
             var stored=settings_from(data)
             if stored!=null: config=stored
-    elif current_variant=="original" and game.song.id=="eclipse": notes=SynkChart.demo()
     game.saved_notes=notes.duplicate(true); game.saved_settings=config.duplicate(true) if config!=null else {}
     game.document.load_notes(notes,game.saved_settings)
     draft_hash=0; recovery_checked=""
     if game.mode=="editor": recover()
     game.refresh_editor()
     if game.lobby: game.lobby.refresh()
+func choose_level(variant: String) -> void:
+    var index=VARIANTS.find(variant)
+    if index>=0: choose_variant(index)
 func choose_variant(index: int) -> void:
     if game.document.dirty and autosave()!=OK: game.tell("Could not store this draft. Save it before switching charts."); return
     current_variant=VARIANTS[index]
@@ -230,18 +236,13 @@ func open_tools(selected_tab: String="Drafts") -> void:
     ui_text(pages.Recording,"Section bounds and pass locks apply to this recording session. Pre-roll, snapping and guide audio are your global recorder preferences.")
     ui_button(pages.Recording,"RECORDING SETUP",func(): close_tools(); game.recorder.show_setup())
     ui_text(pages.Drafts,"Drafts autosave every 2 seconds and recover when you reopen this chart.",21)
-    draft_context=ui_text(pages.Drafts,"Current version: "+current_variant.to_upper()+" · "+str(game.song.title))
+    draft_context=ui_text(pages.Drafts,"Current chart: "+Levels.label(current_variant)+" · "+str(game.song.title))
     ui_button(pages.Drafts,"SAVE DRAFT NOW",func(): report("Draft stored." if autosave()==OK else "Draft could not be stored."))
     ui_button(pages.Drafts,"RECOVER DRAFT",func(): recovery_checked=""; var recovered=recover(true); game.refresh_editor(); report("Draft recovered. UNDO restores your previous edits." if recovered else "No recoverable draft for this version."))
     ui_text(pages.Charts,"One song, multiple charts. Switching versions stores your current draft first.",21)
     var variant=OptionButton.new(); pages.Charts.add_child(variant); variant.custom_minimum_size.y=48
-    for name in VARIANTS: variant.add_item(name.to_upper())
+    for name in VARIANTS: variant.add_item(Levels.label(name).to_upper())
     variant.select(VARIANTS.find(current_variant)); variant.item_selected.connect(choose_variant)
-    ui_button(pages.Charts,"COPY ORIGINAL INTO THIS VERSION",func():
-        if current_variant=="original": report("Select EASY, NORMAL or EXPERT to create another version."); return
-        var original=game.library.load_chart(str(game.song.id))
-        if original.is_empty() and game.song.id=="eclipse": original=SynkChart.demo()
-        game.document.checkpoint(); game.document.notes=original.duplicate(true); game.refresh_editor(); report("Copied original notes into the current version. SAVE to publish this version."))
     ui_text(pages.Sharing,"Export a chart file to share. Audio is not included; importing requires the matching song.",21)
     ui_button(pages.Sharing,"EXPORT CHART FILE",choose_export)
     ui_button(pages.Sharing,"IMPORT CHART FILE",choose_import)
@@ -384,8 +385,8 @@ func refresh_tools_context() -> void:
     if global_settings: tools_context.text="GAME SETTINGS · Applies to every song and chart"; return
     var page=TOOL_PAGES[tabs.current_tab]
     var song_scope=page in ["Song","Charts"]
-    tools_context.text=("SONG · "+str(game.song.title)+" · Shared by all chart versions") if song_scope else ("CHART · "+str(game.song.title)+" / "+current_variant.to_upper()+" · Current draft")
-    if is_instance_valid(draft_context): draft_context.text="Current version: "+current_variant.to_upper()+" · "+str(game.song.title)
+    tools_context.text=("SONG · "+str(game.song.title)+" · Shared by all chart versions") if song_scope else ("CHART · "+str(game.song.title)+" / "+Levels.label(current_variant).to_upper()+" · Current draft")
+    if is_instance_valid(draft_context): draft_context.text="Current chart: "+Levels.label(current_variant)+" · "+str(game.song.title)
     if scope_refresh.has(page): scope_refresh[page].call()
 func populate_analysis(parent: VBoxContainer) -> void:
     for child in parent.get_children(): parent.remove_child(child); child.queue_free()

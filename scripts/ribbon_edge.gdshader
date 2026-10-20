@@ -22,5 +22,5 @@ void fragment() {
 	if (world_z > clip_z) discard;
 	float gray = dot(color, vec3(0.299, 0.587, 0.114));
 	ALBEDO = mix(color, vec3(gray * 0.6), desaturate);
-	ALPHA = ghost_fade * smoothstep(-60.0, -40.0, world_z);
+	ALPHA = ghost_fade * smoothstep(-60.0, -55.0, world_z);
 }

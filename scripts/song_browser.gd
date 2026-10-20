@@ -23,7 +23,10 @@ var bpm: Label
 var duration: Label
 var genre: Label
 var difficulty: Dictionary={}
-var original: Button
+var level_scroll: ScrollContainer
+var level_row: HBoxContainer
+var level_empty: Label
+var shown_levels: Array=[]
 var sections: OptionButton
 var best_label: Label
 var best_value: Label
@@ -35,6 +38,8 @@ var cover_tween: Tween
 var ambience_tween: Tween
 var background: ColorRect
 var art_backdrop: Control
+var cover_glow: Panel
+var play_tween: Tween
 
 func box_style(fill: Color,edge: Color,radius: int=20) -> StyleBoxFlat:
     var s=StyleBoxFlat.new(); s.bg_color=fill; s.border_color=edge; s.set_corner_radius_all(radius); s.set_border_width_all(1); return s
@@ -56,8 +61,8 @@ func _ready() -> void:
     background.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var mat=preload("res://scripts/background_motion.gd").attach(background,preload("res://scripts/song_browser_background.gdshader"))
     mat.set_shader_parameter("ambience",Color(.12,.08,.28,1))
-    # The selected song's album art, blurred and drifting, behind the whole list.
-    art_backdrop=preload("res://scripts/screen_backdrop.gd").album_art(self,.58)
+    # Stage footage behind the list, recoloured blue for this screen.
+    art_backdrop=preload("res://scripts/screen_backdrop.gd").video(self,0.25,.5)  # blue stage
     canvas=Control.new(); add_child(canvas); canvas.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var local_theme=Theme.new(); local_theme.default_font=ThemeDB.fallback_font; local_theme.default_font_size=16; canvas.theme=local_theme
     for type in ["Label","Button","LineEdit","OptionButton","PopupMenu"]: local_theme.set_font("font",type,ThemeDB.fallback_font)
@@ -100,6 +105,10 @@ func _ready() -> void:
     empty.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
     panel=card(canvas,882,168,526,615,Vector2(1456,819),25)
     var p=Vector2(526,615)
+    # Soft glow in the song's accent colour behind the cover.
+    cover_glow=Panel.new(); place(cover_glow,panel,35,35,130,130,p); cover_glow.mouse_filter=Control.MOUSE_FILTER_IGNORE
+    cover_glow.anchor_right=cover_glow.anchor_left; cover_glow.anchor_bottom=cover_glow.anchor_top
+    cover_glow.offset_right=130; cover_glow.offset_bottom=130
     var art_holder=Control.new(); place(art_holder,panel,29,29,142,142,p)
     # Keep album art square when the available panel width changes.
     art_holder.anchor_right=art_holder.anchor_left; art_holder.anchor_bottom=art_holder.anchor_top
@@ -112,9 +121,7 @@ func _ready() -> void:
     artist_label=label(panel,"",192,102,305,28,16,Color("c4bcd6"),p)
     metadata=HBoxContainer.new(); place(metadata,panel,192,135,305,28,p); metadata.add_theme_constant_override("separation",7)
     bpm=chip(); duration=chip(); genre=chip()
-    label(panel,"D I F F I C U L T Y",29,271,146,22,12,Color("bfb5d5"),p)
-    original=button(panel,"Original",389,263,108,40,func(): lobby.choose_difficulty("original"),p)
-    original.caption_size=17
+    label(panel,"L E V E L",29,271,146,22,12,Color("bfb5d5"),p)
     sections=OptionButton.new(); place(sections,panel,29,191,468,64,p)
     sections.tooltip_text="Choose the full song, a verse, or the bridge"
     for key in ["full","verse1","verse2","bridge"]: sections.add_item(game.SECTION_NAMES[key])
@@ -132,11 +139,12 @@ func _ready() -> void:
         popup.position=Vector2i(sections.get_screen_position()+Vector2(0,sections.size.y*k.y+6))
         popup.min_size=Vector2i(roundi(sections.size.x*k.x),0))
     sections.item_selected.connect(func(index): game.set_play_mode(["full","verse1","verse2","bridge"][index]); update_best())
-    var types=[["easy","Easy","Relaxed"],["normal","Normal","Standard"],["hard","Hard","Fast notes"],["expert","Expert","No mercy"]]
-    for i in types.size():
-        var key: String=types[i][0]
-        var n=button(panel,types[i][1],29+i*119,310,110,80,func(): lobby.choose_difficulty(key),p)
-        n.subtitle=types[i][2]; difficulty[key]=n
+    # One chip per chart level the song has (Lv 1-30), scrolling sideways when there are many.
+    level_scroll=ScrollContainer.new(); place(level_scroll,panel,29,300,468,86,p)
+    level_scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+    level_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_SHOW_NEVER
+    level_row=HBoxContainer.new(); level_scroll.add_child(level_row); level_row.add_theme_constant_override("separation",9)
+    level_empty=label(panel,"No charts yet",29,300,468,80,16,Color("8f88a6"),p)
     var best=card(panel,29,394,468,76,p,18)
     best_label=label(best,"",17,11,330,23,12,Color("a9a0bd"),Vector2(468,76))
     best_value=label(best,"0",17,34,330,30,24,Color("f7f3ff"),Vector2(468,76))
@@ -145,8 +153,11 @@ func _ready() -> void:
     details_label=label(panel,"",29,478,468,28,13,Color("a9a0bd"),p)
     play=button(panel,"▶   P L A Y",29,508,468,84,lobby.press_play,p,true)
     create=button(panel,"CREATE CHART",29,508,468,84,func():
-        lobby.stop_preview(); game.set_mode("editor"),p,true)
+        # Opens Chart Studio on this song and asks for the new chart's level (1-30).
+        lobby.stop_preview(); game.open_editor()
+        game.chart_library.select_entry(str(game.song.id)); game.chart_library.ask_level("editor"),p,true)
     play.caption_size=30; create.caption_size=25
+    play.pulse=true; create.pulse=true
     create.visible=false
 func chip() -> Label:
     var n=Label.new(); metadata.add_child(n); n.add_theme_font_size_override("font_size",14)
@@ -182,14 +193,17 @@ func set_details(entry: Dictionary,loading: bool,has_chart: bool) -> void:
     var changed=selected_id!=str(entry.id); selected_id=str(entry.id)
     title_label.text=entry.title; artist_label.text=entry.artist
     bpm.text="%d BPM" % roundi(float(entry.bpm)); duration.text=lobby.duration_text(float(entry.duration))
-    genre.text=entry.genre if not str(entry.genre).is_empty() else ("Original" if entry.id=="eclipse" else "Custom")
+    genre.text=entry.genre if not str(entry.genre).is_empty() else ("SYNK" if entry.id=="eclipse" else "Custom")
     genre.visible=not genre.text.is_empty(); metadata.visible=true
-    details_label.text="Loading song…" if loading else ("" if has_chart else "No chart for this difficulty. Create one in Chart Studio.")
+    details_label.text="Loading song…" if loading else ("" if has_chart else "No chart for this level yet. Create one in Chart Studio.")
     play.visible=has_chart; play.disabled=loading
     create.visible=not has_chart; create.disabled=loading
     panel.modulate.a=1
     var texture=lobby.cover_for(entry.id)
     if art_backdrop: art_backdrop.set_art(texture)
+    tint_play_button(entry)
+    var glow=box_style(Color(entry.accent,.35),Color(0,0,0,0),24); glow.shadow_color=Color(entry.accent,.45); glow.shadow_size=26
+    cover_glow.add_theme_stylebox_override("panel",glow)
     if cover_texture!=texture or changed:
         if cover_tween: cover_tween.kill()
         # Crossfade the actual cover only; leave titles and list interaction responsive.
@@ -209,19 +223,61 @@ func set_details(entry: Dictionary,loading: bool,has_chart: bool) -> void:
         var old_tint=background.material.get_shader_parameter("ambience")
         ambience_tween.tween_method(func(tint: Color): background.material.set_shader_parameter("ambience",tint),old_tint if old_tint is Color else Color(.12,.08,.28,1),entry.accent,.45)
     refresh_difficulties(loading); update_best()
+# The Play button's gradient takes three colours from the song's album art (or shades of its
+# accent when it has no cover), kept bright and saturated so the white caption stays readable.
+func play_colors(entry: Dictionary) -> Array:
+    var id=str(entry.id); var raw: Array=[]
+    if id=="eclipse" or game.has_custom_cover(id):
+        var palette: Dictionary=game.cover_palette_for_id(id)
+        if bool(palette.get("from_cover",false)): raw=palette.notes.slice(0,3)
+    if raw.size()<3:
+        var a: Color=entry.accent
+        raw=[Color.from_hsv(fposmod(a.h-.08,1.0),a.s,a.v),a,Color.from_hsv(fposmod(a.h+.09,1.0),a.s,a.v)]
+    var out: Array=[]
+    for c in raw: out.append(Color.from_hsv(c.h,clampf(c.s,.55,.95),clampf(c.v,.72,.95)))
+    return out
+func tint_play_button(entry: Dictionary) -> void:
+    var target=play_colors(entry)
+    var keys=["start_color","middle_color","end_color"]
+    for button in [play,create]:
+        var mat: ShaderMaterial=button.material
+        if mat==null: continue
+        var from: Array=[]
+        for k in keys:
+            var v=mat.get_shader_parameter(k)
+            from.append(Color(v.x,v.y,v.z) if v is Vector3 else (v if v is Color else Color.WHITE))
+        if play_tween and play_tween.is_running(): play_tween.kill()
+        play_tween=create_tween()
+        play_tween.tween_method(func(t: float):
+            for i in 3:
+                var c: Color=from[i].lerp(target[i],t)
+                for b in [play,create]:
+                    if b.material: b.material.set_shader_parameter(keys[i],Vector3(c.r,c.g,c.b)),0.0,1.0,.45)
+        break
 func refresh_difficulties(loading: bool=false) -> void:
+    var Levels=preload("res://scripts/chart_levels.gd")
+    var levels: Array=lobby.levels_for(selected_id)
+    if levels!=shown_levels:
+        shown_levels=levels.duplicate()
+        for child in level_row.get_children(): child.queue_free()
+        difficulty.clear()
+        for variant in levels:
+            var key: String=variant
+            var chip=ButtonArt.new(); chip.menu_motion=true; chip.text=Levels.label(key); chip.caption_size=22
+            chip.custom_minimum_size=Vector2(104,80); level_row.add_child(chip)
+            chip.pressed.connect(func(): lobby.choose_difficulty(key)); difficulty[key]=chip
+    level_empty.visible=levels.is_empty()
     for key in difficulty:
-        var available=lobby.has_variant(selected_id,key)
-        difficulty[key].disabled=not available or loading
-        difficulty[key].tooltip_text="Play "+key.capitalize() if available else "No "+key.capitalize()+" chart saved for this song"
+        difficulty[key].disabled=loading
         difficulty[key].set_selected(game.features.current_variant==key and not loading)
-    original.visible=lobby.has_variant(selected_id,"original")
-    original.disabled=loading; original.set_selected(game.features.current_variant=="original")
+    # The play button names the level it will start.
+    play.text="▶   P L A Y   ·   "+" ".join(Levels.label(game.features.current_variant).to_upper().split(""))
+    play.caption_size=26
     for i in 4: sections.get_popup().set_item_disabled(i,not game.section_available(["full","verse1","verse2","bridge"][i]) or loading)
     sections.select(["full","verse1","verse2","bridge"].find(game.play_mode))
 func update_best() -> void:
     var variant=game.features.current_variant
-    best_label.text="Your best on "+variant.capitalize()
+    best_label.text="Your best on "+preload("res://scripts/chart_levels.gd").label(variant) if lobby.has_variant(str(game.song.id),variant) else "Your best"
     var notes=game.baseline_notes().duplicate(true)
     notes.sort_custom(func(a,b): return float(a.time)<float(b.time))
     var region=game.section_range(game.play_mode)
@@ -243,4 +299,4 @@ func show_empty() -> void:
     title_label.text="Choose a track"; artist_label.text="Try another filter or search."
     metadata.visible=false; play.visible=true; play.disabled=true; create.visible=false; details_label.text=""
     for n in difficulty.values(): n.disabled=true; n.set_selected(false)
-    original.visible=false; sections.disabled=true; best_value.text="0"; rank_value.text="—"; best_label.text="Your best"
+    level_empty.visible=true; sections.disabled=true; best_value.text="0"; rank_value.text="—"; best_label.text="Your best"

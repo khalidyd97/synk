@@ -1,7 +1,9 @@
 shader_type spatial;
 render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, fog_disabled;
 
-uniform float animation_time = 0.0;
+// One global clock for every highway shader (set once per frame by highway_3d.gd).
+global uniform float synk_time;
+#define animation_time synk_time
 uniform vec3 base_color : source_color = vec3(0.60, 0.36, 1.0);
 uniform vec3 sweep_color : source_color = vec3(0.68, 0.91, 1.0);
 

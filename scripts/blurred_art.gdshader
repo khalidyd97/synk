@@ -3,6 +3,8 @@ shader_type canvas_item;
 // Album art as a soft backdrop: a wide two-ring blur plus a slight saturation lift, so the
 // cover reads as coloured light rather than a picture.
 uniform float radius = 0.06;
+// 0 = fill the rect; above 0 fades the edges out over that fraction (for the square cover layer).
+uniform float edge_fade = 0.0;
 
 void fragment() {
 	vec3 sum = texture(TEXTURE, UV).rgb;
@@ -17,5 +19,10 @@ void fragment() {
 	}
 	vec3 c = sum / count;
 	float l = dot(c, vec3(0.3, 0.59, 0.11));
-	COLOR = vec4(mix(vec3(l), c, 1.35), 1.0);
+	float alpha = 1.0;
+	if (edge_fade > 0.0) {
+		vec2 e = min(UV, 1.0 - UV);
+		alpha = smoothstep(0.0, edge_fade, e.x) * smoothstep(0.0, edge_fade, e.y);
+	}
+	COLOR = vec4(mix(vec3(l), c, 1.35), alpha);
 }

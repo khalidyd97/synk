@@ -9,7 +9,7 @@ const MUTED = Color("a7aac6")
 
 var game: Control
 var song_id = ""
-var level = "original"
+var level = "lv1"
 var canvas: Control
 var list: VBoxContainer
 var heading: Label
@@ -56,7 +56,7 @@ func layout() -> void:
 
 func refresh() -> void:
 	var entry: Dictionary = game.song_details_entry(song_id)
-	heading.text = preload("res://scripts/lobby.gd").display_title(str(entry.get("title", "Chart"))) + "  ·  " + level.capitalize()
+	heading.text = preload("res://scripts/lobby.gd").display_title(str(entry.get("title", "Chart"))) + "  ·  " + preload("res://scripts/chart_levels.gd").label(level)
 	for child in list.get_children(): child.queue_free()
 	var versions = SynkChartVersions.list(song_id, level)
 	var live = SynkChartVersions.current_number(song_id, level)
@@ -85,11 +85,8 @@ func switch(path: String, number: int) -> void:
 		game.tell("Could not switch versions. Check storage."); return
 	if loaded:
 		game.document.dirty = false; game.features.load_variant()
-	if level == "original" and game.song_metadata.has(song_id):
-		var notes: Array = game.library.load_chart(song_id)
-		game.song_metadata[song_id].notes = notes; game.song_metadata[song_id].note_count = notes.size(); game.song_metadata[song_id].has_chart = true
 	game.chart_library.cache.clear(); game.chart_library.refresh(); game.lobby.refresh()
-	game.tell("Switched %s to v%d. The previous chart is kept in history." % [level.capitalize(), number])
+	game.tell("Switched %s to v%d. The previous chart is kept in history." % [preload("res://scripts/chart_levels.gd").label(level), number])
 	refresh()
 
 func close_view() -> void:

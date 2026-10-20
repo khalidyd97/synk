@@ -23,3 +23,7 @@ func _draw() -> void:
     if amount>.001: draw_colored_polygon(points,Color("f53cce",amount))
     points.append(points[0]); draw_polyline(points,Color("6b637e").lerp(Color("f53cce"),amount) if not is_hovered() else Color("e991e3"),1.4,true)
     draw_set_transform(Vector2.ZERO)
+
+# Hidden widgets stop their per-frame update (screens keep many of them alive offscreen).
+func _notification(what: int) -> void:
+    if what==NOTIFICATION_VISIBILITY_CHANGED or what==NOTIFICATION_READY: set_process(is_visible_in_tree())

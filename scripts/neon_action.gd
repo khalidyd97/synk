@@ -174,3 +174,7 @@ func animate_hover(value: float) -> void:
 	hover_tween = create_tween()
 	hover_tween.tween_method(func(amount: float): art_material.set_shader_parameter("hover_amount",amount),
 		float(art_material.get_shader_parameter("hover_amount")),value,0.18)
+
+# Hidden widgets stop their per-frame update (screens keep many of them alive offscreen).
+func _notification(what: int) -> void:
+	if what==NOTIFICATION_VISIBILITY_CHANGED or what==NOTIFICATION_READY: set_process(is_visible_in_tree())

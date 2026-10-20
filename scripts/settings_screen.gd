@@ -15,6 +15,8 @@ var bluetooth_latency_input: Stepper
 var song_preview_toggle: Switch
 var metronome_toggle: Switch
 var shape_tiles: Dictionary = {}
+var render_scale_buttons: Dictionary = {}
+var hit_style_buttons: Dictionary = {}
 var style_tiles: Dictionary = {}
 var color_pickers: Dictionary = {}
 var color_reset_buttons: Dictionary = {}
@@ -221,24 +223,17 @@ class ShapeTile extends Button:
         draw_style_box(style,Rect2(Vector2.ZERO,size))
         var center = Vector2(size.x*.5,size.y*.42)
         var tint = Color("38baff")
-        if shape == "circle":
-            # Preview the raised puck and white/cyan rim used on the highway.
-            draw_set_transform(center,0,Vector2(1,.42))
-            var r = size.x*.25
-            draw_circle(Vector2.ZERO,r*1.18,Color(tint,.14))
-            draw_circle(Vector2(0,r*.20),r,Color("063a9c"))
-            draw_arc(Vector2(0,r*.20),r*.96,0,TAU,48,Color(tint,.9),r*.045,true)
-            draw_circle(Vector2.ZERO,r,Color("0750cf"))
-            draw_arc(Vector2.ZERO,r*.89,0,TAU,48,Color(tint,.8),r*.095,true)
-            draw_arc(Vector2.ZERO,r*.94,0,TAU,48,Color.WHITE,r*.055,true)
-            draw_set_transform(Vector2.ZERO)
+        # The real highway artwork for each shape.
+        if shape == "rectangle":
+            var tap: Texture2D = preload("res://assets/neon/Tap_Note_Blue_Preview.png")
+            var src = Rect2(tap.get_width()*.12, 0, tap.get_width()*.88, tap.get_height())
+            var w = size.x*.62; var dim = Vector2(w, w*src.size.y/src.size.x)
+            draw_texture_rect_region(tap, Rect2(center-dim*.5, dim), src)
         else:
-            var bar = Rect2(center-Vector2(size.x*.3,size.y*.08),Vector2(size.x*.6,size.y*.16))
-            var glow = StyleBoxFlat.new(); glow.set_corner_radius_all(int(bar.size.y*.5)); glow.bg_color = Color(tint,.18)
-            draw_style_box(glow,bar.grow(size.y*.04))
-            var body = StyleBoxFlat.new(); body.set_corner_radius_all(int(bar.size.y*.35)); body.bg_color = tint.lerp(Color.WHITE,.25)
-            body.border_color = Color.WHITE; body.set_border_width_all(2)
-            draw_style_box(body,bar)
+            var puck = shape == "puck"
+            var art: Texture2D = preload("res://assets/neon/Circle_Note_Puck_Blue.png") if puck else preload("res://assets/neon/Circle_Note_Reference.png")
+            var w = size.x*(.56 if puck else .78); var dim = Vector2(w, w*art.get_height()/art.get_width())
+            draw_texture_rect(art, Rect2(center-dim*.5, dim), false)
         var font = ThemeDB.fallback_font
         var caption = shape.to_upper()
         var font_size = 18
@@ -308,7 +303,7 @@ func add_control(panel: PanelContainer,control: Control,width: float=316) -> voi
     if control is Stepper: control.readout.add_theme_font_size_override("font_size",28)
 func page(category: String,key: String) -> VBoxContainer:
     if not pages.has(category):
-        var wrapper=Control.new(); page_host.add_child(wrapper); wrapper.position=Vector2(28,105); wrapper.size=Vector2(1044,461)
+        var wrapper=Control.new(); page_host.add_child(wrapper); wrapper.position=Vector2(28,105); wrapper.size=Vector2(1044,542)
         pages[category]={"root":wrapper,"sections":{}}
         subtab_buttons[category]={}
         var count=SUBPAGES[category].size(); var width=(1044.0-(count-1)*12)/count; var index=0
@@ -317,10 +312,10 @@ func page(category: String,key: String) -> VBoxContainer:
             var tab=action(wrapper,SUBPAGES[category][id],func(): show_section(id))
             tab.custom_minimum_size=Vector2.ZERO; tab.position=Vector2(index*(width+12),0); tab.size=Vector2(width,64); tab.caption_size=22
             subtab_buttons[category][id]=tab; index+=1
-    var content=Control.new(); pages[category].root.add_child(content); content.position=Vector2(0,78); content.size=Vector2(1044,383)
+    var content=Control.new(); pages[category].root.add_child(content); content.position=Vector2(0,78); content.size=Vector2(1044,464)
     var title=label(content,SUBPAGES[category][key],24); title.position=Vector2.ZERO; title.size=Vector2(1044,34)
     var hint=label(content,SUBPAGE_HINTS[key],14,Color("a7aac6")); hint.position=Vector2(0,36); hint.size=Vector2(1044,24)
-    var scroll=ScrollContainer.new(); content.add_child(scroll); scroll.position=Vector2(0,68); scroll.size=Vector2(1044,315)
+    var scroll=ScrollContainer.new(); content.add_child(scroll); scroll.position=Vector2(0,68); scroll.size=Vector2(1044,396)
     scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED; scroll.scroll_deadzone=12
     var drag=preload("res://scripts/song_list_scroll.gd").new(); drag.name="DragScroll"; drag.scroll=scroll; scroll.add_child(drag)
     var rail=StyleBoxFlat.new(); rail.bg_color=Color(0,0,0,0); scroll.get_v_scroll_bar().add_theme_stylebox_override("scroll",rail)
@@ -345,14 +340,14 @@ func _ready() -> void:
     var eyebrow=label(canvas,"G A M E   S E T T I N G S",12,ACCENT); eyebrow.position=Vector2(144,33); eyebrow.size=Vector2(600,24)
     var heading=label(canvas,"Make it your rhythm",36); heading.position=Vector2(144,57); heading.size=Vector2(700,52)
     var save=label(canvas,"Changes save automatically",15,Color("a7aac6")); save.position=Vector2(1100,53); save.size=Vector2(308,32); save.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
-    var rail=Panel.new(); place(rail,canvas,48,168,232,590); rail.add_theme_stylebox_override("panel",style())
+    var rail=Panel.new(); place(rail,canvas,48,136,232,671); rail.add_theme_stylebox_override("panel",style())
     var y=26
     for key in PAGE_NAMES:
         var n=action(rail,PAGE_NAMES[key],func(): show_page(key)); n.caption_size=21
         n.position=Vector2(14,y); n.size=Vector2(204,84); nav_buttons[key]=n; y+=94
-    var scope=label(rail,"GLOBAL PREFERENCES",11,Color("7acbda")); scope.position=Vector2(22,491); scope.size=Vector2(194,24)
-    var scope_hint=label(rail,"Applies across all songs\nand chart versions.",14,Color("a7aac6")); scope_hint.position=Vector2(22,520); scope_hint.size=Vector2(194,52)
-    page_host=Panel.new(); place(page_host,canvas,308,168,1100,590); page_host.add_theme_stylebox_override("panel",style())
+    var scope=label(rail,"GLOBAL PREFERENCES",11,Color("7acbda")); scope.position=Vector2(22,572); scope.size=Vector2(194,24)
+    var scope_hint=label(rail,"Applies across all songs\nand chart versions.",14,Color("a7aac6")); scope_hint.position=Vector2(22,601); scope_hint.size=Vector2(194,52)
+    page_host=Panel.new(); place(page_host,canvas,308,136,1100,671); page_host.add_theme_stylebox_override("panel",style())
     page_title=label(page_host,"",28); page_title.position=Vector2(28,23); page_title.size=Vector2(1044,39)
     page_hint=label(page_host,"",16,Color("a7aac6")); page_hint.position=Vector2(28,66); page_hint.size=Vector2(1044,28)
     build_gameplay(page("gameplay","play"),page("gameplay","browsing"))
@@ -407,6 +402,13 @@ func build_gameplay(items: VBoxContainer,browsing: VBoxContainer) -> void:
     match_display.button_pressed=game.frame_rate_setting()<=0; fps.editable=not match_display.button_pressed
     connect_switch(match_display,func(on): fps.editable=not on; game.change_frame_rate(0 if on else roundi(fps.value)))
     fps.value_changed.connect(func(v): if not match_display.button_pressed: game.change_frame_rate(roundi(v)))
+    # Highway render resolution: three choices, the current one highlighted.
+    var resolution=row(items,"Highway resolution","Lower is a little softer, but smoother on phones.")
+    var choices=HBoxContainer.new(); choices.add_theme_constant_override("separation",10); add_control(resolution,choices,330)
+    for value in game.RENDER_SCALES:
+        var scale_value: float=value
+        var b=action(choices,"%d%%" % roundi(scale_value*100),func(): game.change_render_scale(scale_value))
+        b.custom_minimum_size=Vector2(100,72); b.caption_size=21; render_scale_buttons[scale_value]=b
     extras_switch(items,"judgement","Easy judging","Wider timing windows for PERFECT, GREAT and GOOD.",true)
     extras_switch(items,"touch_assist","Touch assist","A tap just beside an empty lane still hits the nearby note.")
     extras_switch(items,"lane_hints","Lane lines","Show faint lane lines while you play.")
@@ -494,17 +496,14 @@ func build_colors(items: VBoxContainer) -> void:
             picker.color_changed.connect(func(color): game.change_gameplay_color(key,color.to_html(false)))
             var reset=action(controls,"FOLLOW RAIL" if key=="glow" else "DEFAULT",func(): game.change_gameplay_color(key,""))
             reset.custom_minimum_size=Vector2(172,72); reset.caption_size=17; color_reset_buttons[key]=reset
-    rail_glow_input=Stepper.new(0,30,1,game.rail_glow_opacity*100,"%",0)
-    add_control(row(items,"Highway backdrop glow","Soft color across the top and outer rails, gently following the beat."),rail_glow_input)
-    rail_glow_input.value_changed.connect(func(value): game.change_rail_glow_opacity(value/100))
     action(items,"RESET CUSTOM COLORS",game.reset_gameplay_colors)
 
 func build_notes(items: VBoxContainer) -> void:
     var shapes=row(items,"Note shape","Choose the note style you see on the highway.",166)
     var tile_row=HBoxContainer.new(); tile_row.add_theme_constant_override("separation",12)
-    add_control(shapes,tile_row,440)
-    for kind in ["rectangle","circle"]:
-        var tile=ShapeTile.new(kind); tile_row.add_child(tile); tile.custom_minimum_size=Vector2(208,136)
+    add_control(shapes,tile_row,500)
+    for kind in ["rectangle","circle","puck"]:
+        var tile=ShapeTile.new(kind); tile_row.add_child(tile); tile.custom_minimum_size=Vector2(158,136)
         tile.pressed.connect(func(): if not Action.was_dragged(tile): game.change_note_shape(kind))
         shape_tiles[kind]=tile
     var preview=preload("res://scripts/note_appearance_preview.gd").new(); preview.game=game; items.add_child(preview)
@@ -528,6 +527,12 @@ func effect_row(items: VBoxContainer,key: String,hint: String) -> void:
     add_control(row(items,key,hint,96),control)
     control.value_changed.connect(func(v): game.features.set_effect(key,v/100))
 func build_hit_effects(items: VBoxContainer) -> void:
+    var style=row(items,"Hit effect style","Classic bursts, or Bloom: a bright flash with rings on the line.")
+    var choices=HBoxContainer.new(); choices.add_theme_constant_override("separation",10); add_control(style,choices,330)
+    for value in game.HIT_STYLES:
+        var key: String=value
+        var b=action(choices,key.capitalize(),func(): game.change_hit_style(key))
+        b.custom_minimum_size=Vector2(150,72); b.caption_size=21; hit_style_buttons[key]=b
     effect_row(items,"Hit flashes","Set the brightness of hit flashes and impact rings.")
     effect_row(items,"Particles","Set particle density for hit sparks and ambient motes.")
     action(items,"RESET HIT EFFECTS",func():
@@ -567,9 +572,10 @@ func refresh() -> void:
         picker.color=Color.from_string(str(game.gameplay_colors[key]),Color.WHITE) if game.gameplay_colors.has(key) else SynkGameplayColors.preview_default(game,key)
         color_reset_buttons[key].disabled=picker.disabled
         color_reset_buttons[key].set_selected(not game.gameplay_colors.has(key))
-    if rail_glow_input: rail_glow_input.sync_value(game.rail_glow_opacity*100)
     if trail_style_input: trail_style_input.select(1 if game.trail_style=="solid" else 0)
     for kind in shape_tiles: shape_tiles[kind].selected=kind==game.note_shape
+    for key in hit_style_buttons: hit_style_buttons[key].set_selected(key==game.hit_style)
+    for value in render_scale_buttons: render_scale_buttons[value].set_selected(is_equal_approx(value,game.render_scale()))
     for kind in style_tiles: style_tiles[kind].selected=kind==game.highway_style
     for kind in color_mode_tiles: color_mode_tiles[kind].selected=kind==game.highway_colors
     for swatch in rail_swatches: swatch.selected=swatch.color_code==game.rail_color and (game.highway_colors=="adaptive" or not game.gameplay_colors.has("rail"))

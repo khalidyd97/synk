@@ -211,7 +211,7 @@ func draw_lane() -> void:
 		var accent = posmod(k,BEATS_PER_LOOP)==0
 		var color = Color("ffd447") if accent else Color("38baff")
 		var alpha = 1.0 if until >= 0 else maxf(0,1.0+until*4.0)
-		if game.note_shape=="circle":
+		if game.round_notes():
 			lane.draw_set_transform(Vector2(center,y),0,Vector2(1,.38))
 			lane.draw_circle(Vector2.ZERO,half*.62,Color(color,alpha))
 			lane.draw_arc(Vector2.ZERO,half*.58,0,TAU,40,Color(1,1,1,alpha*.85),3.0,true)

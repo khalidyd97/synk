@@ -8,7 +8,8 @@ const EDGE_MARGIN = .2
 const NOTE_SCALE = 1.3
 const NOTE_WIDTH = 3.1*NOTE_SCALE
 const FIT = 1.0
-const LANE_WIDTH = (HIGHWAY_HALF_WIDTH-EDGE_MARGIN-NOTE_WIDTH*.5)/CENTER_LANE
+# Every lane, the outer two included, gets the same share of the highway.
+const LANE_WIDTH = HIGHWAY_HALF_WIDTH*2.0/SynkChart.LANES
 const PAD_HALF_WIDTH = HIGHWAY_HALF_WIDTH
 const FRAME_HALF_WIDTH = HIGHWAY_HALF_WIDTH
 const TRAIL_HALF = .8*NOTE_SCALE
@@ -119,16 +120,29 @@ func line(parent: Node3D, a: Vector3, b: Vector3, width: float, mat: Material) -
 	return node
 
 func lane_x(lane: float) -> float: return (lane-CENTER_LANE)*LANE_WIDTH
+# Where a note is drawn: its lane centre, nudged inward on the outer lanes so the note
+# (about two lanes wide) stays inside the rails. Judging and touch still use lane_x.
+# Taps are judged on the note itself, not its lane: a touch counts when it lands within the
+# note's drawn half-width at the judgement bar (plus a little grace).
+func note_reach() -> float: return NOTE_WIDTH * .5 * game.note_size * 1.1
+func note_x(lane: float) -> float:
+	var limit = HIGHWAY_HALF_WIDTH - EDGE_MARGIN - NOTE_WIDTH*.5*game.note_size
+	return clampf(lane_x(lane), -limit, limit)
+# Notes travel the whole 60-unit track, from the far end to the judgement bar.
+func visible_length() -> float: return TRACK_LENGTH
 func travel_speed() -> float: return TRACK_LENGTH / game.note_travel_seconds()
 func render_time() -> float:
 	return game.visual_song_time if game.audio.playing and game.mode in ["play","record"] and game.countdown<=0 and game.resume_countdown<=0 else game.song_time
 func note_position(lane: float, chart_time: float) -> Vector3:
-	return Vector3(lane_x(lane), .13, (render_time()-chart_time)*travel_speed())
+	return Vector3(note_x(lane), .13, (render_time()-chart_time)*travel_speed())
+func apply_camera(shake: Vector3 = Vector3.ZERO) -> void:
+	camera.projection = Camera3D.PROJECTION_PERSPECTIVE; camera.fov = GAMEPLAY_FOV
+	camera.position = camera_rest_position() + shake; camera.rotation_degrees = Vector3(-highway_angle(), 0, 0)
 
 func _ready() -> void:
 	camera = Camera3D.new(); add_child(camera); camera.current = true
-	camera.position = camera_rest_position(); camera.rotation_degrees.x = -highway_angle()
-	camera.fov = GAMEPLAY_FOV; camera.near = .1; camera.far = 180
+	camera.near = .1; camera.far = 260
+	apply_camera()
 	var environment = WorldEnvironment.new(); environment.environment = Environment.new()
 	environment.environment.background_mode = Environment.BG_COLOR
 	environment.environment.background_color = Color("06091e")
@@ -289,7 +303,7 @@ func update_cover_backdrop() -> void:
 	var viewport_size = get_viewport().get_visible_rect().size
 	if viewport_size.y <= 0: return
 	var aspect = viewport_size.x/viewport_size.y
-	var height = 2.0*COVER_DISTANCE*tan(deg_to_rad(camera.fov*.5))*1.04
+	var height = camera.size*1.04 if camera.projection==Camera3D.PROJECTION_ORTHOGONAL else 2.0*COVER_DISTANCE*tan(deg_to_rad(camera.fov*.5))*1.04
 	(cover_backdrop.mesh as QuadMesh).size = Vector2(height*aspect,height)
 	cover_material.set_shader_parameter("screen_aspect",aspect)
 	# Track the projected rail silhouette without moving the camera or highway geometry.
@@ -478,7 +492,8 @@ func refresh_highway_look() -> void:
 		var glow=rail_glow_colors()
 		cover_material.set_shader_parameter("rail_glow_left",glow[0])
 		cover_material.set_shader_parameter("rail_glow_right",glow[1])
-		cover_material.set_shader_parameter("rail_glow_opacity",0.0 if game.uses_recorder_colors() else game.rail_glow_opacity)
+		# The soft glow that spread outside the rails is removed.
+		cover_material.set_shader_parameter("rail_glow_opacity",0.0)
 
 func build_effects() -> void:
 	spark_mesh = SphereMesh.new(); spark_mesh.radius = .065; spark_mesh.height = .13
@@ -541,7 +556,58 @@ func touch_hit_position(lane: float,pointer_id: int) -> Vector3:
 	# Follow horizontal touch movement, but never let the burst drift up/down the track.
 	return Vector3(clampf(x,-HIGHWAY_HALF_WIDTH,HIGHWAY_HALF_WIDTH),.035,0)
 
+# --- "Bloom" hit effect style (Settings > Visual effects > Hit effects) -------------------
+# A flat overexposed flash with expanding rings on the judgement line, plus rising sparkles.
+# Two quads per hit, pooled; holds keep re-pulsing while they are held.
+const BLOOM_LIFE = .38
+var prewarming_hits = false
+var bloom_pool: Array = []
+var blooms: Array = []
+func make_bloom() -> Dictionary:
+	var node = Node3D.new(); add_child(node)
+	var flat_mesh = PlaneMesh.new(); flat_mesh.size = Vector2(10.0, 6.0)
+	var flat_mat = ShaderMaterial.new(); flat_mat.shader = preload("res://scripts/bloom_hit.gdshader"); flat_mat.render_priority = 5
+	var flat = mesh_node(flat_mesh, node, flat_mat); flat.position = Vector3(0, .02, 0)
+	var spark_mesh = QuadMesh.new(); spark_mesh.size = Vector2(6.0, 5.0)
+	var spark_mat = ShaderMaterial.new(); spark_mat.shader = preload("res://scripts/bloom_sparks.gdshader"); spark_mat.render_priority = 6
+	var sparks = mesh_node(spark_mesh, node, spark_mat); sparks.position = Vector3(0, 2.4, 0); sparks.rotation = camera.rotation
+	node.visible = false
+	return {"node": node, "flat": flat_mat, "sparks": spark_mat, "age": 0.0, "sustain_entry": {}, "pointer_id": -999, "kind": "tap"}
+func prefill_blooms(count: int = 24) -> void:
+	while bloom_pool.size() + blooms.size() < count: bloom_pool.append(make_bloom())
+func spawn_bloom(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int) -> void:
+	if blooms.size() >= 24: bloom_pool.append(blooms.pop_front())
+	var b: Dictionary = bloom_pool.pop_back() if not bloom_pool.is_empty() else make_bloom()
+	var palette = palette_for_kind("tap" if kind in ["slide","flick"] else kind)
+	var c: Color = element_color("hits", colors[palette])
+	c = Color.from_hsv(c.h, minf(1.0, c.s * 1.15), 1.0)  # full-brightness glow in the note colour
+	b.flat.set_shader_parameter("tint", c); b.sparks.set_shader_parameter("tint", c)
+	b.sparks.set_shader_parameter("seed", randf() * 100.0)
+	b.age = 0.0; b.kind = kind; b.sustain_entry = sustain_entry; b.pointer_id = pointer_id
+	b.node.position = touch_hit_position(lane, pointer_id) + Vector3(0, .06, 0)
+	b.node.visible = true; blooms.append(b)
+func animate_blooms(delta: float, running: bool) -> void:
+	var intensity = game.features.effect("Hit flashes"); var particles = game.features.effect("Particles")
+	for i in range(blooms.size() - 1, -1, -1):
+		var b: Dictionary = blooms[i]
+		var sustained = not b.sustain_entry.is_empty() and not b.sustain_entry.done
+		if running: b.age += delta
+		if sustained:
+			# Held notes re-pulse the bloom and follow the finger or slide head.
+			if b.age >= BLOOM_LIFE * .7: b.age = BLOOM_LIFE * .18
+			if game.pointers.has(int(b.sustain_entry.get("pointer", b.pointer_id))) and game.pointers[int(b.sustain_entry.get("pointer", b.pointer_id))].has("world"):
+				b.node.position = touch_hit_position(0, int(b.sustain_entry.get("pointer", b.pointer_id))) + Vector3(0, .06, 0)
+			elif b.kind == "slide": b.node.position.x = note_x(SynkChart.lane_at(b.sustain_entry.note, game.song_time))
+		elif not b.sustain_entry.is_empty(): b.sustain_entry = {}
+		if (not sustained and b.age >= BLOOM_LIFE) or game.mode not in ["play","record","paused"]:
+			b.node.visible = false; blooms.remove_at(i); bloom_pool.append(b); continue
+		var t = b.age / BLOOM_LIFE
+		b.flat.set_shader_parameter("age", t); b.flat.set_shader_parameter("strength", intensity)
+		b.sparks.set_shader_parameter("age", t); b.sparks.set_shader_parameter("strength", particles)
+
 func spawn_hit(lane: float, kind: String, direction: int = 0, sustain_entry: Dictionary = {},pointer_id: int=-999) -> void:
+	if game.hit_style == "bloom" and not prewarming_hits:
+		spawn_bloom(lane, kind, sustain_entry, pointer_id); return
 	if bursts.size() >= 32:
 		recycle_hit(bursts.pop_front())
 	var palette = palette_for_kind("tap" if kind in ["slide","flick"] else kind)
@@ -585,7 +651,8 @@ func spawn_hit(lane: float, kind: String, direction: int = 0, sustain_entry: Dic
 	var ring_mesh = TorusMesh.new(); ring_mesh.inner_radius=.9*FIT; ring_mesh.outer_radius=.97*FIT; ring_mesh.rings=32; ring_mesh.ring_segments=6
 	var ring = mesh_node(ring_mesh,node,material(hit_color,.8))
 	var particles: Array = []
-	var particle_count = 24 if kind=="flick" else 12
+	# Each spark is its own object and draw call; phones get fewer so dense charts stay smooth.
+	var particle_count = (10 if kind=="flick" else 6) if OS.has_feature("mobile") else (24 if kind=="flick" else 12)
 	var particle_material = material(element_color("sparks",colors[palette].lightened(.65) if kind=="flick" else colors[palette]))
 	var streak_mesh = BoxMesh.new(); streak_mesh.size=Vector3(.035,.035,.42)
 	for i in particle_count:
@@ -620,7 +687,10 @@ func prewarm() -> void:
 	var hold = SynkChart.note(0, 5, "hold"); hold.duration = .5; make_ribbon(group, hold, 1)
 	var slide = SynkChart.note(0, 7, "slide"); slide.duration = .5; slide.end_lane = 9
 	slide.path = [{"offset": 0.0, "lane": 7.0}, {"offset": .5, "lane": 9.0}]; make_ribbon(group, slide, 1)
+	prewarming_hits = true
 	for kind in ["tap", "hold", "flick"]: spawn_hit(5, kind, 1)
+	prewarming_hits = false
+	if game.hit_style == "bloom": spawn_bloom(5, "tap", {}, -999)
 	for beam in finger_beams.slice(0, 1): beam.visible = true
 	for i in 4: await get_tree().process_frame
 	if is_instance_valid(group): group.queue_free()
@@ -645,11 +715,14 @@ func prefill_hits() -> void:
 	var have = {}
 	for burst in hit_pool: have[burst.pool_key] = int(have.get(burst.pool_key, 0)) + 1
 	var made: Array = []
+	if game.hit_style == "bloom": prefill_blooms(); return
+	prewarming_hits = true
 	for pool_key in wanted:
 		var kind = "hold" if pool_key == "1normal" else ("flick" if pool_key.begins_with("0flick") else "tap")
 		var dir = int(pool_key.trim_prefix("0flick")) if kind == "flick" else 0
 		for i in maxi(0, int(wanted[pool_key]) - int(have.get(pool_key, 0))):
 			spawn_hit(5, kind, dir); made.append(bursts.pop_back())
+	prewarming_hits = false
 	for burst in made: recycle_hit(burst)
 
 # --- Play aids -------------------------------------------------------------------------
@@ -692,6 +765,39 @@ func flash_miss_lane(lane: float) -> void:
 
 func rail_flare() -> void:
 	flare = 1.0
+
+# --- Combo multiplier effect -------------------------------------------------------------
+# Each time the score multiplier steps up (every 100 combo): a gold wave sweeps from the
+# judgement line to the horizon with a bright leading edge, the judgement bar glows gold,
+# and the rails flare.
+const GOLD = Color("ffd257")
+var gold_wave: MeshInstance3D
+var gold_bar: MeshInstance3D
+var gold_age = -1.0
+func gold_material(edge_only: bool) -> ShaderMaterial:
+	var m = ShaderMaterial.new(); m.shader = preload("res://scripts/gold_wave.gdshader")
+	m.set_shader_parameter("edge_only", 1.0 if edge_only else 0.0); m.render_priority = 4
+	return m
+func multiplier_wave() -> void:
+	if gold_wave == null:
+		# Leading edge at the far end of the band (UV.y 0), trail behind it toward the player.
+		var band = PlaneMesh.new(); band.size = Vector2(HIGHWAY_HALF_WIDTH * 2.0, 14.0)
+		gold_wave = mesh_node(band, self, gold_material(false))
+		var bar = PlaneMesh.new(); bar.size = Vector2(HIGHWAY_HALF_WIDTH * 2.0, JUDGMENT_DEPTH * 2.2)
+		gold_bar = mesh_node(bar, self, gold_material(true))
+	gold_age = 0.0; rail_flare()
+	for node in [gold_wave, gold_bar]: node.visible = true
+func update_multiplier_wave(delta: float) -> void:
+	if gold_age < 0.0: return
+	if game.mode != "paused": gold_age += delta
+	var t = clampf(gold_age / 1.5, 0.0, 1.0)
+	gold_wave.position = Vector3(0, .07, -ease(t, .6) * 62.0 + 7.0)
+	gold_bar.position = Vector3(0, .08, 0)
+	(gold_wave.material_override as ShaderMaterial).set_shader_parameter("strength", 1.0 - t * t)
+	(gold_bar.material_override as ShaderMaterial).set_shader_parameter("strength", .9 * (1.0 - clampf(gold_age / 1.0, 0.0, 1.0)))
+	if t >= 1.0:
+		gold_age = -1.0
+		for node in [gold_wave, gold_bar]: node.visible = false
 
 func update_play_aids(delta: float) -> void:
 	var playing = game.mode == "play" or (game.mode == "paused" and game.paused_mode == "play")
@@ -753,8 +859,8 @@ func build_chords() -> void:
 # Hidden: notes vanish as they approach the line. Sudden: notes appear late, partway down.
 func modifier_hides(z: float) -> bool:
 	var distance = -z
-	if bool(extras_setting("sudden", false)) and distance > TRACK_LENGTH * .5: return true
-	if bool(extras_setting("hidden", false)) and distance < TRACK_LENGTH * .28 and distance > .5: return true
+	if bool(extras_setting("sudden", false)) and distance > visible_length() * .5: return true
+	if bool(extras_setting("hidden", false)) and distance < visible_length() * .28 and distance > .5: return true
 	return false
 
 func clear_hit_effects() -> void:
@@ -772,10 +878,13 @@ func clear_notes() -> void:
 func animate_effects(delta: float) -> void:
 	var running = game.mode in ["play","record"]
 	if running: animation_time += delta
-	for i in range(animated_materials.size()-1,-1,-1):
-		var mat = animated_materials[i].get_ref()
-		if mat==null: animated_materials.remove_at(i)
-		else: mat.set_shader_parameter("animation_time",animation_time)
+	# Every highway shader reads this one global clock (project setting shader_globals/synk_time).
+	RenderingServer.global_shader_parameter_set("synk_time",animation_time)
+	# Settings read once per frame, not once per burst or particle.
+	animate_blooms(delta, running)
+	var hit_intensity=game.features.effect("Hit flashes")
+	var particle_share=game.features.effect("Particles")
+	var hold_wave = .5+.5*sin(animation_time*TAU*2.8)
 	for i in range(bursts.size()-1,-1,-1):
 		var burst: Dictionary = bursts[i]
 		var sustained = not burst.sustain_entry.is_empty() and not burst.sustain_entry.done
@@ -789,30 +898,30 @@ func animate_effects(delta: float) -> void:
 		# A quick, full flash that holds its body before fading out.
 		var fade = pow(1.0-smoothstep(.10,1.0,t),1.5)
 		var attack = minf(1.0,burst.age/.018)
-		var hold_wave = .5+.5*sin(animation_time*TAU*2.8)
 		var hold_blend = smoothstep(0.0,.18,burst.age) if sustained else 0.0
 		if sustained: burst.pointer_id=int(burst.sustain_entry.get("pointer",burst.pointer_id))
 		if sustained and game.pointers.has(burst.pointer_id) and game.pointers[burst.pointer_id].has("world"):
 			burst.node.position=touch_hit_position(0,burst.pointer_id)+Vector3(0,.065,0)
 		elif sustained and burst.kind=="slide":
 			# Keep the normal hit burst on the moving slide head, with repeated flashes.
-			burst.node.position.x = lane_x(SynkChart.lane_at(burst.sustain_entry.note,game.song_time))
-		burst.flash.material_override.set_shader_parameter("opacity",lerpf(attack*fade,.60+hold_wave*.26,hold_blend))
-		burst.fill.material_override.set_shader_parameter("opacity",lerpf(attack*fade,.55+hold_wave*.22,hold_blend))
+			burst.node.position.x = note_x(SynkChart.lane_at(burst.sustain_entry.note,game.song_time))
+		var flash_opacity = lerpf(attack*fade,.60+hold_wave*.26,hold_blend)
+		var fill_opacity = lerpf(attack*fade,.55+hold_wave*.22,hold_blend)
 		if sustained and burst.kind=="slide":
 			var slide_flash = .18+.82*pow(hold_wave,2.0)
-			burst.flash.material_override.set_shader_parameter("opacity",lerpf(attack*fade,slide_flash,hold_blend))
-			burst.fill.material_override.set_shader_parameter("opacity",lerpf(attack*fade,slide_flash,hold_blend))
-		var hit_intensity=game.features.effect("Hit flashes")
-		for art in [burst.flash,burst.fill]:
-			art.material_override.set_shader_parameter("opacity",float(art.material_override.get_shader_parameter("opacity"))*hit_intensity)
+			flash_opacity = lerpf(attack*fade,slide_flash,hold_blend); fill_opacity = flash_opacity
+		burst.flash.material_override.set_shader_parameter("opacity",flash_opacity*hit_intensity)
+		burst.fill.material_override.set_shader_parameter("opacity",fill_opacity*hit_intensity)
 		burst.fill.scale = Vector3(1.0+t*.7,1.0+t*.35,1).lerp(Vector3(1.18+hold_wave*.15,1.05+hold_wave*.14,1),hold_blend)
 		burst.flash.scale = Vector3(1.0+t*.6,1.0+t*.25,1).lerp(Vector3(1.14+hold_wave*.12,1.0+hold_wave*.12,1),hold_blend)
 		burst.ring.scale = Vector3.ONE*lerpf(.8+t*.75,1.12+hold_wave*.22,hold_blend)
 		burst.ring.material_override.albedo_color.a = lerpf(fade*.8,.15+hold_wave*.25,hold_blend)*hit_intensity
-		for particle_index in burst.particles.size():
+		var particle_count=burst.particles.size()
+		for particle_index in particle_count:
 			var particle=burst.particles[particle_index]
-			particle.node.visible=float(particle_index)/maxi(1,burst.particles.size())<game.features.effect("Particles")
+			var shown=float(particle_index)/maxi(1,particle_count)<particle_share
+			particle.node.visible=shown
+			if not shown: continue
 			particle.node.position = particle.velocity*burst.age
 			if burst.kind=="flick": particle.node.position += Vector3(0,1.8,0)
 			if burst.kind!="flick": particle.node.position += Vector3(0,-2.5*burst.age*burst.age,0)
@@ -833,8 +942,8 @@ func palette_for_kind(kind: String) -> int:
 # Tails reuse the exact head artwork, with their own relative size.
 func make_cap(parent: Node3D, lane: float, offset: float, palette: int, recording = false, size = 1.0) -> MeshInstance3D:
 	size*=game.note_size
-	var position_value = Vector3(lane_x(lane),.2,offset*travel_speed()*(1 if recording else -1))
-	if game.note_shape=="circle":
+	var position_value = Vector3(note_x(lane),.2,offset*travel_speed()*(1 if recording else -1))
+	if game.round_notes():
 		return make_circle_cap(parent,position_value,palette,size)
 	return artwork(parent,"Tap_Note_Blue" if palette==0 else "Tap_Note_Pink",palette,position_value,Vector2(NOTE_WIDTH,1.4*FIT)*size,CAP_REGION)
 
@@ -843,18 +952,26 @@ func make_circle_cap(parent: Node3D, position_value: Vector3, palette: int, size
 	# Face the camera once so it keeps that silhouette rather than flattening twice.
 	var radius = 1.16*NOTE_SCALE*size
 	var role=["tap","hold","flick","slide"][palette]
-	var mat = shared("circle|%d|%s|%s|%s" % [palette, colors[palette], game.highway_colors, game.uses_recorder_colors()], func():
+	# Artwork, its base hue (rotated to each note colour) and its aspect ratio.
+	var puck = game.note_shape=="puck"
+	var art: Texture2D = preload("res://assets/neon/Circle_Note_Puck.png") if puck else preload("res://assets/neon/Circle_Note_Reference.png")
+	var base_hue = .76 if puck else .53
+	var mat = shared("circle|%s|%d|%s|%s|%s" % [game.note_shape, palette, colors[palette], game.highway_colors, game.uses_recorder_colors()], func():
 		var m = ShaderMaterial.new(); m.shader = preload("res://scripts/reference_note.gdshader")
-		m.set_shader_parameter("artwork",preload("res://assets/neon/Circle_Note_Reference.png"))
-		m.set_shader_parameter("hue_shift",colors[palette].h-.53)
+		m.set_shader_parameter("artwork",art)
+		m.set_shader_parameter("hue_shift",colors[palette].h-base_hue)
 		if game.highway_colors=="theme" and not game.uses_recorder_colors() and game.gameplay_colors.has(role):
 			m.set_shader_parameter("saturation_scale",colors[palette].s/.78)
 			m.set_shader_parameter("value_scale",colors[palette].v)
 		return m)
-	if not reference_note_meshes.has(size):
-		var quad = QuadMesh.new(); quad.size = Vector2(radius/.4,radius/.4*797.0/1388.0)
-		reference_note_meshes[size]=quad
-	var head = mesh_node(reference_note_meshes[size],parent,mat)
+	var mesh_key = "%s|%s" % [game.note_shape, size]
+	if not reference_note_meshes.has(mesh_key):
+		var quad = QuadMesh.new()
+		# The puck art has no wide halo margin, so it is drawn a little narrower.
+		var width = radius/.4*(.72 if puck else 1.0)
+		quad.size = Vector2(width,width*art.get_height()/art.get_width())
+		reference_note_meshes[mesh_key]=quad
+	var head = mesh_node(reference_note_meshes[mesh_key],parent,mat)
 	head.position = Vector3(position_value.x,.38*size,position_value.z)
 	head.rotation = camera.rotation
 	return head
@@ -862,7 +979,7 @@ func make_circle_cap(parent: Node3D, position_value: Vector3, palette: int, size
 func make_tail_cap(parent: Node3D, lane: float, offset: float, palette: int, recording = false) -> MeshInstance3D:
 	var cap=make_cap(parent,lane,offset,palette,recording,TAIL_CAP_SIZE)
 	# Keep its filled center above the ribbon instead of sinking with the smaller sprite.
-	if game.note_shape=="circle": cap.position.y=.38*game.note_size
+	if game.round_notes(): cap.position.y=.38*game.note_size
 	cap.name="SustainEndCap"
 	return cap
 
@@ -871,7 +988,7 @@ func make_flick(parent: Node3D, note: Dictionary, palette: int) -> void:
 	# One bold chevron keeps the direction clear without overlapping arrows.
 	var axis = camera.basis*[Vector3.UP,Vector3.RIGHT,Vector3.DOWN,Vector3.LEFT][clampi(int(note.direction),0,3)]
 	for i in 1:
-		var base = Vector3(lane_x(note.lane),2.0*FIT*game.note_size,0)
+		var base = Vector3(note_x(note.lane),2.0*FIT*game.note_size,0)
 		var arrow_mesh = QuadMesh.new(); arrow_mesh.size=Vector2(3.22,1.6)*FIT*game.note_size
 		var arrow_material = shared("arrow|%d|%s" % [palette, element_color("arrows",colors[palette])], func():
 			var m = ShaderMaterial.new(); m.shader=preload("res://scripts/flick_arrow.gdshader")
@@ -885,14 +1002,14 @@ func make_flick(parent: Node3D, note: Dictionary, palette: int) -> void:
 # Trails run through the middle of their notes: just above the track for flat rectangle
 # notes, and at half height through the thicker circle pucks.
 func trail_height() -> float:
-	return (.38 if game.note_shape=="circle" else .09)*game.note_size
+	return (.38 if game.round_notes() else .09)*game.note_size
 
 func trail_centers(note: Dictionary, count: int, recording = false) -> Array:
 	var duration = float(note.duration)
 	var result: Array = []
 	for i in count+1:
 		var t = duration*i/count
-		var point = Vector3(lane_x(SynkChart.lane_at(note,note.time+t)),trail_height(),-t*travel_speed())
+		var point = Vector3(note_x(SynkChart.lane_at(note,note.time+t)),trail_height(),-t*travel_speed())
 		if recording: point.z = -point.z
 		result.append(point)
 	return result
@@ -962,7 +1079,7 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 			m.set_shader_parameter("color",trail_color(palette).lightened(.55)); return m)
 		for offset in note.checkpoints:
 			var at = float(offset)
-			var dot_position = Vector3(lane_x(SynkChart.lane_at(note,note.time+at)),trail_height()+.07,-at*travel_speed()*(-1 if recording else 1))
+			var dot_position = Vector3(note_x(SynkChart.lane_at(note,note.time+at)),trail_height()+.07,-at*travel_speed()*(-1 if recording else 1))
 			var halo_mesh = CylinderMesh.new(); halo_mesh.top_radius=.62*FIT; halo_mesh.bottom_radius=.62*FIT; halo_mesh.height=.02; halo_mesh.radial_segments=24
 			var halo = mesh_node(halo_mesh,parent,halo_material); halo.position = dot_position
 			var bead_mesh = SphereMesh.new(); bead_mesh.radius=.34*FIT; bead_mesh.height=.24*FIT; bead_mesh.radial_segments=16; bead_mesh.rings=6
@@ -993,7 +1110,7 @@ func make_solid_trail_joints(parent: Node3D,note: Dictionary,palette: int,record
 		if is_equal_approx(float(offset),float(note.duration)): continue
 		var joint=mesh_node(disc,parent,material)
 		joint.set_meta("solid_trail_joint",true); joint.set_meta("checkpoint_offset",offset)
-		joint.position=Vector3(lane_x(SynkChart.lane_at(note,float(note.time)+offset)),trail_height()+.015,offset*travel_speed()*(1 if recording else -1))
+		joint.position=Vector3(note_x(SynkChart.lane_at(note,float(note.time)+offset)),trail_height()+.015,offset*travel_speed()*(1 if recording else -1))
 
 func make_alignment_lines(parent: Node3D, note: Dictionary, palette: int) -> Array:
 	# Recording-only rows across the highway at each note's head (and tail) for lining notes up.
@@ -1062,6 +1179,9 @@ func prebuild_progress() -> float:
 	if prebuild_total <= 0: return 1.0
 	return 1.0 - float(prebuild_queue.size()) / float(prebuild_total)
 
+# The note-look part of each note's signature, computed once per frame.
+var look_signature = 0
+var look_signature_frame = -1
 func sync_note(key: String, note: Dictionary, visible_keys: Dictionary, recording = false, freeze_time: float = -1.0, held = false) -> void:
 	var tail = float(note.time)+float(note.duration)
 	var visible_time=freeze_time if freeze_time>=0 else render_time()
@@ -1070,14 +1190,14 @@ func sync_note(key: String, note: Dictionary, visible_keys: Dictionary, recordin
 			if note.time>visible_time or visible_time-tail>game.note_travel_seconds(): return
 		elif note.time-visible_time > game.note_travel_seconds() or (visible_time-tail)*travel_speed()>5: return
 	visible_keys[key] = true
-	var signature = (hash(note) if recording or game.mode=="record" else 0)^hash([game.note_speed,game.note_shape,game.note_size,game.hold_trail_width,game.trail_style])
+	if look_signature_frame != Engine.get_process_frames():
+		look_signature_frame = Engine.get_process_frames()
+		look_signature = hash([game.note_speed,game.note_shape,game.note_size,game.hold_trail_width,game.trail_style])
+	var signature = (hash(note) if recording or game.mode=="record" else 0)^look_signature
 	if notes.has(key) and notes[key].signature != signature:
 		notes[key].node.queue_free(); notes.erase(key)
 	if not notes.has(key): build_note_node(key, note, recording)
 	notes[key].node.visible = true
-	for ref in notes[key].materials:
-		var mat = ref.get_ref()
-		if mat: mat.set_shader_parameter("animation_time",animation_time)
 	if notes[key].held != held:
 		notes[key].held = held
 		set_trail_clip(notes[key].node, 0.02 if held else 1000.0)
@@ -1147,10 +1267,8 @@ func animate_miss_shake(delta: float) -> void:
 	miss_shake_remaining=maxf(0,miss_shake_remaining-delta)
 	var strength=miss_shake_remaining/.22
 	var phase=(.22-miss_shake_remaining)*90.0
-	camera.position=camera_rest_position()+Vector3(sin(phase)*.065,sin(phase*1.3)*.025,0)*strength
 	# The loading card fades away over a stationary highway. No entrance zoom.
-	camera.fov=GAMEPLAY_FOV
-	camera.rotation_degrees.x=-highway_angle()
+	apply_camera(Vector3(sin(phase)*.065,sin(phase*1.3)*.025,0)*strength)
 
 # A missed sustain remains visible until its tail exits, even after judgment retires it.
 func first_visible_play_index() -> int:
@@ -1162,6 +1280,7 @@ func first_visible_play_index() -> int:
 		play_render_cursor+=1
 	return play_render_cursor
 
+var shown_keys: Dictionary = {}
 func _process(delta: float) -> void:
 	if game==null: return
 	step_prebuild()
@@ -1169,6 +1288,7 @@ func _process(delta: float) -> void:
 	var in_play = game.mode=="play" or (game.mode=="paused" and game.paused_mode=="play")
 	recorder_guides.visible = game.mode=="record" or (game.mode=="paused" and game.paused_mode=="record") or (in_play and bool(extras_setting("lane_hints", false)))
 	update_play_aids(delta)
+	update_multiplier_wave(delta)
 	animate_miss_shake(delta)
 	update_cover_backdrop()
 	animate_effects(delta)
@@ -1205,11 +1325,13 @@ func _process(delta: float) -> void:
 		for i in game.capture.notes.size(): sync_note("captured"+str(i),game.capture.notes[i],visible_keys,true)
 		for id in game.capture.gestures:
 			sync_note("gesture"+str(id),recording_preview(game.capture.gestures[id]),visible_keys,true)
-	for key in notes.keys():
-		if visible_keys.has(key): continue
+	# Only notes shown last frame can need hiding now, so this stays cheap on long charts.
+	for key in shown_keys:
+		if visible_keys.has(key) or not notes.has(key): continue
 		# Prebuilt chart notes are kept and hidden; anything built on the fly is freed.
 		if notes[key].get("prebuilt", false): notes[key].node.visible = false
 		else: notes[key].node.queue_free(); notes.erase(key)
+	shown_keys = visible_keys
 
 # A stationary touch emits no drag events. Advance its visual tail using the song
 # clock, without changing captured notes, gesture classification or saved timing.
