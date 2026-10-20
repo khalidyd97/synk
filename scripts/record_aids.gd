@@ -6,6 +6,7 @@ extends Node3D
 # take never stalls.
 const SAMPLE_RATE = 40.0
 const BUILD_PER_FRAME = 120
+const ROW = 1024
 var world: Node3D
 var grid: MeshInstance3D
 var grid_material: ShaderMaterial
@@ -42,7 +43,10 @@ func prepare(song_stream: AudioStream) -> void:
 	if stream == null: return
 	peaks.resize(maxi(1, ceili(stream.get_length() * SAMPLE_RATE)))
 	playback = stream.instantiate_playback(); playback.start()
-	peaks_image = Image.create(peaks.size(), 1, false, Image.FORMAT_RF)
+	# Plain 8-bit grid, at most 1024 wide: phones cap texture width (often 4096) and many lack
+	# filterable float textures, so a long single-row float strip could fail to load.
+	var rows = maxi(1, ceili(peaks.size() / float(ROW)))
+	peaks_image = Image.create(ROW, rows, false, Image.FORMAT_L8)
 	peaks_texture = ImageTexture.create_from_image(peaks_image)
 	lane_material.set_shader_parameter("peaks", peaks_texture)
 	lane_material.set_shader_parameter("sample_count", float(peaks.size()))
@@ -57,7 +61,9 @@ func build_some() -> void:
 		for frame in playback.mix_audio(1.0, mini(window, 512)): peak = maxf(peak, maxf(absf(frame.x), absf(frame.y)))
 		peaks[i] = peak
 	# Fixed curve (not relative to the loudest part) so early and late parts read the same.
-	for i in range(built, stop): peaks_image.set_pixel(i, 0, Color(clampf(sqrt(peaks[i]) * 1.15, 0.0, 1.0), 0, 0))
+	for i in range(built, stop):
+		var v = clampf(sqrt(peaks[i]) * 1.15, 0.0, 1.0)
+		peaks_image.set_pixel(i % ROW, i / ROW, Color(v, v, v))
 	built = stop
 	peaks_texture.update(peaks_image)
 	if built >= peaks.size(): playback.stop()

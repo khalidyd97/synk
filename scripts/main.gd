@@ -269,6 +269,12 @@ func automatic_render_quality() -> bool:
 func change_automatic_render_quality(enabled: bool) -> void:
 	prefs.set_value("gameplay","automatic_render_quality",enabled); prefs.save("user://preferences.cfg")
 	apply_render_scale()
+# Phones: automatic quality measured during a song, applied when the next one starts.
+var pending_render_scale=-1.0
+func apply_pending_render_scale() -> void:
+	if pending_render_scale>0.0 and field and field.viewport and not is_equal_approx(field.viewport.scaling_3d_scale,pending_render_scale):
+		field.viewport.scaling_3d_scale=pending_render_scale
+	pending_render_scale=-1.0
 func apply_render_scale() -> void:
 	frame_quality.reset(render_scale())
 	if field and field.viewport: field.viewport.scaling_3d_scale=render_scale()
@@ -290,6 +296,9 @@ func _ready() -> void:
 	intro.finished.connect(func(): intro_layer.queue_free())
 	# The lobby animates in as the intro clears, on every launch.
 	intro.revealing.connect(func(): if lobby: lobby.play_launch_entrance())
+	# First launch: offer the tap-along timing test once the lobby has arrived.
+	if not bool(prefs.get_value("audio","calibrated",false)):
+		intro.finished.connect(func(): get_tree().create_timer(1.4).timeout.connect(func(): if mode=="menu": open_timing_calibration()))
 	# Debug builds: a one-shot gameplay stress test, only when its trigger file exists.
 	if OS.is_debug_build() and FileAccess.file_exists("user://stress_test.json"):
 		var stress=preload("res://scripts/stress_test.gd").new(); stress.game=self; add_child.call_deferred(stress)
@@ -765,6 +774,12 @@ func close_lobby_settings() -> void:
 		UiMotion.reveal(lobby)
 
 # The audio sync helper replaces the settings page while it is open; BACK or SAVE return to it.
+# Tap-along timing test (timing_calibration.gd), on its own top layer.
+func open_timing_calibration() -> void:
+	if get_tree().root.has_node("TimingCalibration"): return
+	var layer=CanvasLayer.new(); layer.layer=96; layer.name="TimingCalibration"; get_tree().root.add_child(layer)
+	var view=preload("res://scripts/timing_calibration.gd").new(); view.game=self; layer.add_child(view)
+	view.closed.connect(func(): layer.queue_free())
 func open_sync_helper() -> void:
 	if not menu_settings_open: return
 	UiMotion.transition(self)
@@ -1080,6 +1095,7 @@ func create_hud_warmup() -> Control:
 	return root
 
 func start_game(notes: Array,automated: bool = false,section: String = "",is_practice: bool=false) -> void:
+	apply_pending_render_scale()
 	var validation=preload("res://scripts/gameplay_validation.gd").inspect(notes,audio.stream)
 	if not validation.is_empty(): tell(validation); return
 	gameplay_loading.cancel()

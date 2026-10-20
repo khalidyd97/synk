@@ -445,6 +445,7 @@ func build_audio(items: VBoxContainer,headset: VBoxContainer) -> void:
     bluetooth_latency_input=Stepper.new(0,600,5,game.bluetooth_latency_ms," ms",0)
     add_control(row(headset,"Extra headset delay","Enable headset mode to adjust its additional delay."),bluetooth_latency_input)
     bluetooth_latency_input.editable=game.bluetooth_mode; bluetooth_latency_input.value_changed.connect(game.change_bluetooth_latency)
+    action(items,"TAP-ALONG TIMING TEST  →",game.open_timing_calibration,true)
     action(items,"OPEN AUDIO SYNC HELPER  →",game.open_sync_helper,true)
 func sizing_row(items: VBoxContainer,key: String,title: String,hint: String,low: float,high: float,current: float) -> void:
     var control=Stepper.new(low,high,5,current*100,"%",0); sizing_inputs[key]=control

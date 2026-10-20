@@ -100,7 +100,10 @@ func _process(_delta: float) -> void:
 		var target=float(game.display_refresh_rate())
 		if Engine.max_fps>0: target=minf(target,float(Engine.max_fps))
 		var quality=game.frame_quality.sample(_delta,target,game.render_scale())
-		if not is_equal_approx(viewport.scaling_3d_scale,quality): viewport.scaling_3d_scale=quality
+		# Resizing the 3D render target mid-song can crash some Android GPU drivers, so on phones
+		# the measured quality is only applied when the next song starts (see main.start_game).
+		if OS.has_feature("mobile"): game.pending_render_scale=quality
+		elif not is_equal_approx(viewport.scaling_3d_scale,quality): viewport.scaling_3d_scale=quality
 	if viewport:
 		viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED if game.mode in ["menu","guide","library","editor"] else SubViewport.UPDATE_ALWAYS
 	if screen: screen.visible = game.mode not in ["guide","menu","library"]
