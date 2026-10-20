@@ -5,7 +5,6 @@ extends Node3D
 # The detailed waveform (40 samples per second) is built a little each frame, so starting a
 # take never stalls.
 const SAMPLE_RATE = 40.0
-const BUILD_PER_FRAME = 120
 const ROW = 1024
 var world: Node3D
 var grid: MeshInstance3D
@@ -53,13 +52,17 @@ func prepare(song_stream: AudioStream) -> void:
 
 func build_some() -> void:
 	if playback == null or built >= peaks.size(): return
-	var stop = mini(peaks.size(), built + BUILD_PER_FRAME)
-	var window = int(44100.0 / SAMPLE_RATE)
-	for i in range(built, stop):
-		playback.seek(i / SAMPLE_RATE)
+	# Decode straight through the song (no seeking: on phones every seek re-decodes compressed
+	# audio, which froze the recorder), and stop after ~2 ms so recording stays smooth.
+	var window = maxi(1, int(AudioServer.get_mix_rate() / SAMPLE_RATE))
+	var deadline = Time.get_ticks_usec() + 2000
+	var stop = built
+	while stop < peaks.size() and Time.get_ticks_usec() < deadline:
 		var peak = 0.0
-		for frame in playback.mix_audio(1.0, mini(window, 512)): peak = maxf(peak, maxf(absf(frame.x), absf(frame.y)))
-		peaks[i] = peak
+		for frame in playback.mix_audio(1.0, window): peak = maxf(peak, maxf(absf(frame.x), absf(frame.y)))
+		peaks[stop] = peak
+		stop += 1
+	if stop == built: return
 	# Fixed curve (not relative to the loudest part) so early and late parts read the same.
 	for i in range(built, stop):
 		var v = clampf(sqrt(peaks[i]) * 1.15, 0.0, 1.0)
