@@ -38,6 +38,9 @@ func run() -> void:
         await process_frame
     check(not loader.preparing and loader.progress==1,"Loading completes")
     check(loader.variants_drawn==42,"Every note appearance and classic effect direction is rendered")
+    check(loader.primed_sounds==g.extras.SOUNDS.size()+g.UiSound.SOUNDS.size(),"Hit and feedback sound decoders are prepared silently")
+    check(g.judgment_lookup!=null and g.field.input_mapping.lane_centers.size()==SynkChart.LANES,"Judgment and touch indexes are prepared before countdown")
+    check(g.run_samples.reserve_cursor>=g.total_judgements() and g.run_samples.fallback_allocations==0,"History rows are reserved before play")
     check(loader.audio_primed and loader.primed_frames>0 and loader.prime_playback==null,"Decoder primes silently and releases its private playback")
     check(not loader.frame_time_samples.is_empty(),"Final readiness measures real frame intervals")
     check(g.background_work_suspended and g.lobby.process_mode==Node.PROCESS_MODE_DISABLED,"Hidden menu branches and background scan integration stop during play")
@@ -84,6 +87,7 @@ func run() -> void:
         if g.mode=="paused": g.toggle_pause()
         await process_frame
     check(not loader.preparing and not g.stage_intro.running() and g.countdown==0,"Live countdown starts only after all preparation completes")
+    check(g.run_samples.fallback_allocations==0,"First live judgments reuse reserved sample rows")
     check(g.audio.playing and g.judged>=1 and not w.blooms.is_empty(),"Live autoplay reaches its first prewarmed bloom hit")
     await RenderingServer.frame_post_draw
     root.get_texture().get_image().save_png("res://.tools/loading-ready-gameplay.png")

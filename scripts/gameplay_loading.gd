@@ -15,6 +15,7 @@ var variants_drawn = 0
 var uploaded_notes = 0
 var uploaded_effects = 0
 var prime_playback: AudioStreamPlayback
+var primed_sounds=0
 var primed_frames=0
 var audio_primed=false
 var frame_stable=false
@@ -38,7 +39,7 @@ func begin() -> void:
     cancel()
     preparing=true; progress=0; status="PREPARING STAGE"
     rendered_frames=0; variants_drawn=0; uploaded_notes=0; uploaded_effects=0
-    primed_frames=0; audio_primed=false; frame_stable=false; frame_time_samples.clear()
+    primed_sounds=0; primed_frames=0; audio_primed=false; frame_stable=false; frame_time_samples.clear()
     run.call_deferred(generation)
 
 func valid(token: int) -> bool:
@@ -93,6 +94,17 @@ func run(token: int) -> void:
                 if not await frame(token): return
             prime_playback.stop(); prime_playback=null
             audio_primed=primed_frames>0
+    status="PREPARING GAME SOUNDS"
+    var sounds: Array=game.extras.SOUNDS.values()+game.UiSound.SOUNDS.values()
+    var sound_budget=Time.get_ticks_usec()
+    for stream in sounds:
+        prime_playback=stream.instantiate_playback()
+        if prime_playback:
+            prime_playback.start(); prime_playback.mix_audio(1.0,512)
+            prime_playback.stop(); prime_playback=null; primed_sounds+=1
+        if Time.get_ticks_usec()-sound_budget>=BUDGET_USEC:
+            if not await frame(token): return
+            sound_budget=Time.get_ticks_usec()
     progress=.04; status="PREPARING NOTE TIMELINE"
     var cursor=0
     while cursor<game.live.size():
@@ -102,11 +114,17 @@ func run(token: int) -> void:
             if entry.note.kind=="slide": entry.curve=preload("res://scripts/playback_curve.gd").new(entry.note)
             var lanes=PackedFloat64Array()
             for offset in entry.note.get("checkpoints",[]): lanes.append(game.play_lane_at(entry,float(entry.note.time)+float(offset)))
-            entry.checkpoint_lanes=lanes; cursor+=1
+            entry.checkpoint_lanes=lanes; entry.judgment_index=cursor; entry.end_time=float(entry.note.time)+float(entry.note.duration); cursor+=1
         progress=.04+.04*float(cursor)/maxi(1,game.live.size())
         if not await frame(token): return
     w.play_visibility=preload("res://scripts/playback_visibility.gd").new(game.live,game.note_travel_seconds(),w.travel_speed())
     w.apply_camera(); w.update_cover_backdrop()
+    status="PREPARING INPUT AND JUDGMENTS"
+    game.field.prepare_input_mapping()
+    game.judgment_lookup=preload("res://scripts/judgment_lookup.gd").new(game.live)
+    game.run_samples.begin_reserve(game.total_judgements()+16,game.live.size() if not game.auto_play else 0)
+    while not game.run_samples.reserve_step(BUDGET_USEC):
+        if not await frame(token): return
     status="BUILDING NOTES"; allow_note_build=true
     while w.prebuilding:
         progress=.08+w.prebuild_progress()*.32
