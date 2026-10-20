@@ -53,6 +53,7 @@ var animated_materials: Array = []
 var bursts: Array = []
 var hit_pool: Array = []
 var play_render_cursor = 0
+var play_visibility: RefCounted
 var reference_note_meshes: Dictionary = {}
 var spark_mesh: SphereMesh
 var miss_shake_remaining = 0.0
@@ -609,7 +610,7 @@ func animate_blooms(delta: float, running: bool) -> void:
 			if b.age >= BLOOM_LIFE * .7: b.age = BLOOM_LIFE * .18
 			if game.pointers.has(int(b.sustain_entry.get("pointer", b.pointer_id))) and game.pointers[int(b.sustain_entry.get("pointer", b.pointer_id))].has("world"):
 				b.node.position = touch_hit_position(0, int(b.sustain_entry.get("pointer", b.pointer_id))) + Vector3(0, .06, 0)
-			elif b.kind == "slide": b.node.position.x = note_x(SynkChart.lane_at(b.sustain_entry.note, game.song_time))
+			elif b.kind == "slide": b.node.position.x = note_x(game.play_lane_at(b.sustain_entry,game.song_time))
 		elif not b.sustain_entry.is_empty(): b.sustain_entry = {}
 		if (not sustained and b.age >= BLOOM_LIFE) or game.mode not in ["play","record","paused"]:
 			b.node.visible = false; blooms.remove_at(i); bloom_pool.append(b); continue
@@ -682,32 +683,6 @@ func recycle_hit(burst: Dictionary) -> void:
 	if hit_pool.size()<HIT_POOL_LIMIT: hit_pool.append(burst)
 	else: burst.node.queue_free()
 
-# Shader warm-up. The Compatibility renderer compiles a shader the first time a material is
-# drawn, which on phones stalls a frame or more; doing it mid-song reads as random stutter.
-# While the loading card covers the stage, draw one of every note look, trail, ring and hit
-# effect far down the highway for a few frames so every shader is ready before play starts.
-var prewarmed: Dictionary = {}
-func prewarm() -> void:
-	var key = str(game.note_shape) + str(game.get("trail_style"))
-	if prewarmed.has(key): return
-	prewarmed[key] = true
-	var group = Node3D.new(); group.name = "ShaderPrewarm"; add_child(group); group.position.z = -30.0
-	make_cap(group, 1, 0, 0)
-	var flick = SynkChart.note(0, 3, "flick"); flick.direction = 1; make_flick(group, flick, 2)
-	var hold = SynkChart.note(0, 5, "hold"); hold.duration = .5; make_ribbon(group, hold, 1)
-	var slide = SynkChart.note(0, 7, "slide"); slide.duration = .5; slide.end_lane = 9
-	slide.path = [{"offset": 0.0, "lane": 7.0}, {"offset": .5, "lane": 9.0}]; make_ribbon(group, slide, 1)
-	prewarming_hits = true
-	for kind in ["tap", "hold", "flick"]: spawn_hit(5, kind, 1)
-	prewarming_hits = false
-	if game.hit_style == "bloom": spawn_bloom(5, "tap", {}, -999)
-	for beam in finger_beams.slice(0, 1): beam.visible = true
-	for i in 4: await get_tree().process_frame
-	if is_instance_valid(group): group.queue_free()
-	# Keep the warm-up hits: they go back into the pool for the song to reuse.
-	for burst in bursts: recycle_hit(burst)
-	bursts.clear()
-
 # Fill the hit-effect pool for the chart before play, so even a dense opening never builds a
 # flash, ring and spark set mid-song. Counts cover the most hits of each kind that can be on
 # screen at once (a hit lasts about 0.65 s); every flick direction the chart uses gets its own.
@@ -740,6 +715,14 @@ func chart_hit_pool_requirements() -> Dictionary:
 			active += int(event.y); peak = maxi(peak,active)
 		wanted[key] = mini(MAX_ACTIVE_HITS,peak)
 	return wanted
+
+# Build a missing effect without borrowing already prepared inventory.
+func add_pooled_hit(pool_key: String) -> void:
+	var existing_pool=hit_pool; hit_pool=[]
+	var kind="hold" if pool_key=="1normal" else ("flick" if pool_key.begins_with("0flick") else "tap")
+	var direction=int(pool_key.trim_prefix("0flick")) if kind=="flick" else 0
+	prewarming_hits=true; spawn_hit(5,kind,direction); prewarming_hits=false
+	var hit=bursts.pop_back(); hit_pool=existing_pool; recycle_hit(hit)
 
 func prefill_hits() -> void:
 	var wanted = chart_hit_pool_requirements()
@@ -902,10 +885,18 @@ func clear_hit_effects() -> void:
 	# Pooled effects for the previous chart are freed; prefill_hits builds the next set.
 	for burst in bursts+hit_pool: burst.node.queue_free()
 	bursts.clear(); hit_pool.clear()
+	for bloom in blooms+bloom_pool: bloom.node.queue_free()
+	blooms.clear(); bloom_pool.clear()
+	gold_age=-1; flare=0; miss_shake_remaining=0
+	for node in [gold_wave,gold_bar]:
+		if is_instance_valid(node): node.visible=false
+	for beam in finger_beams+active_beams: beam.visible=false
+	for entry in miss_flashes:
+		entry.amount=0; entry.node.visible=false; entry.material.albedo_color.a=0
 
 func clear_notes() -> void:
 	clear_shared_materials()
-	play_render_cursor=0
+	play_render_cursor=0; play_visibility=null
 	prebuilding=false; prebuild_queue.clear(); prebuild_total=0; prebuild_index=0
 	for entry in notes.values(): entry.node.queue_free()
 	notes.clear()
@@ -939,7 +930,7 @@ func animate_effects(delta: float) -> void:
 			burst.node.position=touch_hit_position(0,burst.pointer_id)+Vector3(0,.065,0)
 		elif sustained and burst.kind=="slide":
 			# Keep the normal hit burst on the moving slide head, with repeated flashes.
-			burst.node.position.x = note_x(SynkChart.lane_at(burst.sustain_entry.note,game.song_time))
+			burst.node.position.x = note_x(game.play_lane_at(burst.sustain_entry,game.song_time))
 		var flash_opacity = lerpf(attack*fade,.60+hold_wave*.26,hold_blend)
 		var fill_opacity = lerpf(attack*fade,.55+hold_wave*.22,hold_blend)
 		if sustained and burst.kind=="slide":
@@ -1319,6 +1310,9 @@ func first_visible_play_index() -> int:
 var shown_keys: Dictionary = {}
 func _process(delta: float) -> void:
 	if game==null: return
+	if game.gameplay_loading and game.gameplay_loading.preparing:
+		if game.mode=="play" and game.gameplay_loading.allow_note_build: step_prebuild()
+		return
 	step_prebuild()
 	if rail_atmosphere: rail_atmosphere.update(delta)
 	var in_play = game.mode=="play" or (game.mode=="paused" and game.paused_mode=="play")
@@ -1332,13 +1326,16 @@ func _process(delta: float) -> void:
 	for beam in active_beams: beam.visible = false
 	update_finger_beams()
 	if game.mode=="play" or (game.mode=="paused" and game.paused_mode=="play"):
-		for i in range(first_visible_play_index(),game.live.size()):
+		var candidates: Variant
+		if play_visibility and is_equal_approx(play_visibility.travel,game.note_travel_seconds()): candidates=play_visibility.indices(render_time())
+		else: candidates=range(first_visible_play_index(),game.live.size())
+		for i in candidates:
 			if game.live[i].note.time>render_time()+game.note_travel_seconds(): break
 			if not game.live[i].done:
 				var held = game.live[i].started and game.live[i].note.kind in ["hold","slide"]
 				sync_note(game.live[i].key,game.live[i].note,visible_keys,false,-1.0,held)
 				if game.live[i].started and game.live[i].note.kind=="slide":
-					var lane = SynkChart.lane_at(game.live[i].note,render_time())
+					var lane = game.play_lane_at(game.live[i],render_time())
 					var beam = active_beams[clampi(roundi(lane),0,SynkChart.MAX_LANE)]
 					beam.position=touch_hit_position(lane,int(game.live[i].pointer))+Vector3(0,.045,0); beam.visible = true
 					var pulse = .5+.5*sin(animation_time*TAU*3.0)

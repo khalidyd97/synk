@@ -126,11 +126,15 @@ func begin(cover: Texture2D, tint: Color, song_title: String, details: String, s
 	var rim = StyleBoxFlat.new(); rim.bg_color = Color(0,0,0,0); rim.set_corner_radius_all(22)
 	rim.border_color = Color(accent.lerp(Color.WHITE,.45),.45); rim.set_border_width_all(2)
 	card_rim.add_theme_stylebox_override("panel",rim)
-	load_time = 0.0 if skip_loading else LOAD_TIME
+	# Retries still retain an opaque card until resource preparation completes.
+	load_time = .25 if skip_loading else LOAD_TIME
 	elapsed = 0.0; visible = true
 	layout(); animate()
 
 func skip() -> void:
+	if game and game.gameplay_loading and game.gameplay_loading.preparing:
+		# Practice/retry may skip presentation time, but cannot expose warm-up graphics.
+		load_time=.25; elapsed=0; visible=true; layout(); animate(); return
 	elapsed = load_time + ENTER_TIME; visible = false
 
 func running() -> bool: return visible and elapsed < load_time + ENTER_TIME
@@ -170,7 +174,7 @@ func vanishing_point() -> Vector2:
 # the card stays up until they're done (small charts finish well inside the minimum time).
 func build_progress() -> float:
 	if game == null or game.field == null: return 1.0
-	return game.field.world.prebuild_progress()
+	return game.gameplay_loading.progress if game.gameplay_loading and game.gameplay_loading.preparing else game.field.world.prebuild_progress()
 func load_progress() -> float:
 	if load_time <= 0.0: return 1.0
 	var t = clampf(elapsed / (load_time * .9), 0.0, 1.0)
@@ -181,7 +185,7 @@ func _process(delta: float) -> void:
 	if game and game.mode == "play":
 		elapsed += delta
 		# Hold on the loading card until every note is built.
-		if load_time > 0.0 and build_progress() < 1.0: elapsed = minf(elapsed, load_time * .95)
+		if load_time > 0.0 and (build_progress() < 1.0 or (game.gameplay_loading and game.gameplay_loading.preparing)): elapsed = minf(elapsed, load_time * .95)
 	elif game and game.mode != "paused": visible = false; return
 	animate()
 	if elapsed >= load_time + ENTER_TIME: visible = false
@@ -215,7 +219,8 @@ func animate() -> void:
 	var dots = ".".repeat(1 + int(elapsed * 3.0) % 3)
 	eyebrow.text = "NOW LOADING" if load_progress() < 1.0 else "READY"
 	var world = game.field.world if game and game.field else null
-	if world and world.prebuilding: status.text = "BUILDING NOTES  ·  %d / %d" % [world.prebuild_total - world.prebuild_queue.size(), world.prebuild_total]
+	if game.gameplay_loading and game.gameplay_loading.preparing: status.text=game.gameplay_loading.status
+	elif world and world.prebuilding: status.text = "BUILDING NOTES  ·  %d / %d" % [world.prebuild_index, world.prebuild_total]
 	else: status.text = ("LOADING STAGE" + dots) if load_progress() < 1.0 else "GET READY"
 	percent.text = "%d%%" % roundi(load_progress() * 100.0)
 	bar.queue_redraw(); fx.queue_redraw()

@@ -198,6 +198,7 @@ var guide_back: Button
 var hit_label: Label
 var hit_art: TextureRect
 var pause_button: Button
+var gameplay_loading: Node
 var stage_intro: Control
 # Tests turn this off so they can drive gameplay frames directly.
 var stage_intro_enabled = true
@@ -381,7 +382,10 @@ func song_entry_for_id(id: String) -> Dictionary:
 		if str(entry.id)==id: return entry
 	return {}
 
+var background_work_suspended=false
+var suspended_branches: Dictionary={}
 func start_song_worker() -> void:
+	if background_work_suspended: return
 	if not worker_song_id.is_empty(): return
 	if loading_song_index<0 and mode in ["play","record","paused"]: return
 	var id=""
@@ -400,7 +404,8 @@ func start_song_worker() -> void:
 		worker_song_id=""
 		if loading_song_index>0: loading_song_index=-1; tell("Could not start the song loader.")
 
-func poll_song_worker() -> void:
+func poll_song_worker(force: bool=false) -> void:
+	if background_work_suspended and not force: return
 	if worker_song_id.is_empty() or metadata_worker.is_alive(): return
 	var result: Dictionary=metadata_worker.wait_to_finish()
 	var id=worker_song_id; worker_song_id=""
@@ -549,6 +554,7 @@ func build_ui() -> void:
 	guide_back=button(safe_parent("SafeGuideBack"),"‹  BACK",.40,.85,.60,.96,func(): set_mode("menu"),"nav")
 	# Song intro sits above the HUD and below the pause/results modal.
 	stage_intro=StageIntro.new(); stage_intro.game=self; ui.add_child(stage_intro)
+	gameplay_loading=preload("res://scripts/gameplay_loading.gd").new(); gameplay_loading.game=self; add_child(gameplay_loading)
 	results_screen=ResultsScreen.new(); results_screen.game=self; ui.add_child(results_screen)
 	# Pause: the stage behind is blurred and dimmed, with a frosted card on top (same glass as
 	# the lobby cards) holding three icon tiles.
@@ -627,7 +633,22 @@ func recorder_plate(bounds: Rect2) -> Panel:
 	plate.border_color=Color("303349"); plate.set_border_width_all(1); plate.set_corner_radius_all(16)
 	panel.add_theme_stylebox_override("panel",plate); return panel
 
+func set_background_suspension(active: bool) -> void:
+	background_work_suspended=active
+	for node in suspended_branches:
+		if is_instance_valid(node): node.process_mode=suspended_branches[node]
+	suspended_branches.clear()
+	if active:
+		if is_instance_valid(mr):
+			suspended_branches[mr]=mr.process_mode; mr.process_mode=Node.PROCESS_MODE_DISABLED
+		for node in [lobby,chart_library,studio,results_screen]:
+			if is_instance_valid(node) and not node.is_visible_in_tree():
+				suspended_branches[node]=node.process_mode
+				node.process_mode=Node.PROCESS_MODE_DISABLED
+
 func set_mode(value: String) -> void:
+	set_background_suspension(false)
+	if gameplay_loading and value not in ["play","paused"]: gameplay_loading.cancel()
 	if value!=mode:
 		# Menus slide forward and back by depth; entering or leaving the stage dissolves.
 		var depth={"menu":0,"guide":1,"library":1,"editor":2,"results":3}
@@ -695,6 +716,8 @@ func set_mode(value: String) -> void:
 		refresh_editor()
 		UiMotion.screen(studio)
 	if mr: mr.sync_mode()
+
+	set_background_suspension(value=="play" or (value=="paused" and paused_mode=="play"))
 
 func open_lobby_settings() -> void:
 	if mode!="menu": return
@@ -957,6 +980,10 @@ func total_judgements() -> int:
 
 # Checkpoint dots: when one reaches the bar, the finger must be over the trail's lane.
 # Returns false if the hold or slide broke on a missed dot.
+func play_lane_at(entry: Dictionary,at: float) -> float:
+	if entry.has("curve"): return entry.curve.lane_at(at)
+	return SynkChart.lane_at(entry.note,at)
+
 func process_checkpoints(entry: Dictionary, finger_lane: float, automated: bool) -> bool:
 	var checks: Array=entry.note.get("checkpoints",[])
 	while int(entry.get("checks_done",0))<checks.size():
@@ -964,7 +991,7 @@ func process_checkpoints(entry: Dictionary, finger_lane: float, automated: bool)
 		var at=float(entry.note.time)+float(checks[index])
 		if song_time<at: break
 		entry.checks_done=index+1
-		var lane=SynkChart.lane_at(entry.note,at)
+		var lane=float(entry.checkpoint_lanes[index]) if entry.has("checkpoint_lanes") else play_lane_at(entry,at)
 		if automated or absf(finger_lane-lane)<=CHECKPOINT_LANE_TOLERANCE: pass_checkpoint(entry,lane)
 		else: judge(entry,-1); return false
 	return true
@@ -989,24 +1016,35 @@ func rank_name() -> String:
 	var a=accuracy(); return "SS" if a>=98 else ("S" if a>=95 else ("A" if a>=90 else ("B" if a>=80 else "C")))
 
 # section is a play mode ("full", "verse1", "verse2", "bridge"); empty uses the lobby's choice.
-# Draws every word and digit the gameplay HUD can show once, nearly transparent, behind the
-# loading card, so the font has the glyphs cached before the first PERFECT or score change.
-const HUD_GLYPHS = "PERFECT GREAT GOOD MISS EARLY LATE ON TIME ms 0123456789,.%+-x READY"
-func warm_hud_text() -> void:
-	var targets = [hit_label, timing_label, hud, auto_play_hud]
-	var saved: Array = []
-	for label_node in targets:
-		if label_node == null: continue
-		saved.append([label_node, label_node.text, label_node.visible, label_node.modulate])
-		label_node.text = HUD_GLYPHS; label_node.visible = true; label_node.modulate = Color(1, 1, 1, .01)
-	for i in 3: await get_tree().process_frame
-	for item in saved:
-		if not is_instance_valid(item[0]): continue
-		# Restore only if gameplay hasn't already replaced the warm-up text.
-		if item[0].text == HUD_GLYPHS: item[0].text = item[1]
-		item[0].visible = item[2]; item[0].modulate = item[3]
+# Independent warm-up widgets sit behind the opaque loading card, without replacing live HUD text.
+const HUD_GLYPHS = "0123456789,.%+-×\nPERFECT GREAT GOOD MISS READY\nEARLY LATE ON TIME ms COMBO SCORE\n25 50 100 200 300 500 750 1000 ×1.1 ×2.0"
+func create_hud_warmup() -> Control:
+	var root=Control.new(); root.name="HudWarmup"; root.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	ui.add_child(root); ui.move_child(root,stage_intro.get_index())
+	root.size=size
+	for source in [hit_label,timing_label,hud,auto_play_hud,countdown_label]:
+		var sample=Label.new(); root.add_child(sample); sample.size=size
+		sample.text="0123456789" if source==countdown_label else HUD_GLYPHS
+		sample.add_theme_font_override("font",source.get_theme_font("font"))
+		sample.add_theme_font_size_override("font_size",source.get_theme_font_size("font_size"))
+		sample.add_theme_constant_override("outline_size",source.get_theme_constant("outline_size"))
+		sample.add_theme_constant_override("shadow_outline_size",source.get_theme_constant("shadow_outline_size"))
+		sample.add_theme_color_override("font_shadow_color",Color(0,0,0,.7))
+	var combo=preload("res://scripts/combo_view.gd").new(); root.add_child(combo)
+	combo.size=combo_hud.size; combo.position=Vector2(size.x*.35,size.y*.3)
+	combo.combo=1000; combo.caption="1000 COMBO"; combo.wave=.5; combo.badge_age=.2; combo.badge_text="×2.0"
+	combo.set_process(false)
+	for factor in [.58,.15,.17,.264]:
+		for outline in [0,3,5,9,14]:
+			var sample=Label.new(); root.add_child(sample); sample.size=size
+			sample.text=HUD_GLYPHS; sample.add_theme_font_override("font",combo.BOLD)
+			sample.add_theme_font_size_override("font_size",maxi(1,roundi(combo.size.y*factor)))
+			sample.add_theme_constant_override("outline_size",outline)
+	for child in root.get_children(): child.visible=false
+	return root
 
 func start_game(notes: Array,automated: bool = false,section: String = "",is_practice: bool=false) -> void:
+	gameplay_loading.cancel()
 	# Mirror and other note modifiers apply to real runs; a replay reuses the exact notes it recorded.
 	if extras:
 		if not extras.replay_pending and not automated: notes=extras.apply_mods(notes)
@@ -1060,11 +1098,9 @@ func start_game(notes: Array,automated: bool = false,section: String = "",is_pra
 	# Build every note of the chart now (behind the loading card); play only shows and hides them.
 	field.world.begin_prebuild()
 	if stage_intro_enabled:
-		# Compile every gameplay shader behind the loading card, not mid-song.
-		if not restarting: field.world.prewarm(); warm_hud_text()
-		field.world.prefill_hits()
 		var tinted=song.id!="eclipse" and not has_custom_cover(str(song.id))
 		stage_intro.begin(cover_texture_for_id(str(song.id)),cover_tint_for_id(str(song.id)) if tinted else Color.WHITE,str(song.title),intro_details(),restarting)
+		gameplay_loading.begin()
 		judgement=""
 	else: stage_intro.skip()
 	for banner in [song_hud,difficulty_hud]:
@@ -1522,8 +1558,8 @@ func _process(delta: float) -> void:
 	resume_grace=maxf(0,resume_grace-delta)
 	if finishing: advance_finish(delta)
 	elif mode in ["play","record"] and not arranging:
-		if mode=="play" and (stage_intro.running() or field.world.prebuilding):
-			# Hold the countdown until the stage has entered and every note is built.
+		if mode=="play" and (stage_intro.running() or field.world.prebuilding or gameplay_loading.preparing):
+			# Hold countdown until loading work and the stage entrance both finish.
 			visual_song_time=song_time; visual_clock_ready=false
 		elif resume_countdown>0:
 			resume_countdown=maxf(0,resume_countdown-delta)
@@ -1774,7 +1810,7 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 				if entry.done: continue
 				var n: Dictionary=entry.note
 				if entry.started:
-					if entry.pointer==-999 and absf(touch_x-world.note_x(SynkChart.lane_at(n,song_time)))<=reach: entry.pointer=id
+					if entry.pointer==-999 and absf(touch_x-world.note_x(play_lane_at(entry,song_time)))<=reach: entry.pointer=id
 					continue
 				var error=absf(song_time-float(n.time))
 				var timing_limit=.23*extras.scale() if n.kind=="slide" else extras.good_window()
@@ -1795,7 +1831,7 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 				nearest.started=true; nearest.pointer=id; nearest.error=best; nearest.timing_error=song_time-float(nearest.note.time)
 				if nearest.note.kind=="tap": judge(nearest,best)
 				elif nearest.note.kind=="hold": judge(nearest,best,false)
-				elif nearest.note.kind=="slide": field.world.spawn_hit(SynkChart.lane_at(nearest.note,song_time),"slide",0,nearest,id)
+				elif nearest.note.kind=="slide": field.world.spawn_hit(play_lane_at(nearest,song_time),"slide",0,nearest,id)
 	if pointers.has(id):
 		pointers[id].position=p; pointers[id].world=touch_world
 	if ended:
@@ -1811,7 +1847,7 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 			var entry: Dictionary=live[live_index]
 			if entry.done or entry.pointer!=id or entry.note.kind!="slide": continue
 			var end_time=float(entry.note.time)+float(entry.note.duration)
-			var lane_error=absf(SynkCapture.lane(p.x)-SynkChart.lane_at(entry.note,end_time))
+			var lane_error=absf(SynkCapture.lane(p.x)-play_lane_at(entry,end_time))
 			if not canceled and lane_error<=SLIDE_END_LANES and p.y>=.4 and song_time>=end_time-tail_grace(entry) and song_time<=end_time+.30:
 				judge(entry,float(entry.error))
 		pointers.erase(id)
@@ -1829,7 +1865,7 @@ func update_autoplay() -> void:
 		if not entry.started and song_time>=float(n.time):
 			entry.started=true
 			if n.kind=="hold": judge(entry,0.0,false)
-			elif n.kind=="slide": field.world.spawn_hit(SynkChart.lane_at(n,song_time),"slide",0,entry)
+			elif n.kind=="slide": field.world.spawn_hit(play_lane_at(entry,song_time),"slide",0,entry)
 			elif n.kind in ["tap","flick"]: judge(entry,0.0)
 		if entry.started and not entry.done: process_checkpoints(entry,0.0,true)
 		if entry.started and not entry.done and song_time>=float(n.time)+float(n.duration):
@@ -1868,7 +1904,7 @@ func update_game() -> void:
 		elif n.kind=="slide":
 			var end_time=float(n.time)+float(n.duration)
 			if song_time>=end_time-.045:
-				var lane_error=absf(SynkCapture.lane(p.position.x)-SynkChart.lane_at(n,end_time))
+				var lane_error=absf(SynkCapture.lane(p.position.x)-play_lane_at(entry,end_time))
 				if lane_error<=SLIDE_END_LANES and p.position.y>=.4: judge(entry,tail_error(entry))
 				elif song_time>end_time+.30: judge(entry,-1)
 		elif n.kind=="hold":
@@ -1887,13 +1923,13 @@ func judge(entry: Dictionary,error: float,complete: bool = true) -> void:
 		timing_samples.append({"time":float(entry.note.time),"ms":ms})
 		timing_label.text="ON TIME" if absf(ms)<=10 else ("EARLY %d ms" if ms<0 else "LATE %d ms") % roundi(absf(ms))
 		timing_label.add_theme_color_override("font_color",Color("65dcff") if ms<0 else Color("ff82d2"))
-	if error>=0: field.world.spawn_hit(SynkChart.lane_at(entry.note,song_time),str(entry.note.kind),int(entry.note.direction),entry if entry.note.kind=="hold" and not complete else {},int(entry.get("pointer",-999)))
+	if error>=0: field.world.spawn_hit(play_lane_at(entry,song_time),str(entry.note.kind),int(entry.note.direction),entry if entry.note.kind=="hold" and not complete else {},int(entry.get("pointer",-999)))
 	else: field.world.shake_on_miss()
 	if error<0 and entry.note.kind in ["slide","hold"]:
 		entry.missed_at=song_time
 		entry.missed_visual_time=field.world.render_time()
 	judgement_kind = str(entry.note.kind)
-	entry.done=complete; judged+=1; flash=1; flash_lane=roundi(SynkChart.lane_at(entry.note,song_time))
+	entry.done=complete; judged+=1; flash=1; flash_lane=roundi(play_lane_at(entry,song_time))
 	# Energy is a performance gauge only: hits refill it, misses drain it, the song never fails.
 	if error<0: judgement="MISS"; combo=0; combo_pulse=0; forfeit_checkpoints(entry); score_panel.energy=maxf(0,score_panel.energy-.08)
 	else:

@@ -17,6 +17,7 @@ func _ready() -> void:
 	enabled=bool(game.prefs.get_value("editor","mr",false))
 func set_source(stream: AudioStream) -> void:
 	original=stream; reduced=null; unavailable=""
+	if original is AudioStreamWAV and not original.stereo: unavailable="Mono audio cannot use stereo vocal reduction."
 	if worker.is_started():
 		cancel_mutex.lock(); cancel_requested=true; cancel_mutex.unlock()
 	if enabled and not worker.is_started(): prepare()
@@ -28,10 +29,14 @@ func authoring() -> bool:
 func toggle() -> void:
 	enabled=not enabled
 	game.prefs.set_value("editor","mr",enabled); game.prefs.save("user://preferences.cfg")
-	if enabled and reduced==null and unavailable.is_empty(): prepare()
+	if authoring() and enabled and reduced==null and unavailable.is_empty(): prepare()
 	sync_mode(); refresh_buttons()
 	if enabled: game.tell("MR reduces centered vocals and keeps low bass. Stereo songs work best; some vocals and instruments may remain or change.")
+func suspend_background_render() -> void:
+	if worker.is_started():
+		cancel_mutex.lock(); cancel_requested=true; cancel_mutex.unlock()
 func prepare() -> void:
+	if not authoring(): return
 	if original==null or worker.is_started(): return
 	if original is AudioStreamWAV and not original.stereo:
 		unavailable="Mono audio cannot use stereo vocal reduction."; refresh_buttons(); return
@@ -75,8 +80,9 @@ func _process(_delta: float) -> void:
 				reduced=AudioStreamWAV.new(); reduced.format=AudioStreamWAV.FORMAT_16_BITS
 				reduced.mix_rate=RATE; reduced.stereo=false; reduced.data=result.data
 		worker_source=null
-		if enabled and reduced==null and unavailable.is_empty(): prepare()
+		if authoring() and enabled and reduced==null and unavailable.is_empty(): prepare()
 		if not unavailable.is_empty() and authoring(): game.tell(unavailable+" Original audio is playing.")
+	if authoring() and enabled and reduced==null and unavailable.is_empty() and not worker.is_started(): prepare()
 	if authoring() and game.capture.gestures.is_empty(): sync_mode()
 	refresh_buttons()
 func sync_mode() -> void:
