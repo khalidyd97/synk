@@ -1508,6 +1508,11 @@ func _notification(what: int) -> void:
 		if document.dirty: set_mode("editor"); tell("Save your draft or RELOAD to discard edits before closing.")
 		else: get_tree().quit()
 
+var hud_layout_state: Array = []
+var hud_layout_updates = 0
+var displayed_score_integer = -1
+var score_font_color = Color(-1,-1,-1,-1)
+var practice_caption_state: Array = []
 func _process(delta: float) -> void:
 	poll_song_worker()
 	hud_motion_time+=delta if mode=="play" else 0.0
@@ -1547,7 +1552,10 @@ func _process(delta: float) -> void:
 	var intro_running=mode in ["play","paused"] and stage_intro.running()
 	var counting=mode in ["play","record"] and (countdown>0 or resume_countdown>0)
 	practice_hud.visible=practice.active and mode in ["play","paused"]
-	practice_hud.text="PRACTICE · %s× · %s%d" % [str(practice.speed),"LOOP " if practice.repeat_enabled else "TAKE ",practice.round_number]
+	var practice_state = [practice.speed,practice.repeat_enabled,practice.round_number]
+	if practice_state!=practice_caption_state:
+		practice_caption_state=practice_state
+		practice_hud.text="PRACTICE · %s× · %s%d" % [str(practice.speed),"LOOP " if practice.repeat_enabled else "TAKE ",practice.round_number]
 	timing_label.visible=mode=="play" and not auto_play and not counting and flash>0 and not finishing
 	timing_label.modulate.a=clampf(flash,0,1)
 	if mode=="paused":
@@ -1593,22 +1601,28 @@ func _process(delta: float) -> void:
 	if mode=="play":
 		displayed_score=lerpf(displayed_score,float(score),clampf(delta*11.0,0,1))
 		if absf(displayed_score-score)<1.0: displayed_score=score
-	hud.text=format_score(roundi(displayed_score))
+	var score_integer=roundi(displayed_score)
+	if score_integer!=displayed_score_integer:
+		displayed_score_integer=score_integer
+		hud.text=format_score(score_integer)
 	# The score counter glows gold while a combo multiplier is active, brighter as it climbs.
 	var boost=clampf((combo_multiplier()-1.0)/1.0,0.0,1.0) if mode in ["play","paused"] else 0.0
-	hud.add_theme_color_override("font_color",Color.WHITE.lerp(Color("ffd257"),.35+.65*boost) if boost>0 else Color.WHITE)
+	var font_color=Color.WHITE.lerp(Color("ffd257"),.35+.65*boost) if boost>0 else Color.WHITE
+	if font_color!=score_font_color:
+		score_font_color=font_color
+		hud.add_theme_color_override("font_color",font_color)
 	var current_rank=rank_name()
 	if current_rank!=shown_rank:
 		if mode=="play" and judged>0: rank_pulse=1.0
 		shown_rank=current_rank
-	rank_hud.text=current_rank
+	if rank_hud.text!=current_rank: rank_hud.text=current_rank
 	rank_hud.pivot_offset=rank_hud.size*.5
 	rank_hud.scale=Vector2.ONE*(1.0+rank_pulse*.22)
 	rank_hud.modulate=Color.WHITE.lerp(Color("fff1ff"),rank_pulse)
 	if auto_play_hud.visible and mode=="play": auto_play_hud.modulate.a=.78+.22*sin(hud_motion_time*2.2)
 	else: auto_play_hud.modulate.a=1.0
 	if combo_art_value!=combo or combo_art_size!=combo_hud.size: update_combo_art()
-	record_info.text=("PAUSED · CORRECT %.1f s\n%d NOTES" if arranging else "● RECORDING  %.1f s\n%d NOTES / %s") % ([maxf(0,song_time),capture.notes.size()] if arranging else [maxf(0,song_time),capture.notes.size(),tool.to_upper()])
+	if mode=="record": record_info.text=("PAUSED · CORRECT %.1f s\n%d NOTES" if arranging else "● RECORDING  %.1f s\n%d NOTES / %s") % ([maxf(0,song_time),capture.notes.size()] if arranging else [maxf(0,song_time),capture.notes.size(),tool.to_upper()])
 	if mode=="record" and recorder.active:
 		if song_time<recorder.region.x and countdown==0: record_info.text="PRE-ROLL · LISTEN\nREC AT %.2f s" % recorder.region.x
 		elif recorder.looping(): record_info.text+=" · TAKE %d" % (recorder.takes.size()+1)
@@ -1643,12 +1657,21 @@ func has_active_hold() -> bool:
 	return false
 
 func align_gameplay_hud() -> void:
-	var screen_center=field.get_global_transform_with_canvas()*field.project(field.world.CENTER_LANE,0)
-	var center_x=(ui.get_global_transform_with_canvas().affine_inverse()*screen_center).x
+	if mode not in ["play","record","paused"]: return
+	var camera=field.world.camera
+	var field_transform=field.get_global_transform_with_canvas()
+	var ui_transform=ui.get_global_transform_with_canvas()
+	var state=[field_transform,ui_transform,field.viewport.size,camera.global_transform,camera.projection,camera.fov,camera.size,camera.h_offset,camera.v_offset,camera.keep_aspect,hit_art.size,hit_label.size,countdown_label.size,countdown_ring.size]
+	if state==hud_layout_state: return
+	hud_layout_state=state; hud_layout_updates+=1
+	var inverse=ui_transform.affine_inverse()
+	var near=field.project(field.world.CENTER_LANE,0)
+	var screen_center=field_transform*near
+	var center_x=(inverse*screen_center).x
 	for element in [hit_art,hit_label]:
 		element.position.x=center_x-element.size.x*.5
-	var highway_center=field.get_global_transform_with_canvas()*((field.project(field.world.CENTER_LANE,0)+field.project(field.world.CENTER_LANE,1))*.5)
-	var countdown_center=ui.get_global_transform_with_canvas().affine_inverse()*highway_center
+	var highway_center=field_transform*((near+field.project(field.world.CENTER_LANE,1))*.5)
+	var countdown_center=inverse*highway_center
 	for element in [countdown_label,countdown_ring]:
 		element.position=countdown_center-element.size*.5
 

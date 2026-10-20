@@ -322,7 +322,7 @@ func run() -> void:
 	check(world.bursts[0].fill.material_override.get_shader_parameter("tint")==world.colors[0] and world.bursts[1].fill.material_override.get_shader_parameter("tint")==world.colors[2],"Hit effects use the tap and flick colors")
 	world.animate_effects(.1)
 	var burst_age = world.bursts[0].age
-	var spark_position = world.bursts[1].particles[0].node.position
+	var spark_position = world.bursts[1].particle_batch.multimesh.get_instance_transform(0).origin
 	check(spark_position.length()>0,"Hit particles move away from the impact")
 	game.mode="paused"; world.animate_effects(.2)
 	check(world.bursts[0].age==burst_age,"Pause freezes hit animations")

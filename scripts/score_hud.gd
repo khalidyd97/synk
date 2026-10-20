@@ -56,10 +56,15 @@ func caption(text: String, left: float, top: float, right: float, bottom: float,
 func set_score(text: String) -> void:
 	score_label.text = text
 
+var gauge_draw_state: Array = []
 func _process(delta: float) -> void:
 	# The gauge eases toward its target so hits and misses read as motion, not jumps.
 	shown_energy = lerpf(shown_energy,energy,1.0-exp(-delta*10.0))
-	queue_redraw()
+	if absf(shown_energy-energy)<.0001: shown_energy=energy
+	var state=[size,shown_energy,progress,energy_color]
+	if is_visible_in_tree() and state!=gauge_draw_state:
+		gauge_draw_state=state
+		queue_redraw()
 
 func _draw() -> void:
 	var h = size.y

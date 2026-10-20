@@ -135,9 +135,16 @@ func render_time() -> float:
 	return game.visual_song_time if game.audio.playing and game.mode in ["play","record"] and game.countdown<=0 and game.resume_countdown<=0 else game.song_time
 func note_position(lane: float, chart_time: float) -> Vector3:
 	return Vector3(note_x(lane), .13, (render_time()-chart_time)*travel_speed())
+var camera_revision = 0
+var camera_state: Array = []
 func apply_camera(shake: Vector3 = Vector3.ZERO) -> void:
+	var position = camera_rest_position() + shake
+	var rotation = Vector3(-highway_angle(),0,0)
+	var state = [position,rotation]
+	if state==camera_state: return
+	camera_state = state; camera_revision += 1
 	camera.projection = Camera3D.PROJECTION_PERSPECTIVE; camera.fov = GAMEPLAY_FOV
-	camera.position = camera_rest_position() + shake; camera.rotation_degrees = Vector3(-highway_angle(), 0, 0)
+	camera.position = position; camera.rotation_degrees = rotation
 
 func _ready() -> void:
 	camera = Camera3D.new(); add_child(camera); camera.current = true
@@ -299,20 +306,25 @@ func apply_palette(palette: Dictionary) -> void:
 	# Notes already on screen were built with the old colors.
 	clear_notes()
 
+var backdrop_projection_state: Array = []
+var backdrop_projection_updates = 0
 func update_cover_backdrop() -> void:
-	var viewport_size = get_viewport().get_visible_rect().size
-	if viewport_size.y <= 0: return
-	var aspect = viewport_size.x/viewport_size.y
-	var height = camera.size*1.04 if camera.projection==Camera3D.PROJECTION_ORTHOGONAL else 2.0*COVER_DISTANCE*tan(deg_to_rad(camera.fov*.5))*1.04
-	(cover_backdrop.mesh as QuadMesh).size = Vector2(height*aspect,height)
-	cover_material.set_shader_parameter("screen_aspect",aspect)
-	# Track the projected rail silhouette without moving the camera or highway geometry.
-	for side in [-1,1]:
-		var far_point=camera.unproject_position(Vector3(side*FRAME_HALF_WIDTH,0,-50))/viewport_size
-		var near_point=camera.unproject_position(Vector3(side*FRAME_HALF_WIDTH,0,0))/viewport_size
-		var slope=(near_point.x-far_point.x)/maxf(.001,near_point.y-far_point.y)
-		var top_x=far_point.x-far_point.y*slope
-		cover_material.set_shader_parameter("glow_left_rail" if side==-1 else "glow_right_rail",Vector2(top_x,top_x+slope))
+	var state = [get_viewport().get_visible_rect().size,camera.global_transform,camera.projection,camera.fov,camera.size,camera.h_offset,camera.v_offset,camera.keep_aspect]
+	if state!=backdrop_projection_state:
+		backdrop_projection_state = state; backdrop_projection_updates += 1
+		var viewport_size = get_viewport().get_visible_rect().size
+		if viewport_size.y <= 0: return
+		var aspect = viewport_size.x/viewport_size.y
+		var height = camera.size*1.04 if camera.projection==Camera3D.PROJECTION_ORTHOGONAL else 2.0*COVER_DISTANCE*tan(deg_to_rad(camera.fov*.5))*1.04
+		(cover_backdrop.mesh as QuadMesh).size = Vector2(height*aspect,height)
+		cover_material.set_shader_parameter("screen_aspect",aspect)
+		# Track the projected rail silhouette without moving the camera or highway geometry.
+		for side in [-1,1]:
+			var far_point=camera.unproject_position(Vector3(side*FRAME_HALF_WIDTH,0,-50))/viewport_size
+			var near_point=camera.unproject_position(Vector3(side*FRAME_HALF_WIDTH,0,0))/viewport_size
+			var slope=(near_point.x-far_point.x)/maxf(.001,near_point.y-far_point.y)
+			var top_x=far_point.x-far_point.y*slope
+			cover_material.set_shader_parameter("glow_left_rail" if side==-1 else "glow_right_rail",Vector2(top_x,top_x+slope))
 	# A soft brightness kick on every beat while the song plays.
 	var beat = 0.0
 	if game.mode=="play" and game.audio.playing:
@@ -608,7 +620,7 @@ func animate_blooms(delta: float, running: bool) -> void:
 func spawn_hit(lane: float, kind: String, direction: int = 0, sustain_entry: Dictionary = {},pointer_id: int=-999) -> void:
 	if game.hit_style == "bloom" and not prewarming_hits:
 		spawn_bloom(lane, kind, sustain_entry, pointer_id); return
-	if bursts.size() >= 32:
+	if bursts.size() >= MAX_ACTIVE_HITS:
 		recycle_hit(bursts.pop_front())
 	var palette = palette_for_kind("tap" if kind in ["slide","flick"] else kind)
 	var hit_color=element_color("hits",colors[palette])
@@ -624,14 +636,7 @@ func spawn_hit(lane: float, kind: String, direction: int = 0, sustain_entry: Dic
 		reused.flash.material_override.set_shader_parameter("opacity",0.0)
 		reused.fill.material_override.set_shader_parameter("opacity",0.0)
 		reused.ring.material_override.albedo_color.a=0.0
-		for particle_index in reused.particles.size():
-			var particle=reused.particles[particle_index]
-			particle.node.hide()
-			if kind=="flick":
-				var axis=camera.basis*[Vector3.UP,Vector3.RIGHT,Vector3.DOWN,Vector3.LEFT][clampi(direction,0,3)]
-				var sideways=camera.basis*[Vector3.RIGHT,Vector3.DOWN,Vector3.LEFT,Vector3.UP][clampi(direction,0,3)]
-				particle.velocity=axis*(5.0+float(particle_index%7)*1.4)+sideways*sin(particle_index*TAU/24.0)*4.8
-				particle.node.quaternion=Quaternion(Vector3.BACK,particle.velocity.normalized())
+		reused.particle_batch.multimesh.visible_instance_count = 0
 		reused.node.show()
 		bursts.append(reused)
 		return
@@ -651,21 +656,26 @@ func spawn_hit(lane: float, kind: String, direction: int = 0, sustain_entry: Dic
 	var ring_mesh = TorusMesh.new(); ring_mesh.inner_radius=.9*FIT; ring_mesh.outer_radius=.97*FIT; ring_mesh.rings=32; ring_mesh.ring_segments=6
 	var ring = mesh_node(ring_mesh,node,material(hit_color,.8))
 	var particles: Array = []
-	# Each spark is its own object and draw call; phones get fewer so dense charts stay smooth.
+	# One instanced draw per burst replaces one scene object/draw per spark.
 	var particle_count = (10 if kind=="flick" else 6) if OS.has_feature("mobile") else (24 if kind=="flick" else 12)
 	var particle_material = material(element_color("sparks",colors[palette].lightened(.65) if kind=="flick" else colors[palette]))
 	var streak_mesh = BoxMesh.new(); streak_mesh.size=Vector3(.035,.035,.42)
+	var instances = MultiMesh.new(); instances.transform_format = MultiMesh.TRANSFORM_3D
+	instances.mesh = streak_mesh if kind=="flick" else spark_mesh
+	instances.instance_count = particle_count; instances.visible_instance_count = 0
+	var batch = MultiMeshInstance3D.new(); batch.multimesh = instances
+	batch.material_override = particle_material; batch.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	node.add_child(batch)
 	for i in particle_count:
-		var particle=mesh_node(streak_mesh if kind=="flick" else spark_mesh,node,particle_material)
-		var angle=i*TAU/float(particle_count)
-		var velocity=Vector3(cos(angle)*3.5,3.0+float(i%4)*.9,sin(angle)*1.4-.8)
+		var angle = i*TAU/float(particle_count)
+		var velocity = Vector3(cos(angle)*3.5,3.0+float(i%4)*.9,sin(angle)*1.4-.8)
+		var basis = Basis.IDENTITY
 		if kind=="flick":
 			var sideways = camera.basis * [Vector3.RIGHT,Vector3.DOWN,Vector3.LEFT,Vector3.UP][clampi(direction,0,3)]
 			velocity = flick_axis*(5.0+float(i%7)*1.4)+sideways*sin(angle)*4.8
-			# Align each fine streak with its own flight path in the camera plane.
-			particle.quaternion=Quaternion(Vector3.BACK,velocity.normalized())
-		particles.append({"node":particle,"velocity":velocity})
-	bursts.append({"node":node,"age":0.0,"flash":flash,"fill":fill,"ring":ring,"particles":particles,"kind":kind,"flick_axis":flick_axis,"sustain_entry":sustain_entry,"pointer_id":pointer_id,"pool_key":pool_key})
+			basis = Basis(Quaternion(Vector3.BACK,velocity.normalized()))
+		particles.append({"velocity":velocity,"basis":basis})
+	bursts.append({"node":node,"age":0.0,"flash":flash,"fill":fill,"ring":ring,"particles":particles,"particle_batch":batch,"kind":kind,"flick_axis":flick_axis,"sustain_entry":sustain_entry,"pointer_id":pointer_id,"pool_key":pool_key})
 
 func recycle_hit(burst: Dictionary) -> void:
 	burst.node.hide(); burst.sustain_entry={}
@@ -701,21 +711,45 @@ func prewarm() -> void:
 # Fill the hit-effect pool for the chart before play, so even a dense opening never builds a
 # flash, ring and spark set mid-song. Counts cover the most hits of each kind that can be on
 # screen at once (a hit lasts about 0.65 s); every flick direction the chart uses gets its own.
-const HIT_POOL_LIMIT = 48
-func prefill_hits() -> void:
-	var counts = {"tap": 0, "hold": 0}
-	var flick_dirs = {}
+const MAX_ACTIVE_HITS = 32
+const HIT_POOL_LIMIT = MAX_ACTIVE_HITS * 6
+# Sweep effect lifetimes, including sustain heads, releases, and checkpoint flashes.
+# Each family is capped by the same limit as active effects, with a bounded total pool.
+func chart_hit_pool_requirements() -> Dictionary:
+	var families: Dictionary = {}
 	for entry in game.live:
-		var kind = str(entry.note.kind)
-		if kind == "flick": flick_dirs[int(entry.note.get("direction", 1))] = true
-		elif kind == "hold": counts.hold += 1
-		else: counts.tap += 1
-	var wanted = {"0normal": mini(10, counts.tap), "1normal": mini(6, counts.hold)}
-	for dir in flick_dirs: wanted["0flick" + str(dir)] = 3
+		var note: Dictionary = entry.note
+		var kind = str(note.kind)
+		var key = "1normal" if kind=="hold" else ("0flick"+str(int(note.get("direction",1))) if kind=="flick" else "0normal")
+		if not families.has(key): families[key] = []
+		var begin = float(note.time)
+		var finish = begin + float(note.duration)
+		var life = .65 + (float(note.duration) if kind in ["hold","slide"] else 0.0)
+		families[key].append(Vector2(begin-.23,1)); families[key].append(Vector2(begin+life+.23,-1))
+		if kind in ["hold","slide"]:
+			families[key].append(Vector2(finish-.23,1)); families[key].append(Vector2(finish+.88,-1))
+			for offset in note.get("checkpoints",[]):
+				var at = begin + float(offset)
+				families[key].append(Vector2(at,1)); families[key].append(Vector2(at+.88,-1))
+	var wanted: Dictionary = {}
+	for key in families:
+		var events: Array = families[key]
+		events.sort_custom(func(a,b): return a.y < b.y if a.x==b.x else a.x < b.x)
+		var active = 0; var peak = 0
+		for event in events:
+			active += int(event.y); peak = maxi(peak,active)
+		wanted[key] = mini(MAX_ACTIVE_HITS,peak)
+	return wanted
+
+func prefill_hits() -> void:
+	var wanted = chart_hit_pool_requirements()
 	var have = {}
-	for burst in hit_pool: have[burst.pool_key] = int(have.get(burst.pool_key, 0)) + 1
+	for burst in hit_pool+bursts: have[burst.pool_key] = int(have.get(burst.pool_key, 0)) + 1
 	var made: Array = []
 	if game.hit_style == "bloom": prefill_blooms(); return
+	# Build only missing inventory; do not consume the warm instances being counted.
+	var existing_pool = hit_pool
+	hit_pool = []
 	prewarming_hits = true
 	for pool_key in wanted:
 		var kind = "hold" if pool_key == "1normal" else ("flick" if pool_key.begins_with("0flick") else "tap")
@@ -723,6 +757,7 @@ func prefill_hits() -> void:
 		for i in maxi(0, int(wanted[pool_key]) - int(have.get(pool_key, 0))):
 			spawn_hit(5, kind, dir); made.append(bursts.pop_back())
 	prewarming_hits = false
+	hit_pool = existing_pool
 	for burst in made: recycle_hit(burst)
 
 # --- Play aids -------------------------------------------------------------------------
@@ -871,7 +906,7 @@ func clear_hit_effects() -> void:
 func clear_notes() -> void:
 	clear_shared_materials()
 	play_render_cursor=0
-	prebuilding=false; prebuild_queue.clear(); prebuild_total=0
+	prebuilding=false; prebuild_queue.clear(); prebuild_total=0; prebuild_index=0
 	for entry in notes.values(): entry.node.queue_free()
 	notes.clear()
 
@@ -916,16 +951,16 @@ func animate_effects(delta: float) -> void:
 		burst.flash.scale = Vector3(1.0+t*.6,1.0+t*.25,1).lerp(Vector3(1.14+hold_wave*.12,1.0+hold_wave*.12,1),hold_blend)
 		burst.ring.scale = Vector3.ONE*lerpf(.8+t*.75,1.12+hold_wave*.22,hold_blend)
 		burst.ring.material_override.albedo_color.a = lerpf(fade*.8,.15+hold_wave*.25,hold_blend)*hit_intensity
-		var particle_count=burst.particles.size()
-		for particle_index in particle_count:
-			var particle=burst.particles[particle_index]
-			var shown=float(particle_index)/maxi(1,particle_count)<particle_share
-			particle.node.visible=shown
-			if not shown: continue
-			particle.node.position = particle.velocity*burst.age
-			if burst.kind=="flick": particle.node.position += Vector3(0,1.8,0)
-			if burst.kind!="flick": particle.node.position += Vector3(0,-2.5*burst.age*burst.age,0)
-			particle.node.scale = Vector3.ONE*maxf(.01,1-t)
+		var particle_count = burst.particles.size()
+		var shown_count = clampi(ceili(particle_count*particle_share),0,particle_count)
+		var instances: MultiMesh = burst.particle_batch.multimesh
+		instances.visible_instance_count = shown_count
+		for particle_index in shown_count:
+			var particle = burst.particles[particle_index]
+			var position: Vector3 = particle.velocity*burst.age
+			if burst.kind=="flick": position += Vector3(0,1.8,0)
+			else: position += Vector3(0,-2.5*burst.age*burst.age,0)
+			instances.set_instance_transform(particle_index,Transform3D(particle.basis.scaled(Vector3.ONE*maxf(.01,1-t)),position))
 
 func artwork(parent: Node3D, name: String, palette: int, position_value: Vector3, dimensions: Vector2, region = Vector4(0,0,1,1), opacity = 1.0) -> MeshInstance3D:
 	var quad = QuadMesh.new(); quad.size = dimensions
@@ -1135,6 +1170,7 @@ const PREBUILD_BUDGET_MS = 6.0
 var prebuilding = false
 var prebuild_queue: Array = []
 var prebuild_total = 0
+var prebuild_index = 0
 
 func build_note_node(key: String, note: Dictionary, recording = false) -> void:
 	# Materials this note creates are animated with the note (only while it's visible),
@@ -1160,24 +1196,24 @@ func begin_prebuild() -> void:
 	clear_notes()
 	build_chords()
 	prebuild_queue = range(game.live.size())
-	prebuild_total = prebuild_queue.size()
+	prebuild_total = prebuild_queue.size(); prebuild_index = 0
 	prebuilding = prebuild_total > 0
 
 func step_prebuild() -> void:
 	if not prebuilding: return
 	var start = Time.get_ticks_usec()
-	while not prebuild_queue.is_empty() and (Time.get_ticks_usec() - start) < PREBUILD_BUDGET_MS * 1000.0:
-		var i: int = prebuild_queue.pop_front()
+	while prebuild_index < prebuild_total and (Time.get_ticks_usec() - start) < PREBUILD_BUDGET_MS * 1000.0:
+		var i: int = prebuild_queue[prebuild_index]; prebuild_index += 1
 		if i >= game.live.size(): continue
 		var key: String = game.live[i].key
 		if notes.has(key): continue
 		build_note_node(key, game.live[i].note)
 		notes[key].node.visible = false; notes[key].prebuilt = true
-	if prebuild_queue.is_empty(): prebuilding = false
+	if prebuild_index >= prebuild_total: prebuilding = false; prebuild_queue.clear()
 
 func prebuild_progress() -> float:
 	if prebuild_total <= 0: return 1.0
-	return 1.0 - float(prebuild_queue.size()) / float(prebuild_total)
+	return float(prebuild_index) / float(prebuild_total)
 
 # The note-look part of each note's signature, computed once per frame.
 var look_signature = 0
