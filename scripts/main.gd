@@ -306,6 +306,7 @@ func _ready() -> void:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	prefs.load("user://preferences.cfg"); timing_ms = float(prefs.get_value("audio","offset_ms",0))
 	bluetooth_mode=bool(prefs.get_value("audio","bluetooth_mode",false))
+	record_aids_enabled=bool(prefs.get_value("editor","record_aids",false))
 	bluetooth_latency_ms=clampf(float(prefs.get_value("audio","bluetooth_latency_ms",180)),0,600)
 	note_lines=bool(prefs.get_value("editor","note_lines",true))
 	ghost_recording=bool(prefs.get_value("editor","ghost_recording",true))
@@ -637,7 +638,7 @@ func build_ui() -> void:
 	record_help=label(record_tools,"",.2,.925,.8,.985,15); record_help.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	record_help.add_theme_color_override("font_color",Color(1,1,1,.72))
 	# AIDS drawer: hidden until its button (in the top bar) is tapped; drops down below it.
-	record_sidebar=recorder_plate(Rect2(.685,.135,.19,.7))
+	record_sidebar=recorder_plate(Rect2(.685,.135,.19,.775))
 	aids_drawer=Control.new(); rect(aids_drawer,record_tools,0,0,1,1); aids_drawer.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	record_sidebar.reparent(aids_drawer)
 	label(aids_drawer,"RECORDING AIDS",.7,.145,.87,.18,13).add_theme_color_override("font_color",Color("7fd7e7"))
@@ -655,9 +656,20 @@ func build_ui() -> void:
 	r=row.call(6); record_speed_button=button(aids_drawer,str(record_speed)+"× SPEED",r[0],r[1],r[2],r[3],cycle_record_speed,"tool")
 	record_speed_button.tooltip_text="Recording playback speed: 1×, 0.75×, 0.5×, 0.25×, 1.25×, 1.5×"
 	r=row.call(7); mr.register_button(button(aids_drawer,"MR OFF",r[0],r[1],r[2],r[3],mr.toggle,"tool"))
+	r=row.call(8); record_aids_button=button(aids_drawer,"",r[0],r[1],r[2],r[3],toggle_record_aids_display,"tool")
+	update_record_aids_button()
 	aids_drawer.visible=false
 
 var aids_drawer: Control
+# Beat grid and waveform lane while recording (record_aids.gd); off by default.
+var record_aids_enabled=false
+var record_aids_button: Button
+func toggle_record_aids_display() -> void:
+	record_aids_enabled=not record_aids_enabled
+	prefs.set_value("editor","record_aids",record_aids_enabled); prefs.save("user://preferences.cfg")
+	update_record_aids_button()
+func update_record_aids_button() -> void:
+	if record_aids_button: record_aids_button.text="GRID & WAVE: "+("ON" if record_aids_enabled else "OFF"); record_aids_button.set_selected(record_aids_enabled)
 var aids_toggle: Button
 func toggle_record_aids() -> void:
 	aids_drawer.visible=not aids_drawer.visible

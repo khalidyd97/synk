@@ -73,7 +73,8 @@ func build_some() -> void:
 
 func _process(_delta: float) -> void:
 	var game = world.game
-	visible = recording()
+	# Off unless switched on in the recorder's AIDS drawer (GRID & WAVE).
+	visible = recording() and bool(game.get("record_aids_enabled"))
 	if not visible: return
 	prepare(game.audio.stream)
 	build_some()
