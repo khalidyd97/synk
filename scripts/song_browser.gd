@@ -51,7 +51,7 @@ func label(parent: Control,value: String,x: float,y: float,w: float,h: float,fon
     n.add_theme_font_size_override("font_size",roundi(font_size*1.15)); n.add_theme_color_override("font_color",tint)
     n.mouse_filter=Control.MOUSE_FILTER_IGNORE; n.clip_text=true; n.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS; return n
 func button(parent: Control,value: String,x: float,y: float,w: float,h: float,callback: Callable,base: Vector2=Vector2(1456,819),primary: bool=false) -> Button:
-    var n=ButtonArt.new(); n.menu_motion=true; n.text=value; n.primary=primary; n.caption_size=22; place(n,parent,x,y,w,h,base); n.pressed.connect(callback); return n
+    var n=preload("res://scripts/song_play_button.gd").new() if value.begins_with("▶") else ButtonArt.new(); n.menu_motion=true; n.text=value; n.primary=primary; n.caption_size=22; place(n,parent,x,y,w,h,base); n.pressed.connect(callback); return n
 func card(parent: Control,x: float,y: float,w: float,h: float,base: Vector2=Vector2(1456,819),radius: int=20) -> Panel:
     var n=Panel.new(); place(n,parent,x,y,w,h,base)
     n.add_theme_stylebox_override("panel",box_style(Color(0.041,0.041,0.041,.88),Color("2b263b"),radius)); return n
@@ -150,8 +150,8 @@ func _ready() -> void:
     best_value=label(best,"0",17,34,330,30,24,Color("f7f3ff"),Vector2(468,76))
     label(best,"Rank",390,12,60,20,12,Color("aaa2bf"),Vector2(468,76)).horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
     rank_value=label(best,"—",390,34,60,30,24,Color("51d8ec"),Vector2(468,76)); rank_value.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
-    details_label=label(panel,"",29,478,468,28,13,Color("a9a0bd"),p)
-    play=button(panel,"▶   P L A Y",29,508,468,84,lobby.press_play,p,true)
+    details_label=label(panel,"",29,472,468,26,13,Color("a9a0bd"),p)
+    play=button(panel,"▶   P L A Y",16,502,494,104,lobby.press_play,p,true)
     create=button(panel,"CREATE CHART",29,508,468,84,func():
         # Opens Chart Studio on this song and asks for the new chart's level (1-30).
         lobby.stop_preview(); game.open_editor()
@@ -272,7 +272,7 @@ func refresh_difficulties(loading: bool=false) -> void:
         difficulty[key].set_selected(game.features.current_variant==key and not loading)
     # The play button names the level it will start.
     play.text="▶   P L A Y   ·   "+" ".join(Levels.label(game.features.current_variant).to_upper().split(""))
-    play.caption_size=26
+    play.caption_size=30
     for i in 4: sections.get_popup().set_item_disabled(i,not game.section_available(["full","verse1","verse2","bridge"][i]) or loading)
     sections.select(["full","verse1","verse2","bridge"].find(game.play_mode))
 func update_best() -> void:
