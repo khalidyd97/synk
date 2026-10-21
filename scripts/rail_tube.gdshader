@@ -18,13 +18,13 @@ void vertex() {
 void fragment() {
 	vec3 n = normalize(world_normal);
 	float diffuse = clamp(dot(n, normalize(vec3(0.0, 1.0, 0.45))) * 0.5 + 0.5, 0.0, 1.0);
-	vec3 cream = vec3(1.0, 0.96, 0.88);
-	vec3 shade = vec3(0.50, 0.40, 0.31);
+	vec3 cream = vec3(1.0, 1.0, 1.0);
+	vec3 shade = vec3(0.42, 0.44, 0.46);
 	float lit = smoothstep(0.2, 0.9, diffuse);
 	// A colored rail keeps the same rounded shading: dark flank, bright crown.
 	vec3 color = mix(mix(shade, cream, lit), tint * (0.38 + 0.72 * lit), tint_amount);
 	float crown = pow(clamp(dot(n, normalize(vec3(0.0, 1.0, 0.25))), 0.0, 1.0), 28.0);
 	color += vec3(1.0, 0.98, 0.94) * crown * 0.55;
 	ALBEDO = color;
-	ALPHA = smoothstep(-60.0, -38.0, world_z);
+	ALPHA = smoothstep(-61.0, -57.0, world_z);
 }

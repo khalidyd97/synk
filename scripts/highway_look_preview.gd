@@ -29,15 +29,24 @@ func _draw() -> void:
     var plate=StyleBoxFlat.new(); plate.bg_color=Color("101124"); plate.border_color=Color("292c43")
     plate.set_corner_radius_all(18); plate.set_border_width_all(1)
     draw_style_box(plate,Rect2(Vector2.ZERO,size))
+    if game.highway_style=="prism":
+        draw_texture_rect(preload("res://assets/neon/Prism_Stage.png"),Rect2(Vector2(12,12),size-Vector2(24,24)),false)
+        return
     # A stand-in stage glow behind the see-through highway.
     var glow=PackedColorArray([Color("3a1d6e"),Color("3a1d6e"),Color("0d0a1e"),Color("0d0a1e")])
     draw_polygon(PackedVector2Array([Vector2(12,12),Vector2(size.x-12,12),Vector2(size.x-12,size.y-12),Vector2(12,size.y-12)]),glow)
-    var gold=str(game.highway_style)!="neon"
+    var gold=str(game.highway_style)=="gold"
+    var prism=str(game.highway_style)=="prism"
     var darkness=float(game.highway_opacity)
     var surface=Color("050409") if gold else Color("0b1030")
     strip(-1,1,0,1,Color(surface,minf(.95,(.62 if gold else .55)*darkness)))
     # Notes resting in two lanes and one on its way down.
     var t=Time.get_ticks_msec()/1000.0
+    if prism:
+        for lane in range(1,10):
+            var x=-1.0+float(lane)*.2
+            var tint=Color("05cfff").lerp(Color("f02bff"),.5+.5*sin(t*.55+lane*.6))
+            draw_line(at(x,0),at(x,1),Color(tint,.7),1.5,true)
     for item in [[-.55,.42],[.35,.62],[.05,fmod(t*.35,1.0)]]:
         var lane=float(item[0]); var depth=1.0-float(item[1])
         strip(lane-.12,lane+.12,depth-.02,depth+.02,Color("b58aff"))
@@ -59,3 +68,7 @@ func _draw() -> void:
             var tint: Color=rail if rail!=null else NEON_RAILS[0 if side<0 else 1]
             draw_line(near+Vector2(side*3,0),far+Vector2(side*1,0),Color(tint,.25),12,true)
             draw_line(near+Vector2(side*3,0),far+Vector2(side*1,0),tint.lerp(Color.WHITE,.35),3,true)
+            if prism:
+                var dynamic=Color("05cfff").lerp(Color("f02bff"),.5+.5*sin(t*.7+side))
+                draw_line(near+Vector2(side*9,0),far+Vector2(side*3,0),dynamic.darkened(.5),12,true)
+                draw_line(near+Vector2(side*7,0),far+Vector2(side*2,0),dynamic,3,true)

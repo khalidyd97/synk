@@ -102,7 +102,7 @@ var note_speed = 1.0
 # "rectangle", "circle" or "puck" (the purple glass puck); chosen in Settings.
 var note_shape = "circle"
 # Highway slope in degrees (Settings): low is flat and far-reaching, high looks down steeply.
-var highway_angle = 29.0
+var highway_angle = 35.0
 # Highway look: "gold" or "neon", optional custom rail/band colors ("" follows the style),
 # and how dark the see-through highway surface is (1 = the style's default).
 var highway_style = "gold"
@@ -296,9 +296,9 @@ func _ready() -> void:
 	if hit_style not in HIT_STYLES: hit_style="classic"
 	note_shape = str(prefs.get_value("gameplay","note_shape","circle"))
 	if note_shape not in ["rectangle","circle","puck"]: note_shape="rectangle"
-	highway_angle = clampf(float(prefs.get_value("gameplay","highway_angle",29.0)),18.0,44.0)
+	highway_angle = clampf(float(prefs.get_value("gameplay","highway_angle",35.0)),18.0,44.0)
 	highway_style = str(prefs.get_value("highway","style","gold"))
-	if highway_style not in ["gold","neon"]: highway_style="gold"
+	if highway_style not in ["gold","neon","prism"]: highway_style="gold"
 	rail_color = str(prefs.get_value("highway","rail_color",""))
 	band_color = str(prefs.get_value("highway","band_color",""))
 	highway_opacity = clampf(float(prefs.get_value("highway","opacity",1.0)),.3,1.6)
@@ -752,7 +752,7 @@ func change_highway_angle(value: float) -> void:
 
 func change_highway_look(key: String,value: Variant) -> void:
 	match key:
-		"style": highway_style = str(value) if str(value) in ["gold","neon"] else "gold"; value = highway_style
+		"style": highway_style = str(value) if str(value) in ["gold","neon","prism"] else "gold"; value = highway_style
 		"rail_color": rail_color = str(value); value = rail_color
 		"band_color": band_color = str(value); value = band_color
 		"opacity": highway_opacity = clampf(float(value),.3,1.6); value = highway_opacity

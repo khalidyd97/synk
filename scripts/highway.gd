@@ -24,9 +24,6 @@ func _ready() -> void:
 	screen.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	var shader = Shader.new()
 	shader.code = """shader_type canvas_item;
-	float star_hash(vec2 cell) {
-		return fract(sin(dot(cell,vec2(127.1,311.7)))*43758.5453);
-	}
 	void fragment() {
 		vec4 base = texture(TEXTURE,UV);
 		vec3 bloom = vec3(0.0);
@@ -41,16 +38,6 @@ func _ready() -> void:
 		float entry_fade = 1.0 - smoothstep(0.015, 0.22, UV.y);
 		float rail_mask = 1.0 - smoothstep(0.23, 0.40, abs(UV.x - 0.5));
 		vec3 scene_color = (base.rgb + bloom * 0.24) * (1.0 - entry_fade * rail_mask * 0.82);
-		// Only faint stars beyond the rail edges: no colored nebula or ribbon gradients.
-		float rail_half_width = 0.045 + 0.445 * UV.y;
-		float outside = smoothstep(rail_half_width - 0.035, rail_half_width + 0.015, abs(UV.x - 0.5));
-		vec2 star_grid = UV * vec2(145.0, 68.0);
-		vec2 star_cell = floor(star_grid);
-		float star = step(0.994, star_hash(star_cell))
-			* exp(-dot(fract(star_grid) - 0.5, fract(star_grid) - 0.5) * 75.0)
-			* (0.58 + 0.42 * sin(TIME * 1.8 + star_hash(star_cell + 7.0) * 6.283));
-		vec3 backdrop = vec3(0.26, 0.24, 0.37) * star;
-		scene_color += backdrop * outside;
 		COLOR = vec4(scene_color,1.0);
 	}"""
 	var post = ShaderMaterial.new(); post.shader = shader; screen.material = post

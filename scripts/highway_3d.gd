@@ -2,12 +2,12 @@ extends Node3D
 
 # All note positions are in world units. Camera perspective supplies the depth.
 const CENTER_LANE = (SynkChart.LANES-1)*.5
-# Original highway proportions, artwork size and lane spacing.
+# Keep the reference taper and original track width, with larger readable note faces.
 const HIGHWAY_HALF_WIDTH = 9.75
 const EDGE_MARGIN = .2
-const NOTE_SCALE = 1.3
+const NOTE_SCALE = 1.65
 const NOTE_WIDTH = 3.1*NOTE_SCALE
-const FIT = 1.0
+const FIT = NOTE_SCALE/1.3
 # Every lane, the outer two included, gets the same share of the highway.
 const LANE_WIDTH = HIGHWAY_HALF_WIDTH*2.0/SynkChart.LANES
 const PAD_HALF_WIDTH = HIGHWAY_HALF_WIDTH
@@ -57,13 +57,9 @@ var reference_note_meshes: Dictionary = {}
 var spark_mesh: SphereMesh
 var miss_shake_remaining = 0.0
 var cover_backdrop: MeshInstance3D
-var ambient_motes: CPUParticles3D
-var ambient_streaks: Array = []
 var rail_atmosphere: Node3D
-var ambient_side_motes: Array = []
-var ambient_mote_material: StandardMaterial3D
+var prism_theme: Node3D
 var cover_material: ShaderMaterial
-var ambient_palette: Gradient
 var rail_edge_materials: Array = []
 # Highway looks: the glossy "gold" rails and band, or the earlier "neon" glow rails.
 var gold_nodes: Array = []
@@ -78,15 +74,17 @@ var sky_material: ShaderMaterial
 # The cover plane sits this far in front of the camera, behind the whole highway.
 const COVER_DISTANCE = 150.0
 const CAMERA_POSITION = Vector3(0,10,10)
-const CAMERA_PITCH = -29.0
+const CAMERA_PITCH = -35.0
 # Highway angle setting: the camera swings around the judgment bar, keeping its distance and the
 # bar's place on screen (touch input relies on it), so only the slope of the highway changes.
-const BAR_DISTANCE = 14.142136
-const BAR_BELOW_CENTER = 16.0
+const PERSPECTIVE_SCALE = .55
+const BAR_DISTANCE = 14.142136*PERSPECTIVE_SCALE*cos(deg_to_rad(18.0))/cos(deg_to_rad(BAR_BELOW_CENTER))
+const BAR_BELOW_CENTER = rad_to_deg(atan(tan(deg_to_rad(18.0))/PERSPECTIVE_SCALE))
 const MIN_ANGLE = 18.0
 const MAX_ANGLE = 44.0
 # Fixed gameplay lens, including the loading-card transition.
-const GAMEPLAY_FOV = 45.0
+# A closer, wider lens narrows the far end while preserving the judgment bar framing.
+const GAMEPLAY_FOV = rad_to_deg(2.0*atan(tan(deg_to_rad(45.0)*.5)/PERSPECTIVE_SCALE))
 
 func material(color: Color, alpha = 1.0) -> StandardMaterial3D:
 	var result = StandardMaterial3D.new()
@@ -148,18 +146,8 @@ func _ready() -> void:
 	environment.environment.background_color = Color("06091e")
 	var sky_shader = Shader.new()
 	sky_shader.code = """shader_type sky;
-	float star_hash(vec2 cell) {
-		return fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
-	}
 	void sky() {
-		// Flat dark sky: no horizon glow or aurora behind the highway.
-		vec3 color = vec3(0.012, 0.013, 0.035);
-		vec2 star_cell = floor(vec2(EYEDIR.x, EYEDIR.y) * 145.0);
-		vec2 star_center = fract(vec2(EYEDIR.x, EYEDIR.y) * 145.0) - 0.5;
-		float star = step(0.997, star_hash(star_cell)) * exp(-dot(star_center, star_center) * 80.0);
-		float twinkle = 0.62 + 0.38 * sin(TIME * 1.7 + star_hash(star_cell + 9.0) * 6.283);
-		color += vec3(0.11, 0.10, 0.20) * star * twinkle;
-		COLOR = color;
+		COLOR = vec3(0.012, 0.013, 0.035);
 	}"""
 	sky_material = ShaderMaterial.new(); sky_material.shader = sky_shader
 	var sky = Sky.new(); sky.sky_material = sky_material
@@ -171,10 +159,10 @@ func _ready() -> void:
 		materials.append(material(color))
 		note_meshes.append(make_note_mesh(color))
 	build_track()
+	prism_theme=preload("res://scripts/prism_highway.gd").new(); prism_theme.world=self; add_child(prism_theme)
 	build_effects()
 	build_play_aids()
 	build_cover_backdrop()
-	build_ambient_particles()
 	rail_atmosphere=preload("res://scripts/stage_rail_effects.gd").new(); rail_atmosphere.world=self; add_child(rail_atmosphere)
 
 func build_cover_backdrop() -> void:
@@ -186,88 +174,6 @@ func build_cover_backdrop() -> void:
 	cover_backdrop.position = Vector3(0,0,-COVER_DISTANCE)
 	cover_backdrop.visible = false
 
-func ambient_material(texture: Texture2D, billboard: bool) -> StandardMaterial3D:
-	# Additive, unshaded, colored per particle; drawn before the highway so the track stays on top.
-	var result = StandardMaterial3D.new()
-	result.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	result.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	result.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	result.vertex_color_use_as_albedo = true
-	result.albedo_texture = texture
-	result.disable_receive_shadows = true; result.disable_fog = true
-	result.cull_mode = BaseMaterial3D.CULL_DISABLED
-	if billboard: result.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	result.render_priority = -15
-	return result
-
-func build_ambient_particles() -> void:
-	var dot = GradientTexture2D.new(); dot.width = 64; dot.height = 64
-	dot.fill = GradientTexture2D.FILL_RADIAL; dot.fill_from = Vector2(.5,.5); dot.fill_to = Vector2(1,.5)
-	var falloff = Gradient.new(); falloff.set_color(0,Color.WHITE); falloff.set_color(1,Color(1,1,1,0))
-	falloff.add_point(.35,Color(1,1,1,.55)); dot.gradient = falloff
-	var palette = Gradient.new(); palette.set_color(0,Color("a36aff")); palette.set_color(1,Color("38baff"))
-	palette.add_point(.5,Color("ff7ad9"))
-	ambient_palette = palette
-	# Drifting light motes filling the space around and beyond the track.
-	ambient_motes = CPUParticles3D.new(); add_child(ambient_motes)
-	var mote_mesh = QuadMesh.new(); mote_mesh.size = Vector2(1.5,1.5)
-	ambient_mote_material = ambient_material(dot,true)
-	mote_mesh.material = ambient_mote_material
-	ambient_motes.mesh = mote_mesh
-	ambient_motes.amount = 170; ambient_motes.lifetime = 9.0; ambient_motes.preprocess = 9.0
-	ambient_motes.position = Vector3(0,6,-90)
-	ambient_motes.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
-	ambient_motes.emission_box_extents = Vector3(65,14,60)
-	ambient_motes.direction = Vector3(0,1,0); ambient_motes.spread = 35
-	ambient_motes.gravity = Vector3.ZERO
-	ambient_motes.initial_velocity_min = .6; ambient_motes.initial_velocity_max = 1.8
-	ambient_motes.scale_amount_min = .5; ambient_motes.scale_amount_max = 1.8
-	ambient_motes.color_initial_ramp = palette
-	var mote_life = Gradient.new(); mote_life.set_color(0,Color(1,1,1,0)); mote_life.set_color(1,Color(1,1,1,0))
-	mote_life.add_point(.25,Color(1,1,1,.9)); mote_life.add_point(.75,Color(1,1,1,.9))
-	ambient_motes.color_ramp = mote_life
-	# A closer band of motes along each side, so the space beside the track feels alive too.
-	for side in [-1,1]:
-		var near = ambient_motes.duplicate() as CPUParticles3D; add_child(near)
-		near.amount = 45; near.position = Vector3(side*26,3,-40); near.emission_box_extents = Vector3(10,5,28)
-		near.scale_amount_min = .35; near.scale_amount_max = 1.0
-		ambient_side_motes.append(near)
-	# Speed streaks shoot away from the camera along both sides of the highway.
-	var streak_mesh = BoxMesh.new(); streak_mesh.size = Vector3(.07,.07,5.0)
-	streak_mesh.material = ambient_material(null,false)
-	for side in [-1,1]:
-		var streaks = CPUParticles3D.new(); add_child(streaks)
-		streaks.mesh = streak_mesh
-		streaks.amount = 22; streaks.lifetime = 1.8; streaks.preprocess = 1.8
-		streaks.position = Vector3(side*17,1.2,8)
-		streaks.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
-		streaks.emission_box_extents = Vector3(5,2.2,30)
-		streaks.direction = Vector3(0,0,-1); streaks.spread = 0
-		streaks.gravity = Vector3.ZERO
-		streaks.initial_velocity_min = 32; streaks.initial_velocity_max = 51
-		streaks.particle_flag_align_y = false
-		streaks.color_initial_ramp = palette
-		var streak_life = Gradient.new(); streak_life.set_color(0,Color(1,1,1,0)); streak_life.set_color(1,Color(1,1,1,0))
-		streak_life.add_point(.3,Color(1,1,1,.7)); streak_life.add_point(.7,Color(1,1,1,.7))
-		streaks.color_ramp = streak_life
-		ambient_streaks.append(streaks)
-
-func update_ambient_particles(beat: float) -> void:
-	# Freeze with the game when paused, follow the note speed, and brighten motes on the beat.
-	var running = game.mode in ["play","record"]
-	ambient_motes.speed_scale = 1.0 if running else 0.0
-	for motes in ambient_side_motes: motes.speed_scale = ambient_motes.speed_scale
-	for streaks in ambient_streaks: streaks.speed_scale = (game.note_speed if running else 0.0)
-	ambient_mote_material.albedo_color = Color(1,1,1).lerp(Color(1.8,1.8,1.8),beat)
-	var particles=game.features.effect("Particles")
-	ambient_motes.visible=particles>0; ambient_motes.color=Color(1,1,1,particles)
-	for motes in ambient_side_motes:
-		motes.visible=particles>0; motes.color=Color(1,1,1,particles)
-	var lasers=game.features.effect("Lasers")
-	for streaks in ambient_streaks:
-		streaks.visible=lasers>0; streaks.color=Color(element_color("lasers",Color.WHITE),lasers)
-	cover_material.set_shader_parameter("brightness",game.features.effect("Background brightness"))
-
 func set_cover(texture: Texture2D, tint: Color) -> void:
 	cover_material.set_shader_parameter("cover",texture)
 	cover_material.set_shader_parameter("tint",tint)
@@ -277,7 +183,7 @@ func set_cover(texture: Texture2D, tint: Color) -> void:
 	cover_material.set_shader_parameter("image_aspect",float(texture.get_width())/maxf(1.0,texture.get_height()) if texture else 1.0)
 	cover_backdrop.visible = true
 
-# Recolors notes, rails, the judgment bar, track, sky and particles to the cover's colors.
+# Recolors notes, rails, the judgment bar, track and sky to the cover's colors.
 func apply_palette(palette: Dictionary) -> void:
 	# Cached hit materials belong to the previous palette.
 	clear_hit_effects()
@@ -290,8 +196,6 @@ func apply_palette(palette: Dictionary) -> void:
 		materials.append(material(color))
 		note_meshes.append(make_note_mesh(color))
 	refresh_highway_look()
-	ambient_palette.offsets = PackedFloat32Array([0.0,.5,1.0])
-	ambient_palette.colors = PackedColorArray([element_color("particles",colors[1]),element_color("particles",colors[1].lerp(colors[2],.5) if cover_palette_active else Color("ff7ad9")),element_color("particles",colors[0])])
 	finger_beam_material.set_shader_parameter("tint",element_color("beams",colors[0]))
 	for beam in active_beams:
 		var mat: ShaderMaterial = beam.get_child(0).material_override
@@ -323,7 +227,7 @@ func update_cover_backdrop() -> void:
 	beat = clampf(maxf(beat * .6, loudness) + flare * .8, 0.0, 1.5)
 	cover_material.set_shader_parameter("beat",beat)
 	if flare > 0.0: cover_material.set_shader_parameter("glow_beat", 1.0)
-	update_ambient_particles(beat)
+	cover_material.set_shader_parameter("brightness",game.features.effect("Background brightness"))
 
 func make_note_mesh(color: Color) -> ArrayMesh:
 	var st = SurfaceTool.new(); st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -360,7 +264,7 @@ func build_track() -> void:
 	# Low render priority draws it before the notes and effects, which stay crisp on top.
 	var base_material = track_material(TRACK_COLOR,.30); base_material.render_priority = -10
 	track_materials.append(base_material)
-	box(self,Vector3(0,-.15,-28),Vector3(19.65,.25,64),base_material)
+	box(self,Vector3(0,-.15,-28),Vector3(FRAME_HALF_WIDTH*2.0+.15,.25,64),base_material)
 	var surface = PlaneMesh.new(); surface.size = Vector2(FRAME_HALF_WIDTH*2.0,60)
 	var surface_material = track_material(TRACK_COLOR,.55); surface_material.render_priority = -9
 	track_materials.append(surface_material)
@@ -409,7 +313,7 @@ func build_track() -> void:
 		animated_materials.append(weakref(strip_material))
 		neon_rail_materials.append(strip_material)
 		var neon_edge = mesh_node(strip,self,strip_material)
-		neon_edge.position = Vector3(side*9.72,.035,-28)
+		neon_edge.position = Vector3(side*(FRAME_HALF_WIDTH-.03),.035,-28)
 		neon_nodes.append(neon_edge)
 	# A bit deeper than the visible note face so the hit line reads clearly.
 	var judgment_mesh = QuadMesh.new(); judgment_mesh.size = Vector2(PAD_HALF_WIDTH*2.0,JUDGMENT_DEPTH)
@@ -449,23 +353,26 @@ func rail_glow_colors() -> Array:
 # Applies the chosen highway style, custom rail/band colors and highway darkness.
 func refresh_highway_look() -> void:
 	if judgment_material == null or track_materials.size() < 2: return
-	var gold = game == null or game.uses_recorder_colors() or str(game.get("highway_style")) != "neon"
+	var prism = game != null and game.highway_style=="prism" and not game.uses_recorder_colors()
+	var gold = game == null or game.uses_recorder_colors() or game.highway_style=="gold"
 	var darkness = clampf(float(game.get("highway_opacity")),.3,1.6) if game != null and game.get("highway_opacity") != null else 1.0
 	if game.uses_recorder_colors(): darkness=1.0
 	for node in gold_nodes: node.visible = gold
-	for node in neon_nodes: node.visible = not gold
+	for node in neon_nodes: node.visible = not gold and not prism
+	get_node("JudgmentPads").visible=not prism
+	if prism_theme: prism_theme.refresh()
 	var rail = custom_color("rail_color")
 	var band = custom_color("band_color")
 	# Tap color on the left rail, sustained on the right, unless the player picked one color.
 	for i in 2:
 		var tint: Color = rail if rail != null else (colors[1] if i==1 else colors[0])
 		rail_edge_materials[i].set_shader_parameter("tint",tint)
-		rail_edge_materials[i].set_shader_parameter("tint_amount",1.0 if rail != null else (.45 if cover_palette_active else 0.0))
+		rail_edge_materials[i].set_shader_parameter("tint_amount",1.0 if rail != null else 0.0)
 		neon_rail_materials[i].set_shader_parameter("tint",tint)
 	if gold:
 		judgment_material.shader = preload("res://scripts/judgment_bar.gdshader")
 		# Adaptive colors pull the band toward the artwork's main color; the theme keeps it golden.
-		var base: Color = band if band != null else (JUDGMENT_GOLD.lerp(colors[1].lightened(.15),.6) if cover_palette_active else JUDGMENT_GOLD)
+		var base: Color = band if band != null else JUDGMENT_GOLD
 		judgment_material.set_shader_parameter("base_color",base)
 		judgment_material.set_shader_parameter("sweep_color",base.lerp(Color.WHITE,.6))
 		track_materials[0].set_shader_parameter("color",stage_color.darkened(.88) if cover_palette_active else TRACK_COLOR)
@@ -482,6 +389,11 @@ func refresh_highway_look() -> void:
 		track_materials[0].set_shader_parameter("opacity",minf(.95,.36*darkness))
 		track_materials[1].set_shader_parameter("opacity",minf(.95,.42*darkness))
 		for m in track_materials: m.set_shader_parameter("near_fraction",1.0)
+	if prism:
+		judgment_material.shader=preload("res://scripts/prism_judgment.gdshader")
+		var adaptive=game.highway_colors=="adaptive" and cover_palette_active
+		judgment_material.set_shader_parameter("base_color",band if band!=null else (colors[0] if adaptive else Color("05cfff")))
+		judgment_material.set_shader_parameter("sweep_color",band.lerp(Color.WHITE,.5) if band!=null else (colors[1] if adaptive else Color("f02bff")))
 	for m in judgment_borders: m.albedo_color = Color(Color("fff1cf") if gold else Color("ead6ff"),.85 if gold else 1.0)
 	var judgment_color: Color=judgment_material.get_shader_parameter("base_color")
 	highway_shadow_material.set_shader_parameter("tint",judgment_color.darkened(.65))

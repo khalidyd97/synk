@@ -156,6 +156,12 @@ class StyleTile extends Button:
         box.set_border_width_all(2 if selected else 1)
         draw_style_box(box,Rect2(Vector2.ZERO,size))
         var gold = style_name=="gold"
+        if style_name=="prism":
+            draw_texture_rect(preload("res://assets/neon/Prism_Stage.png"),Rect2(Vector2(8,10),Vector2(size.x-16,size.y*.62)),false)
+            var font=ThemeDB.fallback_font
+            var width=font.get_string_size("PRISM",HORIZONTAL_ALIGNMENT_LEFT,-1,18).x
+            draw_string(font,Vector2((size.x-width)*.5,size.y*.88),"PRISM",HORIZONTAL_ALIGNMENT_LEFT,-1,18,Color.WHITE)
+            return
         var top = size.y*.14; var bottom = size.y*.66
         var a = Vector2(size.x*.40,top); var b = Vector2(size.x*.60,top)
         var c = Vector2(size.x*.86,bottom); var d = Vector2(size.x*.14,bottom)
@@ -167,6 +173,13 @@ class StyleTile extends Button:
             else:
                 draw_line(rail[0],rail[1],Color(rail[2],.3),8,true)
                 draw_line(rail[0],rail[1],rail[2],2,true)
+        if style_name=="prism":
+            for lane in range(1,10):
+                var t=float(lane)/10.0
+                draw_line(a.lerp(b,t),d.lerp(c,t),Color("50cfff").lerp(Color("f02bff"),t),1,true)
+            for rail in [[a,d],[b,c]]:
+                draw_line(rail[0],rail[1],Color("35306e"),9,true)
+                draw_line(rail[0],rail[1],Color("e464ff"),3,true)
         var font = ThemeDB.fallback_font; var caption = style_name.to_upper()
         var width = font.get_string_size(caption,HORIZONTAL_ALIGNMENT_LEFT,-1,18).x
         draw_string(font,Vector2((size.x-width)*.5,size.y*.88),caption,HORIZONTAL_ALIGNMENT_LEFT,-1,18,Color.WHITE if selected else Color(1,1,1,.65))
@@ -462,11 +475,11 @@ func build_highway(items: VBoxContainer) -> void:
     add_control(row(items,"Highway angle","Choose how flat or steep the highway looks."),highway_angle_input)
     highway_angle_input.value_changed.connect(game.change_highway_angle)
     var preview=preload("res://scripts/highway_look_preview.gd").new(); preview.game=game; items.add_child(preview)
-    var styles=row(items,"Highway style","Glossy gold rails or glowing neon rails.",166)
+    var styles=row(items,"Highway style","Gold, Neon, or Prism: faceted rails with flowing colors.",166)
     var tile_row=HBoxContainer.new(); tile_row.add_theme_constant_override("separation",12)
     add_control(styles,tile_row,440)
-    for kind in ["gold","neon"]:
-        var tile=StyleTile.new(kind); tile_row.add_child(tile); tile.custom_minimum_size=Vector2(208,136)
+    for kind in ["gold","neon","prism"]:
+        var tile=StyleTile.new(kind); tile_row.add_child(tile); tile.custom_minimum_size=Vector2(138,136)
         tile.pressed.connect(func(): if not Action.was_dragged(tile): game.change_highway_look("style",kind))
         style_tiles[kind]=tile
     var modes=row(items,"Colors","Theme keeps the style's colors. Adaptive takes them from the song's artwork.",148)
@@ -534,7 +547,7 @@ func build_hit_effects(items: VBoxContainer) -> void:
         var b=action(choices,key.capitalize(),func(): game.change_hit_style(key))
         b.custom_minimum_size=Vector2(150,72); b.caption_size=21; hit_style_buttons[key]=b
     effect_row(items,"Hit flashes","Set the brightness of hit flashes and impact rings.")
-    effect_row(items,"Particles","Set particle density for hit sparks and ambient motes.")
+    effect_row(items,"Particles","Set particle density for note-hit sparks.")
     action(items,"RESET HIT EFFECTS",func():
         for key in ["Hit flashes","Particles"]: effect_inputs[key].value=100)
 func build_stage_effects(items: VBoxContainer) -> void:
@@ -544,10 +557,9 @@ func build_stage_effects(items: VBoxContainer) -> void:
         add_control(row(items,key,hint,96),control,152)
         control.set_pressed_no_signal(game.features.effect(key)>0)
         connect_switch(control,func(on): game.features.set_effect(key,1.0 if on else 0.0))
-    effect_row(items,"Lasers","Control the original ambient laser streaks.")
     effect_row(items,"Background brightness","Adjust artwork brightness behind the highway.")
     action(items,"RESET STAGE EFFECTS",func():
-        for key in ["Lasers","Background brightness"]: effect_inputs[key].value=100
+        for key in ["Background brightness"]: effect_inputs[key].value=100
         for key in stage_effect_switches:
             game.features.set_effect(key,game.features.effect_default(key)); stage_effect_switches[key].set_pressed_no_signal(false))
 func editor_switch(items: VBoxContainer,key: String,title: String,hint: String,value: bool,callback: Callable) -> Switch:
