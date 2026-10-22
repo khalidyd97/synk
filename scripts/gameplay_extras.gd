@@ -19,7 +19,7 @@ const EASY_SCALE = 1.4
 
 var game: Control
 var settings: Dictionary = {
-	"hit_volume": .6, "vibration": true, "lane_hints": false, "window_preview": true,
+	"hit_volume": .6, "vibration": true, "lane_hints": true, "window_preview": true,
 	"judgement": "normal", "touch_assist": true, "mirror": false, "hidden": false, "sudden": false,
 }
 var players: Array[AudioStreamPlayer] = []
