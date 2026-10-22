@@ -80,8 +80,11 @@ const CAMERA_PITCH = -35.0
 # Highway angle setting: the camera swings around the judgment bar, keeping its distance and the
 # bar's place on screen (touch input relies on it), so only the slope of the highway changes.
 const PERSPECTIVE_SCALE = .55
-const BAR_DISTANCE = 14.142136*PERSPECTIVE_SCALE*cos(deg_to_rad(18.0))/cos(deg_to_rad(BAR_BELOW_CENTER))
-const BAR_BELOW_CENTER = rad_to_deg(atan(tan(deg_to_rad(18.0))/PERSPECTIVE_SCALE))
+# How far below the screen centre the judgement bar sits (as seen through a 45-degree lens):
+# 14 degrees puts it about 80% down the screen, clear of the bottom edge (18 was about 89%).
+const BAR_SCREEN_ANGLE = 14.0
+const BAR_DISTANCE = 14.142136*PERSPECTIVE_SCALE*cos(deg_to_rad(BAR_SCREEN_ANGLE))/cos(deg_to_rad(BAR_BELOW_CENTER))
+const BAR_BELOW_CENTER = rad_to_deg(atan(tan(deg_to_rad(BAR_SCREEN_ANGLE))/PERSPECTIVE_SCALE))
 const MIN_ANGLE = 18.0
 const MAX_ANGLE = 44.0
 # Fixed gameplay lens, including the loading-card transition.
@@ -752,7 +755,7 @@ func update_play_aids(delta: float) -> void:
 	update_ready_marker()
 	var playing = game.mode == "play" or (game.mode == "paused" and game.paused_mode == "play")
 	var counting = game.mode == "play" and game.countdown > 0
-	var show_bands = counting and bool(extras_setting("window_preview", true)) and game.get("extras") != null
+	var show_bands = counting and bool(extras_setting("window_preview", false)) and game.get("extras") != null
 	for i in window_bands.size():
 		window_bands[i].visible = show_bands
 		if show_bands:
