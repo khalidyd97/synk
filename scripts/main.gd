@@ -108,6 +108,8 @@ var highway_angle = 35.0
 var highway_style = "gold"
 var ssrg_playable_run = false
 var ssrg_lane_count = 13
+# SSRG Playables keeps its own note speed (set on that screen), separate from SYNK's.
+func ssrg_note_speed() -> float: return clampf(float(prefs.get_value("ssrg","speed",1.0)),.5,4.0)
 var ssrg_playable_previous_style = "gold"
 var rail_color = ""
 var band_color = ""
@@ -983,7 +985,7 @@ func space_authored_notes(incoming: Array,fixed: Array) -> bool:
 	return resolved
 
 func note_travel_seconds() -> float:
-	if ssrg_playable_run and not uses_recorder_colors(): return 2.2/note_speed
+	if ssrg_playable_run and not uses_recorder_colors(): return 2.2/ssrg_note_speed()
 	return 2.6 / (recorder_note_speed if uses_recorder_colors() else note_speed)
 
 func cycle_recorder_note_speed() -> void:

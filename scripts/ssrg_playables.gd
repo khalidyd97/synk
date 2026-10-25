@@ -29,6 +29,7 @@ var import_status: Label
 var import_button: Button
 var import_panel: Control
 var status_label: Label
+var speed_label: Label
 var search: LineEdit
 var song_list: VBoxContainer
 var detail: Control
@@ -84,6 +85,10 @@ func _ready() -> void:
 	text(self,"SSRG PLAYABLES",.17,.035,.5,.1,40)
 	status_label = text(self,"Play SSRG songs from your own game files.",.17,.095,.6,.15,16,MUTED)
 	action(self,"+  IMPORT SONG",.8,.045,.965,.135,open_import,"primary")
+	# Note speed for SSRG songs only (0.5x to 4x).
+	action(self,"−",.57,.045,.62,.135,func(): change_speed(-.25),"small")
+	speed_label = text(self,"",.625,.045,.725,.135,18); speed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	action(self,"+",.73,.045,.78,.135,func(): change_speed(.25),"small")
 	ScreenStyle.rule(self,.035,.965,.165)
 
 	# Song list
@@ -117,7 +122,7 @@ func _ready() -> void:
 	image_picker.filters = PackedStringArray(["*.png,*.jpg,*.jpeg;Images;image/png,image/jpeg"])
 	image_picker.file_selected.connect(set_background)
 	move_child(safe_content,get_child_count()-1)
-	refresh_staged()
+	refresh_staged(); refresh_speed()
 
 func build_import_panel() -> void:
 	import_panel = Control.new(); place(import_panel,self,0,0,1,1); import_panel.visible = false
@@ -286,6 +291,14 @@ func refresh_detail() -> void:
 	action(detail,"BACKGROUND",.74,.76,.96,.88,choose_background)
 	if game.has_background(id): action(detail,"REMOVE BACKGROUND",.04,.895,.36,.97,func(): game.remove_background(id); refresh_detail(),"small")
 	delete_button = action(detail,"DELETE SONG",.7,.895,.96,.97,delete_selected,"small")
+
+func change_speed(step: float) -> void:
+	game.prefs.set_value("ssrg","speed",clampf(snappedf(game.ssrg_note_speed()+step,.25),.5,4.0))
+	game.prefs.save("user://preferences.cfg")
+	refresh_speed()
+
+func refresh_speed() -> void:
+	speed_label.text = "SPEED %s×" % str(game.ssrg_note_speed())
 
 # --- Actions ---------------------------------------------------------------------------
 func choose_background() -> void:
