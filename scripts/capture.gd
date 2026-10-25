@@ -65,7 +65,7 @@ func end(id: int, time: float, p: Vector2, canceled = false) -> Dictionary:
 	if canceled: return {}
 	var n: Dictionary = g.note
 	n.kind = g.tool
-	if g.tool == "auto": n.kind = "tap" if n.duration < .22 else ("slide" if g.max_delta >= .8 else "hold")
+	if g.tool == "auto": n.kind = "tap" if n.duration < .14 else ("slide" if g.max_delta >= .8 else "hold")
 	if n.kind=="flick":
 		var displacement: Vector2=p-g.start
 		if maxf(absf(displacement.x),absf(displacement.y))<.035: return {}

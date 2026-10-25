@@ -20,8 +20,14 @@ var press_lines: Array = []
 var hit_pool: Array = []
 var hits: Array = []
 var active = false
+var original_stage: Node3D
+var imported_frames: Array[Texture2D] = []
 
 func _ready() -> void:
+	for index in range(1,12):
+		var path="res://assets/ssrg/imported/Effect_A_%02d.png" % index
+		if ResourceLoader.exists(path): imported_frames.append(load(path))
+	original_stage=preload("res://scripts/ssrg_stage.gd").new(); add_child(original_stage)
 	var w = world
 	var half = w.FRAME_HALF_WIDTH
 	floor_node = shaded_plane(Vector2(half * 2.0, 62.0), preload("res://scripts/ssrg_floor.gdshader"), Vector3(0, .026, -30.5), -7)
@@ -54,8 +60,12 @@ func shaded_plane(size: Vector2, shader: Shader, at: Vector3, priority: int) -> 
 	return node
 
 func refresh() -> void:
-	active = world.game.highway_style == "ssrg" and not world.game.uses_recorder_colors()
+	active = world.game.ssrg_playable_run and not world.game.uses_recorder_colors()
 	visible = active
+	if original_stage:
+		original_stage.configure(world)
+		for child in get_children():
+			if child != original_stage: child.visible=false
 	if world.cover_material: world.cover_material.set_shader_parameter("photo", active)
 
 # --- Hit effects ---------------------------------------------------------------------
@@ -63,7 +73,7 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 	if hits.size() >= 24: release(hits.pop_front())
 	var h: Dictionary = hit_pool.pop_back() if not hit_pool.is_empty() else make_hit()
 	var perfect = str(world.game.judgement) == "PERFECT"
-	h.material.set_shader_parameter("atlas", preload("res://assets/ssrg/hit_b.png") if perfect else preload("res://assets/ssrg/hit_a.png"))
+	if not imported_frames.is_empty(): h.material.set_shader_parameter("atlas", imported_frames[0])
 	h.age = 0.0; h.sustain_entry = sustain_entry; h.pointer_id = pointer_id; h.kind = kind
 	h.node.position = world.touch_hit_position(lane, pointer_id) + Vector3(0, .9, 0)
 	h.node.visible = true; hits.append(h)
@@ -82,6 +92,7 @@ func prefill(count: int = 16) -> void:
 
 func _process(delta: float) -> void:
 	if not active: return
+	original_stage.update(world)
 	var game = world.game
 	var playing = game.mode == "play"
 	# Hits: play the sheet once; held notes loop the middle frames and follow the finger.
@@ -93,7 +104,8 @@ func _process(delta: float) -> void:
 		if (not held and h.age >= HIT_LIFE) or game.mode not in ["play", "paused"]:
 			hits.remove_at(i); release(h); continue
 		if held and h.kind == "slide": h.node.position.x = world.note_x(SynkChart.lane_at(h.sustain_entry.note, game.song_time))
-		h.material.set_shader_parameter("frame", h.age / HIT_LIFE * 11.0)
+		if not imported_frames.is_empty(): h.material.set_shader_parameter("atlas",imported_frames[mini(imported_frames.size()-1,int(h.age/HIT_LIFE*imported_frames.size()))])
+	return
 	if game.live.size() != used_for_size:
 		used_for_size = game.live.size(); used_lanes.clear()
 		for entry in game.live: used_lanes[clampi(roundi(float(entry.note.lane)), 0, SynkChart.MAX_LANE)] = true

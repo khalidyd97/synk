@@ -17,7 +17,7 @@ static func mount(scope: Node) -> void:
 static func watch(node: Node) -> void:
     if not is_instance_valid(node) or node.has_meta("interface_life_watched") or node.has_meta("interface_life_decoration"): return
     node.set_meta("interface_life_watched",true)
-    node.child_entered_tree.connect(func(child): watch.call_deferred(child))
+    node.child_entered_tree.connect(func(child): watch_id.call_deferred(child.get_instance_id()))
     if node is Control and (node is BaseButton or node is LineEdit or node is TextEdit or node is PanelContainer or node is Panel):
         var decorate=true
         for property in node.get_property_list():
@@ -27,6 +27,9 @@ static func watch(node: Node) -> void:
             var life=load("res://scripts/interface_life.gd").new()
             life.name="InterfaceLife"; life.target=node; life.set_meta("interface_life_decoration",true); node.add_child(life)
     for child in node.get_children(): watch(child)
+
+static func watch_id(id: int) -> void:
+    if is_instance_id_valid(id): watch(instance_from_id(id))
 
 func _ready() -> void:
     mouse_filter=Control.MOUSE_FILTER_IGNORE; focus_mode=Control.FOCUS_NONE

@@ -57,6 +57,7 @@ static func parse(bytes: PackedByteArray) -> Dictionary:
 	var taken = {}
 	for point in taps:
 		var n = SynkChart.note(point.time, roundi(lane(point.position)))
+		n.lane=lane(point.position); n.end_lane=n.lane
 		var key = "%d|%d" % [roundi(n.time * 1000), n.lane]
 		if taken.has(key): continue
 		taken[key] = true; notes.append(n)
@@ -68,13 +69,20 @@ static func parse(bytes: PackedByteArray) -> Dictionary:
 static func long_note(chain: Array) -> Dictionary:
 	var first: Dictionary = chain[0]; var last: Dictionary = chain[-1]
 	var n = SynkChart.note(first.time, roundi(lane(first.position)))
+	n.lane=lane(first.position); n.end_lane=n.lane
 	var duration = float(last.time) - float(first.time)
 	if chain.size() < 2 or duration <= 0: return n
+	# Continuation records are playable connector pucks, not just curve samples.
+	n.checkpoints = []
+	for p in chain:
+		var offset = float(p.time) - float(first.time)
+		if offset > 0 and offset < duration and (n.checkpoints.is_empty() or offset > float(n.checkpoints[-1])):
+			n.checkpoints.append(offset)
 	var moves = chain.any(func(p): return p.position != first.position)
 	if not moves:
 		n.kind = "hold"; n.duration = duration
 	else:
-		n.kind = "slide"; n.duration = duration; n.end_lane = roundi(lane(last.position))
+		n.kind = "slide"; n.duration = duration; n.end_lane = lane(last.position)
 		var previous = -1.0
 		for p in chain:
 			var offset = float(p.time) - float(first.time)

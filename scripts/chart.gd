@@ -30,6 +30,7 @@ static func lane_at(n: Dictionary, time: float) -> float:
 			var span = maxf(.0001, t1 - t0)
 			var t = (elapsed - t0) / span
 			var l0 = float(path[i-1].lane); var l1 = float(path[i].lane)
+			if n.get("ssrg_path",false): return lerpf(l0,l1,t)
 			var d1 = (l1 - l0) / span
 			var d0 = (l0 - float(path[i-2].lane)) / maxf(.0001, t0 - float(path[i-2].offset)) if i >= 2 else d1
 			var d2 = (float(path[i+1].lane) - l1) / maxf(.0001, float(path[i+1].offset) - t1) if i + 1 < path.size() else d1

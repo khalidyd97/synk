@@ -15,6 +15,11 @@ void fragment(){
     if(outside_rails(INV_VIEW_MATRIX[3].xyz) || world_z>clip_z) discard;
     vec3 color=tint*.87;
     float opacity=.8;
+    if(!joint){
+        float edge=min(UV.x,1.0-UV.x);
+        float feather=max(fwidth(UV.x),.001);
+        opacity*=smoothstep(0.0,feather,edge);
+    }
     if(joint){
         float radius=length(UV-.5)*2.0;
         if(radius>1.0) discard;

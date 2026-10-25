@@ -128,7 +128,8 @@ func artist_line(source: Dictionary) -> String:
     return artist+("  ·  "+album if not album.is_empty() and album.to_lower()!=artist.to_lower() else "")
 func all_entries() -> Array:
     var entries: Array=[entry_for(game.eclipse_song(),0)]
-    for i in game.library.songs.size(): entries.append(entry_for(game.library.songs[i],i+1))
+    for i in game.library.songs.size():
+        if not game.library.songs[i].has("ssrg"): entries.append(entry_for(game.library.songs[i],i+1))
     return entries
 func set_filter(value: String) -> void:
     if value not in ["all","favorites","recent","new","daily"]: return
@@ -154,7 +155,9 @@ func refresh_tracks() -> void:
     if filtered_entries.is_empty():
         stop_preview(); browser.show_empty(); return
     var found=filtered_entries.any(func(e): return str(e.id)==selected_track_id())
-    if not found: select_track(int(filtered_entries[0].index))
+    # A metadata refresh in this hidden browser must never replace a song loaded
+    # by SSRG Playables (whose songs intentionally do not appear in this list).
+    if not found and is_visible_in_tree(): select_track(int(filtered_entries[0].index))
     refresh_song_details()
     if was_empty: schedule_preview()
 func refresh_song_details() -> void:

@@ -440,9 +440,19 @@ func launch() -> void:
 	game.features.choose_level(str(run.variant))
 	var notes: Array = game.baseline_notes()
 	if notes.is_empty(): status_label.text = "This chart could not be loaded."; return
+	notes=notes.duplicate(true)
+	for note in notes:
+		if note.kind=="slide": note.ssrg_path=true
 	status_label.text = ""
 	running = run
 	visible = false
+	# SSRG visuals belong only to imported SSRG playables. Keep the user's normal
+	# highway preference and restore it automatically when the run ends.
+	game.ssrg_playable_previous_style=game.highway_style
+	game.ssrg_playable_run=true
+	game.ssrg_lane_count=Levels.number(str(run.variant))
+	game.highway_style="ssrg"
+	game.field.world.refresh_highway_look()
 	game.start_game(notes,bool(run.auto))
 
 func record_result() -> void:
