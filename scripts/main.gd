@@ -982,7 +982,9 @@ func space_authored_notes(incoming: Array,fixed: Array) -> bool:
 	if not resolved: tell("This chord is too crowded to separate. Move a note or reduce its size.")
 	return resolved
 
-func note_travel_seconds() -> float: return 2.6 / (recorder_note_speed if uses_recorder_colors() else note_speed)
+func note_travel_seconds() -> float:
+	if ssrg_playable_run and not uses_recorder_colors(): return 2.2/note_speed
+	return 2.6 / (recorder_note_speed if uses_recorder_colors() else note_speed)
 
 func cycle_recorder_note_speed() -> void:
 	recorder_note_speed=snappedf(recorder_note_speed+.25,.25)

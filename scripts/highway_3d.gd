@@ -148,9 +148,9 @@ func apply_camera(shake: Vector3 = Vector3.ZERO) -> void:
 		# Reference framing: distant rails converge near the top, while their near
 		# ends reach the lower corners. Keep the judgment plane low in the view.
 		camera.fov=60.0
-		var direction=deg_to_rad(38.0+24.0)
-		camera.position=Vector3(0,10.8*sin(direction),10.8*cos(direction))
-		camera.rotation_degrees.x=-38.0
+		var direction=deg_to_rad(30.0+24.0)
+		camera.position=Vector3(0,10.0*sin(direction),10.0*cos(direction))
+		camera.rotation_degrees.x=-30.0
 
 func _ready() -> void:
 	var aids=preload("res://scripts/record_aids.gd").new(); aids.world=self; add_child.call_deferred(aids)
@@ -923,7 +923,7 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 		m.set_shader_parameter("artwork",art); return m)
 	var mesh_key = "ssrg|%s|%s" % [size, tail]
 	if not reference_note_meshes.has(mesh_key):
-		var quad = QuadMesh.new(); var width = LANE_WIDTH*2.1*size
+		var quad = QuadMesh.new(); var width = LANE_WIDTH*1.4*size
 		quad.size = Vector2(width,width*art.get_height()/art.get_width())
 		reference_note_meshes[mesh_key]=quad
 	var head = mesh_node(reference_note_meshes[mesh_key],parent,mat)
