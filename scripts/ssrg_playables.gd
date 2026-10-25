@@ -16,8 +16,7 @@ const KEY_COLORS = {4: Color("5fd0ff"), 7: Color("ffd36a"), 13: Color("ff7ac8")}
 #   left:  searchable song list with cover, key chips and best rank
 #   right: the selected song - banner, one card per chart (notes, density, best score),
 #          PLAY / AUTO PLAY, gameplay background and delete
-#   IMPORT opens the import panel; the SSRG STAGE switch plays these songs on the SSRG
-#   highway style without changing the player's own highway setting.
+#   IMPORT opens the import panel. Songs play on the player's regular SYNK highway.
 
 var game: Control
 var safe_content: Control
@@ -33,7 +32,6 @@ var status_label: Label
 var search: LineEdit
 var song_list: VBoxContainer
 var detail: Control
-var stage_button: Button
 var selected_id = ""
 var selected_variant = ""
 var delete_armed = 0.0
@@ -43,7 +41,6 @@ var row_armed_id = ""
 var pending: Dictionary = {}
 # The run started from this screen: its best score is kept when the results appear.
 var running: Dictionary = {}
-var restore_style = ""
 
 func place(node: Control, parent: Control, left: float, top: float, right: float, bottom: float) -> void:
 	if parent==self and safe_content!=null: parent=safe_content
@@ -86,7 +83,6 @@ func _ready() -> void:
 	action(self,"‹  BACK",.035,.035,.15,.14,close,"nav")
 	text(self,"SSRG PLAYABLES",.17,.035,.5,.1,40)
 	status_label = text(self,"Play SSRG songs from your own game files.",.17,.095,.6,.15,16,MUTED)
-	stage_button = action(self,"",.6,.045,.78,.135,toggle_stage)
 	action(self,"+  IMPORT SONG",.8,.045,.965,.135,open_import,"primary")
 	ScreenStyle.rule(self,.035,.965,.165)
 
@@ -121,7 +117,7 @@ func _ready() -> void:
 	image_picker.filters = PackedStringArray(["*.png,*.jpg,*.jpeg;Images;image/png,image/jpeg"])
 	image_picker.file_selected.connect(set_background)
 	move_child(safe_content,get_child_count()-1)
-	refresh_stage_button(); refresh_staged()
+	refresh_staged()
 
 func build_import_panel() -> void:
 	import_panel = Control.new(); place(import_panel,self,0,0,1,1); import_panel.visible = false
@@ -141,7 +137,6 @@ func build_import_panel() -> void:
 func open() -> void:
 	pending = {}; delete_armed = 0
 	visible = true
-	refresh_stage_button()
 	refresh_songs()
 
 func close() -> void:
@@ -293,16 +288,6 @@ func refresh_detail() -> void:
 	delete_button = action(detail,"DELETE SONG",.7,.895,.96,.97,delete_selected,"small")
 
 # --- Actions ---------------------------------------------------------------------------
-func refresh_stage_button() -> void:
-	var on = bool(game.prefs.get_value("ssrg","use_stage",true))
-	stage_button.text = "SSRG STAGE  ON" if on else "SSRG STAGE  OFF"
-	stage_button.tooltip_text = "Play these songs on the SSRG highway style (your own style setting is kept)."
-
-func toggle_stage() -> void:
-	game.prefs.set_value("ssrg","use_stage",not bool(game.prefs.get_value("ssrg","use_stage",true)))
-	game.prefs.save("user://preferences.cfg")
-	refresh_stage_button()
-
 func choose_background() -> void:
 	if OS.get_name()=="iOS": image_picker.access=FileDialog.ACCESS_USERDATA; image_picker.current_dir="user://"
 	image_picker.popup_centered_ratio(.8)
@@ -445,7 +430,6 @@ func _process(delta: float) -> void:
 			running.recorded = true; record_result()
 		elif game.mode in ["menu","library","editor"]:
 			running = {}
-			if not restore_style.is_empty(): game.change_highway_look("style",restore_style); restore_style = ""
 			if visible: refresh_songs()
 	if not visible or pending.is_empty() or game.loading_song_index > 0: return
 	if str(game.song.id) == str(pending.id): launch()
@@ -457,8 +441,6 @@ func launch() -> void:
 	var notes: Array = game.baseline_notes()
 	if notes.is_empty(): status_label.text = "This chart could not be loaded."; return
 	status_label.text = ""
-	if bool(game.prefs.get_value("ssrg","use_stage",true)) and game.highway_style != "ssrg":
-		restore_style = game.highway_style; game.change_highway_look("style","ssrg")
 	running = run
 	visible = false
 	game.start_game(notes,bool(run.auto))
