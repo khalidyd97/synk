@@ -155,6 +155,7 @@ var toast_layer: CanvasLayer
 var floating_text_input: CanvasLayer
 var ui: Control
 var lobby: Control
+var ssrg_playables: Control
 var chart_library: Control
 var menu_settings_open = false
 var modal: Panel
@@ -352,6 +353,9 @@ func _ready() -> void:
 	sync_helper=Control.new(); sync_helper.set_script(load("res://scripts/sync_helper.gd")); sync_helper.game=self
 	ui.add_child(sync_helper); sync_helper.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.move_child(sync_helper,3); sync_helper.visible=false
+	ssrg_playables=Control.new(); ssrg_playables.set_script(load("res://scripts/ssrg_playables.gd")); ssrg_playables.game=self
+	ui.add_child(ssrg_playables); ssrg_playables.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ui.move_child(ssrg_playables,3); ssrg_playables.visible=false
 	saved_notes = library.load_chart("eclipse")
 	get_window().files_dropped.connect(func(files):
 		if files.size()>0 and mode in ["menu","library","editor"]:
@@ -649,6 +653,7 @@ func set_mode(value: String) -> void:
 	studio.visible=mode=="editor"; modal.visible=mode=="paused"
 	if mode!="results": results_screen.visible=false
 	lobby.visible=mode=="menu"
+	if ssrg_playables: ssrg_playables.visible=false
 	chart_library.visible=mode=="library"
 	if song_details: song_details.visible=false
 	pause_backdrop.visible=mode=="paused"
@@ -709,6 +714,21 @@ func close_lobby_settings() -> void:
 	UiMotion.back(self)
 	menu_settings_open=false
 	settings_panel.visible=false
+	if mode=="menu":
+		lobby.visible=true
+		UiMotion.reveal(lobby)
+
+# SSRG Playables replaces the lobby while it is open; BACK returns to it.
+func open_ssrg_playables() -> void:
+	if mode!="menu": return
+	UiMotion.transition(self)
+	lobby.visible=false
+	ssrg_playables.open()
+	UiMotion.screen(ssrg_playables)
+
+func close_ssrg_playables() -> void:
+	UiMotion.back(self)
+	ssrg_playables.visible=false
 	if mode=="menu":
 		lobby.visible=true
 		UiMotion.reveal(lobby)

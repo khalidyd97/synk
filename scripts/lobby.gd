@@ -268,6 +268,10 @@ func build_gateway() -> void:
     var create=Portal.new(); create.kind="create"; create.caption="CREATE CHARTS"; design_rect(create,safe_buttons,1170,300,380,380)
     create.name="CreateCard"; create.tooltip_text="Edit charts, import music, and record notes"
     create.activated.connect(func(): game.open_editor())
+    var ssrg=preload("res://scripts/settings_action.gd").new(); ssrg.text="SSRG PLAYABLES"; ssrg.caption_size=24
+    design_rect(ssrg,safe_buttons,790,700,340,92); ssrg.name="SsrgPlayablesButton"
+    ssrg.tooltip_text="Import and play SSRG songs from your own game files"
+    ssrg.pressed.connect(func(): game.open_ssrg_playables())
     var settings=preload("res://scripts/gear_button.gd").new(); design_rect(settings,safe_buttons,1756,32,120,120)
     settings.name="SettingsButton"; settings.accent=Color("bcb2d4")
     settings.pressed.connect(func(): game.open_lobby_settings())
@@ -275,8 +279,8 @@ func build_gateway() -> void:
     footer.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     # Launch entrance (after the start-up intro): node, offset it arrives from, delay, bounce.
     launch_items=[[logo,Vector2(0,-140),0.0,true],[play,Vector2(-520,0),.14,false],[create,Vector2(520,0),.22,false],
-        [settings,Vector2(60,0),.6,false],[footer,Vector2(0,24),.66,false]]
-    gateway_entrance_items=[{"node":logo,"delay":.02},{"node":play,"delay":.10},{"node":create,"delay":.16},{"node":footer,"delay":.24}]
+        [ssrg,Vector2(0,60),.4,false],[settings,Vector2(60,0),.6,false],[footer,Vector2(0,24),.66,false]]
+    gateway_entrance_items=[{"node":logo,"delay":.02},{"node":play,"delay":.10},{"node":create,"delay":.16},{"node":ssrg,"delay":.2},{"node":footer,"delay":.24}]
     gateway.visible=false
 
 # Plays every time the app launches, as the start-up intro clears: the wordmark drops in with
