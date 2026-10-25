@@ -126,23 +126,49 @@ static func artist_and_title(name: String) -> Array:
 #   {game, song_id, charts {keys: path}, audio, background, name}
 const CHART_EXTENSIONS = ["seq", "bytes"]
 const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp"]
+const AUDIO_EXTENSIONS = ["ogg", "mp3", "wav", "bytes"]
 
-static func subfolder(base: String, wanted: String) -> String:
+static func subfolder(base: String, wanted: Variant) -> String:
+	var names: Array = wanted if wanted is Array else [wanted]
 	for name in DirAccess.get_directories_at(base):
-		if name.to_lower() == wanted: return base.path_join(name)
+		if name.to_lower() in names: return base.path_join(name)
+	return ""
+
+# Files in a folder and its subfolders (one level), as paths.
+static func files_deep(folder: String) -> PackedStringArray:
+	var result = PackedStringArray()
+	if folder.is_empty(): return result
+	for name in DirAccess.get_files_at(folder): result.append(folder.path_join(name))
+	for sub in DirAccess.get_directories_at(folder):
+		for name in DirAccess.get_files_at(folder.path_join(sub)): result.append(folder.path_join(sub).path_join(name))
+	return result
+
+# Lower case letters and digits only: "FTISLAND - Severely (1).ogg" and "ftisland_severely" meet.
+static func simple(text: String) -> String:
+	var out = ""
+	for ch in text.to_lower():
+		if (ch >= "a" and ch <= "z") or (ch >= "0" and ch <= "9"): out += ch
+	return out
+
+# The path whose file name best matches one of `stems`: same name first, then one name
+# containing the other (ignoring case, spaces and punctuation).
+static func find_file(paths: PackedStringArray, stems: Array, extensions: Array = []) -> String:
+	var candidates: Array = []
+	for path in paths:
+		if extensions.is_empty() or path.get_extension().to_lower() in extensions: candidates.append(path)
+	for pass_index in 2:
+		for stem in stems:
+			var wanted = simple(str(stem))
+			if wanted.length() < 3: continue
+			for path in candidates:
+				var have = simple(path.get_file().get_basename())
+				if have.is_empty(): continue
+				if have == wanted: return path
+				if pass_index == 1 and (have.contains(wanted) or (have.length() >= 4 and wanted.contains(have))): return path
 	return ""
 
 static func files_in(folder: String) -> PackedStringArray:
 	return DirAccess.get_files_at(folder) if not folder.is_empty() else PackedStringArray()
-
-# The file in `names` whose name (without extension) matches one of `stems`, ignoring case.
-static func match_file(folder: String, names: PackedStringArray, stems: Array, extensions: Array = []) -> String:
-	for stem in stems:
-		if str(stem).is_empty(): continue
-		for name in names:
-			if not extensions.is_empty() and name.get_extension().to_lower() not in extensions: continue
-			if name.get_basename().to_lower() == str(stem).to_lower(): return folder.path_join(name)
-	return ""
 
 static func scan(root: String) -> Array:
 	var songs: Array = []
@@ -150,8 +176,10 @@ static func scan(root: String) -> Array:
 	var games = Array(DirAccess.get_directories_at(root)); games.sort()
 	for game_name in games:
 		var base = root.path_join(game_name)
-		var seq_dir = subfolder(base, "seq"); var music_dir = subfolder(base, "music"); var art_dir = subfolder(base, "background")
-		var music = files_in(music_dir); var art = files_in(art_dir)
+		var seq_dir = subfolder(base, ["seq", "seqs", "chart", "charts"])
+		var music_dir = subfolder(base, ["music", "musics", "bgm", "audio", "sound", "sounds", "songs"])
+		var art_dir = subfolder(base, ["background", "backgrounds", "bg", "image", "images"])
+		var music = files_deep(music_dir); var art = files_deep(art_dir)
 		var grouped = {}
 		for name in files_in(seq_dir):
 			if name.get_extension().to_lower() not in CHART_EXTENSIONS: continue
@@ -165,8 +193,9 @@ static func scan(root: String) -> Array:
 			var charts: Dictionary = grouped[song_id]
 			var name = audio_name(FileAccess.get_file_as_bytes(charts.values()[0]))
 			songs.append({"game": game_name, "song_id": song_id, "charts": charts, "name": name,
-				"audio": match_file(music_dir, music, [name, song_id]),
-				"background": match_file(art_dir, art, [song_id, name], IMAGE_EXTENSIONS)})
+				"audio": find_file(music, [name, song_id], AUDIO_EXTENSIONS),
+				"background": find_file(art, [song_id, name], IMAGE_EXTENSIONS),
+				"music_dir": music_dir, "music_files": music.size()})
 	return songs
 
 # Changes when any of the song's files change, so an unchanged song is not imported again.

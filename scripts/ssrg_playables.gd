@@ -465,17 +465,24 @@ func scan_phone() -> void:
 	var seen: Dictionary = game.prefs.get_value("ssrg","scanned",{})
 	scan_queue = []; scan_done = 0; scan_added = 0
 	var missing = 0
+	var example = ""
 	for entry in found:
-		if str(entry.audio).is_empty(): missing += 1; continue
+		if str(entry.audio).is_empty():
+			missing += 1
+			# Say what was looked for and where, so a naming mismatch is easy to spot.
+			if example.is_empty():
+				var folder = "no music folder in %s" % entry.game if str(entry.music_dir).is_empty() else "%s/%s has %d audio files" % [entry.game, str(entry.music_dir).get_file(), int(entry.music_files)]
+				example = " Song %s looks for \"%s\" (%s)." % [entry.song_id, entry.name, folder]
+			continue
 		var key = str(entry.game)+"/"+str(entry.song_id)
 		var known = seen.get(key,{})
 		if known is Dictionary and str(known.get("signature","")) == SsrgImport.signature(entry) and game.library.songs.any(func(s): return str(s.id)==str(known.get("id",""))): continue
 		scan_queue.append(entry)
 	if scan_queue.is_empty():
-		status_label.text = "Found %d songs; nothing new to import.%s" % [found.size(), " %d have no music file." % missing if missing else ""]
+		status_label.text = "Found %d songs; nothing new to import.%s" % [found.size(), " %d have no music file.%s" % [missing, example] if missing else ""]
 		return
 	status_label.text = "Importing 0 / %d…" % scan_queue.size()
-	set_meta("scan_missing", missing); set_meta("scan_total", scan_queue.size())
+	set_meta("scan_missing", missing); set_meta("scan_total", scan_queue.size()); set_meta("scan_example", example)
 
 func import_next_scanned() -> void:
 	var entry: Dictionary = scan_queue.pop_front()
@@ -499,7 +506,7 @@ func import_next_scanned() -> void:
 		game.refresh_library()
 		if game.lobby: game.lobby.refresh()
 		var missing = int(get_meta("scan_missing",0))
-		status_label.text = "Imported %d of %d songs.%s" % [scan_added,total," %d have no music file." % missing if missing else ""]
+		status_label.text = "Imported %d of %d songs.%s" % [scan_added,total," %d have no music file.%s" % [missing,str(get_meta("scan_example",""))] if missing else ""]
 		refresh_songs()
 
 # --- Playing ---------------------------------------------------------------------------
