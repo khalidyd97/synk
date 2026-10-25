@@ -16,7 +16,8 @@ const KEY_COLORS = {4: Color("5fd0ff"), 7: Color("ffd36a"), 13: Color("ff7ac8")}
 #   left:  searchable song list with cover, key chips and best rank
 #   right: the selected song - banner, one card per chart (notes, density, best score),
 #          PLAY / AUTO PLAY, gameplay background and delete
-#   IMPORT opens the import panel. Songs play on the player's regular SYNK highway.
+#   IMPORT opens the import panel. SCAN PHONE reads the ssrg folder on the phone's storage:
+#   ssrg/<GAME>/seq (charts), ssrg/<GAME>/music and ssrg/<GAME>/background, one game per folder. Songs play on the player's regular SYNK highway.
 
 var game: Control
 var safe_content: Control
@@ -40,6 +41,10 @@ var delete_button: Button
 # Song whose row delete button was tapped once (a second tap within a few seconds deletes it).
 var row_armed_id = ""
 var pending: Dictionary = {}
+# Songs found by SCAN PHONE, imported one per frame so the screen keeps drawing.
+var scan_queue: Array = []
+var scan_done = 0
+var scan_added = 0
 # The run started from this screen: its best score is kept when the results appear.
 var running: Dictionary = {}
 
@@ -84,7 +89,8 @@ func _ready() -> void:
 	action(self,"‹  BACK",.035,.035,.15,.14,close,"nav")
 	text(self,"SSRG PLAYABLES",.17,.035,.5,.1,40)
 	status_label = text(self,"Play SSRG songs from your own game files.",.17,.095,.6,.15,16,MUTED)
-	action(self,"+  IMPORT SONG",.8,.045,.965,.135,open_import,"primary")
+	action(self,"SCAN PHONE",.8,.045,.965,.135,scan_phone,"primary")
+	action(self,"+ FILES",.455,.045,.555,.135,open_import,"small")
 	# Note speed for SSRG songs only (0.5x to 4x).
 	action(self,"−",.57,.045,.62,.135,func(): change_speed(-.25),"small")
 	speed_label = text(self,"",.625,.045,.725,.135,18); speed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -181,7 +187,8 @@ func refresh_songs() -> void:
 	if not songs.any(func(s): return str(s.id)==selected_id): selected_id = str(songs[0].id) if not songs.is_empty() else ""
 	var shown = 0
 	for song in songs:
-		if not query.is_empty() and not str(song.title).to_lower().contains(query): continue
+		var haystack = " ".join([str(song.title),str(song.get("artist","")),str(song.get("album",""))]).to_lower()
+		if not query.is_empty() and not haystack.contains(query): continue
 		shown += 1
 		song_list.add_child(song_row(song))
 	if shown == 0:
@@ -205,10 +212,15 @@ func song_row(song: Dictionary) -> Control:
 	cover.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; cover.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	cover.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cover.texture = game.lobby.cover_for(id); game.lobby.style_cover(cover,id,12)
-	var title = Label.new(); row.add_child(title); title.position = Vector2(96,14); title.size = Vector2(260,32)
+	var title = Label.new(); row.add_child(title); title.position = Vector2(96,6); title.size = Vector2(260,30)
 	title.text = str(song.title); title.clip_text = true; title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	title.add_theme_font_size_override("font_size",20)
-	var chips = HBoxContainer.new(); row.add_child(chips); chips.position = Vector2(96,52); chips.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Artist · game folder (SSYG, SSFNC, ...) when the song came from a phone scan.
+	var byline = Label.new(); row.add_child(byline); byline.position = Vector2(96,34); byline.size = Vector2(260,22)
+	byline.text = "  ·  ".join([str(song.get("artist","")),str(song.get("album",""))].filter(func(t): return not t.is_empty() and t != "SSRG"))
+	byline.clip_text = true; byline.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	byline.add_theme_font_size_override("font_size",14); byline.add_theme_color_override("font_color",MUTED)
+	var chips = HBoxContainer.new(); row.add_child(chips); chips.position = Vector2(96,60); chips.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	chips.add_theme_constant_override("separation",6)
 	for chart in charts_for(id):
 		var chip = Label.new(); chip.text = " %dK " % chart.keys; chip.add_theme_font_size_override("font_size",13)
@@ -255,7 +267,7 @@ func refresh_detail() -> void:
 	var fade = ColorRect.new(); place(fade,banner,0,.45,1,1); fade.color = Color(0,0,0,.55); fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	text(banner,str(song.title),.04,.5,.96,.78,30)
 	var length = song_length(song)
-	var facts: Array = ["SSRG"]
+	var facts: Array = [str(song.get("artist","")),str(song.get("album","SSRG"))].filter(func(t): return not t.is_empty())
 	if float(song.get("bpm",0)) > 0: facts.append("%d BPM" % roundi(float(song.bpm)))
 	if length > 0: facts.append(game.lobby.duration_text(length))
 	text(banner,"  ·  ".join(facts),.04,.76,.96,.95,16,Color(1,1,1,.75))
@@ -385,22 +397,36 @@ func staged_title() -> String:
 
 func import_staged() -> void:
 	if staged_audio.is_empty() or staged_charts.is_empty(): return
-	var library: SynkLibrary = game.library
 	import_status.text = "Importing…"
-	var result = library.import_song(staged_audio)
-	if result.is_empty(): import_status.text = library.message; return
+	var stored = store_song(staged_audio,staged_charts,{"title":staged_title()})
+	if stored.has("error"): import_status.text = stored.error; return
+	game.refresh_library()
+	if game.lobby: game.lobby.refresh()
+	staged_audio = ""; staged_charts.clear()
+	refresh_staged()
+	import_panel.visible = false
+	selected_id = stored.id; selected_variant = ""
+	status_label.text = "Imported %s with %d chart%s." % [stored.title, stored.saved, "" if stored.saved==1 else "s"]
+	refresh_songs()
+
+# Adds one song (audio file + parsed charts by key count) to the library; meta may carry
+# title, artist, album (the game) and background (an image path).
+func store_song(audio_path: String, charts: Dictionary, meta: Dictionary) -> Dictionary:
+	var library: SynkLibrary = game.library
+	var result = library.import_song(audio_path)
+	if result.is_empty(): return {"error": library.message}
 	var song: Dictionary = result.song
 	var id = str(song.id)
-	var any: Dictionary = staged_charts.values()[0]
-	var title = staged_title()
-	if not title.is_empty(): song.title = title
-	song.bpm = float(any.bpm); song.album = "SSRG"
+	var any: Dictionary = charts.values()[0]
+	if not str(meta.get("title","")).is_empty(): song.title = str(meta.title)
+	if not str(meta.get("artist","")).is_empty(): song.artist = str(meta.artist)
+	song.bpm = float(any.bpm); song.album = str(meta.get("album","SSRG"))
 	var length = result.stream.get_length()
 	song.length = length
 	var keys: Array = song.get("ssrg",[]).duplicate()
 	var saved = 0
-	for count in staged_charts:
-		var chart: Dictionary = staged_charts[count]
+	for count in charts:
+		var chart: Dictionary = charts[count]
 		var notes = chart.notes.filter(func(n): return float(n.time)+float(n.duration) <= length)
 		if not SynkChart.valid(notes): continue
 		var settings = {"bpm":float(chart.bpm),"beat_offset":0.0,"verse2":-1.0,"bridge":-1.0}
@@ -412,14 +438,69 @@ func import_staged() -> void:
 	keys.sort(); song.ssrg = keys
 	SynkLibrary.atomic_write(library.root_path.path_join("songs/library.json"),library.songs)
 	game.song_metadata.erase(id)
-	game.refresh_library()
-	if game.lobby: game.lobby.refresh()
-	staged_audio = ""; staged_charts.clear()
-	refresh_staged()
-	import_panel.visible = false
-	selected_id = id; selected_variant = ""
-	status_label.text = "Imported %s with %d chart%s." % [song.title, saved, "" if saved==1 else "s"]
-	refresh_songs()
+	var art = str(meta.get("background",""))
+	if not art.is_empty():
+		var picked = game.load_picked_image(art)
+		if picked is Image: game.save_background_image(id,picked)
+	return {"id":id,"title":str(song.title),"saved":saved}
+
+# --- Phone library ---------------------------------------------------------------------
+func phone_root() -> String:
+	if OS.get_name() == "Android": return "/storage/emulated/0/ssrg"
+	# Desktop: an "ssrg" folder beside Documents (for testing).
+	return OS.get_system_dir(OS.SYSTEM_DIR_DOCUMENTS).get_base_dir().path_join("ssrg")
+
+func scan_phone() -> void:
+	if not scan_queue.is_empty(): return
+	# Reading another app's files needs Android's "All files access" for SYNK.
+	if OS.get_name() == "Android" and "android.permission.MANAGE_EXTERNAL_STORAGE" not in OS.get_granted_permissions():
+		OS.request_permission("android.permission.MANAGE_EXTERNAL_STORAGE")
+		status_label.text = "Allow \"All files access\" for SYNK, then come back and tap SCAN PHONE again."
+		return
+	var root = phone_root()
+	if not DirAccess.dir_exists_absolute(root):
+		status_label.text = "No ssrg folder found. Create %s with one folder per game (seq, music, background inside)." % root
+		return
+	var found = SsrgImport.scan(root)
+	var seen: Dictionary = game.prefs.get_value("ssrg","scanned",{})
+	scan_queue = []; scan_done = 0; scan_added = 0
+	var missing = 0
+	for entry in found:
+		if str(entry.audio).is_empty(): missing += 1; continue
+		var key = str(entry.game)+"/"+str(entry.song_id)
+		var known = seen.get(key,{})
+		if known is Dictionary and str(known.get("signature","")) == SsrgImport.signature(entry) and game.library.songs.any(func(s): return str(s.id)==str(known.get("id",""))): continue
+		scan_queue.append(entry)
+	if scan_queue.is_empty():
+		status_label.text = "Found %d songs; nothing new to import.%s" % [found.size(), " %d have no music file." % missing if missing else ""]
+		return
+	status_label.text = "Importing 0 / %d…" % scan_queue.size()
+	set_meta("scan_missing", missing); set_meta("scan_total", scan_queue.size())
+
+func import_next_scanned() -> void:
+	var entry: Dictionary = scan_queue.pop_front()
+	var charts = {}
+	for keys in entry.charts:
+		var chart = SsrgImport.parse(FileAccess.get_file_as_bytes(entry.charts[keys]))
+		if not chart.is_empty(): charts[int(keys) if int(keys) in [4,7,13] else int(chart.keys)] = chart
+	if not charts.is_empty():
+		var names = SsrgImport.artist_and_title(str(entry.name)) if not str(entry.name).is_empty() else ["",str(entry.song_id)]
+		var stored = store_song(entry.audio,charts,{"artist":names[0],"title":names[1],"album":entry.game,"background":entry.background})
+		if not stored.has("error"):
+			scan_added += 1
+			var seen: Dictionary = game.prefs.get_value("ssrg","scanned",{})
+			seen[str(entry.game)+"/"+str(entry.song_id)] = {"id":stored.id,"signature":SsrgImport.signature(entry)}
+			game.prefs.set_value("ssrg","scanned",seen)
+	scan_done += 1
+	var total = int(get_meta("scan_total",0))
+	status_label.text = "Importing %d / %d…" % [scan_done,total]
+	if scan_queue.is_empty():
+		game.prefs.save("user://preferences.cfg")
+		game.refresh_library()
+		if game.lobby: game.lobby.refresh()
+		var missing = int(get_meta("scan_missing",0))
+		status_label.text = "Imported %d of %d songs.%s" % [scan_added,total," %d have no music file." % missing if missing else ""]
+		refresh_songs()
 
 # --- Playing ---------------------------------------------------------------------------
 func play(id: String, variant: String, automated: bool) -> void:
@@ -433,6 +514,7 @@ func play(id: String, variant: String, automated: bool) -> void:
 	if game.select_song(index): launch()
 
 func _process(delta: float) -> void:
+	if not scan_queue.is_empty(): import_next_scanned()
 	if delete_armed > 0:
 		delete_armed -= delta
 		if delete_armed <= 0:
