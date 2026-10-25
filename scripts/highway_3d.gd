@@ -931,15 +931,16 @@ func make_circle_cap(parent: Node3D, position_value: Vector3, palette: int, size
 const SSRG_ART=[preload("res://assets/ssrg/hold.png"),preload("res://assets/ssrg/tap.png"),preload("res://assets/ssrg/flick.png"),preload("res://assets/ssrg/slide.png")]
 func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size = 1.0) -> MeshInstance3D:
 	var tail = size < game.note_size*.99
-	var art: Texture2D = preload("res://assets/ssrg/imported/end.png") if tail else (preload("res://assets/ssrg/imported/tap.png") if palette==0 else (preload("res://assets/ssrg/hold.png") if palette in [1,3] else SSRG_ART[clampi(palette,0,3)]))
-	var mat = shared("ssrg|%d|%s" % [palette, tail], func():
+	# Connector pucks along slides (and the end puck) are the head note's own art at 60%.
+	var art: Texture2D = preload("res://assets/ssrg/imported/tap.png") if palette==0 else (preload("res://assets/ssrg/hold.png") if palette in [1,3] else SSRG_ART[clampi(palette,0,3)])
+	var mat = shared("ssrg|%d" % palette, func():
 		var m = ShaderMaterial.new(); m.shader = preload("res://scripts/reference_note.gdshader")
 		m.set_shader_parameter("artwork",art); return m)
 	var mesh_key = "ssrg|%s|%s" % [size, tail]
 	if not reference_note_meshes.has(mesh_key):
 		# About 11% of the screen width at the line and flat, as in SSRG footage.
 		var quad = QuadMesh.new()
-		quad.size = Vector2(art.get_width(),art.get_height())*SSRG_UNIT*game.note_size
+		quad.size = Vector2(art.get_width(),art.get_height())*SSRG_UNIT*game.note_size*(.6 if tail else 1.0)
 		reference_note_meshes[mesh_key]=quad
 	var head = mesh_node(reference_note_meshes[mesh_key],parent,mat)
 	head.position = Vector3(position_value.x,.36*size,position_value.z)
