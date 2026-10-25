@@ -38,6 +38,8 @@ var selected_id = ""
 var selected_variant = ""
 var delete_armed = 0.0
 var delete_button: Button
+# Song whose row delete button was tapped once (a second tap within a few seconds deletes it).
+var row_armed_id = ""
 var pending: Dictionary = {}
 # The run started from this screen: its best score is kept when the results appear.
 var running: Dictionary = {}
@@ -217,6 +219,14 @@ func song_row(song: Dictionary) -> Control:
 		if not record.is_empty():
 			var rank = Label.new(); rank.text = str(record.get("rank","")); rank.add_theme_font_size_override("font_size",13)
 			rank.add_theme_color_override("font_color",MUTED); chips.add_child(rank)
+	# Delete right from the list: tap ✕, then tap DELETE? to confirm.
+	var armed = row_armed_id == id and delete_armed > 0
+	var trash = action(row,"DELETE?" if armed else "✕",.8 if armed else .88,.25,.97,.75,func():
+		if Action.was_dragged(row): return
+		if row_armed_id == id and delete_armed > 0: delete_song(id)
+		else:
+			row_armed_id = id; delete_armed = 3.0; refresh_songs(),"small")
+	trash.tooltip_text = "Delete this song"
 	return row
 
 func refresh_detail() -> void:
@@ -307,11 +317,13 @@ func set_background(path: String) -> void:
 func delete_selected() -> void:
 	# Two taps: the first arms the button for a few seconds.
 	if delete_armed <= 0:
-		delete_armed = 3.0
+		delete_armed = 3.0; row_armed_id = ""
 		if delete_button: delete_button.text = "TAP AGAIN TO DELETE"
 		return
-	delete_armed = 0
-	var id = selected_id
+	delete_song(selected_id)
+
+func delete_song(id: String) -> void:
+	delete_armed = 0; row_armed_id = ""
 	var title = ""
 	for s in ssrg_songs():
 		if str(s.id) == id: title = str(s.title)
@@ -324,7 +336,7 @@ func delete_selected() -> void:
 	game.song_metadata.erase(id)
 	game.refresh_library()
 	if game.lobby: game.lobby.refresh()
-	selected_id = ""
+	if selected_id == id: selected_id = ""
 	status_label.text = "Deleted %s." % title
 	refresh_songs()
 
@@ -425,7 +437,9 @@ func play(id: String, variant: String, automated: bool) -> void:
 func _process(delta: float) -> void:
 	if delete_armed > 0:
 		delete_armed -= delta
-		if delete_armed <= 0 and delete_button and is_instance_valid(delete_button): delete_button.text = "DELETE SONG"
+		if delete_armed <= 0:
+			if delete_button and is_instance_valid(delete_button): delete_button.text = "DELETE SONG"
+			if not row_armed_id.is_empty(): row_armed_id = ""; refresh_songs()
 	if not running.is_empty():
 		if game.mode == "results" and not running.get("recorded",false):
 			running.recorded = true; record_result()
