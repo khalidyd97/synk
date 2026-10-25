@@ -127,10 +127,20 @@ func lane_x(lane: float) -> float: return (lane-CENTER_LANE)*LANE_WIDTH
 # (about two lanes wide) stays inside the rails. Judging and touch still use lane_x.
 # Taps are judged on the note itself, not its lane: a touch counts when it lands within the
 # note's drawn half-width at the judgement bar (plus a little grace).
-func note_reach() -> float: return NOTE_WIDTH * .5 * game.note_size * 1.1
+func note_reach() -> float:
+	if game.ssrg_playable_run: return SSRG_NOTE_SIZE.x * .5 * game.note_size * 1.1
+	return NOTE_WIDTH * .5 * game.note_size * 1.1
+# SSRG Playables use SSRG's own layout, in its 2D units scaled so its rail edge at the
+# judgement line (512 units from centre) meets the rails at x = 9.75: 13 positions 62.7 units
+# apart around the centre, and notes and target rings 212 x 116 units.
+const SSRG_UNIT = 9.75/512.0
+const SSRG_STEP = 62.7*SSRG_UNIT
+const SSRG_NOTE_SIZE = Vector2(212.0,116.0)*SSRG_UNIT
+# SYNK lanes 0..9 hold SSRG positions 0..12 (lane = position * 0.75).
+func ssrg_x(lane: float) -> float: return (lane/.75-6.0)*SSRG_STEP
 func note_x(lane: float) -> float:
 	var limit = HIGHWAY_HALF_WIDTH - EDGE_MARGIN - NOTE_WIDTH*.5*game.note_size
-	if game.ssrg_playable_run: return lerpf(-limit,limit,lane/float(SynkChart.MAX_LANE))
+	if game.ssrg_playable_run: return ssrg_x(lane)
 	return clampf(lane_x(lane), -limit, limit)
 # Notes travel the whole 60-unit track, from the far end to the judgement bar.
 func visible_length() -> float: return TRACK_LENGTH
@@ -149,10 +159,12 @@ func apply_camera(shake: Vector3 = Vector3.ZERO) -> void:
 		# ends reach the lower corners. Keep the judgment plane low in the view.
 		# Measured from SSRG footage (about 2.25:1): the rails meet at the top edge, the
 		# judgement line sits 88% down the screen, and the rails there are 72% of the width apart.
-		camera.fov=60.0
-		var direction=deg_to_rad(36.0+24.0)
-		camera.position=Vector3(0,12.0*sin(direction),12.0*cos(direction))
-		camera.rotation_degrees.x=-36.0
+		# Fitted to SSRG's own 2D layout (640 units tall): judgement line 234 units below centre,
+		# rails 512 units out at the line, track's far end 62 units from the top.
+		camera.fov=50.0
+		var direction=deg_to_rad(29.0+19.0)
+		camera.position=Vector3(0,13.8*sin(direction),13.8*cos(direction))
+		camera.rotation_degrees.x=-29.0
 
 func _ready() -> void:
 	var aids=preload("res://scripts/record_aids.gd").new(); aids.world=self; add_child.call_deferred(aids)
@@ -926,8 +938,8 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 	var mesh_key = "ssrg|%s|%s" % [size, tail]
 	if not reference_note_meshes.has(mesh_key):
 		# About 11% of the screen width at the line and flat, as in SSRG footage.
-		var quad = QuadMesh.new(); var width = LANE_WIDTH*1.6*size
-		quad.size = Vector2(width,width*.4)
+		var quad = QuadMesh.new()
+		quad.size = Vector2(art.get_width(),art.get_height())*SSRG_UNIT*game.note_size
 		reference_note_meshes[mesh_key]=quad
 	var head = mesh_node(reference_note_meshes[mesh_key],parent,mat)
 	head.position = Vector3(position_value.x,.36*size,position_value.z)
@@ -1008,7 +1020,7 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 	var duration = float(note.duration)
 	var half_width = TRAIL_HALF*.65*game.hold_trail_width
 	# SSRG footage: holds and slides are a thin bar about a fifth of the note's width.
-	if game.ssrg_playable_run and not recording: half_width = LANE_WIDTH*1.6*.1*game.note_size
+	if game.ssrg_playable_run and not recording: half_width = SSRG_NOTE_SIZE.x*.1*game.note_size
 	var count = clampi(ceili(duration*96),32,1024)
 	var st = SurfaceTool.new(); st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var edge = SurfaceTool.new(); edge.begin(Mesh.PRIMITIVE_TRIANGLES)

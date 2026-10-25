@@ -58,7 +58,7 @@ static func parse(bytes: PackedByteArray) -> Dictionary:
 	for point in taps:
 		var n = SynkChart.note(point.time, roundi(lane(point.position)))
 		n.lane=lane(point.position); n.end_lane=n.lane
-		var key = "%d|%d" % [roundi(n.time * 1000), n.lane]
+		var key = "%d|%d" % [roundi(n.time * 1000), point.position]
 		if taken.has(key): continue
 		taken[key] = true; notes.append(n)
 	for start in chains:

@@ -25,7 +25,7 @@ func _init() -> void :
 	mat.render_priority = -3
 	press.material_override = mat;press.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF;add_child(press)
 	for lane in 13:
-		var ring = MeshInstance3D.new(); var disc = QuadMesh.new();disc.size = Vector2(2.85, 1.1);ring.mesh = disc
+		var ring = MeshInstance3D.new(); var disc = QuadMesh.new();disc.size = Vector2(212.0, 116.0)*9.75/512.0   # SSRG guide sprite size;ring.mesh = disc
 		ring.name = "Receptor" + str(receptors.size() + 1);ring.position = Vector3(0, 0.2, 0);ring.visible = false
 		var material = ShaderMaterial.new();material.shader = preload("res://scripts/ssrg_receptor.gdshader")
 		material.render_priority = -2
