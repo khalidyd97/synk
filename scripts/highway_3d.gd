@@ -147,10 +147,12 @@ func apply_camera(shake: Vector3 = Vector3.ZERO) -> void:
 	if game != null and game.ssrg_playable_run:
 		# Reference framing: distant rails converge near the top, while their near
 		# ends reach the lower corners. Keep the judgment plane low in the view.
+		# Measured from SSRG footage (about 2.25:1): the rails meet at the top edge, the
+		# judgement line sits 88% down the screen, and the rails there are 72% of the width apart.
 		camera.fov=60.0
-		var direction=deg_to_rad(30.0+24.0)
-		camera.position=Vector3(0,10.0*sin(direction),10.0*cos(direction))
-		camera.rotation_degrees.x=-30.0
+		var direction=deg_to_rad(36.0+24.0)
+		camera.position=Vector3(0,12.0*sin(direction),12.0*cos(direction))
+		camera.rotation_degrees.x=-36.0
 
 func _ready() -> void:
 	var aids=preload("res://scripts/record_aids.gd").new(); aids.world=self; add_child.call_deferred(aids)
@@ -923,8 +925,9 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 		m.set_shader_parameter("artwork",art); return m)
 	var mesh_key = "ssrg|%s|%s" % [size, tail]
 	if not reference_note_meshes.has(mesh_key):
-		var quad = QuadMesh.new(); var width = LANE_WIDTH*1.4*size
-		quad.size = Vector2(width,width*art.get_height()/art.get_width())
+		# About 11% of the screen width at the line and flat, as in SSRG footage.
+		var quad = QuadMesh.new(); var width = LANE_WIDTH*1.6*size
+		quad.size = Vector2(width,width*.4)
 		reference_note_meshes[mesh_key]=quad
 	var head = mesh_node(reference_note_meshes[mesh_key],parent,mat)
 	head.position = Vector3(position_value.x,.36*size,position_value.z)
