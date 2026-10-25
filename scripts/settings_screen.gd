@@ -156,6 +156,18 @@ class StyleTile extends Button:
         box.set_border_width_all(2 if selected else 1)
         draw_style_box(box,Rect2(Vector2.ZERO,size))
         var gold = style_name=="gold"
+        if style_name=="ssrg":
+            # Dark glass track, silver rails, glass band and one glossy note.
+            var t0=size.y*.14; var b0=size.y*.66
+            var pa=Vector2(size.x*.40,t0); var pb=Vector2(size.x*.60,t0); var pc=Vector2(size.x*.86,b0); var pd=Vector2(size.x*.14,b0)
+            draw_colored_polygon(PackedVector2Array([pa,pb,pc,pd]),Color(.05,.055,.09))
+            draw_line(pa,pd,Color(.92,.94,1.0),2.5,true); draw_line(pb,pc,Color(.92,.94,1.0),2.5,true)
+            draw_line(pa.lerp(pd,.8),pb.lerp(pc,.8),Color(1,1,1,.85),2,true)
+            var note: Texture2D=preload("res://assets/ssrg/tap.png"); var nw=size.x*.26
+            draw_texture_rect(note,Rect2(Vector2(size.x*.5-nw*.5,size.y*.36),Vector2(nw,nw*note.get_height()/note.get_width())),false)
+            var font=ThemeDB.fallback_font; var w=font.get_string_size("SSRG",HORIZONTAL_ALIGNMENT_LEFT,-1,18).x
+            draw_string(font,Vector2((size.x-w)*.5,size.y*.88),"SSRG",HORIZONTAL_ALIGNMENT_LEFT,-1,18,Color.WHITE)
+            return
         if style_name=="prism":
             draw_texture_rect(preload("res://assets/neon/Prism_Stage.png"),Rect2(Vector2(8,10),Vector2(size.x-16,size.y*.62)),false)
             var font=ThemeDB.fallback_font
@@ -475,10 +487,10 @@ func build_highway(items: VBoxContainer) -> void:
     add_control(row(items,"Highway angle","Choose how flat or steep the highway looks."),highway_angle_input)
     highway_angle_input.value_changed.connect(game.change_highway_angle)
     var preview=preload("res://scripts/highway_look_preview.gd").new(); preview.game=game; items.add_child(preview)
-    var styles=row(items,"Highway style","Gold, Neon, or Prism: faceted rails with flowing colors.",166)
+    var styles=row(items,"Highway style","Gold, Neon, Prism, or SSRG: a dark glass stage with silver rails and glossy notes.",166)
     var tile_row=HBoxContainer.new(); tile_row.add_theme_constant_override("separation",12)
-    add_control(styles,tile_row,440)
-    for kind in ["gold","neon","prism"]:
+    add_control(styles,tile_row,590)
+    for kind in ["gold","neon","prism","ssrg"]:
         var tile=StyleTile.new(kind); tile_row.add_child(tile); tile.custom_minimum_size=Vector2(138,136)
         tile.pressed.connect(func(): if not Action.was_dragged(tile): game.change_highway_look("style",kind))
         style_tiles[kind]=tile
