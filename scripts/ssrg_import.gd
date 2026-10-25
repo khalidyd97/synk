@@ -6,10 +6,9 @@ extends RefCounted
 #   records: 24 bytes each - tick (int64), position 0..12, flag, type, unused.
 #   types: 0 tap; 21 then 22s = one finger's long note, 11 then 12s = the other finger's.
 #          Positions above 12 are start/end markers.
-# A long note that stays in place is a hold, one that moves is a slide, and a very short move
-# is a flick. The 13 positions spread across SYNK's 10 lanes. The song audio is plain Ogg Vorbis.
+# A long note that stays in place is a hold and one that moves is a slide, however short:
+# SSRG has no flicks. The 13 positions spread across SYNK's 10 lanes. The song audio is plain Ogg Vorbis.
 const RECORD = 24
-const FLICK_SECONDS = .12
 
 static func is_audio(bytes: PackedByteArray) -> bool:
 	return bytes.size() >= 4 and bytes.slice(0, 4).get_string_from_ascii() == "OggS"
@@ -74,8 +73,6 @@ static func long_note(chain: Array) -> Dictionary:
 	var moves = chain.any(func(p): return p.position != first.position)
 	if not moves:
 		n.kind = "hold"; n.duration = duration
-	elif duration <= FLICK_SECONDS:
-		n.kind = "flick"; n.direction = 1 if last.position > first.position else 3
 	else:
 		n.kind = "slide"; n.duration = duration; n.end_lane = roundi(lane(last.position))
 		var previous = -1.0
