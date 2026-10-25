@@ -12,6 +12,8 @@ uniform float screen_aspect = 1.7778;
 uniform float image_aspect = 1.0;
 // No artwork: draw solid black.
 uniform bool plain = false;
+// SSRG style: the song photo at full brightness, with no haze, as the stage itself.
+uniform bool photo = false;
 uniform float beat = 0.0;
 // One global clock for every highway shader (set once per frame by highway_3d.gd).
 global uniform float synk_time;
@@ -48,6 +50,7 @@ void fragment() {
 	float haze = (top+side+edge_halo*0.16*(1.0-UV.y))*mix(1.0,0.12,inside_track);
 	vec3 wash_color = mix(rail_glow_left,rail_glow_right,smoothstep(0.15,0.85,UV.x));
 	vec3 wash = wash_color*haze*rail_glow_opacity*(1.25+glow_beat*0.45);
-	ALBEDO = plain ? vec3(0.0) : (art+wash) * brightness;
+	if (photo) { art = texture(cover, uv).rgb; wash = vec3(0.0); }
+	ALBEDO = plain ? vec3(0.0) : photo ? art : (art+wash) * brightness;
 	ALPHA = strength;
 }

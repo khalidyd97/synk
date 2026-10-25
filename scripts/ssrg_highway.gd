@@ -1,8 +1,8 @@
 extends Node3D
 # SSRG highway style (Settings > Highway style > SSRG): a Superstar-inspired stage drawn with
 # SYNK's own art (assets/ssrg, made by tools/ssrg_art/generate.py).
-#   - dark glass floor, thin silver rails and a glass judgement band
-#   - a target ring that fades in on a lane as its next note approaches
+#   - the song's photo at full brightness behind a see-through track with solid white rails
+#   - grey target rings on the chart's lanes that turn white as a note arrives
 #   - a thin light line up each lane while a finger holds it
 #   - hit effects played from an 11-frame flash sheet (gold star sheet on PERFECT)
 # Only in play; the recorder keeps its own look.
@@ -10,6 +10,10 @@ const HIT_LIFE = .42
 const LOOKAHEAD = .55
 var world: Node3D
 var floor_node: MeshInstance3D
+var band: MeshInstance3D
+# Lanes the current chart uses (rings show only there); rebuilt when a new run starts.
+var used_lanes: Dictionary = {}
+var used_for_size = -1
 var rings: Array = []
 var ring_materials: Array = []
 var press_lines: Array = []
@@ -21,15 +25,17 @@ func _ready() -> void:
 	var w = world
 	var half = w.FRAME_HALF_WIDTH
 	floor_node = shaded_plane(Vector2(half * 2.0, 62.0), preload("res://scripts/ssrg_floor.gdshader"), Vector3(0, .026, -30.5), -7)
+	floor_node.material_override.set_shader_parameter("opacity", .32)
 	for side in [-1, 1]:
-		var rail = shaded_plane(Vector2(.7, 64.0), preload("res://scripts/ssrg_line.gdshader"), Vector3(side * (half + .2), .05, -31.0), 2)
-		rail.material_override.set_shader_parameter("strength", 1.1)
+		var rail = shaded_plane(Vector2(.95, 64.0), preload("res://scripts/ssrg_rail.gdshader"), Vector3(side * (half + .35), .08, -31.0), 2)
+		if side > 0: rail.rotation_degrees.y = 180
 	var band_mesh = QuadMesh.new(); band_mesh.size = Vector2(half * 2.0 + 1.2, w.JUDGMENT_DEPTH * 1.25)
 	var band_mat = ShaderMaterial.new(); band_mat.shader = preload("res://scripts/reference_note.gdshader")
 	band_mat.set_shader_parameter("artwork", preload("res://assets/ssrg/judgment.png")); band_mat.render_priority = -5
-	var band = w.mesh_node(band_mesh, self, band_mat); band.position = Vector3(0, .04, 0); band.rotation_degrees.x = -90
+	band = w.mesh_node(band_mesh, self, band_mat); band.position = Vector3(0, .04, 0); band.rotation_degrees.x = -90
+	band.visible = false   # the reference stage has no band; the rings mark the line
 	for lane in SynkChart.LANES:
-		var ring_mesh = QuadMesh.new(); ring_mesh.size = Vector2(w.LANE_WIDTH * .9, w.LANE_WIDTH * .9)
+		var ring_mesh = QuadMesh.new(); ring_mesh.size = Vector2(w.LANE_WIDTH * 1.6, w.LANE_WIDTH * 1.6)
 		var ring_mat = ShaderMaterial.new(); ring_mat.shader = preload("res://scripts/ssrg_ring.gdshader"); ring_mat.render_priority = 3
 		var ring = w.mesh_node(ring_mesh, self, ring_mat)
 		ring.position = Vector3(w.lane_x(lane), .06, 0); ring.rotation_degrees.x = -90
@@ -50,6 +56,7 @@ func shaded_plane(size: Vector2, shader: Shader, at: Vector3, priority: int) -> 
 func refresh() -> void:
 	active = world.game.highway_style == "ssrg" and not world.game.uses_recorder_colors()
 	visible = active
+	if world.cover_material: world.cover_material.set_shader_parameter("photo", active)
 
 # --- Hit effects ---------------------------------------------------------------------
 func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int) -> void:
@@ -87,6 +94,9 @@ func _process(delta: float) -> void:
 			hits.remove_at(i); release(h); continue
 		if held and h.kind == "slide": h.node.position.x = world.note_x(SynkChart.lane_at(h.sustain_entry.note, game.song_time))
 		h.material.set_shader_parameter("frame", h.age / HIT_LIFE * 11.0)
+	if game.live.size() != used_for_size:
+		used_for_size = game.live.size(); used_lanes.clear()
+		for entry in game.live: used_lanes[clampi(roundi(float(entry.note.lane)), 0, SynkChart.MAX_LANE)] = true
 	# Target rings: brighten on a lane as its next note approaches the line.
 	var strengths: Array = []; strengths.resize(SynkChart.LANES); strengths.fill(0.0)
 	if game.mode in ["play", "paused"]:
@@ -99,8 +109,8 @@ func _process(delta: float) -> void:
 			var lane = clampi(roundi(float(entry.note.lane)), 0, SynkChart.MAX_LANE)
 			strengths[lane] = maxf(strengths[lane], clampf(1.0 - t / LOOKAHEAD, 0.0, 1.0))
 	for lane in SynkChart.LANES:
-		rings[lane].visible = strengths[lane] > 0.0
 		ring_materials[lane].set_shader_parameter("strength", float(strengths[lane]))
+		rings[lane].visible = used_lanes.has(lane) or strengths[lane] > 0.0
 		rings[lane].position.x = world.note_x(lane)
 	# Press lines: one thin light up the lane under each finger.
 	var touches: Array = game.pointers.values() if playing else []

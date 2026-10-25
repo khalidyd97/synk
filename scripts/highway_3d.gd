@@ -1227,10 +1227,12 @@ var shown_keys: Dictionary = {}
 func _process(delta: float) -> void:
 	if game==null: return
 	step_prebuild()
-	if rail_atmosphere: rail_atmosphere.update(delta)
+	if rail_atmosphere:
+		if ssrg_theme and ssrg_theme.active: rail_atmosphere.visible = false
+		else: rail_atmosphere.update(delta)
 	var in_play = game.mode=="play" or (game.mode=="paused" and game.paused_mode=="play")
 	var recording_now = game.mode=="record" or (game.mode=="paused" and game.paused_mode=="record")
-	recorder_guides.visible = recording_now or (in_play and bool(extras_setting("lane_hints", true)))
+	recorder_guides.visible = recording_now or (in_play and bool(extras_setting("lane_hints", true)) and not (ssrg_theme and ssrg_theme.active))
 	if guide_material: guide_material.albedo_color.a = .38 if recording_now else .3
 	update_play_aids(delta)
 	update_multiplier_wave(delta)
