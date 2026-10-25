@@ -1007,6 +1007,8 @@ func connector_sides(centers: Array) -> Array:
 func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = false) -> void:
 	var duration = float(note.duration)
 	var half_width = TRAIL_HALF*.65*game.hold_trail_width
+	# SSRG footage: holds and slides are a thin bar about a fifth of the note's width.
+	if game.ssrg_playable_run and not recording: half_width = LANE_WIDTH*1.6*.1*game.note_size
 	var count = clampi(ceili(duration*96),32,1024)
 	var st = SurfaceTool.new(); st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var edge = SurfaceTool.new(); edge.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -1136,7 +1138,7 @@ func build_note_node(key: String, note: Dictionary, recording = false) -> void:
 	if note.kind in ["hold","slide"]: make_ribbon(node,note,palette,recording)
 	var lines: Array = []
 	if recording: lines = make_alignment_lines(node,note,palette)
-	var signature = (hash(note) if recording or game.mode=="record" else 0)^hash([game.note_speed,game.note_shape,game.note_size,game.hold_trail_width,game.trail_style])
+	var signature = (hash(note) if recording or game.mode=="record" else 0)^hash([game.note_speed,game.note_shape,game.note_size,game.hold_trail_width,game.trail_style,game.ssrg_playable_run])
 	var own_materials: Array = []
 	for ref in animated_materials.slice(first_material):
 		var m = ref.get_ref()
@@ -1181,7 +1183,7 @@ func sync_note(key: String, note: Dictionary, visible_keys: Dictionary, recordin
 	visible_keys[key] = true
 	if look_signature_frame != Engine.get_process_frames():
 		look_signature_frame = Engine.get_process_frames()
-		look_signature = hash([game.note_speed,game.note_shape,game.note_size,game.hold_trail_width,game.trail_style])
+		look_signature = hash([game.note_speed,game.note_shape,game.note_size,game.hold_trail_width,game.trail_style,game.ssrg_playable_run])
 	var signature = (hash(note) if recording or game.mode=="record" else 0)^look_signature
 	if notes.has(key) and notes[key].signature != signature:
 		notes[key].node.queue_free(); notes.erase(key)
