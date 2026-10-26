@@ -134,6 +134,10 @@ func note_reach() -> float:
 # judgement line (512 units from centre) meets the rails at x = 9.75: 13 positions 62.7 units
 # apart around the centre, and notes and target rings 212 x 116 units.
 const SSRG_UNIT = 9.75/512.0
+# SSRG footage: judgement line 0.379 screen heights below centre (87.9% down), rails 0.826
+# screen heights out from the centre there.
+const SSRG_LINE_DOWN = .379
+const SSRG_RAIL_OUT = .826
 const SSRG_STEP = 62.7*SSRG_UNIT
 const SSRG_NOTE_SIZE = Vector2(212.0,116.0)*SSRG_UNIT
 # SYNK lanes 0..9 hold SSRG positions 0..12 (lane = position * 0.75).
@@ -165,13 +169,14 @@ func apply_camera(shake: Vector3 = Vector3.ZERO) -> void:
 		# ends reach the lower corners. Keep the judgment plane low in the view.
 		# Measured from SSRG footage (about 2.25:1): the rails meet at the top edge, the
 		# judgement line sits 88% down the screen, and the rails there are 72% of the width apart.
-		# SSRG's own 2D layout (640 units tall) pins the judgement line 234 units below centre
-		# (86.6% down) and the rails 512 units out there (0.8 screen heights). Any tilt and lens
-		# (set in game, defaults 36 deg and 45 deg) keep those two; only depth and slope change.
+		# Fitted to the rails in SSRG footage (25 frames): the judgement line 87.9% down the
+		# screen, the rails there 0.826 screen heights from the centre (at the rail's middle),
+		# and the rails meeting 5.7% from the top, which is ANGLE 20 at LENS 45 (the defaults).
+		# Any tilt and lens keep the line and rail spacing; only depth and slope change.
 		var lens: float = game.ssrg_fov
 		var t = tan(deg_to_rad(lens)*.5)
-		var below = atan(.7312*t)                 # judgement line's angle below the view centre
-		var distance = 9.75/(1.6*t)/cos(below)    # camera to judgement line
+		var below = atan(SSRG_LINE_DOWN*2.0*t)               # judgement line below the view centre
+		var distance = 9.75/(2.0*SSRG_RAIL_OUT*t)/cos(below) # camera to judgement line
 		var direction = deg_to_rad(game.ssrg_tilt)+below
 		camera.fov = lens
 		camera.position = Vector3(0,distance*sin(direction),distance*cos(direction))+shake
