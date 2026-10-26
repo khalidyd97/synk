@@ -145,6 +145,11 @@ var countdown_ring: Control
 var countdown_shown = -1
 # How far (in lanes) the finger may be from the trail when a checkpoint dot is judged.
 const CHECKPOINT_LANE_TOLERANCE = 2.0
+# SSRG Playables judge hold and slide connectors more loosely: a wider reach (in lanes; one
+# SSRG position is 0.75 lanes) and a short grace after the connector passes the line.
+const SSRG_CHECKPOINT_LANES = 3.2
+const SSRG_CHECKPOINT_GRACE = .15
+const SSRG_SLIDE_END_LANES = 4.5
 var studio_mark_buttons: Dictionary = {}
 var tool = "auto"
 var cursor = 0.0
@@ -1038,10 +1043,13 @@ func process_checkpoints(entry: Dictionary, finger_lane: float, automated: bool)
 		var index=int(entry.get("checks_done",0))
 		var at=float(entry.note.time)+float(checks[index])
 		if song_time<at: break
-		entry.checks_done=index+1
 		var lane=SynkChart.lane_at(entry.note,at)
-		if automated or absf(finger_lane-lane)<=CHECKPOINT_LANE_TOLERANCE: pass_checkpoint(entry,lane)
-		else: judge(entry,-1); return false
+		var tolerance=SSRG_CHECKPOINT_LANES if ssrg_playable_run else CHECKPOINT_LANE_TOLERANCE
+		if automated or absf(finger_lane-lane)<=tolerance:
+			entry.checks_done=index+1; pass_checkpoint(entry,lane)
+		# SSRG Playables: a finger still on its way gets a moment to reach the connector.
+		elif ssrg_playable_run and song_time<at+SSRG_CHECKPOINT_GRACE: break
+		else: entry.checks_done=index+1; judge(entry,-1); return false
 	return true
 
 func pass_checkpoint(entry: Dictionary, lane: float) -> void:
@@ -1909,7 +1917,8 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 			if entry.done or entry.pointer!=id or entry.note.kind!="slide": continue
 			var end_time=float(entry.note.time)+float(entry.note.duration)
 			var lane_error=absf(SynkCapture.lane(p.x)-SynkChart.lane_at(entry.note,end_time))
-			if not canceled and lane_error<=SLIDE_END_LANES and p.y>=.4 and song_time>=end_time-tail_grace(entry) and song_time<=end_time+.30:
+			var end_lanes=SSRG_SLIDE_END_LANES if ssrg_playable_run else SLIDE_END_LANES
+			if not canceled and lane_error<=end_lanes and p.y>=(.25 if ssrg_playable_run else .4) and song_time>=end_time-tail_grace(entry) and song_time<=end_time+.30:
 				judge(entry,float(entry.error))
 		pointers.erase(id)
 		if canceled:
@@ -1966,7 +1975,8 @@ func update_game() -> void:
 			var end_time=float(n.time)+float(n.duration)
 			if song_time>=end_time-.045:
 				var lane_error=absf(SynkCapture.lane(p.position.x)-SynkChart.lane_at(n,end_time))
-				if lane_error<=SLIDE_END_LANES and p.position.y>=.4: judge(entry,tail_error(entry))
+				var end_lanes=SSRG_SLIDE_END_LANES if ssrg_playable_run else SLIDE_END_LANES
+				if lane_error<=end_lanes and p.position.y>=(.25 if ssrg_playable_run else .4): judge(entry,tail_error(entry))
 				elif song_time>end_time+.30: judge(entry,-1)
 		elif n.kind=="hold":
 			var hold_end=float(n.time)+float(n.duration)
