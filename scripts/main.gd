@@ -391,6 +391,8 @@ func _ready() -> void:
 	get_tree().auto_accept_quit = false
 	finish_overlay=Control.new(); finish_overlay.set_script(load("res://scripts/finish_overlay.gd")); finish_overlay.game=self
 	ui.add_child(finish_overlay)
+	var ssrg_judgement=Control.new(); ssrg_judgement.set_script(load("res://scripts/ssrg_judgement.gd")); ssrg_judgement.game=self
+	ui.add_child(ssrg_judgement)
 	app_login=preload("res://scripts/app_login.gd").new(); app_login.game=self; add_child(app_login)
 	set_mode("menu")
 	build_waveform()
@@ -1710,8 +1712,9 @@ func _process(delta: float) -> void:
 		countdown_label.text=str(ceili(remaining))
 		countdown_label.pivot_offset=countdown_label.size*.5
 		countdown_label.scale=Vector2.ONE*(1.0+fmod(remaining,1.0)*.2)
-	combo_hud.visible=mode in ["play","paused"] and not counting and combo>0 and not finishing
-	hit_label.visible=mode in ["play","record"] and not counting
+	# SSRG Playables show their own centre judgement and combo (ssrg_judgement.gd).
+	combo_hud.visible=mode in ["play","paused"] and not counting and combo>0 and not finishing and not ssrg_playable_run
+	hit_label.visible=mode in ["play","record"] and not counting and not ssrg_playable_run
 	if mode=="editor" and audio.playing:
 		cursor=clampf(chart_time(),0,length())
 		if not recorder.reviewing_audio and loop_enabled and loop_b>loop_a+.1 and cursor>=loop_b: audio.play(loop_a); cursor=loop_a
@@ -1750,7 +1753,7 @@ func _process(delta: float) -> void:
 		hit_art.scale=Vector2.ONE*(1.0+(0.0 if active_hold else flash*.04))
 	# The finish and the results never show the last judgment.
 	var play_judgement=mode=="play" and not finishing and JUDGEMENT_ART.has(judgement)
-	hit_label.visible=(mode=="record" or play_judgement) and not counting
+	hit_label.visible=(mode=="record" or play_judgement) and not counting and not ssrg_playable_run
 	hit_label.text=judgement
 	if play_judgement:
 		# The last judgment stays readable; each hit gives it a small pop.
