@@ -12,7 +12,9 @@ uniform float clip_z = 1000.0;
 // centre and halo down to the plain colour, then again), and stay hot over the last
 // `glow_distance` units before the judgement line.
 uniform bool approach_glow = false;
-uniform float glow_distance = 18.0;
+uniform float glow_distance = 7.0;
+// Colour of the note's glass centre when it is not glowing (blue taps, gold holds).
+uniform vec3 core_tint : source_color = vec3(0.32, 0.78, 1.0);
 const float GLOW_FRAMES = 6.0;
 const float GLOW_LOOPS_PER_SECOND = 2.2;
 global uniform float synk_time;
@@ -46,12 +48,16 @@ void fragment(){
         float frame=floor(fract(synk_time*GLOW_LOOPS_PER_SECOND+centre_z*0.031)*GLOW_FRAMES);
         float loop_heat=1.0-frame/(GLOW_FRAMES-1.0);
         float near=pow(clamp(1.0+centre_z/glow_distance,0.0,1.0),1.4);
-        float heat=max(loop_heat*0.9,near);
+        // Mostly the plain colour: the loop only tints, the full white is kept for the line.
+        float heat=max(loop_heat*0.45,near*0.8);
         float bright=dot(art.rgb,vec3(0.3,0.55,0.15));
-        color=mix(color,vec3(1.0),heat*smoothstep(0.3,0.9,bright)*0.85);
+        // Cool: the white centre takes the note's colour; hot: it burns back to white.
+        float centre_mask=smoothstep(0.55,0.95,bright);
+        color=mix(color,core_tint*(0.55+0.45*bright),centre_mask*(1.0-heat)*0.8);
+        color=mix(color,vec3(1.0),heat*centre_mask*0.7);
         // Halo: the blurred note shape (a low mip) around the edge, white-tinted.
         float halo=textureLod(artwork,UV,4.0).a;
-        float rim=heat*halo*(1.0-art.a)*0.7;
+        float rim=heat*halo*(1.0-art.a)*0.45;
         color=mix(color,vec3(1.0),rim/max(0.001,alpha+rim));
         alpha=max(alpha,rim);
     }

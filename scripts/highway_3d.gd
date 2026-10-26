@@ -946,7 +946,8 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 	var art: Texture2D = preload("res://assets/ssrg/imported/tap.png") if palette==0 else (preload("res://assets/ssrg/hold.png") if palette in [1,3] else SSRG_ART[clampi(palette,0,3)])
 	var mat = shared("ssrg|%d" % palette, func():
 		var m = ShaderMaterial.new(); m.shader = preload("res://scripts/reference_note.gdshader")
-		m.set_shader_parameter("artwork",art); m.set_shader_parameter("approach_glow",true); return m)
+		m.set_shader_parameter("artwork",art); m.set_shader_parameter("approach_glow",true)
+		m.set_shader_parameter("core_tint",Color("4fc8ff") if palette==0 else Color("ffc23a")); return m)
 	var mesh_key = "ssrg|%s|%s" % [size, tail]
 	if not reference_note_meshes.has(mesh_key):
 		# About 11% of the screen width at the line and flat, as in SSRG footage.
