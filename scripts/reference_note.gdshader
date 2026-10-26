@@ -8,8 +8,13 @@ uniform float opacity = 1.0;
 uniform float ghost_fade = 1.0;
 uniform float desaturate = 0.0;
 uniform float clip_z = 1000.0;
+// SSRG Playables: a note heats up as it nears the judgement line - its centre turns white and
+// a soft halo grows around it, starting `glow_distance` units before the line.
+uniform bool approach_glow = false;
+uniform float glow_distance = 26.0;
 varying float world_z;
-void vertex(){ world_z=(MODEL_MATRIX*vec4(VERTEX,1.0)).z; }
+varying float centre_z;
+void vertex(){ world_z=(MODEL_MATRIX*vec4(VERTEX,1.0)).z; centre_z=MODEL_MATRIX[3].z; }
 // Rotate hue only: value, saturation, white highlights and source alpha survive intact.
 vec3 rgb_to_hsv(vec3 c){
     vec4 k=vec4(0.0,-1.0/3.0,2.0/3.0,-1.0);
@@ -31,6 +36,17 @@ void fragment(){
     hsv.z*=value_scale;
     vec3 color=hsv_to_rgb(hsv);
     float gray=dot(color,vec3(0.299,0.587,0.114));
+    float alpha=art.a;
+    if(approach_glow){
+        float heat=pow(clamp(1.0+centre_z/glow_distance,0.0,1.0),1.6);
+        float bright=dot(art.rgb,vec3(0.3,0.55,0.15));
+        color=mix(color,vec3(1.0),heat*smoothstep(0.3,0.9,bright)*0.85);
+        // Halo: the blurred note shape (a low mip) around the edge, white-tinted.
+        float halo=textureLod(artwork,UV,4.0).a;
+        float rim=heat*halo*(1.0-art.a)*0.7;
+        color=mix(color,vec3(1.0),rim/max(0.001,alpha+rim));
+        alpha=max(alpha,rim);
+    }
     ALBEDO=mix(color,vec3(gray*0.52),desaturate);
-    ALPHA=art.a*opacity*ghost_fade*smoothstep(-60.0,-55.0,world_z);
+    ALPHA=alpha*opacity*ghost_fade*smoothstep(-60.0,-55.0,world_z);
 }

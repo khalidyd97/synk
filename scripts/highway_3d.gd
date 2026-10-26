@@ -946,7 +946,7 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 	var art: Texture2D = preload("res://assets/ssrg/imported/tap.png") if palette==0 else (preload("res://assets/ssrg/hold.png") if palette in [1,3] else SSRG_ART[clampi(palette,0,3)])
 	var mat = shared("ssrg|%d" % palette, func():
 		var m = ShaderMaterial.new(); m.shader = preload("res://scripts/reference_note.gdshader")
-		m.set_shader_parameter("artwork",art); return m)
+		m.set_shader_parameter("artwork",art); m.set_shader_parameter("approach_glow",true); return m)
 	var mesh_key = "ssrg|%s|%s" % [size, tail]
 	if not reference_note_meshes.has(mesh_key):
 		# About 11% of the screen width at the line and flat, as in SSRG footage.
@@ -1240,6 +1240,8 @@ func sync_note(key: String, note: Dictionary, visible_keys: Dictionary, recordin
 func update_finger_beams() -> void:
 	# Each finger on the stage lights a column up the highway that slides with it.
 	var touches: Array = game.pointers.values() if game.mode=="play" else []
+	# SSRG Playables light their lanes with lasers instead (ssrg_highway.gd).
+	if ssrg_theme and ssrg_theme.active: touches = []
 	for i in finger_beams.size():
 		var beam: MeshInstance3D = finger_beams[i]
 		beam.visible = i < touches.size()
