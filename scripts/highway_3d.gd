@@ -161,7 +161,7 @@ func apply_camera(shake: Vector3 = Vector3.ZERO) -> void:
 		# judgement line sits 88% down the screen, and the rails there are 72% of the width apart.
 		# SSRG's own 2D layout (640 units tall) pins the judgement line 234 units below centre
 		# (86.6% down) and the rails 512 units out there (0.8 screen heights). Any tilt and lens
-		# (set in game, defaults 29 deg and 50 deg) keep those two; only depth and slope change.
+		# (set in game, defaults 35 deg and 45 deg) keep those two; only depth and slope change.
 		var lens: float = game.ssrg_fov
 		var t = tan(deg_to_rad(lens)*.5)
 		var below = atan(.7312*t)                 # judgement line's angle below the view centre

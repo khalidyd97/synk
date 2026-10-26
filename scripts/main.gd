@@ -111,14 +111,14 @@ var ssrg_lane_count = 13
 # SSRG Playables keeps its own note speed (set on that screen), separate from SYNK's.
 func ssrg_note_speed() -> float: return clampf(float(prefs.get_value("ssrg","speed",1.0)),.5,4.0)
 # SSRG Playables camera: tilt (degrees down) and lens (vertical field of view), set in game.
-var ssrg_tilt = 29.0
-var ssrg_fov = 50.0
+var ssrg_tilt = 35.0
+var ssrg_fov = 45.0
 func load_ssrg_view() -> void:
-	ssrg_tilt = clampf(float(prefs.get_value("ssrg","tilt",29.0)),10.0,70.0)
-	ssrg_fov = clampf(float(prefs.get_value("ssrg","fov",50.0)),30.0,100.0)
+	ssrg_tilt = clampf(float(prefs.get_value("ssrg","view_tilt",35.0)),10.0,70.0)
+	ssrg_fov = clampf(float(prefs.get_value("ssrg","view_fov",45.0)),30.0,100.0)
 func change_ssrg_view(tilt_step: float, fov_step: float) -> void:
 	ssrg_tilt = clampf(ssrg_tilt+tilt_step,10.0,70.0); ssrg_fov = clampf(ssrg_fov+fov_step,30.0,100.0)
-	prefs.set_value("ssrg","tilt",ssrg_tilt); prefs.set_value("ssrg","fov",ssrg_fov); prefs.save("user://preferences.cfg")
+	prefs.set_value("ssrg","view_tilt",ssrg_tilt); prefs.set_value("ssrg","view_fov",ssrg_fov); prefs.save("user://preferences.cfg")
 	field.world.apply_camera(); field.world.face_ssrg_billboards()
 var ssrg_playable_previous_style = "gold"
 var rail_color = ""
