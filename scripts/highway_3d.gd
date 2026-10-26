@@ -138,6 +138,7 @@ const SSRG_UNIT = 9.75/512.0
 # screen heights out from the centre there.
 const SSRG_LINE_DOWN = .379
 const SSRG_RAIL_OUT = .826
+const SSRG_FOOTAGE_ASPECT = 2.246
 const SSRG_STEP = 62.7*SSRG_UNIT
 const SSRG_NOTE_SIZE = Vector2(212.0,116.0)*SSRG_UNIT
 # SYNK lanes 0..9 hold SSRG positions 0..12 (lane = position * 0.75).
@@ -178,7 +179,12 @@ func apply_camera(shake: Vector3 = Vector3.ZERO) -> void:
 		var lens: float = game.ssrg_fov
 		var t = tan(deg_to_rad(lens)*.5)
 		var below = atan(SSRG_LINE_DOWN*2.0*t)               # judgement line below the view centre
-		var distance = 9.75/(2.0*SSRG_RAIL_OUT*t)/cos(below) # camera to judgement line
+		# Narrower screens than the 2.25:1 footage (16:9 phones, tablets) pull the camera back so
+		# the rails keep the same share of the screen width; wider screens keep the fitted view.
+		var view: Vector2 = camera.get_viewport().get_visible_rect().size
+		var aspect = view.x/maxf(1.0,view.y)
+		var rail_out = SSRG_RAIL_OUT*minf(1.0,aspect/SSRG_FOOTAGE_ASPECT)
+		var distance = 9.75/(2.0*rail_out*t)/cos(below) # camera to judgement line
 		var direction = deg_to_rad(game.ssrg_tilt)+below
 		camera.fov = lens
 		camera.position = Vector3(0,distance*sin(direction),distance*cos(direction))+shake
