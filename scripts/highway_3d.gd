@@ -170,24 +170,6 @@ func apply_camera(shake: Vector3 = Vector3.ZERO) -> void:
 		camera.fov = lens
 		camera.position = Vector3(0,distance*sin(direction),distance*cos(direction))+shake
 		camera.rotation_degrees.x = -game.ssrg_tilt
-	update_ssrg_warp()
-
-# Globals for note_warp.gdshaderinc (on only for SSRG Playables).
-func view_tangent(z: float) -> float:
-	var p = deg_to_rad(-camera.rotation_degrees.x); var w = z - camera.position.z; var h = camera.position.y
-	return (-h*cos(p) - w*sin(p))/(h*sin(p) - w*cos(p))
-func update_ssrg_warp() -> void:
-	var on = game != null and game.ssrg_playable_run
-	var p = deg_to_rad(-camera.rotation_degrees.x)
-	RenderingServer.global_shader_parameter_set("ssrg_camera",Vector4(camera.position.y,camera.position.z,sin(p),cos(p)))
-	RenderingServer.global_shader_parameter_set("ssrg_screen",Vector4(view_tangent(0.0),view_tangent(-TRACK_LENGTH),TRACK_LENGTH,1.0 if on else 0.0))
-# The same mapping for things placed by script (chord lines).
-func ssrg_warp_z(z: float) -> float:
-	if game == null or not game.ssrg_playable_run: return z
-	var s = clampf(-z/TRACK_LENGTH,-.35,1.0)
-	var u = lerpf(view_tangent(0.0),view_tangent(-TRACK_LENGTH),s)
-	var p = deg_to_rad(-camera.rotation_degrees.x); var h = camera.position.y
-	return camera.position.z - h*(cos(p)+u*sin(p))/(sin(p)-u*cos(p))
 
 func _ready() -> void:
 	var aids=preload("res://scripts/record_aids.gd").new(); aids.world=self; add_child.call_deferred(aids)
@@ -796,7 +778,7 @@ func update_play_aids(delta: float) -> void:
 			var t = float(chord.time)
 			var visible_now = t - render_time() <= game.note_travel_seconds() and render_time() - t < .2 and not chord_done(chord)
 			chord.node.visible = visible_now
-			if visible_now: chord.node.position.z = ssrg_warp_z((render_time() - t) * travel_speed())
+			if visible_now: chord.node.position.z = (render_time() - t) * travel_speed()
 	else:
 		for chord in chords: chord.node.visible = false
 
@@ -958,7 +940,7 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 	var art: Texture2D = preload("res://assets/ssrg/imported/tap.png") if palette==0 else (preload("res://assets/ssrg/hold.png") if palette in [1,3] else SSRG_ART[clampi(palette,0,3)])
 	var mat = shared("ssrg|%d" % palette, func():
 		var m = ShaderMaterial.new(); m.shader = preload("res://scripts/reference_note.gdshader")
-		m.set_shader_parameter("artwork",art); m.set_shader_parameter("screen_warp",true); return m)
+		m.set_shader_parameter("artwork",art); return m)
 	var mesh_key = "ssrg|%s|%s" % [size, tail]
 	if not reference_note_meshes.has(mesh_key):
 		# About 11% of the screen width at the line and flat, as in SSRG footage.
@@ -1062,14 +1044,7 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 	var sides = trail_sides(centers)
 	if game.ssrg_playable_run and not recording and note.kind=="slide" and note.path.size()>1:
 		centers=[]
-		# Each leg is cut into short pieces so the screen warp can bend it smoothly.
-		for i in note.path.size():
-			var point: Dictionary = note.path[i]
-			if i > 0:
-				var prev: Dictionary = note.path[i-1]
-				for k in range(1,8):
-					var f = k/8.0
-					centers.append(Vector3(note_x(lerpf(float(prev.lane),float(point.lane),f)),trail_height(),-lerpf(float(prev.offset),float(point.offset),f)*travel_speed()))
+		for point in note.path:
 			centers.append(Vector3(note_x(float(point.lane)),trail_height(),-float(point.offset)*travel_speed()))
 		count=centers.size()-1
 		sides=connector_sides(centers)
@@ -1086,10 +1061,9 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 	var solid=game.trail_style=="solid" or (game.ssrg_playable_run and not recording)
 	var trail_material: ShaderMaterial
 	if solid:
-		var warp = game.ssrg_playable_run and not recording
-		trail_material=shared("solid_trail|%s|%s" % [trail_color(palette),warp], func():
+		trail_material=shared("solid_trail|%s" % trail_color(palette), func():
 			var m=ShaderMaterial.new(); m.shader=preload("res://scripts/solid_trail.gdshader")
-			m.set_shader_parameter("tint",trail_color(palette)); m.set_shader_parameter("screen_warp",warp); return m)
+			m.set_shader_parameter("tint",trail_color(palette)); return m)
 	else:
 		var still = note.kind=="hold"
 		trail_material=shared("art_trail|%d|%s|%s" % [palette, trail_color(palette), still], func():

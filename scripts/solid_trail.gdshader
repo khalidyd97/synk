@@ -1,7 +1,6 @@
 shader_type spatial;
 render_mode unshaded, blend_mix, depth_prepass_alpha, cull_disabled, fog_disabled;
 #include "res://scripts/highway_clip.gdshaderinc"
-#include "res://scripts/note_warp.gdshaderinc"
 uniform vec3 tint : source_color=vec3(1.0,.73,.16);
 uniform float clip_z=1000.0;
 uniform float ghost_fade=1.0;
@@ -11,11 +10,6 @@ varying float world_z;
 void vertex(){
     rail_position=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz;
     world_z=rail_position.z;
-    if(screen_warp){
-        // Every vertex moves, so the trail bends to the steady screen spacing.
-        vec3 moved=vec3(rail_position.xy,warp_z(rail_position.z));
-        VERTEX=(inverse(MODEL_MATRIX)*vec4(moved,1.0)).xyz;
-    }
 }
 void fragment(){
     if(outside_rails(INV_VIEW_MATRIX[3].xyz) || world_z>clip_z) discard;
