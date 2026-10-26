@@ -159,12 +159,17 @@ func apply_camera(shake: Vector3 = Vector3.ZERO) -> void:
 		# ends reach the lower corners. Keep the judgment plane low in the view.
 		# Measured from SSRG footage (about 2.25:1): the rails meet at the top edge, the
 		# judgement line sits 88% down the screen, and the rails there are 72% of the width apart.
-		# Fitted to SSRG's own 2D layout (640 units tall): judgement line 234 units below centre,
-		# rails 512 units out at the line, track's far end 62 units from the top.
-		camera.fov=50.0
-		var direction=deg_to_rad(29.0+19.0)
-		camera.position=Vector3(0,13.8*sin(direction),13.8*cos(direction))
-		camera.rotation_degrees.x=-29.0
+		# SSRG's own 2D layout (640 units tall) pins the judgement line 234 units below centre
+		# (86.6% down) and the rails 512 units out there (0.8 screen heights). Any tilt and lens
+		# (set in game, defaults 29 deg and 50 deg) keep those two; only depth and slope change.
+		var lens: float = game.ssrg_fov
+		var t = tan(deg_to_rad(lens)*.5)
+		var below = atan(.7312*t)                 # judgement line's angle below the view centre
+		var distance = 9.75/(1.6*t)/cos(below)    # camera to judgement line
+		var direction = deg_to_rad(game.ssrg_tilt)+below
+		camera.fov = lens
+		camera.position = Vector3(0,distance*sin(direction),distance*cos(direction))+shake
+		camera.rotation_degrees.x = -game.ssrg_tilt
 
 func _ready() -> void:
 	var aids=preload("res://scripts/record_aids.gd").new(); aids.world=self; add_child.call_deferred(aids)
@@ -945,7 +950,17 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 	var head = mesh_node(reference_note_meshes[mesh_key],parent,mat)
 	head.position = Vector3(position_value.x,.36*size,position_value.z)
 	head.rotation = camera.rotation
+	ssrg_billboards.append(weakref(head))
 	return head
+
+# SSRG notes face the camera; when the view is changed mid-song they turn to face it again.
+var ssrg_billboards: Array = []
+func face_ssrg_billboards() -> void:
+	var alive: Array = []
+	for ref in ssrg_billboards:
+		var node = ref.get_ref()
+		if node: node.rotation = camera.rotation; alive.append(ref)
+	ssrg_billboards = alive
 
 func make_tail_cap(parent: Node3D, lane: float, offset: float, palette: int, recording = false) -> MeshInstance3D:
 	var cap=make_cap(parent,lane,offset,palette,recording,TAIL_CAP_SIZE)
