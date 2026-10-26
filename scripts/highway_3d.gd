@@ -1240,8 +1240,6 @@ func sync_note(key: String, note: Dictionary, visible_keys: Dictionary, recordin
 func update_finger_beams() -> void:
 	# Each finger on the stage lights a column up the highway that slides with it.
 	var touches: Array = game.pointers.values() if game.mode=="play" else []
-	# SSRG Playables light their lanes with lasers instead (ssrg_highway.gd).
-	if ssrg_theme and ssrg_theme.active: touches = []
 	for i in finger_beams.size():
 		var beam: MeshInstance3D = finger_beams[i]
 		beam.visible = i < touches.size()

@@ -8,10 +8,14 @@ uniform float opacity = 1.0;
 uniform float ghost_fade = 1.0;
 uniform float desaturate = 0.0;
 uniform float clip_z = 1000.0;
-// SSRG Playables: a note heats up as it nears the judgement line - its centre turns white and
-// a soft halo grows around it, starting `glow_distance` units before the line.
+// SSRG Playables: falling notes play a 6-frame glow loop like a sprite sequence (white-hot
+// centre and halo down to the plain colour, then again), and stay hot over the last
+// `glow_distance` units before the judgement line.
 uniform bool approach_glow = false;
-uniform float glow_distance = 26.0;
+uniform float glow_distance = 18.0;
+const float GLOW_FRAMES = 6.0;
+const float GLOW_LOOPS_PER_SECOND = 2.2;
+global uniform float synk_time;
 varying float world_z;
 varying float centre_z;
 void vertex(){ world_z=(MODEL_MATRIX*vec4(VERTEX,1.0)).z; centre_z=MODEL_MATRIX[3].z; }
@@ -38,7 +42,11 @@ void fragment(){
     float gray=dot(color,vec3(0.299,0.587,0.114));
     float alpha=art.a;
     if(approach_glow){
-        float heat=pow(clamp(1.0+centre_z/glow_distance,0.0,1.0),1.6);
+        // Stepped frame 0..5 (0 = hottest), offset by position so notes do not pulse in unison.
+        float frame=floor(fract(synk_time*GLOW_LOOPS_PER_SECOND+centre_z*0.031)*GLOW_FRAMES);
+        float loop_heat=1.0-frame/(GLOW_FRAMES-1.0);
+        float near=pow(clamp(1.0+centre_z/glow_distance,0.0,1.0),1.4);
+        float heat=max(loop_heat*0.9,near);
         float bright=dot(art.rgb,vec3(0.3,0.55,0.15));
         color=mix(color,vec3(1.0),heat*smoothstep(0.3,0.9,bright)*0.85);
         // Halo: the blurred note shape (a low mip) around the edge, white-tinted.

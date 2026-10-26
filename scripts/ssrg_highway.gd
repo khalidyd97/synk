@@ -7,12 +7,6 @@ extends Node3D
 #   - hit effects played from an 11-frame flash sheet (gold star sheet on PERFECT)
 # Only in play; the recorder keeps its own look.
 const HIT_LIFE = .42
-# Lane lasers (as in SSRG footage): a beam up the lane on every hit, held while a hold or
-# slide is held. Cyan for taps, gold for holds and slides.
-const LASER_LIFE = .32
-const LASER_COLORS = {"tap": Color("5fd0ff"), "hold": Color("ffc94a"), "slide": Color("ffc94a"), "flick": Color("ff6fc8")}
-var laser_pool: Array = []
-var lasers: Array = []
 const LOOKAHEAD = .55
 var world: Node3D
 var floor_node: MeshInstance3D
@@ -83,41 +77,13 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 	h.age = 0.0; h.sustain_entry = sustain_entry; h.pointer_id = pointer_id; h.kind = kind
 	# SSRG flashes sit on the note itself (not where the finger landed) and face the
 	# current camera, which ANGLE/LENS may have changed since the pool was made.
-	h.node.position = Vector3(world.note_x(lane), .9, 0)
+	h.node.position = Vector3(world.note_x(lane), 1.3, 0)
 	h.node.rotation = world.camera.rotation
 	h.material.set_shader_parameter("opacity", 1.0)
 	h.node.visible = true; hits.append(h)
-	fire_laser(lane, kind, sustain_entry)
-
-func make_laser() -> Dictionary:
-	var mesh = PlaneMesh.new(); mesh.size = Vector2(world.SSRG_NOTE_SIZE.x * .9, world.TRACK_LENGTH)
-	var mat = ShaderMaterial.new(); mat.shader = preload("res://scripts/ssrg_laser.gdshader"); mat.render_priority = 4
-	var node = world.mesh_node(mesh, self, mat); node.position = Vector3(0, .05, -world.TRACK_LENGTH * .5); node.visible = false
-	return {"node": node, "material": mat, "age": 0.0, "sustain_entry": {}}
-
-func fire_laser(lane: float, kind: String, sustain_entry: Dictionary) -> void:
-	if lasers.size() >= 16:
-		var old: Dictionary = lasers.pop_front(); old.node.visible = false; laser_pool.append(old)
-	var l: Dictionary = laser_pool.pop_back() if not laser_pool.is_empty() else make_laser()
-	l.age = 0.0; l.sustain_entry = sustain_entry
-	l.material.set_shader_parameter("color", LASER_COLORS.get(kind, LASER_COLORS.tap))
-	l.node.position.x = world.note_x(lane); l.node.visible = true
-	lasers.append(l)
-
-func update_lasers(delta: float, playing: bool) -> void:
-	var game = world.game
-	for i in range(lasers.size() - 1, -1, -1):
-		var l: Dictionary = lasers[i]
-		var held = not l.sustain_entry.is_empty() and not l.sustain_entry.done
-		if playing: l.age += delta
-		if (not held and l.age >= LASER_LIFE) or game.mode not in ["play", "paused"]:
-			l.node.visible = false; lasers.remove_at(i); laser_pool.append(l); continue
-		if held: l.node.position.x = world.note_x(SynkChart.lane_at(l.sustain_entry.note, game.song_time))
-		var fade = .8 + .2 * sin(l.age * 18.0) if held else pow(1.0 - l.age / LASER_LIFE, 1.5)
-		l.material.set_shader_parameter("strength", fade)
 
 func make_hit() -> Dictionary:
-	var mesh = QuadMesh.new(); mesh.size = Vector2(9.0, 5.4)
+	var mesh = QuadMesh.new(); mesh.size = Vector2(13.5, 8.1)   # 1.5x: bigger SSRG hit flashes
 	var mat = ShaderMaterial.new(); mat.shader = preload("res://scripts/ssrg_hit.gdshader"); mat.render_priority = 6
 	var node = world.mesh_node(mesh, self, mat); node.rotation = world.camera.rotation; node.visible = false
 	return {"node": node, "material": mat, "age": 0.0, "sustain_entry": {}, "pointer_id": -999, "kind": "tap"}
@@ -133,7 +99,6 @@ func _process(delta: float) -> void:
 	original_stage.update(world)
 	var game = world.game
 	var playing = game.mode == "play"
-	update_lasers(delta, playing)
 	# Hits: play the sheet once; held notes loop the middle frames and follow the finger.
 	for i in range(hits.size() - 1, -1, -1):
 		var h: Dictionary = hits[i]
