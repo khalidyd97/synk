@@ -58,3 +58,11 @@ synk_time={
 "type": "float",
 "value": 0.0
 }
+ssrg_camera={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+ssrg_screen={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}

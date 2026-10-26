@@ -8,8 +8,17 @@ uniform float opacity = 1.0;
 uniform float ghost_fade = 1.0;
 uniform float desaturate = 0.0;
 uniform float clip_z = 1000.0;
+#include "res://scripts/note_warp.gdshaderinc"
 varying float world_z;
-void vertex(){ world_z=(MODEL_MATRIX*vec4(VERTEX,1.0)).z; }
+void vertex(){
+    world_z=(MODEL_MATRIX*vec4(VERTEX,1.0)).z;
+    if(screen_warp){
+        // A note keeps its shape: the whole quad moves with its centre.
+        float centre=MODEL_MATRIX[3].z;
+        vec3 moved=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz+vec3(0.0,0.0,warp_z(centre)-centre);
+        VERTEX=(inverse(MODEL_MATRIX)*vec4(moved,1.0)).xyz;
+    }
+}
 // Rotate hue only: value, saturation, white highlights and source alpha survive intact.
 vec3 rgb_to_hsv(vec3 c){
     vec4 k=vec4(0.0,-1.0/3.0,2.0/3.0,-1.0);
