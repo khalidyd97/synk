@@ -117,7 +117,7 @@ func input_position(p: Vector2) -> Vector2:
 		origin=world.camera.project_ray_origin(screen_point)
 		direction=world.camera.project_ray_normal(screen_point)
 		hit=Plane(Vector3.UP,0).intersects_ray(origin,direction)
-	if hit != null: p.x = .07 + ((hit.x/world.LANE_WIDTH+world.CENTER_LANE)+.5)/SynkChart.LANES*.86
+	if hit != null: p.x = .07 + (world.world_lane(hit.x)+.5)/SynkChart.LANES*.86
 	if on_pad and absf(hit.x)<=world.PAD_HALF_WIDTH+.001:
 		p.x=clampf(p.x,.070001,.929999)
 	return p

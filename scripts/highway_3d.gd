@@ -138,6 +138,12 @@ const SSRG_STEP = 62.7*SSRG_UNIT
 const SSRG_NOTE_SIZE = Vector2(212.0,116.0)*SSRG_UNIT
 # SYNK lanes 0..9 hold SSRG positions 0..12 (lane = position * 0.75).
 func ssrg_x(lane: float) -> float: return (lane/.75-6.0)*SSRG_STEP
+# Lane <-> world x for touches. SSRG Playables use the SSRG spacing above, so a finger is
+# measured in the same lane units as the notes it is judged against.
+func lane_world_x(lane: float) -> float: return ssrg_x(lane) if game.ssrg_playable_run else lane_x(lane)
+func world_lane(x: float) -> float:
+	if game.ssrg_playable_run: return clampf((x/SSRG_STEP+6.0)*.75,0.0,float(SynkChart.MAX_LANE))
+	return x/LANE_WIDTH+CENTER_LANE
 func note_x(lane: float) -> float:
 	var limit = HIGHWAY_HALF_WIDTH - EDGE_MARGIN - NOTE_WIDTH*.5*game.note_size
 	if game.ssrg_playable_run: return ssrg_x(lane)
@@ -161,7 +167,7 @@ func apply_camera(shake: Vector3 = Vector3.ZERO) -> void:
 		# judgement line sits 88% down the screen, and the rails there are 72% of the width apart.
 		# SSRG's own 2D layout (640 units tall) pins the judgement line 234 units below centre
 		# (86.6% down) and the rails 512 units out there (0.8 screen heights). Any tilt and lens
-		# (set in game, defaults 35 deg and 45 deg) keep those two; only depth and slope change.
+		# (set in game, defaults 36 deg and 45 deg) keep those two; only depth and slope change.
 		var lens: float = game.ssrg_fov
 		var t = tan(deg_to_rad(lens)*.5)
 		var below = atan(.7312*t)                 # judgement line's angle below the view centre
@@ -500,7 +506,7 @@ func build_asset_material(name: String, palette: int, region = Vector4(0,0,1,1),
 	return mat
 
 func touch_hit_position(lane: float,pointer_id: int) -> Vector3:
-	var x=lane_x(lane)
+	var x=lane_world_x(lane)
 	if game.pointers.has(pointer_id) and game.pointers[pointer_id].has("world"):
 		x=game.pointers[pointer_id].world.x
 	# Follow horizontal touch movement, but never let the burst drift up/down the track.
@@ -1239,7 +1245,9 @@ func update_finger_beams() -> void:
 		beam.visible = i < touches.size()
 		# Beams snap to whole lanes rather than following the finger smoothly.
 		# Keep the full note-width glow centered on its lane, including outer notes.
-		if beam.visible: beam.position.x = clampf(lane_x(roundi(SynkCapture.lane(touches[i].position.x))),-BEAM_MAX_X,BEAM_MAX_X)
+		if beam.visible:
+			var touch_lane = SynkCapture.lane(touches[i].position.x)
+			beam.position.x = clampf(lane_world_x(touch_lane if game.ssrg_playable_run else float(roundi(touch_lane))),-BEAM_MAX_X,BEAM_MAX_X)
 
 func set_trail_clip(node: Node3D, clip_z: float) -> void:
 	for mesh in node.get_children():

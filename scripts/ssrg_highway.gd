@@ -75,7 +75,11 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 	var perfect = str(world.game.judgement) == "PERFECT"
 	if not imported_frames.is_empty(): h.material.set_shader_parameter("atlas", imported_frames[0])
 	h.age = 0.0; h.sustain_entry = sustain_entry; h.pointer_id = pointer_id; h.kind = kind
-	h.node.position = world.touch_hit_position(lane, pointer_id) + Vector3(0, .9, 0)
+	# SSRG flashes sit on the note itself (not where the finger landed) and face the
+	# current camera, which ANGLE/LENS may have changed since the pool was made.
+	h.node.position = Vector3(world.note_x(lane), .9, 0)
+	h.node.rotation = world.camera.rotation
+	h.material.set_shader_parameter("opacity", 1.0)
 	h.node.visible = true; hits.append(h)
 
 func make_hit() -> Dictionary:
@@ -103,7 +107,7 @@ func _process(delta: float) -> void:
 		if held and h.age > HIT_LIFE * .55: h.age = HIT_LIFE * .25
 		if (not held and h.age >= HIT_LIFE) or game.mode not in ["play", "paused"]:
 			hits.remove_at(i); release(h); continue
-		if held and h.kind == "slide": h.node.position.x = world.note_x(SynkChart.lane_at(h.sustain_entry.note, game.song_time))
+		if held: h.node.position.x = world.note_x(SynkChart.lane_at(h.sustain_entry.note, game.song_time))
 		if not imported_frames.is_empty(): h.material.set_shader_parameter("atlas",imported_frames[mini(imported_frames.size()-1,int(h.age/HIT_LIFE*imported_frames.size()))])
 	return
 	if game.live.size() != used_for_size:

@@ -111,10 +111,10 @@ var ssrg_lane_count = 13
 # SSRG Playables keeps its own note speed (set on that screen), separate from SYNK's.
 func ssrg_note_speed() -> float: return clampf(float(prefs.get_value("ssrg","speed",1.0)),.5,4.0)
 # SSRG Playables camera: tilt (degrees down) and lens (vertical field of view), set in game.
-var ssrg_tilt = 35.0
+var ssrg_tilt = 36.0
 var ssrg_fov = 45.0
 func load_ssrg_view() -> void:
-	ssrg_tilt = clampf(float(prefs.get_value("ssrg","view_tilt",35.0)),10.0,70.0)
+	ssrg_tilt = clampf(float(prefs.get_value("ssrg","view_tilt",36.0)),10.0,70.0)
 	ssrg_fov = clampf(float(prefs.get_value("ssrg","view_fov",45.0)),30.0,100.0)
 func change_ssrg_view(tilt_step: float, fov_step: float) -> void:
 	ssrg_tilt = clampf(ssrg_tilt+tilt_step,10.0,70.0); ssrg_fov = clampf(ssrg_fov+fov_step,30.0,100.0)
@@ -1864,7 +1864,7 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 			var nearest: Dictionary={}; var best=.231; var best_gap=INF
 			# Where the finger is across the judgement bar, in world units: notes are hit by touching
 			# the note itself (its drawn width), whatever lane it is in.
-			var world=field.world; var touch_x=world.lane_x(SynkCapture.lane(p.x)); var reach=world.note_reach()
+			var world=field.world; var touch_x=world.lane_world_x(SynkCapture.lane(p.x)); var reach=world.note_reach()
 			for live_index in range(first_live_index(),live.size()):
 				var entry: Dictionary=live[live_index]
 				if float(entry.note.time)>song_time+.23: break
