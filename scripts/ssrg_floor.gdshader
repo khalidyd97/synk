@@ -7,9 +7,9 @@ uniform float opacity = 0.78;
 varying float world_z;
 void vertex() { world_z = (MODEL_MATRIX * vec4(VERTEX, 1.0)).z; }
 void fragment() {
-	float depth = clamp(-world_z / 60.0, 0.0, 1.0);
+	float depth = clamp(-world_z / 600.0, 0.0, 1.0);
 	float sheen = exp(-pow((UV.x - 0.5) * 3.2, 2.0)) * 0.05;
 	float edge = smoothstep(0.0, 0.025, UV.x) * smoothstep(0.0, 0.025, 1.0 - UV.x);
 	ALBEDO = glass + vec3(sheen);
-	ALPHA = opacity * mix(1.0, 0.72, depth) * smoothstep(-60.0, -46.0, world_z) * edge;
+	ALPHA = opacity * mix(1.0, 0.72, depth) * smoothstep(-1500.0, -900.0, world_z) * edge;
 }

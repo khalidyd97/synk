@@ -161,6 +161,8 @@ func note_position(lane: float, chart_time: float) -> Vector3:
 	return Vector3(note_x(lane), .13, (render_time()-chart_time)*travel_speed())
 func apply_camera(shake: Vector3 = Vector3.ZERO) -> void:
 	camera.projection = Camera3D.PROJECTION_PERSPECTIVE; camera.fov = GAMEPLAY_FOV
+	# SSRG Playables draw their track out to 1500 units (ssrg_stage.gd); other views stop at 260.
+	camera.far = 1600.0 if game != null and game.ssrg_playable_run else 260.0
 	camera.position = camera_rest_position() + shake; camera.rotation_degrees = Vector3(-highway_angle(), 0, 0)
 	# Place the SSRG judgment area near the bottom while preserving the camera's
 	# projection for note rendering and touch raycasts together.

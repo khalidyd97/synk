@@ -2,19 +2,22 @@ extends Node3D
 var receptors: Array = []
 var press: MeshInstance3D
 var rails: Array = []
+const TRACK_REACH = 1500.0
 func _init() -> void :
 	name = "SSRGStage"
 	# Continue beneath the judgment line and beyond the camera's lower edge.
 	var floor_node=MeshInstance3D.new(); var floor_mesh=PlaneMesh.new()
-	floor_mesh.size=Vector2(19.5,72.0); floor_node.mesh=floor_mesh
-	floor_node.position=Vector3(0,.026,-24.0)
+	# Like SSRG, the track runs on until its rails nearly meet (about 7% from the top of the
+	# screen): 1500 units out, far past where notes appear (60 units).
+	floor_mesh.size=Vector2(19.5,TRACK_REACH+12.0); floor_node.mesh=floor_mesh
+	floor_node.position=Vector3(0,.026,12.0-(TRACK_REACH+12.0)*.5)
 	var floor_mat=ShaderMaterial.new(); floor_mat.shader=preload("res://scripts/ssrg_floor.gdshader")
 	floor_mat.set_shader_parameter("opacity",.32); floor_mat.render_priority=-7
 	floor_node.material_override=floor_mat; add_child(floor_node)
 	for side in [-1, 1]:
 		var rail = MeshInstance3D.new(); var plane = PlaneMesh.new()
-		plane.size = Vector2(0.55, 72.0);rail.mesh = plane
-		rail.position = Vector3(side * 9.75, 0.09, -24.0)
+		plane.size = Vector2(0.55, TRACK_REACH+12.0);rail.mesh = plane
+		rail.position = Vector3(side * 9.75, 0.09, 12.0-(TRACK_REACH+12.0)*.5)
 		var mat = ShaderMaterial.new();mat.shader = preload("res://scripts/ssrg_stage.gdshader")
 		mat.set_shader_parameter("artwork", preload("res://assets/ssrg/rail.png"))
 		mat.set_shader_parameter("tint", Color("fff9e7"))
@@ -100,13 +103,11 @@ func warmup(world: Node3D) -> void :
 func configure(world: Node3D) -> void :
 	var stock_road = true
 	press.visible = stock_road
-	var band = Color("c7a520")
-
-	var stock_band = Color("c7a520")
-	var tint = Color(0.58, 0.45, 0.12) if band.is_equal_approx(stock_band) else band
-	press.material_override.set_shader_parameter("base_color", tint)
+	# SSRG colours: a dark grey glass judgement bar and white-silver rails (a rail colour picked
+	# in Settings still wins).
+	press.material_override.set_shader_parameter("base_color", Color(0.16, 0.17, 0.21))
 	var rail_tint = world.custom_color("rail_color")
-	if rail_tint == null: rail_tint = band.lerp(Color.WHITE, 0.55)
+	if rail_tint == null: rail_tint = Color("eef1f6")
 	for rail in rails:
 		rail.visible = stock_road
 		rail.material_override.set_shader_parameter("tint", rail_tint)
