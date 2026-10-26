@@ -3,10 +3,11 @@ const ScreenStyle = preload("res://scripts/screen_style.gd")
 const Action = preload("res://scripts/settings_action.gd")
 const Levels = preload("res://scripts/chart_levels.gd")
 const SsrgImport = preload("res://scripts/ssrg_import.gd")
-const BACKGROUND = preload("res://assets/lobby/city_background.png")
 const TEXT = Color("eef0ff")
 const MUTED = Color(.8,.82,.95,.6)
 const ACCENT = Color("ffd36a")
+const STAR = "★"
+const STAR_OFF = "☆"
 const KEY_COLORS = {4: Color("5fd0ff"), 7: Color("ffd36a"), 13: Color("ff7ac8")}
 
 # SSRG Playables (lobby button). The player picks the files of an SSRG song from their own copy
@@ -35,6 +36,26 @@ var search: LineEdit
 # Category tabs: one per game folder (SSYG, SSFNC, ...) plus ALL; "" shows every game.
 var game_tabs: HBoxContainer
 var game_filter = ""
+# List order (cycled by SORT) and favourites (a star on a song; the star tab shows only those).
+const SORTS = ["GAME", "TITLE", "ARTIST", "NEWEST", "BEST"]
+var sort_mode = "GAME"
+var sort_button: Button
+var favorites: Array = []
+# A short clip of the selected song (PREVIEW in the song panel turns it off).
+var preview_player: AudioStreamPlayer
+var preview_delay = -1.0
+var preview_id = ""
+# The preview's audio is read on a worker thread so tapping a song never stalls the screen.
+var preview_loader = -1
+var preview_loaded: AudioStream
+# Private login (local/ssrg_login.json, made by tools/make_ssrg_login.py and never committed):
+# when that file is bundled, the screen asks for it once per device until LOG OUT.
+const LOGIN_FILE = "res://local/ssrg_login.json"
+var login_panel: Control
+var login_user: LineEdit
+var login_pass: LineEdit
+var login_error: Label
+var logout_button: Button
 # With hundreds of songs the list must stay cheap: chart details are read once per song and
 # kept, and picking a song only restyles two rows instead of rebuilding the list.
 var chart_cache: Dictionary = {}
@@ -91,16 +112,15 @@ func panel(parent: Control, left: float, top: float, right: float, bottom: float
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	var background = TextureRect.new(); place(background,self,0,0,1,1)
-	background.texture = BACKGROUND; background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED; background.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var shade = ColorRect.new(); place(shade,self,0,0,1,1); shade.color = Color(0.017,0.017,0.017,.86); shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# A flat backdrop: the old full-screen picture was 86% covered and cost a full extra fill.
+	var shade = ColorRect.new(); place(shade,self,0,0,1,1); shade.color = Color(0.024,0.024,0.034); shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	safe_content=game.safe_parent("SafeSsrgControls",self)
 	action(self,"‹  BACK",.035,.035,.15,.14,close,"nav")
 	text(self,"SSRG PLAYABLES",.17,.035,.5,.1,40)
 	status_label = text(self,"Play SSRG songs from your own game files.",.17,.095,.6,.15,16,MUTED)
 	action(self,"SCAN PHONE",.8,.045,.965,.135,scan_phone,"primary")
 	action(self,"+ FILES",.455,.045,.555,.135,open_import,"small")
+	logout_button = action(self,"LOG OUT",.37,.045,.445,.135,log_out,"small")
 	# Note speed for SSRG songs only (0.5x to 4x).
 	action(self,"−",.57,.045,.62,.135,func(): change_speed(-.25),"small")
 	speed_label = text(self,"",.625,.045,.725,.135,18); speed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -109,7 +129,9 @@ func _ready() -> void:
 
 	# Song list
 	var list_panel = panel(self,.035,.19,.4,.96)
-	search = LineEdit.new(); place(search,list_panel,.05,.025,.95,.11)
+	search = LineEdit.new(); place(search,list_panel,.04,.025,.5,.11)
+	sort_button = action(list_panel,"",.52,.025,.76,.11,cycle_sort,"small")
+	action(list_panel,"SHUFFLE",.78,.025,.96,.11,shuffle,"small")
 	search.placeholder_text = "Search songs"; search.clear_button_enabled = true
 	search.add_theme_font_size_override("font_size",17)
 	for state in ["normal","focus"]:
@@ -141,7 +163,13 @@ func _ready() -> void:
 	image_picker.filters = PackedStringArray(["*.png,*.jpg,*.jpeg;Images;image/png,image/jpeg"])
 	image_picker.file_selected.connect(set_background)
 	move_child(safe_content,get_child_count()-1)
-	refresh_staged(); refresh_speed()
+	preview_player = AudioStreamPlayer.new(); add_child(preview_player); preview_player.volume_db = -10
+	var stored = game.prefs.get_value("ssrg","favorites",[])
+	favorites = stored if stored is Array else []
+	sort_mode = str(game.prefs.get_value("ssrg","sort","GAME"))
+	if sort_mode not in SORTS: sort_mode = "GAME"
+	build_login_panel()
+	refresh_staged(); refresh_speed(); refresh_sort_button()
 
 func build_import_panel() -> void:
 	import_panel = Control.new(); place(import_panel,self,0,0,1,1); import_panel.visible = false
@@ -161,11 +189,157 @@ func build_import_panel() -> void:
 func open() -> void:
 	pending = {}; delete_armed = 0
 	visible = true
+	logout_button.visible = not login_record().is_empty()
+	login_panel.visible = not unlocked()
+	if login_panel.visible: login_error.text = ""; login_pass.text = ""
 	refresh_songs()
 
 func close() -> void:
+	stop_preview()
 	visible = false
 	game.close_ssrg_playables()
+
+# --- Login ---------------------------------------------------------------------------
+func login_record() -> Dictionary:
+	if not FileAccess.file_exists(LOGIN_FILE): return {}
+	var data = JSON.parse_string(FileAccess.get_file_as_string(LOGIN_FILE))
+	return data if data is Dictionary and data.has("user") and data.has("sha256") else {}
+
+func login_token(record: Dictionary) -> String:
+	return (str(record.user) + "|" + str(record.sha256)).sha256_text()
+
+func unlocked() -> bool:
+	var record = login_record()
+	return record.is_empty() or str(game.prefs.get_value("ssrg","login","")) == login_token(record)
+
+func build_login_panel() -> void:
+	login_panel = Control.new(); place(login_panel,self,0,0,1,1); login_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	var dim = ColorRect.new(); place(dim,login_panel,0,0,1,1); dim.color = Color(0.01,0.01,0.02,.94)
+	var card = panel(login_panel,.33,.16,.67,.86,Color(ACCENT,.55))
+	text(card,"SSRG PLAYABLES",.08,.04,.92,.15,26,ACCENT).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	text(card,"Sign in to continue.",.08,.15,.92,.23,15,MUTED).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	login_user = login_field(card,"Username",.27)
+	login_pass = login_field(card,"Password",.43); login_pass.secret = true
+	login_pass.text_submitted.connect(func(_t): try_login())
+	login_error = text(card,"",.08,.57,.92,.66,15,Color("ff8a8a")); login_error.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	action(card,"SIGN IN",.08,.68,.92,.8,try_login,"primary")
+	action(card,"‹  BACK",.3,.84,.7,.95,close,"small")
+	login_panel.visible = false
+
+func login_field(parent: Control, hint: String, top: float) -> LineEdit:
+	var field = LineEdit.new(); place(field,parent,.08,top,.92,top+.13)
+	field.placeholder_text = hint; field.add_theme_font_size_override("font_size",18)
+	var style = box(Color(1,1,1,.06),Color(1,1,1,.16),14); style.content_margin_left = 16
+	var focus = box(Color(1,1,1,.08),Color(ACCENT,.6),14); focus.content_margin_left = 16
+	field.add_theme_stylebox_override("normal",style); field.add_theme_stylebox_override("focus",focus)
+	return field
+
+func try_login() -> void:
+	var record = login_record()
+	if login_user.text.strip_edges() == str(record.get("user","")) and login_pass.text.sha256_text() == str(record.get("sha256","")):
+		game.prefs.set_value("ssrg","login",login_token(record)); game.prefs.save("user://preferences.cfg")
+		login_panel.visible = false; login_pass.text = ""; login_error.text = ""
+		refresh_songs()
+	else:
+		login_error.text = "Wrong username or password."; login_pass.text = ""
+
+func log_out() -> void:
+	stop_preview()
+	game.prefs.set_value("ssrg","login",""); game.prefs.save("user://preferences.cfg")
+	login_user.text = ""; login_error.text = ""
+	login_panel.visible = not unlocked()
+
+# --- Sort, favourites, shuffle, preview ----------------------------------------------
+func refresh_sort_button() -> void:
+	sort_button.text = "SORT: " + sort_mode
+
+func cycle_sort() -> void:
+	sort_mode = SORTS[(SORTS.find(sort_mode)+1) % SORTS.size()]
+	game.prefs.set_value("ssrg","sort",sort_mode); game.prefs.save("user://preferences.cfg")
+	refresh_sort_button(); refresh_songs()
+
+func best_score(id: String) -> int:
+	var top = -1
+	for count in [4,7,13]: top = maxi(top, int(best(id,Levels.key(count)).get("score",-1)))
+	return top
+
+func sort_key(song: Dictionary) -> Array:
+	match sort_mode:
+		"TITLE": return [str(song.title).to_lower()]
+		"ARTIST": return [str(song.get("artist","")).to_lower(), str(song.title).to_lower()]
+		"NEWEST": return [-float(song.get("added",0)), str(song.title).to_lower()]
+		"BEST": return [-best_score(str(song.id)), str(song.title).to_lower()]
+	return [category(song), str(song.title).to_lower()]
+
+func is_favorite(id: String) -> bool: return id in favorites
+
+func toggle_favorite(id: String) -> void:
+	if id in favorites: favorites.erase(id)
+	else: favorites.append(id)
+	game.prefs.set_value("ssrg","favorites",favorites); game.prefs.save("user://preferences.cfg")
+	if rows.has(id) and is_instance_valid(rows[id].star): style_star(rows[id].star,is_favorite(id))
+	if game_filter == STAR: refresh_songs()
+	else: refresh_game_tabs(ssrg_songs()); refresh_detail(); refresh_stats()
+
+func style_star(button: Button, on: bool) -> void:
+	button.text = STAR if on else STAR_OFF
+	button.add_theme_color_override("font_color",ACCENT if on else MUTED)
+	button.add_theme_color_override("font_hover_color",ACCENT)
+
+func shuffle() -> void:
+	var pool = shown_songs()
+	if pool.size() < 2: return
+	var pick = pool[randi() % pool.size()]
+	while str(pick.id) == selected_id: pick = pool[randi() % pool.size()]
+	select_song(str(pick.id))
+	status_label.text = "Shuffled: %s" % str(pick.title)
+
+func preview_enabled() -> bool: return bool(game.prefs.get_value("ssrg","preview",true))
+
+func toggle_preview() -> void:
+	game.prefs.set_value("ssrg","preview",not preview_enabled()); game.prefs.save("user://preferences.cfg")
+	if preview_enabled(): schedule_preview()
+	else: stop_preview()
+	refresh_detail()
+
+func stop_preview() -> void:
+	preview_delay = -1.0
+	if preview_player: preview_player.stop()
+
+func schedule_preview() -> void:
+	stop_preview()
+	if preview_enabled() and visible and not selected_id.is_empty(): preview_delay = .45
+
+func start_preview() -> void:
+	var song: Dictionary = game.song_entry_for_id(selected_id)
+	if song.is_empty() or not visible or login_panel.visible: return
+	if preview_id == selected_id and preview_player.stream != null: play_preview(); return
+	if preview_loader >= 0: return
+	var path = "user://songs/"+str(song.file); var id = selected_id
+	preview_loaded = null
+	preview_loader = WorkerThreadPool.add_task(func(): preview_loaded = SynkLibrary.decode(path))
+	set_meta("preview_for", id)
+
+func finish_preview_load() -> void:
+	if preview_loader < 0 or not WorkerThreadPool.is_task_completed(preview_loader): return
+	WorkerThreadPool.wait_for_task_completion(preview_loader); preview_loader = -1
+	var id = str(get_meta("preview_for",""))
+	if preview_loaded == null: return
+	preview_player.stream = preview_loaded; preview_id = id
+	# Still the selected song: play it; otherwise start loading the newly selected one.
+	if id == selected_id and preview_enabled() and visible: play_preview()
+	elif preview_enabled() and visible: start_preview()
+
+func play_preview() -> void:
+	var length = preview_player.stream.get_length()
+	preview_player.play(minf(length*.3, maxf(0.0,length-12.0)))
+
+func refresh_stats() -> void:
+	var songs = ssrg_songs()
+	var games = {}
+	for song in songs: games[category(song)] = true
+	var liked = favorites.filter(func(id): return songs.any(func(x): return str(x.id)==id)).size()
+	status_label.text = "%d songs  ·  %d games  ·  %d favourites" % [songs.size(), games.size(), liked]
 
 # --- SSRG songs ------------------------------------------------------------------------
 func ssrg_songs() -> Array:
@@ -207,15 +381,15 @@ func refresh_songs() -> void:
 	var all_songs = ssrg_songs()
 	refresh_game_tabs(all_songs)
 	# Grouped by game folder, A to Z, then by title; a heading starts each game.
-	var songs = all_songs.filter(func(s): return game_filter.is_empty() or category(s) == game_filter)
-	songs.sort_custom(func(a, b): return [category(a), str(a.title).to_lower()] < [category(b), str(b.title).to_lower()])
+	var songs = all_songs.filter(func(x): return in_filter(x))
+	songs.sort_custom(func(a, b): return sort_key(a) < sort_key(b))
 	if not songs.any(func(s): return str(s.id)==selected_id): selected_id = str(songs[0].id) if not songs.is_empty() else ""
 	var shown = 0
 	var heading = null
 	for song in songs:
 		var haystack = " ".join([str(song.title),str(song.get("artist","")),str(song.get("album",""))]).to_lower()
 		if not query.is_empty() and not haystack.contains(query): continue
-		if category(song) != heading:
+		if sort_mode == "GAME" and category(song) != heading:
 			heading = category(song)
 			var count = songs.filter(func(x): return category(x) == heading).size()
 			var label = Label.new(); label.text = "%s  ·  %d" % [heading, count]
@@ -225,10 +399,22 @@ func refresh_songs() -> void:
 		row_queue.append(song)
 	if shown == 0:
 		var empty = Label.new(); empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		empty.text = "No SSRG songs yet.\nTap + IMPORT SONG to add one." if songs.is_empty() else "No songs match your search."
+		empty.text = "No SSRG songs yet.\nTap SCAN PHONE or + FILES to add some." if all_songs.is_empty() else ("No favourites yet. Tap the star on a song." if game_filter == STAR else "No songs match your search.")
 		empty.add_theme_color_override("font_color",MUTED); empty.add_theme_font_size_override("font_size",17)
 		song_list.add_child(empty)
-	refresh_detail()
+	refresh_detail(); refresh_stats()
+
+func in_filter(song: Dictionary) -> bool:
+	if game_filter.is_empty(): return true
+	if game_filter == STAR: return is_favorite(str(song.id))
+	return category(song) == game_filter
+
+# The songs the list currently shows (tab and search applied).
+func shown_songs() -> Array:
+	var query = search.text.strip_edges().to_lower()
+	return ssrg_songs().filter(func(x):
+		var haystack = " ".join([str(x.title),str(x.get("artist","")),str(x.get("album",""))]).to_lower()
+		return in_filter(x) and (query.is_empty() or haystack.contains(query)))
 
 # The game folder a song was scanned from; songs added with + FILES go under IMPORTED.
 func category(song: Dictionary) -> String:
@@ -241,9 +427,10 @@ func refresh_game_tabs(songs: Array) -> void:
 	for song in songs:
 		if category(song) not in names: names.append(category(song))
 	names.sort()
-	if game_filter not in names: game_filter = ""
-	if names.size() < 2 and game_filter.is_empty(): return
-	for name in [""] + names:
+	var has_favorites = songs.any(func(x): return is_favorite(str(x.id)))
+	if game_filter not in names and not (game_filter == STAR and has_favorites): game_filter = ""
+	if names.size() < 2 and not has_favorites and game_filter.is_empty(): return
+	for name in [""] + ([STAR] if has_favorites else []) + names:
 		var tab = Action.new(); tab.text = "ALL" if name.is_empty() else name; tab.caption_size = 15
 		tab.primary = name == game_filter; tab.custom_minimum_size = Vector2(maxf(84, tab.text.length()*11+36), 38)
 		tab.pressed.connect(func(): game_filter = name; refresh_songs())
@@ -298,8 +485,16 @@ func song_row(song: Dictionary) -> Control:
 		if row_armed_id == id and delete_armed > 0: delete_song(id); return
 		disarm_row()
 		row_armed_id = id; delete_armed = 3.0
-		trash.text = "DELETE?"; trash.anchor_left = .74)
-	rows[id] = {"row":row,"trash":trash}
+		trash.text = "DELETE?"; trash.anchor_left = .74
+		if rows.has(id): rows[id].star.visible = false)
+	var star = Button.new(); place(star,row,.74,.25,.85,.75); star.focus_mode = Control.FOCUS_NONE
+	star.add_theme_font_size_override("font_size",20)
+	for state in ["normal","hover","pressed"]: star.add_theme_stylebox_override(state,box(Color(1,1,1,0),Color(1,1,1,0),14))
+	style_star(star,is_favorite(id)); star.tooltip_text = "Favourite"
+	star.pressed.connect(func():
+		if Action.was_dragged(row): return
+		toggle_favorite(id))
+	rows[id] = {"row":row,"trash":trash,"star":star}
 	return row
 
 func style_row(row: Button, selected: bool) -> void:
@@ -311,10 +506,12 @@ func select_song(id: String) -> void:
 	selected_id = id; selected_variant = ""; delete_armed = 0; disarm_row()
 	if rows.has(id): style_row(rows[id].row,true)
 	refresh_detail()
+	schedule_preview()
 
 func disarm_row() -> void:
 	if rows.has(row_armed_id) and is_instance_valid(rows[row_armed_id].trash):
 		rows[row_armed_id].trash.text = "✕"; rows[row_armed_id].trash.anchor_left = .86
+		if rows[row_armed_id].has("star") and is_instance_valid(rows[row_armed_id].star): rows[row_armed_id].star.visible = true
 	row_armed_id = ""
 
 func refresh_detail() -> void:
@@ -378,6 +575,12 @@ func refresh_detail() -> void:
 	action(detail,"AUTO PLAY",.52,.76,.72,.88,func(): play(id,selected_variant,true))
 	action(detail,"BACKGROUND",.74,.76,.96,.88,choose_background)
 	if game.has_background(id): action(detail,"REMOVE BACKGROUND",.04,.895,.36,.97,func(): game.remove_background(id); refresh_detail(),"small")
+	action(detail,"PREVIEW  " + ("ON" if preview_enabled() else "OFF"),.38,.895,.68,.97,toggle_preview,"small")
+	var star = Button.new(); place(star,detail,.88,.045,.955,.14); star.focus_mode = Control.FOCUS_NONE
+	star.add_theme_font_size_override("font_size",30)
+	for state in ["normal","hover","pressed"]: star.add_theme_stylebox_override(state,box(Color(0,0,0,.35),Color(1,1,1,.12),14))
+	style_star(star,is_favorite(id)); star.tooltip_text = "Favourite"
+	star.pressed.connect(func(): toggle_favorite(id))
 	delete_button = action(detail,"DELETE SONG",.7,.895,.96,.97,delete_selected,"small")
 
 func change_speed(step: float) -> void:
@@ -497,6 +700,7 @@ func store_song(audio_path: String, charts: Dictionary, meta: Dictionary) -> Dic
 	if not str(meta.get("title","")).is_empty(): song.title = str(meta.title)
 	if not str(meta.get("artist","")).is_empty(): song.artist = str(meta.artist)
 	song.bpm = float(any.bpm); song.album = str(meta.get("album","SSRG"))
+	if not song.has("added"): song.added = Time.get_unix_time_from_system()
 	var length = result.stream.get_length()
 	song.length = length
 	var keys: Array = song.get("ssrg",[]).duplicate()
@@ -599,6 +803,10 @@ func play(id: String, variant: String, automated: bool) -> void:
 	if game.select_song(index): launch()
 
 func _process(delta: float) -> void:
+	finish_preview_load()
+	if preview_delay >= 0:
+		preview_delay -= delta
+		if preview_delay < 0: start_preview()
 	for i in mini(ROWS_PER_FRAME,row_queue.size()):
 		var item = row_queue.pop_front()
 		song_list.add_child(item if item is Control else song_row(item))
@@ -627,6 +835,7 @@ func launch() -> void:
 	for note in notes:
 		if note.kind=="slide": note.ssrg_path=true
 	status_label.text = ""
+	stop_preview()
 	running = run
 	visible = false
 	# SSRG visuals belong only to imported SSRG playables. Keep the user's normal

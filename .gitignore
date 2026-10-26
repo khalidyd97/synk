@@ -13,3 +13,6 @@
 /.vs/
 export_credentials.cfg
 *.tmp
+
+# Private SSRG Playables login (username + password hash); bundled into local builds only.
+/local/

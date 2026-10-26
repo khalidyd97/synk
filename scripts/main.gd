@@ -781,6 +781,9 @@ func open_ssrg_playables() -> void:
 	if mode!="menu": return
 	UiMotion.transition(self)
 	lobby.visible=false
+	# Hidden lobby videos would keep decoding behind the screen; pause them while it is open.
+	for video in [lobby.home_video,lobby.background_video]:
+		if video: video.paused=true
 	ssrg_playables.open()
 	UiMotion.screen(ssrg_playables)
 
@@ -789,6 +792,8 @@ func close_ssrg_playables() -> void:
 	ssrg_playables.visible=false
 	if mode=="menu":
 		lobby.visible=true
+		var video=lobby.home_video if lobby.gateway and lobby.gateway.visible else lobby.background_video
+		if video: video.paused=false
 		UiMotion.reveal(lobby)
 
 # The audio sync helper replaces the settings page while it is open; BACK or SAVE return to it.
