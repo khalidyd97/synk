@@ -33,8 +33,26 @@ func _init() -> void :
 		add_child(ring);receptors.append(ring)
 
 
+# SSRG's bottom bar is 130 of 640 screen units tall, centred 250 units below the middle
+# (79% to 99% down the screen). Cover that same screen band on the floor, whatever the view.
+const BAND_TOP = .5 + 185.0/640.0
+const BAND_BOTTOM = .5 + 315.0/640.0
+func fit_band(world: Node3D) -> void:
+	var camera: Camera3D = world.camera
+	var size: Vector2 = camera.get_viewport().get_visible_rect().size
+	var floor_plane = Plane(Vector3.UP, .035)
+	var ends: Array = []
+	for fraction in [BAND_TOP, BAND_BOTTOM]:
+		var point = Vector2(size.x*.5, size.y*fraction)
+		var hit = floor_plane.intersects_ray(camera.project_ray_origin(point), camera.project_ray_normal(point))
+		if hit == null: return
+		ends.append(hit.z)
+	(press.mesh as PlaneMesh).size = Vector2(19.5, maxf(.5, ends[1]-ends[0]))
+	press.position.z = (ends[0]+ends[1])*.5
+
 func update(world: Node3D) -> void :
 	if not visible: return
+	fit_band(world)
 	for receptor in receptors: receptor.hide()
 	var game = world.game
 	if not (game.mode == "play" or (game.mode == "paused" and game.paused_mode == "play")): return
