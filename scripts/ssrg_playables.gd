@@ -48,13 +48,7 @@ var preview_id = ""
 # The preview's audio is read on a worker thread so tapping a song never stalls the screen.
 var preview_loader = -1
 var preview_loaded: AudioStream
-# Private login (local/ssrg_login.json, made by tools/make_ssrg_login.py and never committed):
-# when that file is bundled, the screen asks for it once per device until LOG OUT.
-const LOGIN_FILE = "res://local/ssrg_login.json"
-var login_panel: Control
-var login_user: LineEdit
-var login_pass: LineEdit
-var login_error: Label
+# LOG OUT for the game-wide sign-in (app_login.gd); shown only when that sign-in is on.
 var logout_button: Button
 # With hundreds of songs the list must stay cheap: chart details are read once per song and
 # kept, and picking a song only restyles two rows instead of rebuilding the list.
@@ -168,7 +162,6 @@ func _ready() -> void:
 	favorites = stored if stored is Array else []
 	sort_mode = str(game.prefs.get_value("ssrg","sort","GAME"))
 	if sort_mode not in SORTS: sort_mode = "GAME"
-	build_login_panel()
 	refresh_staged(); refresh_speed(); refresh_sort_button()
 
 func build_import_panel() -> void:
@@ -189,9 +182,7 @@ func build_import_panel() -> void:
 func open() -> void:
 	pending = {}; delete_armed = 0
 	visible = true
-	logout_button.visible = not login_record().is_empty()
-	login_panel.visible = not unlocked()
-	if login_panel.visible: login_error.text = ""; login_pass.text = ""
+	logout_button.visible = game.app_login != null and game.app_login.required()
 	refresh_songs()
 
 func close() -> void:
@@ -199,55 +190,10 @@ func close() -> void:
 	visible = false
 	game.close_ssrg_playables()
 
-# --- Login ---------------------------------------------------------------------------
-func login_record() -> Dictionary:
-	if not FileAccess.file_exists(LOGIN_FILE): return {}
-	var data = JSON.parse_string(FileAccess.get_file_as_string(LOGIN_FILE))
-	return data if data is Dictionary and data.has("user") and data.has("sha256") else {}
-
-func login_token(record: Dictionary) -> String:
-	return (str(record.user) + "|" + str(record.sha256)).sha256_text()
-
-func unlocked() -> bool:
-	var record = login_record()
-	return record.is_empty() or str(game.prefs.get_value("ssrg","login","")) == login_token(record)
-
-func build_login_panel() -> void:
-	login_panel = Control.new(); place(login_panel,self,0,0,1,1); login_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	var dim = ColorRect.new(); place(dim,login_panel,0,0,1,1); dim.color = Color(0.01,0.01,0.02,.94)
-	var card = panel(login_panel,.33,.16,.67,.86,Color(ACCENT,.55))
-	text(card,"SSRG PLAYABLES",.08,.04,.92,.15,26,ACCENT).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	text(card,"Sign in to continue.",.08,.15,.92,.23,15,MUTED).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	login_user = login_field(card,"Username",.27)
-	login_pass = login_field(card,"Password",.43); login_pass.secret = true
-	login_pass.text_submitted.connect(func(_t): try_login())
-	login_error = text(card,"",.08,.57,.92,.66,15,Color("ff8a8a")); login_error.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	action(card,"SIGN IN",.08,.68,.92,.8,try_login,"primary")
-	action(card,"‹  BACK",.3,.84,.7,.95,close,"small")
-	login_panel.visible = false
-
-func login_field(parent: Control, hint: String, top: float) -> LineEdit:
-	var field = LineEdit.new(); place(field,parent,.08,top,.92,top+.13)
-	field.placeholder_text = hint; field.add_theme_font_size_override("font_size",18)
-	var style = box(Color(1,1,1,.06),Color(1,1,1,.16),14); style.content_margin_left = 16
-	var focus = box(Color(1,1,1,.08),Color(ACCENT,.6),14); focus.content_margin_left = 16
-	field.add_theme_stylebox_override("normal",style); field.add_theme_stylebox_override("focus",focus)
-	return field
-
-func try_login() -> void:
-	var record = login_record()
-	if login_user.text.strip_edges() == str(record.get("user","")) and login_pass.text.sha256_text() == str(record.get("sha256","")):
-		game.prefs.set_value("ssrg","login",login_token(record)); game.prefs.save("user://preferences.cfg")
-		login_panel.visible = false; login_pass.text = ""; login_error.text = ""
-		refresh_songs()
-	else:
-		login_error.text = "Wrong username or password."; login_pass.text = ""
-
 func log_out() -> void:
 	stop_preview()
-	game.prefs.set_value("ssrg","login",""); game.prefs.save("user://preferences.cfg")
-	login_user.text = ""; login_error.text = ""
-	login_panel.visible = not unlocked()
+	close()
+	if game.app_login: game.app_login.sign_out()
 
 # --- Sort, favourites, shuffle, preview ----------------------------------------------
 func refresh_sort_button() -> void:
@@ -312,7 +258,7 @@ func schedule_preview() -> void:
 
 func start_preview() -> void:
 	var song: Dictionary = game.song_entry_for_id(selected_id)
-	if song.is_empty() or not visible or login_panel.visible: return
+	if song.is_empty() or not visible: return
 	if preview_id == selected_id and preview_player.stream != null: play_preview(); return
 	if preview_loader >= 0: return
 	var path = "user://songs/"+str(song.file); var id = selected_id

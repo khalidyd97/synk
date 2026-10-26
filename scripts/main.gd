@@ -176,6 +176,8 @@ var floating_text_input: CanvasLayer
 var ui: Control
 var lobby: Control
 var ssrg_playables: Control
+# Game-wide private sign-in (on only when local/ssrg_login.json is bundled).
+var app_login: CanvasLayer
 var chart_library: Control
 var menu_settings_open = false
 var modal: Panel
@@ -389,6 +391,7 @@ func _ready() -> void:
 	get_tree().auto_accept_quit = false
 	finish_overlay=Control.new(); finish_overlay.set_script(load("res://scripts/finish_overlay.gd")); finish_overlay.game=self
 	ui.add_child(finish_overlay)
+	app_login=preload("res://scripts/app_login.gd").new(); app_login.game=self; add_child(app_login)
 	set_mode("menu")
 	build_waveform()
 	floating_text_input=preload("res://scripts/floating_text_input.gd").new()
