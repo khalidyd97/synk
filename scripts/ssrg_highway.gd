@@ -77,13 +77,21 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 	h.age = 0.0; h.sustain_entry = sustain_entry; h.pointer_id = pointer_id; h.kind = kind
 	# SSRG flashes sit on the note itself (not where the finger landed) and face the
 	# current camera, which ANGLE/LENS may have changed since the pool was made.
-	h.node.position = Vector3(world.note_x(lane), 1.3, 0)
+	h.node.position = flash_point(world.note_x(lane))
 	h.node.rotation = world.camera.rotation
 	h.material.set_shader_parameter("opacity", 1.0)
 	h.node.visible = true; hits.append(h)
 
+# Where a flash goes: the note's point on the judgement line, pulled toward the camera along
+# the line of sight. It shows exactly on that point on screen (lifting it instead made outer
+# flashes drift off the line and look tilted) and draws in front of the track.
+const FLASH_PULL = 3.0
+func flash_point(x: float) -> Vector3:
+	var on_line = Vector3(x, .035, 0)
+	return on_line + (world.camera.global_position - on_line).normalized() * FLASH_PULL
+
 func make_hit() -> Dictionary:
-	var mesh = QuadMesh.new(); mesh.size = Vector2(13.5, 8.1)   # 1.5x: bigger SSRG hit flashes
+	var mesh = QuadMesh.new(); mesh.size = Vector2(10.1, 6.1) * .8   # 25% smaller than the 1.5x size
 	var mat = ShaderMaterial.new(); mat.shader = preload("res://scripts/ssrg_hit.gdshader"); mat.render_priority = 6
 	var node = world.mesh_node(mesh, self, mat); node.rotation = world.camera.rotation; node.visible = false
 	return {"node": node, "material": mat, "age": 0.0, "sustain_entry": {}, "pointer_id": -999, "kind": "tap"}
@@ -107,7 +115,7 @@ func _process(delta: float) -> void:
 		if held and h.age > HIT_LIFE * .55: h.age = HIT_LIFE * .25
 		if (not held and h.age >= HIT_LIFE) or game.mode not in ["play", "paused"]:
 			hits.remove_at(i); release(h); continue
-		if held: h.node.position.x = world.note_x(SynkChart.lane_at(h.sustain_entry.note, game.song_time))
+		if held: h.node.position = flash_point(world.note_x(SynkChart.lane_at(h.sustain_entry.note, game.song_time)))
 		if not imported_frames.is_empty(): h.material.set_shader_parameter("atlas",imported_frames[mini(imported_frames.size()-1,int(h.age/HIT_LIFE*imported_frames.size()))])
 	return
 	if game.live.size() != used_for_size:
