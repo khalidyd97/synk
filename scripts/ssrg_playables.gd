@@ -32,6 +32,16 @@ var import_panel: Control
 var status_label: Label
 var speed_label: Label
 var search: LineEdit
+# Category tabs: one per game folder (SSYG, SSFNC, ...) plus ALL; "" shows every game.
+var game_tabs: HBoxContainer
+var game_filter = ""
+# With hundreds of songs the list must stay cheap: chart details are read once per song and
+# kept, and picking a song only restyles two rows instead of rebuilding the list.
+var chart_cache: Dictionary = {}
+var rows: Dictionary = {}   # song id -> {"row": Button, "trash": Button}
+# Rows still to add; the list is built a few dozen rows per frame.
+var row_queue: Array = []
+const ROWS_PER_FRAME = 12
 var song_list: VBoxContainer
 var detail: Control
 var selected_id = ""
@@ -107,7 +117,10 @@ func _ready() -> void:
 		field.content_margin_left = 16; field.content_margin_right = 12
 		search.add_theme_stylebox_override(state,field)
 	search.text_changed.connect(func(_t): refresh_songs())
-	var scroll = ScrollContainer.new(); place(scroll,list_panel,.04,.13,.96,.98)
+	var tab_scroll = ScrollContainer.new(); place(tab_scroll,list_panel,.04,.125,.96,.205)
+	tab_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	game_tabs = HBoxContainer.new(); tab_scroll.add_child(game_tabs); game_tabs.add_theme_constant_override("separation",8)
+	var scroll = ScrollContainer.new(); place(scroll,list_panel,.04,.22,.96,.98)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	preload("res://scripts/drag_scroll.gd").attach(scroll)
 	song_list = VBoxContainer.new(); scroll.add_child(song_list)
@@ -160,6 +173,11 @@ func ssrg_songs() -> Array:
 
 func charts_for(id: String) -> Array:
 	# [{keys, variant, notes, density, length}] for each saved key count, fewest keys first.
+	if chart_cache.has(id): return chart_cache[id]
+	# Songs imported by this version carry a summary, so the chart files need not be read.
+	var entry: Dictionary = game.song_entry_for_id(id)
+	if entry.get("ssrg_charts") is Array and not entry.ssrg_charts.is_empty():
+		chart_cache[id] = entry.ssrg_charts; return chart_cache[id]
 	var result: Array = []
 	for count in [4,7,13]:
 		var variant = Levels.key(count)
@@ -170,6 +188,7 @@ func charts_for(id: String) -> Array:
 		if not notes is Array or notes.is_empty(): continue
 		var span = maxf(1.0,float(notes[-1].time)-float(notes[0].time))
 		result.append({"keys":count,"variant":variant,"notes":notes.size(),"density":notes.size()/span,"bpm":float(data.get("bpm",0))})
+	chart_cache[id] = result
 	return result
 
 func best(id: String, variant: String) -> Dictionary:
@@ -181,16 +200,29 @@ func song_length(song: Dictionary) -> float:
 	return float(meta.get("duration",song.get("length",0.0)))
 
 func refresh_songs() -> void:
-	for child in song_list.get_children(): child.queue_free()
+	for child in song_list.get_children():
+		song_list.remove_child(child); child.queue_free()
+	rows.clear(); row_queue.clear()
 	var query = search.text.strip_edges().to_lower()
-	var songs = ssrg_songs()
+	var all_songs = ssrg_songs()
+	refresh_game_tabs(all_songs)
+	# Grouped by game folder, A to Z, then by title; a heading starts each game.
+	var songs = all_songs.filter(func(s): return game_filter.is_empty() or category(s) == game_filter)
+	songs.sort_custom(func(a, b): return [category(a), str(a.title).to_lower()] < [category(b), str(b.title).to_lower()])
 	if not songs.any(func(s): return str(s.id)==selected_id): selected_id = str(songs[0].id) if not songs.is_empty() else ""
 	var shown = 0
+	var heading = null
 	for song in songs:
 		var haystack = " ".join([str(song.title),str(song.get("artist","")),str(song.get("album",""))]).to_lower()
 		if not query.is_empty() and not haystack.contains(query): continue
+		if category(song) != heading:
+			heading = category(song)
+			var count = songs.filter(func(x): return category(x) == heading).size()
+			var label = Label.new(); label.text = "%s  ·  %d" % [heading, count]
+			label.add_theme_font_size_override("font_size",15); label.add_theme_color_override("font_color",ACCENT)
+			row_queue.append(label)
 		shown += 1
-		song_list.add_child(song_row(song))
+		row_queue.append(song)
 	if shown == 0:
 		var empty = Label.new(); empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		empty.text = "No SSRG songs yet.\nTap + IMPORT SONG to add one." if songs.is_empty() else "No songs match your search."
@@ -198,20 +230,44 @@ func refresh_songs() -> void:
 		song_list.add_child(empty)
 	refresh_detail()
 
+# The game folder a song was scanned from; songs added with + FILES go under IMPORTED.
+func category(song: Dictionary) -> String:
+	var album = str(song.get("album","")).strip_edges()
+	return "IMPORTED" if album.is_empty() or album == "SSRG" else album.to_upper()
+
+func refresh_game_tabs(songs: Array) -> void:
+	for child in game_tabs.get_children(): child.queue_free()
+	var names: Array = []
+	for song in songs:
+		if category(song) not in names: names.append(category(song))
+	names.sort()
+	if game_filter not in names: game_filter = ""
+	if names.size() < 2 and game_filter.is_empty(): return
+	for name in [""] + names:
+		var tab = Action.new(); tab.text = "ALL" if name.is_empty() else name; tab.caption_size = 15
+		tab.primary = name == game_filter; tab.custom_minimum_size = Vector2(maxf(84, tab.text.length()*11+36), 38)
+		tab.pressed.connect(func(): game_filter = name; refresh_songs())
+		game_tabs.add_child(tab)
+
 func song_row(song: Dictionary) -> Control:
 	var id = str(song.id)
 	var row = Button.new(); row.custom_minimum_size = Vector2(0,92); row.focus_mode = Control.FOCUS_NONE
 	var selected = id == selected_id
-	var normal = box(Color(1,1,1,.09) if selected else Color(1,1,1,.035),Color(ACCENT,.7) if selected else Color(1,1,1,.06),16)
-	for state in ["normal","hover","pressed","focus"]: row.add_theme_stylebox_override(state,normal)
+	style_row(row,selected)
 	row.pressed.connect(func():
 		if Action.was_dragged(row): return
-		selected_id = id; selected_variant = ""; delete_armed = 0; refresh_songs())
-	var cover = TextureRect.new(); row.add_child(cover)
-	cover.position = Vector2(12,12); cover.size = Vector2(68,68)
-	cover.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; cover.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	cover.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	cover.texture = game.lobby.cover_for(id); game.lobby.style_cover(cover,id,12)
+		select_song(id))
+	# Real album art when the song has it, otherwise a flat tile in the song's hue (no shader).
+	if game.has_custom_cover(id):
+		var cover = TextureRect.new(); row.add_child(cover)
+		cover.position = Vector2(12,12); cover.size = Vector2(68,68)
+		cover.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; cover.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		cover.mouse_filter = Control.MOUSE_FILTER_IGNORE; cover.texture = game.cover_texture_for_id(id)
+	else:
+		var tile = Panel.new(); row.add_child(tile); tile.position = Vector2(12,12); tile.size = Vector2(68,68)
+		tile.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var hue = float(posmod(id.hash(),360))/360.0
+		tile.add_theme_stylebox_override("panel",box(Color.from_hsv(hue,.6,.5),Color.from_hsv(hue,.5,.85),12))
 	var title = Label.new(); row.add_child(title); title.position = Vector2(96,6); title.size = Vector2(260,30)
 	title.text = str(song.title); title.clip_text = true; title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	title.add_theme_font_size_override("font_size",20)
@@ -232,14 +288,34 @@ func song_row(song: Dictionary) -> Control:
 			var rank = Label.new(); rank.text = str(record.get("rank","")); rank.add_theme_font_size_override("font_size",13)
 			rank.add_theme_color_override("font_color",MUTED); chips.add_child(rank)
 	# Delete right from the list: tap ✕, then tap DELETE? to confirm.
-	var armed = row_armed_id == id and delete_armed > 0
-	var trash = action(row,"DELETE?" if armed else "✕",.8 if armed else .88,.25,.97,.75,func():
-		if Action.was_dragged(row): return
-		if row_armed_id == id and delete_armed > 0: delete_song(id)
-		else:
-			row_armed_id = id; delete_armed = 3.0; refresh_songs(),"small")
+	# A plain button (no per-frame animation), so hundreds of rows cost nothing while idle.
+	var trash = Button.new(); place(trash,row,.86,.25,.97,.75); trash.text = "✕"; trash.focus_mode = Control.FOCUS_NONE
+	trash.add_theme_font_size_override("font_size",15)
+	for state in ["normal","hover","pressed"]: trash.add_theme_stylebox_override(state,box(Color(1,1,1,.05 if state=="normal" else .12),Color(1,1,1,.14),14))
 	trash.tooltip_text = "Delete this song"
+	trash.pressed.connect(func():
+		if Action.was_dragged(row): return
+		if row_armed_id == id and delete_armed > 0: delete_song(id); return
+		disarm_row()
+		row_armed_id = id; delete_armed = 3.0
+		trash.text = "DELETE?"; trash.anchor_left = .74)
+	rows[id] = {"row":row,"trash":trash}
 	return row
+
+func style_row(row: Button, selected: bool) -> void:
+	var normal = box(Color(1,1,1,.09) if selected else Color(1,1,1,.035),Color(ACCENT,.7) if selected else Color(1,1,1,.06),16)
+	for state in ["normal","hover","pressed","focus"]: row.add_theme_stylebox_override(state,normal)
+
+func select_song(id: String) -> void:
+	if rows.has(selected_id): style_row(rows[selected_id].row,false)
+	selected_id = id; selected_variant = ""; delete_armed = 0; disarm_row()
+	if rows.has(id): style_row(rows[id].row,true)
+	refresh_detail()
+
+func disarm_row() -> void:
+	if rows.has(row_armed_id) and is_instance_valid(rows[row_armed_id].trash):
+		rows[row_armed_id].trash.text = "✕"; rows[row_armed_id].trash.anchor_left = .86
+	row_armed_id = ""
 
 func refresh_detail() -> void:
 	for child in detail.get_children(): child.queue_free()
@@ -333,7 +409,7 @@ func delete_selected() -> void:
 	delete_song(selected_id)
 
 func delete_song(id: String) -> void:
-	delete_armed = 0; row_armed_id = ""
+	delete_armed = 0; row_armed_id = ""; chart_cache.erase(id)
 	var title = ""
 	for s in ssrg_songs():
 		if str(s.id) == id: title = str(s.title)
@@ -436,6 +512,8 @@ func store_song(audio_path: String, charts: Dictionary, meta: Dictionary) -> Dic
 		if int(count) not in keys: keys.append(int(count))
 		saved += 1
 	keys.sort(); song.ssrg = keys
+	chart_cache.erase(id); song.erase("ssrg_charts")
+	song.ssrg_charts = charts_for(id)
 	SynkLibrary.atomic_write(library.root_path.path_join("songs/library.json"),library.songs)
 	game.song_metadata.erase(id)
 	var art = str(meta.get("background",""))
@@ -521,12 +599,15 @@ func play(id: String, variant: String, automated: bool) -> void:
 	if game.select_song(index): launch()
 
 func _process(delta: float) -> void:
+	for i in mini(ROWS_PER_FRAME,row_queue.size()):
+		var item = row_queue.pop_front()
+		song_list.add_child(item if item is Control else song_row(item))
 	if not scan_queue.is_empty(): import_next_scanned()
 	if delete_armed > 0:
 		delete_armed -= delta
 		if delete_armed <= 0:
 			if delete_button and is_instance_valid(delete_button): delete_button.text = "DELETE SONG"
-			if not row_armed_id.is_empty(): row_armed_id = ""; refresh_songs()
+			disarm_row()
 	if not running.is_empty():
 		if game.mode == "results" and not running.get("recorded",false):
 			running.recorded = true; record_result()
