@@ -21,6 +21,8 @@ func run() -> void:
 	check(is_equal_approx(game.note_travel_seconds(),1.17),"Shared travel uses note speed")
 	check(world.ssrg_theme.original_stage.receptors[0].mesh!=null,"Receptors have visible geometry")
 	world.ssrg_theme.original_stage.update(world)
+	check(not world.ssrg_theme.original_stage.receptors.any(func(n):return n.visible),"Receptors wait until a note is midway down")
+	game.song_time=2.85; world.ssrg_theme.original_stage.update(world)
 	check(world.ssrg_theme.original_stage.receptors.any(func(n):return n.visible),"Approaching notes reveal a receptor")
 	var holder=Node3D.new(); world.add_child(holder)
 	var head=world.make_ssrg_cap(holder,Vector3.ZERO,1)

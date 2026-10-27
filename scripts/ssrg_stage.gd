@@ -62,6 +62,13 @@ func update(world: Node3D) -> void :
 	if not (game.mode == "play" or (game.mode == "paused" and game.paused_mode == "play")): return
 	var now: float = world.render_time()
 	var travel: float = game.note_travel_seconds()
+	# As in SSRG: a receptor lights for a blue tap or the head of a yellow note (not connectors
+	# or ends), from when that note passes the middle of the screen to when it reaches the line.
+	var camera: Camera3D = world.camera
+	var top = camera.unproject_position(Vector3(0, .13, -100000)).y
+	var line = camera.unproject_position(Vector3(0, .13, 0)).y
+	var midway = clampf((camera.get_viewport().get_visible_rect().size.y * .5 - top) / maxf(1.0, line - top), 0.0, .95)
+	var k: float = world.SSRG_APPROACH_K
 	var targets: Dictionary = {}
 	var indexed = false
 	var candidates: Variant = range(game.first_live_index(), game.live.size())
@@ -72,21 +79,15 @@ func update(world: Node3D) -> void :
 		if float(note.time) > now + travel:
 			if not indexed: break
 			continue
+		if entry.get("started", false): continue
 		var at = float(note.time)
-		var span = travel
 		var lane = float(note.lane)
-		if entry.get("started", false):
-			if note.kind not in ["hold", "slide"]: continue
-			var checks: Array = note.get("checkpoints", [])
-			var next = int(entry.get("checks_done", 0))
-			at = float(note.time) + (float(checks[next]) if next < checks.size() else float(note.duration))
-			var previous = float(note.time) + (float(checks[next - 1]) if next > 0 else 0.0)
-			span = minf(travel, maxf(0.001, at - previous))
-			lane = SynkChart.lane_at(note, at)
-		if at - now > span: continue
+		# Where the note is drawn: progress p from the vanishing point (0) to the line (1).
+		var p = (pow(k, clampf(1.0 - (at - now) / travel, 0.0, 1.0)) - 1.0) / (k - 1.0)
+		if p < midway: continue
 		var slot = clampi(roundi(lane / float(SynkChart.MAX_LANE) * (game.gameplay_lane_count()-1)), 0, game.gameplay_lane_count()-1)
 		if targets.has(slot) and targets[slot].at <= at: continue
-		targets[slot] = {"at": at, "lane": lane, "progress": clampf(1.0 - (at - now) / span, 0.0, 1.0)}
+		targets[slot] = {"at": at, "lane": lane, "progress": clampf((p - midway) / (1.0 - midway), 0.0, 1.0)}
 	for slot in targets:
 		var target: Dictionary = targets[slot]
 		var receptor: MeshInstance3D = receptors[slot]

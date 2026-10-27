@@ -87,6 +87,8 @@ var hold_pulse_time = 0.0
 var max_combo = 0
 var earned = 0.0
 var judged = 0
+# Slides completed by an early lift flash at their end puck once it reaches the line: {at, note}.
+var pending_end_hits: Array = []
 var flash = 0.0
 var flash_lane = 6
 var judgement = ""
@@ -1116,6 +1118,7 @@ func start_game(notes: Array,automated: bool = false,section: String = "",is_pra
 	last_section=section if not section.is_empty() else play_mode
 	if not section_available(last_section): last_section="full"
 	play_range=section_range(last_section)
+	pending_end_hits.clear()
 	var sorted=notes.duplicate(true); sorted.sort_custom(func(a,b): return a.time<b.time)
 	sorted=sorted.filter(func(n): return float(n.time)>=play_range.x-.001 and float(n.time)<play_range.y)
 	for n in sorted:
@@ -1959,6 +1962,11 @@ func tail_error(entry: Dictionary) -> float:
 	return minf(float(entry.get("error",0.0)),extras.great_window())
 
 func update_game() -> void:
+	for i in range(pending_end_hits.size()-1,-1,-1):
+		var pending: Dictionary=pending_end_hits[i]
+		if song_time<float(pending.at): continue
+		field.world.spawn_hit(SynkChart.lane_at(pending.note,float(pending.at)),"slide")
+		pending_end_hits.remove_at(i)
 	for live_index in range(first_live_index(),live.size()):
 		var entry: Dictionary=live[live_index]
 		if float(entry.note.time)>song_time+.23: break
@@ -2002,7 +2010,11 @@ func judge(entry: Dictionary,error: float,complete: bool = true) -> void:
 		timing_samples.append({"time":float(entry.note.time),"ms":ms})
 		timing_label.text="ON TIME" if absf(ms)<=10 else ("EARLY %d ms" if ms<0 else "LATE %d ms") % roundi(absf(ms))
 		timing_label.add_theme_color_override("font_color",Color("65dcff") if ms<0 else Color("ff82d2"))
-	if error>=0: field.world.spawn_hit(SynkChart.lane_at(entry.note,song_time),str(entry.note.kind),int(entry.note.direction),entry if entry.note.kind=="hold" and not complete else {},int(entry.get("pointer",-999)))
+	var end_at=float(entry.note.time)+float(entry.note.duration)
+	# An early lift completes a slide before its end reaches the line; flashing then would land
+	# on the head's flash, so the end flashes on its own puck when it gets there.
+	if error>=0 and entry.note.kind=="slide" and song_time<end_at: pending_end_hits.append({"at":end_at,"note":entry.note})
+	elif error>=0: field.world.spawn_hit(SynkChart.lane_at(entry.note,song_time),str(entry.note.kind),int(entry.note.direction),entry if entry.note.kind=="hold" and not complete else {},int(entry.get("pointer",-999)))
 	else: field.world.shake_on_miss()
 	if error<0 and entry.note.kind in ["slide","hold"]:
 		entry.missed_at=song_time
