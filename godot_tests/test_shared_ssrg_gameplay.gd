@@ -32,7 +32,7 @@ func run() -> void:
 	check(head.material_override.get_shader_parameter("artwork").resource_path.ends_with("imported/hold.png"),"Hold uses extracted yellow artwork")
 	for i in 35: world.ssrg_theme.spawn(4,"tap",{},-999)
 	check(world.ssrg_theme.hits.size()==35,"Dense hits do not evict preceding effects")
-	check(world.ssrg_theme.sustain_frames.size()==11,"Both effect frame sets are available")
+	check(world.ssrg_theme.special_frames.size()==11,"Special-event artwork remains available")
 	game.paused_mode="play"; game.set_mode("paused")
 	check(game.uses_ssrg_gameplay(),"Pause keeps the shared stage")
 	game.set_mode("record")

@@ -1,12 +1,15 @@
 extends Node3D
-# SSRG highway style (Settings > Highway style > SSRG): a Superstar-inspired stage drawn with
-# SYNK's own art (assets/ssrg, made by tools/ssrg_art/generate.py).
+# Shared gameplay stage using the recovered SSRG artwork and 2D projection.
 #   - the song's photo at full brightness behind a see-through track with solid white rails
 #   - grey target rings on the chart's lanes that turn white as a note arrives
 #   - a thin light line up each lane while a finger holds it
-#   - hit effects played from an 11-frame flash sheet (gold star sheet on PERFECT)
+#   - ordinary hits use the original 11-frame A sequence at 33 frames per second
 # Only in play; the recorder keeps its own look.
-const HIT_LIFE = .42
+# Packaged NoteCoolbomb / NoteCoolbomb_Star: Current 0..11 at 33 frames/s.
+# Frame 11 is the terminal hide boundary, not a twelfth image.
+const HIT_FPS = 33.0
+const HIT_LIFE = 11.0/HIT_FPS
+const HOLD_RETRIGGER = HIT_LIFE*.3
 const LOOKAHEAD = .55
 var world: Node3D
 var floor_node: MeshInstance3D
@@ -22,14 +25,14 @@ var hits: Array = []
 var active = false
 var original_stage: Node3D
 var imported_frames: Array[Texture2D] = []
-var sustain_frames: Array[Texture2D] = []
+var special_frames: Array[Texture2D] = []
 
 func _ready() -> void:
 	for index in range(1,12):
 		var path="res://assets/ssrg/imported/Effect_A_%02d.png" % index
 		if ResourceLoader.exists(path): imported_frames.append(load(path))
-		var sustain_path="res://assets/ssrg/imported/Effect_B_%02d.png" % index
-		if ResourceLoader.exists(sustain_path): sustain_frames.append(load(sustain_path))
+		var special_path="res://assets/ssrg/imported/Effect_B_%02d.png" % index
+		if ResourceLoader.exists(special_path): special_frames.append(load(special_path))
 	original_stage=preload("res://scripts/ssrg_stage.gd").new(); add_child(original_stage)
 	var w = world
 	var half = w.FRAME_HALF_WIDTH
@@ -74,8 +77,8 @@ func refresh() -> void:
 # --- Hit effects ---------------------------------------------------------------------
 func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int) -> void:
 	var h: Dictionary = hit_pool.pop_back() if not hit_pool.is_empty() else make_hit()
-	var perfect = str(world.game.judgement) == "PERFECT"
-	var frames=sustain_frames if kind in ["hold","slide"] and not sustain_frames.is_empty() else imported_frames
+	# B belongs to source special event/item notes. Ordinary taps and sustains use A.
+	var frames=imported_frames
 	h.frames=frames
 	if not frames.is_empty(): h.material.set_shader_parameter("atlas", frames[0])
 	h.age = 0.0; h.sustain_entry = sustain_entry; h.pointer_id = pointer_id; h.kind = kind
@@ -103,6 +106,11 @@ func make_hit() -> Dictionary:
 func release(h: Dictionary) -> void:
 	h.node.visible = false; hit_pool.append(h)
 
+func clear_hits() -> void:
+	for hit in hits+hit_pool:
+		hit.node.hide();hit.node.queue_free()
+	hits.clear();hit_pool.clear()
+
 func prefill(count: int = 16) -> void:
 	while hit_pool.size() + hits.size() < count: hit_pool.append(make_hit())
 
@@ -111,17 +119,18 @@ func _process(delta: float) -> void:
 	original_stage.update(world)
 	var game = world.game
 	var playing = game.mode == "play"
-	# Hits: play the sheet once; held notes loop the middle frames and follow the finger.
+	# Source RenderLongCoolbombTouch rewinds after normalized time > .3.
+	# Independent tap instances intentionally preserve SYNK's uninterrupted dense-hit flow.
 	for i in range(hits.size() - 1, -1, -1):
 		var h: Dictionary = hits[i]
 		var held = not h.sustain_entry.is_empty() and not h.sustain_entry.done
 		if playing: h.age += delta
-		if held and h.age > HIT_LIFE * .55: h.age = HIT_LIFE * .25
+		if playing and held and h.age > HOLD_RETRIGGER: h.age = 0.0
 		if (not held and h.age >= HIT_LIFE) or game.mode not in ["play", "paused"]:
 			hits.remove_at(i); release(h); continue
 		if held: h.node.position = flash_point(world.note_x(SynkChart.lane_at(h.sustain_entry.note, game.song_time)))
 		var frames: Array=h.get("frames",imported_frames)
-		if not frames.is_empty(): h.material.set_shader_parameter("atlas",frames[mini(frames.size()-1,int(h.age/HIT_LIFE*frames.size()))])
+		if not frames.is_empty(): h.material.set_shader_parameter("atlas",frames[mini(frames.size()-1,int(h.age*HIT_FPS))])
 	return
 	if game.live.size() != used_for_size:
 		used_for_size = game.live.size(); used_lanes.clear()

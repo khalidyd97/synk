@@ -15,6 +15,7 @@ func _init() -> void :
 		rail.rotation_degrees.x=-90
 		if side>0: rail.scale.x=-1
 		var mat=ShaderMaterial.new(); mat.shader=preload("res://scripts/ssrg_stage.gdshader")
+		mat.render_priority=-7
 		mat.set_shader_parameter("artwork",preload("res://assets/ssrg/imported/rail_original.png"))
 		mat.set_shader_parameter("along_rail",false)
 		rail.material_override=mat; add_child(rail); rails.append(rail)
@@ -22,7 +23,7 @@ func _init() -> void :
 	plane.size=Vector2(1156,130)*UNIT; press.mesh=plane
 	press.position=Vector3(-5*UNIT,.035,16*UNIT)
 	var mat=ShaderMaterial.new(); mat.shader=preload("res://scripts/ssrg_press.gdshader")
-	mat.set_shader_parameter("base_color",Color(.08,.08,.09)); mat.render_priority=-3
+	mat.set_shader_parameter("base_color",Color(.08,.08,.09)); mat.render_priority=-8
 	press.material_override=mat; add_child(press)
 	for lane in 13:
 		var ring = MeshInstance3D.new(); var disc = QuadMesh.new();disc.size = Vector2(212.0, 116.0)*9.75/512.0   # SSRG guide sprite size
@@ -30,7 +31,7 @@ func _init() -> void :
 		ring.name = "Receptor" + str(receptors.size() + 1);ring.position = Vector3(0, 0.2, 0);ring.visible = false
 		var material = ShaderMaterial.new();material.shader = preload("res://scripts/ssrg_receptor.gdshader")
 		material.set_shader_parameter("artwork",preload("res://assets/ssrg/imported/guide_original.png"))
-		material.render_priority = -2
+		material.render_priority = -5
 		ring.material_override = material;ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(ring);receptors.append(ring)
 

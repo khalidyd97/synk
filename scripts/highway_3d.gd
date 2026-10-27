@@ -496,7 +496,7 @@ func build_effects() -> void:
 	# Original atlas material uses SrcAlpha/OneMinusSrcAlpha, not additive glow.
 	ssrg_finger_beam_material=ShaderMaterial.new()
 	ssrg_finger_beam_material.shader=preload("res://scripts/ssrg_beam.gdshader")
-	ssrg_finger_beam_material.render_priority=2
+	ssrg_finger_beam_material.render_priority=-6
 	ssrg_finger_beam_material.set_shader_parameter("ssrg_beam_reach",SSRG_BEAM_REACH)
 	ssrg_finger_beam_material.set_shader_parameter("ssrg_beam_art",preload("res://assets/ssrg/imported/beam_original.png"))
 	ssrg_finger_beam_material.set_shader_parameter("tint",element_color("beams",Color(0,.7843137383,1)))
@@ -873,6 +873,7 @@ func modifier_hides(z: float) -> bool:
 
 func clear_hit_effects() -> void:
 	# Pooled effects for the previous chart are freed; prefill_hits builds the next set.
+	if ssrg_theme: ssrg_theme.clear_hits()
 	for burst in bursts+hit_pool: burst.node.queue_free()
 	bursts.clear(); hit_pool.clear()
 
@@ -1128,8 +1129,9 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 	var solid=game.trail_style=="solid" or (game.uses_ssrg_gameplay() and not recording)
 	var trail_material: ShaderMaterial
 	if solid:
-		trail_material=shared("solid_trail|%s|%s" % [trail_color(palette),half_width], func():
+		trail_material=shared("solid_trail|%s|%s|%s" % [trail_color(palette),half_width,game.uses_ssrg_gameplay() and not recording], func():
 			var m=ShaderMaterial.new(); m.shader=preload("res://scripts/solid_trail.gdshader")
+			if game.uses_ssrg_gameplay() and not recording: m.render_priority=-4
 			m.set_shader_parameter("tint",trail_color(palette)); m.set_shader_parameter("ssrg_half_width",half_width); return m)
 	else:
 		var still = note.kind=="hold"
@@ -1236,7 +1238,11 @@ func build_note_node(key: String, note: Dictionary, recording = false) -> void:
 	var signature = (hash(note) if recording or game.mode=="record" else 0)^hash([game.note_speed,game.note_shape,game.note_size,game.hold_trail_width,game.trail_style,game.uses_ssrg_gameplay()])
 	if game.uses_ssrg_gameplay() and not recording:
 		for child in node.get_children():
-			if child is GeometryInstance3D: child.extra_cull_margin=TRACK_LENGTH+SSRG_STAGE_DISTANCE
+			if child is GeometryInstance3D:
+				child.extra_cull_margin=TRACK_LENGTH+SSRG_STAGE_DISTANCE
+				# Native batch order: heads 20,000,000-100*Id; lines
+				# 10,000,000-100*Id. Farther notes draw first on this flat canvas.
+				child.sorting_offset=-(float(note.time)+float(child.get_meta("checkpoint_offset",0.0)))
 	var own_materials: Array = []
 	for ref in animated_materials.slice(first_material):
 		var m = ref.get_ref()
