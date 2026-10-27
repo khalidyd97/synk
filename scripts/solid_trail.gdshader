@@ -7,9 +7,12 @@ uniform float ghost_fade=1.0;
 uniform float desaturate=0.0;
 uniform bool joint=false;
 varying float world_z;
+#include "res://scripts/ssrg_warp.gdshaderinc"
 void vertex(){
+    // world_z stays the linear track position, so clip_z and the far fade are unchanged.
+    world_z=(MODEL_MATRIX*vec4(VERTEX,1.0)).z;
+    VERTEX=joint?ssrg_warp_rigid(VERTEX,MODEL_MATRIX):ssrg_warp_vertex(VERTEX,MODEL_MATRIX);
     rail_position=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz;
-    world_z=rail_position.z;
 }
 void fragment(){
     if(outside_rails(INV_VIEW_MATRIX[3].xyz) || world_z>clip_z) discard;

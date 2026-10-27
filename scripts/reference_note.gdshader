@@ -20,7 +20,9 @@ const float GLOW_LOOPS_PER_SECOND = 2.2;
 global uniform float synk_time;
 varying float world_z;
 varying float centre_z;
-void vertex(){ world_z=(MODEL_MATRIX*vec4(VERTEX,1.0)).z; centre_z=MODEL_MATRIX[3].z; }
+#include "res://scripts/ssrg_warp.gdshaderinc"
+// world_z and centre_z stay linear track positions for clipping, fading and the glow.
+void vertex(){ world_z=(MODEL_MATRIX*vec4(VERTEX,1.0)).z; centre_z=MODEL_MATRIX[3].z; VERTEX=ssrg_warp_rigid(VERTEX,MODEL_MATRIX); }
 // Rotate hue only: value, saturation, white highlights and source alpha survive intact.
 vec3 rgb_to_hsv(vec3 c){
     vec4 k=vec4(0.0,-1.0/3.0,2.0/3.0,-1.0);

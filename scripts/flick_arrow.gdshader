@@ -12,7 +12,8 @@ float segment_distance(vec2 p, vec2 a, vec2 b) {
     return length(p-a-edge*clamp(dot(p-a,edge)/dot(edge,edge),0.0,1.0));
 }
 
-void vertex(){rail_position=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz;}
+#include "res://scripts/ssrg_warp.gdshaderinc"
+void vertex(){VERTEX=ssrg_warp_rigid(VERTEX,MODEL_MATRIX); rail_position=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz;}
 
 void fragment() {
 	if(outside_rails(INV_VIEW_MATRIX[3].xyz)) discard;

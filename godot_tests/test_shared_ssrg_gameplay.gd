@@ -6,7 +6,7 @@ func _initialize() -> void: run.call_deferred()
 func run() -> void:
 	var game=load("res://scenes/main.tscn").instantiate(); root.add_child(game)
 	await process_frame; await process_frame
-	game.stage_intro_enabled=false; game.note_speed=1
+	game.stage_intro_enabled=false; game.note_speed=1; game.note_size=1.0; game.recorder_note_speed=1
 	var slide=SynkChart.note(4,2,"slide"); slide.duration=1; slide.end_lane=7
 	slide.path=[{"offset":0.0,"lane":2.0},{"offset":.5,"lane":6.0},{"offset":1.0,"lane":7.0}]
 	var notes=[SynkChart.note(3,4),slide]
@@ -18,7 +18,7 @@ func run() -> void:
 	check(game.gameplay_lane_count()==10,"Normal charts retain 10 unique lanes")
 	check(game.live[1].note.get("ssrg_path",false),"Runtime slides use straight connectors")
 	check(not slide.has("ssrg_path"),"Original chart data stays intact")
-	check(is_equal_approx(game.note_travel_seconds(),1.07),"Shared travel uses note speed")
+	check(is_equal_approx(game.note_travel_seconds(),1.17),"Shared travel uses note speed")
 	check(world.ssrg_theme.original_stage.receptors[0].mesh!=null,"Receptors have visible geometry")
 	world.ssrg_theme.original_stage.update(world)
 	check(world.ssrg_theme.original_stage.receptors.any(func(n):return n.visible),"Approaching notes reveal a receptor")

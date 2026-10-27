@@ -156,6 +156,23 @@ func note_x(lane: float) -> float:
 # Notes travel the whole 60-unit track, from the far end to the judgement bar.
 func visible_length() -> float: return TRACK_LENGTH
 func travel_speed() -> float: return TRACK_LENGTH / game.note_travel_seconds()
+# SSRG notes leave the vanishing point and speed up on the way down, K times faster at the
+# line than at the top: p = (K^u - 1)/(K - 1), fitted to tracked notes in SSRG footage.
+const SSRG_APPROACH_K = 3.3
+# Depth constant Z of the current camera: a point at track z draws at p = Z/(Z - z).
+func ssrg_camera_depth() -> float:
+	var forward = -camera.global_transform.basis.z
+	return (Vector3(0,.13,0)-camera.global_position).dot(forward)/maxf(.001,-forward.z)
+# Mirrors ssrg_warp_z() in ssrg_warp.gdshaderinc for code that projects notes itself.
+func ssrg_warped_z(z: float) -> float:
+	if not game.uses_ssrg_gameplay(): return z
+	var k = SSRG_APPROACH_K; var depth = ssrg_camera_depth()
+	if z >= 0.0: return z*depth*k*log(k)/((k-1.0)*TRACK_LENGTH)
+	var p = maxf((pow(k,maxf(1.0+z/TRACK_LENGTH,0.0))-1.0)/(k-1.0),.012)
+	return depth*(1.0-1.0/p)
+func update_ssrg_warp() -> void:
+	var on = 1.0 if game != null and game.uses_ssrg_gameplay() else 0.0
+	RenderingServer.global_shader_parameter_set("ssrg_warp",Vector4(on,SSRG_APPROACH_K,ssrg_camera_depth(),TRACK_LENGTH))
 func render_time() -> float:
 	return game.visual_song_time if game.audio.playing and game.mode in ["play","record"] and game.countdown<=0 and game.resume_countdown<=0 else game.song_time
 func note_position(lane: float, chart_time: float) -> Vector3:
@@ -852,6 +869,7 @@ func animate_effects(delta: float) -> void:
 	if running: animation_time += delta
 	# Every highway shader reads this one global clock (project setting shader_globals/synk_time).
 	RenderingServer.global_shader_parameter_set("synk_time",animation_time)
+	update_ssrg_warp()
 	# Settings read once per frame, not once per burst or particle.
 	animate_blooms(delta, running)
 	var hit_intensity=game.features.effect("Hit flashes")
