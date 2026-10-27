@@ -159,6 +159,7 @@ func travel_speed() -> float: return TRACK_LENGTH / game.note_travel_seconds()
 # SSRG notes leave the vanishing point and speed up on the way down, K times faster at the
 # line than at the top: p = (K^u - 1)/(K - 1), fitted to tracked notes in SSRG footage.
 const SSRG_APPROACH_K = 3.3
+const SSRG_NOTE_WIDTH_SCALE = .78
 # Depth constant Z of the current camera: a point at track z draws at p = Z/(Z - z).
 func ssrg_camera_depth() -> float:
 	var forward = -camera.global_transform.basis.z
@@ -982,9 +983,10 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 		m.set_shader_parameter("core_tint",Color("4fc8ff") if palette==0 else Color("ffc23a")); return m)
 	var mesh_key = "ssrg|%s|%s|%s" % [size, tail, palette]
 	if not reference_note_meshes.has(mesh_key):
-		# About 11% of the screen width at the line and flat, as in SSRG footage.
+		# SSRG draws its 212x116 sprite narrower than the art: tracked notes in gameplay footage
+		# are 0.78 of its width at full height (about 2.1:1 on screen, not the art's 2.7:1).
 		var quad = QuadMesh.new()
-		quad.size = Vector2(art.get_width(),art.get_height())*SSRG_UNIT*game.note_size*(.6 if tail else 1.0)
+		quad.size = Vector2(art.get_width()*SSRG_NOTE_WIDTH_SCALE,art.get_height())*SSRG_UNIT*game.note_size*(.6 if tail else 1.0)
 		reference_note_meshes[mesh_key]=quad
 	var head = mesh_node(reference_note_meshes[mesh_key],parent,mat)
 	head.position = Vector3(position_value.x,.36*size,position_value.z)
