@@ -30,7 +30,12 @@ void vertex(){
     rail_position=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz;
 }
 void fragment(){
-    if(outside_rails(INV_VIEW_MATRIX[3].xyz) || world_z>clip_z) discard;
+    if(outside_rails(INV_VIEW_MATRIX[3].xyz)) discard;
+    if(ssrg_warp.x>0.5){
+        // Clip on the drawn judgment plane, not interpolated obsolete timing Z.
+        if(rail_position.z>ssrg_warp_z(clip_z)) discard;
+        if(rail_position.z<ssrg_warp.z*(pow(0.5,ssrg_warp.y)-1.0)) discard;
+    }else if(world_z>clip_z) discard;
     vec3 color=tint*.87;
     float opacity=.8;
     if(!joint){
@@ -48,5 +53,5 @@ void fragment(){
     }
     float gray=dot(color,vec3(.299,.587,.114));
     ALBEDO=mix(color,vec3(gray*.6),desaturate);
-    ALPHA=opacity*ghost_fade*smoothstep(-60.0,-55.0,world_z)*ssrg_reveal(world_z);
+    ALPHA=opacity*ghost_fade*(ssrg_warp.x>0.5?1.0:smoothstep(-60.0,-55.0,world_z));
 }

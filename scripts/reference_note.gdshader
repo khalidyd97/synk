@@ -36,7 +36,7 @@ vec3 hsv_to_rgb(vec3 c){
     return c.z*mix(vec3(1.0),clamp(p-1.0,0.0,1.0),c.y);
 }
 void fragment(){
-    if(world_z>clip_z) discard;
+    if((ssrg_warp.x>0.5?centre_z:world_z)>clip_z) discard;
     vec4 art=texture(artwork,UV);
     vec3 hsv=rgb_to_hsv(art.rgb);
     hsv.x=fract(hsv.x+hue_shift);

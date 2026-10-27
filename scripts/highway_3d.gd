@@ -176,6 +176,7 @@ func update_ssrg_warp() -> void:
 	var on = 1.0 if game != null and game.uses_ssrg_gameplay() else 0.0
 	RenderingServer.global_shader_parameter_set("ssrg_warp",Vector4(on,SSRG_APPROACH_POWER,SSRG_STAGE_DISTANCE,TRACK_LENGTH))
 func render_time() -> float:
+	if game.uses_ssrg_gameplay() and game.mode=="paused" and game.visual_clock_ready: return game.visual_song_time
 	return game.visual_song_time if game.audio.playing and game.mode in ["play","record"] and game.countdown<=0 and game.resume_countdown<=0 else game.song_time
 func note_position(lane: float, chart_time: float) -> Vector3:
 	return Vector3(note_x(lane), .13, (render_time()-chart_time)*travel_speed())
@@ -271,8 +272,13 @@ func update_cover_backdrop() -> void:
 	cover_material.set_shader_parameter("screen_aspect",aspect)
 	# Track the projected rail silhouette without moving the camera or highway geometry.
 	for side in [-1,1]:
-		var far_point=camera.unproject_position(Vector3(side*FRAME_HALF_WIDTH,0,-50))/viewport_size
-		var near_point=camera.unproject_position(Vector3(side*FRAME_HALF_WIDTH,0,0))/viewport_size
+		var far_world=Vector3(side*FRAME_HALF_WIDTH,0,-50)
+		var near_world=Vector3(side*FRAME_HALF_WIDTH,0,0)
+		if game.uses_ssrg_gameplay():
+			far_world=Vector3(side*44.0*SSRG_UNIT,0,-492.0*SSRG_UNIT)
+			near_world=Vector3(side*700.0*SSRG_UNIT,0,86.0*SSRG_UNIT)
+		var far_point=camera.unproject_position(far_world)/viewport_size
+		var near_point=camera.unproject_position(near_world)/viewport_size
 		var slope=(near_point.x-far_point.x)/maxf(.001,near_point.y-far_point.y)
 		var top_x=far_point.x-far_point.y*slope
 		cover_material.set_shader_parameter("glow_left_rail" if side==-1 else "glow_right_rail",Vector2(top_x,top_x+slope))
@@ -767,7 +773,13 @@ func update_multiplier_wave(delta: float) -> void:
 	if gold_age < 0.0: return
 	if game.mode != "paused": gold_age += delta
 	var t = clampf(gold_age / 1.5, 0.0, 1.0)
-	gold_wave.position = Vector3(0, .07, -ease(t, .6) * 62.0 + 7.0)
+	if game.uses_ssrg_gameplay():
+		var q=pow(1.0-t,SSRG_APPROACH_POWER)
+		gold_wave.position=Vector3(0,.07,SSRG_STAGE_DISTANCE*(q-1.0))
+		gold_wave.scale.x=q
+	else:
+		gold_wave.position = Vector3(0, .07, -ease(t, .6) * 62.0 + 7.0)
+		gold_wave.scale.x=1.0
 	gold_bar.position = Vector3(0, .08, 0)
 	(gold_wave.material_override as ShaderMaterial).set_shader_parameter("strength", 1.0 - t * t)
 	(gold_bar.material_override as ShaderMaterial).set_shader_parameter("strength", .9 * (1.0 - clampf(gold_age / 1.0, 0.0, 1.0)))
@@ -976,6 +988,9 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 	var head = mesh_node(reference_note_meshes[mesh_key],parent,mat)
 	head.position = Vector3(position_value.x,.13,position_value.z)
 	head.rotation = camera.rotation
+	# The GPU projects the raw timing depth onto a short 2D canvas. CPU frustum
+	# culling must cover that displacement or notes pop in late despite p>=.5.
+	head.extra_cull_margin=TRACK_LENGTH+SSRG_STAGE_DISTANCE
 	ssrg_billboards.append(weakref(head))
 	return head
 
@@ -1199,6 +1214,9 @@ func build_note_node(key: String, note: Dictionary, recording = false) -> void:
 	var lines: Array = []
 	if recording: lines = make_alignment_lines(node,note,palette)
 	var signature = (hash(note) if recording or game.mode=="record" else 0)^hash([game.note_speed,game.note_shape,game.note_size,game.hold_trail_width,game.trail_style,game.uses_ssrg_gameplay()])
+	if game.uses_ssrg_gameplay() and not recording:
+		for child in node.get_children():
+			if child is GeometryInstance3D: child.extra_cull_margin=TRACK_LENGTH+SSRG_STAGE_DISTANCE
 	var own_materials: Array = []
 	for ref in animated_materials.slice(first_material):
 		var m = ref.get_ref()
@@ -1263,17 +1281,31 @@ func sync_note(key: String, note: Dictionary, visible_keys: Dictionary, recordin
 	if recording: notes[key].node.position.z *= -1
 	elif not held and modifier_hides(notes[key].node.position.z): notes[key].node.visible = false
 
+# Beam sections share the same apex and lane centres as the 2D notes.
+func ssrg_beam_lane(lane: float) -> float:
+	var slots=maxi(2,game.gameplay_lane_count())
+	return roundf(clampf(lane,0,SynkChart.MAX_LANE)/SynkChart.MAX_LANE*(slots-1))*SynkChart.MAX_LANE/(slots-1)
+func ssrg_beam_width() -> float:
+	return (ssrg_x(SynkChart.MAX_LANE)-ssrg_x(0))/maxi(1,game.gameplay_lane_count()-1)*.96
 func update_finger_beams() -> void:
-	# Each finger on the stage lights a column up the highway that slides with it.
 	var touches: Array = game.pointers.values() if game.mode=="play" else []
+	var ssrg=game.uses_ssrg_gameplay()
 	for i in finger_beams.size():
 		var beam: MeshInstance3D = finger_beams[i]
-		beam.visible = i < touches.size()
-		# Beams snap to whole lanes rather than following the finger smoothly.
-		# Keep the full note-width glow centered on its lane, including outer notes.
+		# Reuse one mesh per view; rebuild only when switching view/lane layout.
+		var signature=game.gameplay_lane_count() if ssrg else -1
+		if beam.get_meta("layout",-99)!=signature:
+			var mesh=PlaneMesh.new()
+			var near=81.0*SSRG_UNIT if ssrg else JUDGMENT_DEPTH*.5
+			var reach=SSRG_STAGE_DISTANCE if ssrg else 58.0
+			mesh.size=Vector2(ssrg_beam_width() if ssrg else NOTE_WIDTH,reach+near)
+			beam.mesh=mesh; beam.position.z=(near-reach)*.5
+			beam.extra_cull_margin=SSRG_STAGE_DISTANCE if ssrg else 0.0
+			beam.set_meta("layout",signature)
+		beam.visible=i<touches.size()
 		if beam.visible:
-			var touch_lane = SynkCapture.lane(touches[i].position.x)
-			beam.position.x = clampf(lane_world_x(touch_lane if game.uses_ssrg_gameplay() else float(roundi(touch_lane))),-BEAM_MAX_X,BEAM_MAX_X)
+			var lane=SynkCapture.lane(touches[i].position.x)
+			beam.position.x=ssrg_x(ssrg_beam_lane(lane)) if ssrg else clampf(lane_world_x(roundf(lane)),-BEAM_MAX_X,BEAM_MAX_X)
 
 func set_trail_clip(node: Node3D, clip_z: float) -> void:
 	for mesh in node.get_children():
@@ -1352,13 +1384,13 @@ func _process(delta: float) -> void:
 	var visible_keys = {}
 	for beam in active_beams: beam.visible = false
 	update_finger_beams()
-	if game.mode=="play" or (game.mode=="paused" and game.paused_mode=="play"):
+	if (game.mode=="play" or (game.mode=="paused" and game.paused_mode=="play")) and game.countdown<=0:
 		for i in range(first_visible_play_index(),game.live.size()):
 			if game.live[i].note.time>render_time()+game.note_travel_seconds(): break
 			if not game.live[i].done:
 				var held = game.live[i].started and game.live[i].note.kind in ["hold","slide"]
 				sync_note(game.live[i].key,game.live[i].note,visible_keys,false,-1.0,held)
-				if game.live[i].started and game.live[i].note.kind=="slide":
+				if game.live[i].started and game.live[i].note.kind=="slide" and not game.uses_ssrg_gameplay():
 					var lane = SynkChart.lane_at(game.live[i].note,render_time())
 					var beam = active_beams[clampi(roundi(lane),0,SynkChart.MAX_LANE)]
 					beam.position=touch_hit_position(lane,int(game.live[i].pointer))+Vector3(0,.045,0); beam.visible = true

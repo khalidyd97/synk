@@ -8,6 +8,7 @@ void fragment(){
     float cell=clamp(floor(frame),0.0,10.0);
     vec2 tile=vec2(mod(cell,4.0),floor(cell/4.0));
     vec2 uv=UV;
-    ALBEDO=texture(atlas,uv).rgb*tint.rgb;
-    ALPHA=opacity;
+    vec4 art=texture(atlas,uv);
+    ALBEDO=art.rgb*tint.rgb;
+    ALPHA=art.a*opacity;
 }

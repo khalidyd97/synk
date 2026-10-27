@@ -24,8 +24,11 @@ func _ready() -> void:
 	screen.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	var shader = Shader.new()
 	shader.code = """shader_type canvas_item;
+	uniform bool ssrg_canvas=false;
 	void fragment() {
 		vec4 base = texture(TEXTURE,UV);
+		vec3 scene_color=base.rgb;
+		if(!ssrg_canvas){
 		vec3 bloom = vec3(0.0);
 		for (int x=-1;x<=1;x++) {
 			for (int y=-1;y<=1;y++) {
@@ -37,7 +40,8 @@ func _ready() -> void:
 		// Notes enter through a soft shadow at the distant end of the rail.
 		float entry_fade = 1.0 - smoothstep(0.015, 0.22, UV.y);
 		float rail_mask = 1.0 - smoothstep(0.23, 0.40, abs(UV.x - 0.5));
-		vec3 scene_color = (base.rgb + bloom * 0.24) * (1.0 - entry_fade * rail_mask * 0.82);
+		scene_color = (base.rgb + bloom * 0.24) * (1.0 - entry_fade * rail_mask * 0.82);
+		}
 		COLOR = vec4(scene_color,1.0);
 	}"""
 	var post = ShaderMaterial.new(); post.shader = shader; screen.material = post
@@ -54,6 +58,7 @@ func build_asset_guide() -> void:
 	add_child(guide_art); guide_art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var shader = Shader.new()
 	shader.code = """shader_type canvas_item;
+	uniform bool ssrg_canvas=false;
 	uniform bool recolor = false;
 	uniform vec3 tint : source_color = vec3(1.0);
 	void fragment() {
@@ -82,7 +87,18 @@ func build_asset_guide() -> void:
 func resize_viewport() -> void:
 	if viewport: viewport.size = Vector2i(maxi(1,roundi(size.x)),maxi(1,roundi(size.y)))
 
+func sync_projection_style() -> void:
+	if not screen: return
+	var ssrg=game.uses_ssrg_gameplay()
+	if screen.has_meta("ssrg_canvas") and screen.get_meta("ssrg_canvas")==ssrg: return
+	screen.set_meta("ssrg_canvas",ssrg)
+	screen.material.set_shader_parameter("ssrg_canvas",ssrg)
+	# Original sprites already include glow and antialiasing. Avoid applying the
+	# old 3D bloom/shadow and multisample resolve to the flat canvas a second time.
+	viewport.msaa_3d=Viewport.MSAA_DISABLED if ssrg else (Viewport.MSAA_2X if OS.has_feature("mobile") else Viewport.MSAA_4X)
+
 func _process(_delta: float) -> void:
+	sync_projection_style()
 	if viewport:
 		viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED if game.mode in ["menu","guide","library","editor"] else SubViewport.UPDATE_ALWAYS
 	if screen: screen.visible = game.mode not in ["guide","menu","library"]

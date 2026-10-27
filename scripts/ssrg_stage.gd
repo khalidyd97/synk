@@ -50,7 +50,7 @@ func update(world: Node3D) -> void :
 	if not visible: return
 	for receptor in receptors: receptor.hide()
 	var game = world.game
-	if not (game.mode == "play" or (game.mode == "paused" and game.paused_mode == "play")): return
+	if game.countdown>0 or not (game.mode == "play" or (game.mode == "paused" and game.paused_mode == "play")): return
 	var now: float = world.render_time()
 	var travel: float = game.note_travel_seconds()
 	# As in SSRG: a receptor lights for a blue tap or the head of a yellow note (not connectors
