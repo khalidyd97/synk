@@ -7,29 +7,36 @@ func run() -> void:
 	game.note_speed=1; game.recorder_note_speed=1
 	assert(is_equal_approx(game.note_travel_seconds(),2.6))
 	game.set_mode("play")
-	assert(game.uses_ssrg_gameplay() and is_equal_approx(game.note_travel_seconds(),1.17),"Normal play shares SSRG motion")
+	assert(game.uses_ssrg_gameplay() and is_equal_approx(game.note_travel_seconds(),3.5),"Normal play shares SSRG motion")
 	game.ssrg_playable_run=true; game.highway_style="ssrg"; game.set_mode("play")
-	assert(is_equal_approx(game.note_travel_seconds(),1.17))
+	assert(is_equal_approx(game.note_travel_seconds(),3.5))
 	var world=game.field.world; world.apply_camera()
 	var camera=world.camera
-	# Progress along the line from the vanishing point (0) to the judgement line (1).
-	var top=camera.unproject_position(Vector3(0,.13,-100000)).y
+	assert(camera.projection==Camera3D.PROJECTION_ORTHOGONAL,"SSRG uses a direct 2D orthographic stage")
+	var top=camera.unproject_position(Vector3(0,.13,-world.SSRG_STAGE_DISTANCE)).y
 	var line=camera.unproject_position(Vector3(0,.13,0)).y
-	var progress=func(z: float) -> float: return (camera.unproject_position(Vector3(0,.13,world.ssrg_warped_z(z))).y-top)/(line-top)
-	assert(is_equal_approx(world.ssrg_warped_z(0),0.0),"Hit timestamp still lands on the line")
-	assert(progress.call(-world.TRACK_LENGTH)<.02,"Notes leave the vanishing point")
-	# Tracked SSRG notes: p = (K^u - 1)/(K - 1) over the trip, K = 3.3.
-	var k=world.SSRG_APPROACH_K
-	for u in [.25,.5,.75,.9]:
-		var expected=(pow(k,u)-1.0)/(k-1.0)
-		assert(absf(progress.call(-(1.0-u)*world.TRACK_LENGTH)-expected)<.01,"Approach follows the SSRG curve")
-	var speed_top=progress.call(-.9*world.TRACK_LENGTH)-progress.call(-world.TRACK_LENGTH)
-	var speed_line=progress.call(0)-progress.call(-.1*world.TRACK_LENGTH)
-	assert(speed_line>2.5*speed_top,"Notes speed up toward the line")
+	for u in [.5,.75,.9,1.0]:
+		var q=pow(u,6.0)
+		var z=-(1.0-u)*world.TRACK_LENGTH
+		var position=camera.unproject_position(Vector3(world.ssrg_x(9)*q,.13,world.ssrg_warped_z(z)))
+		assert(absf((position.y-top)/(line-top)-q)<.0001,"Direct 2D note position follows recovered sixth-power curve")
+		var centre=camera.unproject_position(Vector3.ZERO)
+		var edge=camera.unproject_position(Vector3(world.SSRG_NOTE_SIZE.x*q,0,0))
+		var full=camera.unproject_position(Vector3(world.SSRG_NOTE_SIZE.x,0,0))
+		assert(absf((edge.x-centre.x)/(full.x-centre.x)-q)<.0001,"Note size uses q without extra camera perspective")
+	assert(is_zero_approx(world.ssrg_warped_z(0)),"Hit timestamp reaches original judgment coordinate")
+	game.ssrg_playable_run=false; game.note_speed=2
+	assert(is_equal_approx(game.note_travel_seconds(),1.75),"Speed changes duration without changing the curve")
+	game.note_speed=1
+	for lane in [0.0,4.5,9.0]:
+		var point=camera.unproject_position(Vector3(world.ssrg_x(lane),.035,0))/Vector2(game.field.viewport.size)
+		var input=game.field.input_position(point)
+		assert(absf(SynkCapture.lane(input.x)-lane)<.001,"Orthographic note lane maps back to matching touch lane")
 	game.song_time=5; game.audio.stop()
 	assert(is_zero_approx(world.note_position(4,5).z),"Hit timestamp still reaches judgment plane")
 	game.set_mode("record")
 	assert(is_equal_approx(game.note_travel_seconds(),2.6),"Recorder retains original travel")
+	assert(camera.projection==Camera3D.PROJECTION_PERSPECTIVE,"Recorder restores its original camera")
 	game.queue_free(); await process_frame
 	print("SSRG reference motion and normal/recorder isolation: PASS")
 	quit()

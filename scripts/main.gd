@@ -1010,8 +1010,8 @@ func space_authored_notes(incoming: Array,fixed: Array) -> bool:
 	return resolved
 
 func note_travel_seconds() -> float:
-	# SSRG: vanishing point to judgement line, measured from tracked notes in SSRG footage.
-	if uses_ssrg_gameplay() and not uses_recorder_colors(): return 1.17/(ssrg_note_speed() if ssrg_playable_run else note_speed)
+	# APK default basicTime=3.5; normalized 1x corresponds to original UI speed 3.
+	if uses_ssrg_gameplay() and not uses_recorder_colors(): return 3.5/(ssrg_note_speed() if ssrg_playable_run else note_speed)
 	return 2.6 / (recorder_note_speed if uses_recorder_colors() else note_speed)
 
 func cycle_recorder_note_speed() -> void:

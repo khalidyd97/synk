@@ -142,7 +142,7 @@ const SSRG_FOOTAGE_ASPECT = 2.246
 # Fixed SSRG view, not adjustable: tilt 20 and lens 45, fitted to the rails in SSRG footage.
 const SSRG_TILT = 20.0
 const SSRG_LENS = 45.0
-const SSRG_STEP = 62.7*SSRG_UNIT
+const SSRG_STEP = 62.71392*SSRG_UNIT
 const SSRG_NOTE_SIZE = Vector2(212.0,116.0)*SSRG_UNIT
 # SYNK lanes 0..9 hold SSRG positions 0..12 (lane = position * 0.75).
 func ssrg_x(lane: float) -> float: return (lane/.75-6.0)*SSRG_STEP
@@ -159,24 +159,22 @@ func note_x(lane: float) -> float:
 # Notes travel the whole 60-unit track, from the far end to the judgement bar.
 func visible_length() -> float: return TRACK_LENGTH
 func travel_speed() -> float: return TRACK_LENGTH / game.note_travel_seconds()
-# SSRG notes leave the vanishing point and speed up on the way down, K times faster at the
-# line than at the top: p = (K^u - 1)/(K - 1), fitted to tracked notes in SSRG footage.
-const SSRG_APPROACH_K = 3.3
-const SSRG_NOTE_WIDTH_SCALE = .78
-# Depth constant Z of the current camera: a point at track z draws at p = Z/(Z - z).
-func ssrg_camera_depth() -> float:
-	var forward = -camera.global_transform.basis.z
-	return (Vector3(0,.13,0)-camera.global_position).dot(forward)/maxf(.001,-forward.z)
-# Mirrors ssrg_warp_z() in ssrg_warp.gdshaderinc for code that projects notes itself.
+# Recovered from Perspective2dSettings.ToAcceleration in the supplied APK:
+# raw chart progress p becomes q = p^6 for BOTH position and sprite size.
+# Gameplay is drawn directly in the original 2D UI coordinate system on X/Z.
+# An orthographic camera adds no further perspective to the recovered curve.
+const SSRG_APPROACH_POWER = 6.0
+const SSRG_STAGE_DISTANCE = 514.0*SSRG_UNIT
+const SSRG_UI_HEIGHT = 640.0
+func ssrg_approach(z: float) -> float:
+	return pow(maxf(1.0+z/TRACK_LENGTH,0.0),SSRG_APPROACH_POWER)
+# Mirrors ssrg_warp_z() in ssrg_warp.gdshaderinc.
 func ssrg_warped_z(z: float) -> float:
 	if not game.uses_ssrg_gameplay(): return z
-	var k = SSRG_APPROACH_K; var depth = ssrg_camera_depth()
-	if z >= 0.0: return z*depth*k*log(k)/((k-1.0)*TRACK_LENGTH)
-	var p = maxf((pow(k,maxf(1.0+z/TRACK_LENGTH,0.0))-1.0)/(k-1.0),.012)
-	return depth*(1.0-1.0/p)
+	return SSRG_STAGE_DISTANCE*(ssrg_approach(z)-1.0)
 func update_ssrg_warp() -> void:
 	var on = 1.0 if game != null and game.uses_ssrg_gameplay() else 0.0
-	RenderingServer.global_shader_parameter_set("ssrg_warp",Vector4(on,SSRG_APPROACH_K,ssrg_camera_depth(),TRACK_LENGTH))
+	RenderingServer.global_shader_parameter_set("ssrg_warp",Vector4(on,SSRG_APPROACH_POWER,SSRG_STAGE_DISTANCE,TRACK_LENGTH))
 func render_time() -> float:
 	return game.visual_song_time if game.audio.playing and game.mode in ["play","record"] and game.countdown<=0 and game.resume_countdown<=0 else game.song_time
 func note_position(lane: float, chart_time: float) -> Vector3:
@@ -189,26 +187,12 @@ func apply_camera(shake: Vector3 = Vector3.ZERO) -> void:
 	# Place the SSRG judgment area near the bottom while preserving the camera's
 	# projection for note rendering and touch raycasts together.
 	if game != null and game.uses_ssrg_gameplay():
-		# Reference framing: distant rails converge near the top, while their near
-		# ends reach the lower corners. Keep the judgment plane low in the view.
-		# Measured from SSRG footage (about 2.25:1): the rails meet at the top edge, the
-		# judgement line sits 88% down the screen, and the rails there are 72% of the width apart.
-		# Fitted to the rails in SSRG footage (25 frames): the judgement line 87.9% down the
-		# screen, the rails there 0.826 screen heights from the centre (at the rail's middle),
-		# and the rails meeting 5.7% from the top, which is SSRG_TILT 20 at SSRG_LENS 45.
-		var lens: float = SSRG_LENS
-		var t = tan(deg_to_rad(lens)*.5)
-		var below = atan(SSRG_LINE_DOWN*2.0*t)               # judgement line below the view centre
-		# Narrower screens than the 2.25:1 footage (16:9 phones, tablets) pull the camera back so
-		# the rails keep the same share of the screen width; wider screens keep the fitted view.
-		var view: Vector2 = camera.get_viewport().get_visible_rect().size
-		var aspect = view.x/maxf(1.0,view.y)
-		var rail_out = SSRG_RAIL_OUT*minf(1.0,aspect/SSRG_FOOTAGE_ASPECT)
-		var distance = 9.75/(2.0*rail_out*t)/cos(below) # camera to judgement line
-		var direction = deg_to_rad(SSRG_TILT)+below
-		camera.fov = lens
-		camera.position = Vector3(0,distance*sin(direction),distance*cos(direction))+shake
-		camera.rotation_degrees.x = -SSRG_TILT
+		# UI y=280 at the top, y=-234 at judgment. X/Z is a flat UI canvas;
+		# camera centre corresponds to original UI (0,0), never a fitted lens.
+		camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+		camera.size = SSRG_UI_HEIGHT*SSRG_UNIT
+		camera.position = Vector3(0,30,-234.0*SSRG_UNIT)+shake
+		camera.rotation_degrees = Vector3(-90,0,0)
 
 func _ready() -> void:
 	var aids=preload("res://scripts/record_aids.gd").new(); aids.world=self; add_child.call_deferred(aids)
@@ -985,13 +969,12 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 		m.set_shader_parameter("core_tint",Color("4fc8ff") if palette==0 else Color("ffc23a")); return m)
 	var mesh_key = "ssrg|%s|%s|%s" % [size, tail, palette]
 	if not reference_note_meshes.has(mesh_key):
-		# SSRG draws its 212x116 sprite narrower than the art: tracked notes in gameplay footage
-		# are 0.78 of its width at full height (about 2.1:1 on screen, not the art's 2.7:1).
+		# Packaged IngameRenderer maximum sizes, before the shared p^6 scale.
 		var quad = QuadMesh.new()
-		quad.size = Vector2(art.get_width()*SSRG_NOTE_WIDTH_SCALE,art.get_height())*SSRG_UNIT*game.note_size*(.6 if tail else 1.0)
+		quad.size = (Vector2(132,72) if tail else Vector2(212,116))*SSRG_UNIT*game.note_size
 		reference_note_meshes[mesh_key]=quad
 	var head = mesh_node(reference_note_meshes[mesh_key],parent,mat)
-	head.position = Vector3(position_value.x,.36*size,position_value.z)
+	head.position = Vector3(position_value.x,.13,position_value.z)
 	head.rotation = camera.rotation
 	ssrg_billboards.append(weakref(head))
 	return head
@@ -1008,7 +991,7 @@ func face_ssrg_billboards() -> void:
 func make_tail_cap(parent: Node3D, lane: float, offset: float, palette: int, recording = false) -> MeshInstance3D:
 	var cap=make_cap(parent,lane,offset,palette,recording,TAIL_CAP_SIZE)
 	# Keep its filled center above the ribbon instead of sinking with the smaller sprite.
-	if game.round_notes(): cap.position.y=.38*game.note_size
+	if game.round_notes() and not game.uses_ssrg_gameplay(): cap.position.y=.38*game.note_size
 	cap.name="SustainEndCap"
 	return cap
 
@@ -1031,7 +1014,8 @@ func make_flick(parent: Node3D, note: Dictionary, palette: int) -> void:
 # Trails run through the middle of their notes: just above the track for flat rectangle
 # notes, and at half height through the thicker circle pucks.
 func trail_height() -> float:
-	return (.38 if game.uses_ssrg_gameplay() or game.round_notes() else .09)*game.note_size
+	if game.uses_ssrg_gameplay(): return .13
+	return (.38 if game.round_notes() else .09)*game.note_size
 
 func trail_centers(note: Dictionary, count: int, recording = false) -> Array:
 	var duration = float(note.duration)
@@ -1080,9 +1064,10 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 	var half_width = TRAIL_HALF*.65*game.hold_trail_width
 	# SSRG footage: holds and slides are a thin bar, about 23 px times p wide where the
 	# note is 148 px times p (0.12 of the 212-unit sprite); drawn a little thicker, at 0.16.
-	if game.uses_ssrg_gameplay() and not recording: half_width = SSRG_NOTE_SIZE.x*.08*game.note_size
+	if game.uses_ssrg_gameplay() and not recording: half_width = 116.0*.4*.5*1.3*SSRG_UNIT*game.note_size*game.note_size
 	var count = clampi(ceili(duration*96),32,1024)
 	var st = SurfaceTool.new(); st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_custom_format(0,SurfaceTool.CUSTOM_RGBA_FLOAT)
 	var edge = SurfaceTool.new(); edge.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var centers = trail_centers(note,count,recording)
 	var sides = trail_sides(centers)
@@ -1098,7 +1083,8 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 		for index in [0,1,2,0,2,3]:
 			st.set_uv([Vector2(0,float(i)/count),Vector2(0,float(i+1)/count),Vector2(1,float(i+1)/count),Vector2(1,float(i)/count)][index])
 			# The centreline depth, so the SSRG warp moves each cross-section as one piece.
-			st.set_uv2(Vector2([a.z,b.z,b.z,a.z][index],0))
+			st.set_uv2(Vector2([a.z,b.z,b.z,a.z][index],[-1.0,-1.0,1.0,1.0][index]))
+			st.set_custom(0,Color(a.x,a.z,b.x,b.z) if game.uses_ssrg_gameplay() and not recording else Color(0,0,0,0))
 			st.add_vertex([a-sa*half_width,b-sb*half_width,b+sb*half_width,a+sa*half_width][index])
 		for side in [-1,1]:
 			var lift = Vector3(0,.01,0)
@@ -1107,9 +1093,9 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 	var solid=game.trail_style=="solid" or (game.uses_ssrg_gameplay() and not recording)
 	var trail_material: ShaderMaterial
 	if solid:
-		trail_material=shared("solid_trail|%s" % trail_color(palette), func():
+		trail_material=shared("solid_trail|%s|%s" % [trail_color(palette),half_width], func():
 			var m=ShaderMaterial.new(); m.shader=preload("res://scripts/solid_trail.gdshader")
-			m.set_shader_parameter("tint",trail_color(palette)); return m)
+			m.set_shader_parameter("tint",trail_color(palette)); m.set_shader_parameter("ssrg_half_width",half_width); return m)
 	else:
 		var still = note.kind=="hold"
 		trail_material=shared("art_trail|%d|%s|%s" % [palette, trail_color(palette), still], func():

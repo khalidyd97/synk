@@ -26,3 +26,7 @@ The extracted Assemblies directory is empty. No original movement implementation
 ## Validation
 
 `test_shared_ssrg_gameplay.gd` checks shared activation, ten-lane normal play, unchanged saved charts, visible receptor geometry, extracted hold artwork, dense-hit continuity, both frame sets, pause behavior and recorder/menu isolation. Recorder restoration, imported lane preservation, slide width and reference-motion checks cover the adjacent systems.
+
+## Superseding APK evidence
+
+The later supplied APKs revealed explicit2D sixth-power motion. The footage-fit travel and exponential curve are superseded by the implementation documented in SSRG_APK_NOTE_ANALYSIS.md: position and size use p^6, base duration3.5 seconds at normalized1x, raw visibility cutoff.5, source note maxima212x116 and132x72. The SSRG renderer now uses an orthographic2D canvas and original rail sprite placement; no inverse perspective mapping remains. See the analysis report for the explicit logical-resolution choice and remaining runtime unknowns.

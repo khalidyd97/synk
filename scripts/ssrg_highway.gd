@@ -92,7 +92,7 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 const FLASH_PULL = 3.0
 func flash_point(x: float) -> Vector3:
 	var on_line = Vector3(x, .035, 0)
-	return on_line + (world.camera.global_position - on_line).normalized() * FLASH_PULL
+	return on_line + Vector3.UP*FLASH_PULL if world.game.uses_ssrg_gameplay() else on_line + (world.camera.global_position - on_line).normalized() * FLASH_PULL
 
 func make_hit() -> Dictionary:
 	var mesh = QuadMesh.new(); mesh.size = Vector2(10.1, 6.1) * .8   # 25% smaller than the 1.5x size

@@ -5,28 +5,33 @@ var rails: Array = []
 const TRACK_REACH = 1500.0
 func _init() -> void :
 	name = "SSRGStage"
-	# Continue beneath the judgment line and beyond the camera's lower edge.
-	var floor_node=MeshInstance3D.new(); var floor_mesh=PlaneMesh.new()
-	# Like SSRG, the track runs on until its rails nearly meet (about 7% from the top of the
-	# screen): 1500 units out, far past where notes appear (60 units).
-	floor_mesh.size=Vector2(19.5,TRACK_REACH+12.0); floor_node.mesh=floor_mesh
-	floor_node.position=Vector3(0,.026,12.0-(TRACK_REACH+12.0)*.5)
+	# Direct original UI canvas: world Z = -(UI y + 234) * UNIT.
+	const UNIT = 9.75/512.0
+	var floor_node=MeshInstance3D.new()
+	var st=SurfaceTool.new(); st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for point in [Vector3(0,.026,-514*UNIT),Vector3(-720*UNIT,.026,86*UNIT),Vector3(720*UNIT,.026,86*UNIT)]:
+		st.set_uv(Vector2(.5, .5)); st.add_vertex(point)
+	floor_node.mesh=st.commit()
 	var floor_mat=ShaderMaterial.new(); floor_mat.shader=preload("res://scripts/ssrg_floor.gdshader")
 	floor_mat.set_shader_parameter("opacity",.32); floor_mat.render_priority=-7
 	floor_node.material_override=floor_mat; add_child(floor_node)
-	for side in [-1, 1]:
-		var rail = MeshInstance3D.new(); var plane = PlaneMesh.new()
-		plane.size = Vector2(0.55, TRACK_REACH+12.0);rail.mesh = plane
-		rail.position = Vector3(side * 9.75, 0.09, 12.0-(TRACK_REACH+12.0)*.5)
-		var mat = ShaderMaterial.new();mat.shader = preload("res://scripts/ssrg_stage.gdshader")
-		mat.set_shader_parameter("artwork", preload("res://assets/ssrg/rail.png"))
-		mat.set_shader_parameter("tint", Color("fff9e7"))
-		rail.material_override = mat;rail.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF;add_child(rail);rails.append(rail)
-	press = MeshInstance3D.new(); var plane = PlaneMesh.new();plane.size = Vector2(19.5, 2.0);press.mesh = plane
-	press.position = Vector3(0, 0.035, - 0.15)
-	var mat = ShaderMaterial.new();mat.shader = preload("res://scripts/ssrg_press.gdshader")
-	mat.render_priority = -3
-	press.material_override = mat;press.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF;add_child(press)
+	for side in [-1,1]:
+		# Original BottomRight-pivot sprite at (0,-320), mirrored on the right.
+		var rail=MeshInstance3D.new(); var quad=QuadMesh.new()
+		quad.size=Vector2(720,578)*UNIT; rail.mesh=quad
+		rail.position=Vector3(side*360*UNIT,.09,-203*UNIT)
+		rail.rotation_degrees.x=-90
+		if side>0: rail.scale.x=-1
+		var mat=ShaderMaterial.new(); mat.shader=preload("res://scripts/ssrg_stage.gdshader")
+		mat.set_shader_parameter("artwork",preload("res://assets/ssrg/imported/rail_original.png"))
+		mat.set_shader_parameter("along_rail",false)
+		rail.material_override=mat; add_child(rail); rails.append(rail)
+	press=MeshInstance3D.new(); var plane=PlaneMesh.new()
+	plane.size=Vector2(1156,130)*UNIT; press.mesh=plane
+	press.position=Vector3(-5*UNIT,.035,16*UNIT)
+	var mat=ShaderMaterial.new(); mat.shader=preload("res://scripts/ssrg_press.gdshader")
+	mat.set_shader_parameter("base_color",Color(.08,.08,.09)); mat.render_priority=-3
+	press.material_override=mat; add_child(press)
 	for lane in 13:
 		var ring = MeshInstance3D.new(); var disc = QuadMesh.new();disc.size = Vector2(212.0, 116.0)*9.75/512.0   # SSRG guide sprite size
 		ring.mesh = disc
@@ -41,22 +46,8 @@ func _init() -> void :
 # (79% to 99% down the screen). Cover that same screen band on the floor, whatever the view.
 const BAND_TOP = .5 + 185.0/640.0
 const BAND_BOTTOM = .5 + 315.0/640.0
-func fit_band(world: Node3D) -> void:
-	var camera: Camera3D = world.camera
-	var size: Vector2 = camera.get_viewport().get_visible_rect().size
-	var floor_plane = Plane(Vector3.UP, .035)
-	var ends: Array = []
-	for fraction in [BAND_TOP, BAND_BOTTOM]:
-		var point = Vector2(size.x*.5, size.y*fraction)
-		var hit = floor_plane.intersects_ray(camera.project_ray_origin(point), camera.project_ray_normal(point))
-		if hit == null: return
-		ends.append(hit.z)
-	(press.mesh as PlaneMesh).size = Vector2(19.5, maxf(.5, ends[1]-ends[0]))
-	press.position.z = (ends[0]+ends[1])*.5
-
 func update(world: Node3D) -> void :
 	if not visible: return
-	fit_band(world)
 	for receptor in receptors: receptor.hide()
 	var game = world.game
 	if not (game.mode == "play" or (game.mode == "paused" and game.paused_mode == "play")): return
@@ -65,10 +56,9 @@ func update(world: Node3D) -> void :
 	# As in SSRG: a receptor lights for a blue tap or the head of a yellow note (not connectors
 	# or ends), from when that note passes the middle of the screen to when it reaches the line.
 	var camera: Camera3D = world.camera
-	var top = camera.unproject_position(Vector3(0, .13, -100000)).y
+	var top = camera.unproject_position(Vector3(0, .13, -world.SSRG_STAGE_DISTANCE)).y
 	var line = camera.unproject_position(Vector3(0, .13, 0)).y
 	var midway = clampf((camera.get_viewport().get_visible_rect().size.y * .5 - top) / maxf(1.0, line - top), 0.0, .95)
-	var k: float = world.SSRG_APPROACH_K
 	var targets: Dictionary = {}
 	var indexed = false
 	var candidates: Variant = range(game.first_live_index(), game.live.size())
@@ -83,7 +73,7 @@ func update(world: Node3D) -> void :
 		var at = float(note.time)
 		var lane = float(note.lane)
 		# Where the note is drawn: progress p from the vanishing point (0) to the line (1).
-		var p = (pow(k, clampf(1.0 - (at - now) / travel, 0.0, 1.0)) - 1.0) / (k - 1.0)
+		var p: float = world.ssrg_approach(-clampf((at-now)/travel,0.0,1.0)*world.TRACK_LENGTH)
 		if p < midway: continue
 		var slot = clampi(roundi(lane / float(SynkChart.MAX_LANE) * (game.gameplay_lane_count()-1)), 0, game.gameplay_lane_count()-1)
 		if targets.has(slot) and targets[slot].at <= at: continue
