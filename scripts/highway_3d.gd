@@ -49,6 +49,7 @@ var active_beams: Array = []
 # Light columns that follow each finger touching the highway.
 var finger_beams: Array = []
 var finger_beam_material: ShaderMaterial
+var ssrg_finger_beam_material: ShaderMaterial
 var animation_time = 0.0
 var animated_materials: Array = []
 var bursts: Array = []
@@ -72,6 +73,7 @@ var highway_shadow_material: ShaderMaterial
 var highway_shadow: MeshInstance3D
 var judgment_material: ShaderMaterial
 var track_materials: Array = []
+var track_nodes: Array = []
 var sky_material: ShaderMaterial
 # The cover plane sits this far in front of the camera, behind the whole highway.
 const COVER_DISTANCE = 150.0
@@ -257,6 +259,7 @@ func apply_palette(palette: Dictionary) -> void:
 		note_meshes.append(make_note_mesh(color))
 	refresh_highway_look()
 	finger_beam_material.set_shader_parameter("tint",element_color("beams",colors[0]))
+	ssrg_finger_beam_material.set_shader_parameter("tint",element_color("beams",Color(0,.7843137383,1)))
 	for beam in active_beams:
 		var mat: ShaderMaterial = beam.get_child(0).material_override
 		mat.set_shader_parameter("tint",element_color("beams",colors[1])); mat.set_shader_parameter("recolor",true)
@@ -275,8 +278,8 @@ func update_cover_backdrop() -> void:
 		var far_world=Vector3(side*FRAME_HALF_WIDTH,0,-50)
 		var near_world=Vector3(side*FRAME_HALF_WIDTH,0,0)
 		if game.uses_ssrg_gameplay():
-			far_world=Vector3(side*44.0*SSRG_UNIT,0,-492.0*SSRG_UNIT)
-			near_world=Vector3(side*700.0*SSRG_UNIT,0,86.0*SSRG_UNIT)
+			far_world=Vector3(side*27.0*SSRG_UNIT,0,-492.0*SSRG_UNIT)
+			near_world=Vector3(side*607.5*SSRG_UNIT,0,86.0*SSRG_UNIT)
 		var far_point=camera.unproject_position(far_world)/viewport_size
 		var near_point=camera.unproject_position(near_world)/viewport_size
 		var slope=(near_point.x-far_point.x)/maxf(.001,near_point.y-far_point.y)
@@ -329,11 +332,12 @@ func build_track() -> void:
 	# Low render priority draws it before the notes and effects, which stay crisp on top.
 	var base_material = track_material(TRACK_COLOR,.30); base_material.render_priority = -10
 	track_materials.append(base_material)
-	box(self,Vector3(0,-.15,-28),Vector3(FRAME_HALF_WIDTH*2.0+.15,.25,64),base_material)
+	track_nodes.append(box(self,Vector3(0,-.15,-28),Vector3(FRAME_HALF_WIDTH*2.0+.15,.25,64),base_material))
 	var surface = PlaneMesh.new(); surface.size = Vector2(FRAME_HALF_WIDTH*2.0,60)
 	var surface_material = track_material(TRACK_COLOR,.55); surface_material.render_priority = -9
 	track_materials.append(surface_material)
 	var rail = mesh_node(surface,self,surface_material); rail.position = Vector3(0,.008,-30)
+	track_nodes.append(rail)
 	# A translucent, darkened echo of the judgment color sits beneath the rails.
 	highway_shadow_material=ShaderMaterial.new()
 	highway_shadow_material.shader=preload("res://scripts/highway_shadow.gdshader")
@@ -467,6 +471,13 @@ func refresh_highway_look() -> void:
 	highway_shadow_material.set_shader_parameter("opacity",.2)
 	for m in track_materials:
 		m.set_shader_parameter("color",element_color("track",m.get_shader_parameter("color")))
+	# The source rail sprites already contain the translucent black road. Old
+	# rectangular 3D floor passes otherwise tint the whole orthographic canvas blue.
+	var original_stage=game.uses_ssrg_gameplay() and not game.uses_recorder_colors()
+	for node in track_nodes: node.visible=not original_stage
+	if original_stage:
+		for m in track_materials: m.set_shader_parameter("opacity",0.0)
+	if highway_shadow: highway_shadow.visible=not original_stage
 	if cover_material:
 		var glow=rail_glow_colors()
 		cover_material.set_shader_parameter("rail_glow_left",glow[0])
@@ -480,6 +491,15 @@ func build_effects() -> void:
 	# Drawn over the judgment bar so the lit lane reads all the way down to the bar's near edge.
 	finger_beam_material.render_priority = 2
 	finger_beam_material.set_shader_parameter("rail_half_width",FRAME_HALF_WIDTH)
+	finger_beam_material.set_shader_parameter("ssrg_beam_reach",SSRG_BEAM_REACH)
+	finger_beam_material.set_shader_parameter("ssrg_beam_art",preload("res://assets/ssrg/imported/beam_original.png"))
+	# Original atlas material uses SrcAlpha/OneMinusSrcAlpha, not additive glow.
+	ssrg_finger_beam_material=ShaderMaterial.new()
+	ssrg_finger_beam_material.shader=preload("res://scripts/ssrg_beam.gdshader")
+	ssrg_finger_beam_material.render_priority=2
+	ssrg_finger_beam_material.set_shader_parameter("ssrg_beam_reach",SSRG_BEAM_REACH)
+	ssrg_finger_beam_material.set_shader_parameter("ssrg_beam_art",preload("res://assets/ssrg/imported/beam_original.png"))
+	ssrg_finger_beam_material.set_shader_parameter("tint",element_color("beams",Color(0,.7843137383,1)))
 	var beam_mesh = PlaneMesh.new(); beam_mesh.size = Vector2(NOTE_WIDTH,58+JUDGMENT_DEPTH*.5)
 	for i in 10:
 		var finger_beam = mesh_node(beam_mesh,self,finger_beam_material)
@@ -1285,27 +1305,34 @@ func sync_note(key: String, note: Dictionary, visible_keys: Dictionary, recordin
 func ssrg_beam_lane(lane: float) -> float:
 	var slots=maxi(2,game.gameplay_lane_count())
 	return roundf(clampf(lane,0,SynkChart.MAX_LANE)/SynkChart.MAX_LANE*(slots-1))*SynkChart.MAX_LANE/(slots-1)
+# Original UIPolySprite: apex (0,286), bottom y=-320, width295;
+# bottom channel centres are73.75 apart. Use its judgment-plane cross-section.
+const SSRG_BEAM_REACH = 520.0*SSRG_UNIT
+const SSRG_BEAM_NEAR = 86.0*SSRG_UNIT
+func ssrg_beam_center(lane: float) -> float:
+	return (lane/.75-6.0)*73.75*(520.0/606.0)*SSRG_UNIT
 func ssrg_beam_width() -> float:
-	return (ssrg_x(SynkChart.MAX_LANE)-ssrg_x(0))/maxi(1,game.gameplay_lane_count()-1)*.96
+	return 295.0*(520.0/606.0)*SSRG_UNIT
 func update_finger_beams() -> void:
 	var touches: Array = game.pointers.values() if game.mode=="play" else []
 	var ssrg=game.uses_ssrg_gameplay()
 	for i in finger_beams.size():
 		var beam: MeshInstance3D = finger_beams[i]
 		# Reuse one mesh per view; rebuild only when switching view/lane layout.
-		var signature=game.gameplay_lane_count() if ssrg else -1
+		var signature=hash([game.gameplay_lane_count(),game.note_size]) if ssrg else -1
 		if beam.get_meta("layout",-99)!=signature:
 			var mesh=PlaneMesh.new()
-			var near=81.0*SSRG_UNIT if ssrg else JUDGMENT_DEPTH*.5
-			var reach=SSRG_STAGE_DISTANCE if ssrg else 58.0
+			var near=SSRG_BEAM_NEAR if ssrg else JUDGMENT_DEPTH*.5
+			var reach=SSRG_BEAM_REACH if ssrg else 58.0
 			mesh.size=Vector2(ssrg_beam_width() if ssrg else NOTE_WIDTH,reach+near)
 			beam.mesh=mesh; beam.position.z=(near-reach)*.5
+			beam.material_override=ssrg_finger_beam_material if ssrg else finger_beam_material
 			beam.extra_cull_margin=SSRG_STAGE_DISTANCE if ssrg else 0.0
 			beam.set_meta("layout",signature)
 		beam.visible=i<touches.size()
 		if beam.visible:
 			var lane=SynkCapture.lane(touches[i].position.x)
-			beam.position.x=ssrg_x(ssrg_beam_lane(lane)) if ssrg else clampf(lane_world_x(roundf(lane)),-BEAM_MAX_X,BEAM_MAX_X)
+			beam.position.x=ssrg_beam_center(ssrg_beam_lane(lane)) if ssrg else clampf(lane_world_x(roundf(lane)),-BEAM_MAX_X,BEAM_MAX_X)
 
 func set_trail_clip(node: Node3D, clip_z: float) -> void:
 	for mesh in node.get_children():

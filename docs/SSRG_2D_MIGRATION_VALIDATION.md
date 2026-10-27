@@ -32,3 +32,7 @@ This desktop reports32Hz, and the existing match-display setting capped the run 
 - test_ssrg_music_start.gd: chart start-marker/audio-offset handling remains unchanged.
 
 Desktop checks passed. Android signature and transfer status are reported with the build; no phone installation or launch is authorized by this workflow.
+
+## Later source-art corrections
+
+SSRG_STAGE_VIDEO_MATCH.md supersedes the initial lane-width beam estimate, generated receptor art/fade and synthetic floor. It documents the correct APK rail image, native295-unit beam polygon/alpha strip, original guide sprite padding and RenderNoteGuide fade.

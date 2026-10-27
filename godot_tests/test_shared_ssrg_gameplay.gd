@@ -11,7 +11,7 @@ func run() -> void:
 	slide.path=[{"offset":0.0,"lane":2.0},{"offset":.5,"lane":6.0},{"offset":1.0,"lane":7.0}]
 	var notes=[SynkChart.note(3,4),slide]
 	game.start_game(notes,true)
-	game.countdown=0; game.song_time=2.5
+	game.countdown=0; game.song_time=2.0
 	var world=game.field.world
 	check(not game.ssrg_playable_run,"Normal song does not become an SSRG import")
 	check(game.uses_ssrg_gameplay() and world.ssrg_theme.active,"Normal gameplay activates SSRG stage")
@@ -21,9 +21,12 @@ func run() -> void:
 	check(is_equal_approx(game.note_travel_seconds(),3.5),"Shared travel uses note speed")
 	check(world.ssrg_theme.original_stage.receptors[0].mesh!=null,"Receptors have visible geometry")
 	world.ssrg_theme.original_stage.update(world)
-	check(not world.ssrg_theme.original_stage.receptors.any(func(n):return n.visible),"Receptors wait until a note is midway down")
+	check(not world.ssrg_theme.original_stage.receptors.any(func(n):return n.visible),"Receptors wait for the original projected-progress threshold")
 	game.song_time=2.85; world.ssrg_theme.original_stage.update(world)
 	check(world.ssrg_theme.original_stage.receptors.any(func(n):return n.visible),"Approaching notes reveal a receptor")
+	game.song_time=2.9; world.ssrg_theme.original_stage.update(world)
+	check(world.ssrg_theme.original_stage.receptors.any(func(n):return n.visible and is_equal_approx(float(n.material_override.get_shader_parameter("progress")),1.0)),"Original guide becomes fully visible by projected progress .8")
+	check(world.ssrg_theme.original_stage.receptors[0].material_override.get_shader_parameter("artwork").resource_path.ends_with("guide_original.png"),"Guide uses APK sprite padding and ellipse position")
 	var holder=Node3D.new(); world.add_child(holder)
 	var head=world.make_ssrg_cap(holder,Vector3.ZERO,1)
 	check(head.material_override.get_shader_parameter("artwork").resource_path.ends_with("imported/hold.png"),"Hold uses extracted yellow artwork")

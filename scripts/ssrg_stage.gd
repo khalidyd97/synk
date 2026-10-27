@@ -7,14 +7,6 @@ func _init() -> void :
 	name = "SSRGStage"
 	# Direct original UI canvas: world Z = -(UI y + 234) * UNIT.
 	const UNIT = 9.75/512.0
-	var floor_node=MeshInstance3D.new()
-	var st=SurfaceTool.new(); st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for point in [Vector3(0,.026,-514*UNIT),Vector3(-720*UNIT,.026,86*UNIT),Vector3(720*UNIT,.026,86*UNIT)]:
-		st.set_uv(Vector2(.5, .5)); st.add_vertex(point)
-	floor_node.mesh=st.commit()
-	var floor_mat=ShaderMaterial.new(); floor_mat.shader=preload("res://scripts/ssrg_floor.gdshader")
-	floor_mat.set_shader_parameter("opacity",.32); floor_mat.render_priority=-7
-	floor_node.material_override=floor_mat; add_child(floor_node)
 	for side in [-1,1]:
 		# Original BottomRight-pivot sprite at (0,-320), mirrored on the right.
 		var rail=MeshInstance3D.new(); var quad=QuadMesh.new()
@@ -37,6 +29,7 @@ func _init() -> void :
 		ring.mesh = disc
 		ring.name = "Receptor" + str(receptors.size() + 1);ring.position = Vector3(0, 0.2, 0);ring.visible = false
 		var material = ShaderMaterial.new();material.shader = preload("res://scripts/ssrg_receptor.gdshader")
+		material.set_shader_parameter("artwork",preload("res://assets/ssrg/imported/guide_original.png"))
 		material.render_priority = -2
 		ring.material_override = material;ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(ring);receptors.append(ring)
@@ -53,12 +46,8 @@ func update(world: Node3D) -> void :
 	if game.countdown>0 or not (game.mode == "play" or (game.mode == "paused" and game.paused_mode == "play")): return
 	var now: float = world.render_time()
 	var travel: float = game.note_travel_seconds()
-	# As in SSRG: a receptor lights for a blue tap or the head of a yellow note (not connectors
-	# or ends), from when that note passes the middle of the screen to when it reaches the line.
-	var camera: Camera3D = world.camera
-	var top = camera.unproject_position(Vector3(0, .13, -world.SSRG_STAGE_DISTANCE)).y
-	var line = camera.unproject_position(Vector3(0, .13, 0)).y
-	var midway = clampf((camera.get_viewport().get_visible_rect().size.y * .5 - top) / maxf(1.0, line - top), 0.0, .95)
+	# Original RenderNoteGuide: fade starts at projected q=.3 and is complete
+	# by q=.8. Sprite padding, not an offset hit line, places the visible ellipse.
 	var targets: Dictionary = {}
 	var indexed = false
 	var candidates: Variant = range(game.first_live_index(), game.live.size())
@@ -73,11 +62,11 @@ func update(world: Node3D) -> void :
 		var at = float(note.time)
 		var lane = float(note.lane)
 		# Where the note is drawn: progress p from the vanishing point (0) to the line (1).
-		var p: float = world.ssrg_approach(-clampf((at-now)/travel,0.0,1.0)*world.TRACK_LENGTH)
-		if p < midway: continue
+		var p: float = world.ssrg_approach(-(at-now)/travel*world.TRACK_LENGTH)
+		if p < .3 or p > 1.0: continue
 		var slot = clampi(roundi(lane / float(SynkChart.MAX_LANE) * (game.gameplay_lane_count()-1)), 0, game.gameplay_lane_count()-1)
 		if targets.has(slot) and targets[slot].at <= at: continue
-		targets[slot] = {"at": at, "lane": lane, "progress": clampf((p - midway) / (1.0 - midway), 0.0, 1.0)}
+		targets[slot] = {"at": at, "lane": lane, "progress": clampf(2.0*(minf(p,.8)-.3),0.0,1.0)}
 	for slot in targets:
 		var target: Dictionary = targets[slot]
 		var receptor: MeshInstance3D = receptors[slot]
@@ -99,7 +88,9 @@ func configure(world: Node3D) -> void :
 	# in Settings still wins).
 	press.material_override.set_shader_parameter("base_color", Color(0.16, 0.17, 0.21))
 	var rail_tint = world.custom_color("rail_color")
-	if rail_tint == null: rail_tint = Color("eef1f6")
+	if rail_tint == null: rail_tint = Color.WHITE
 	for rail in rails:
 		rail.visible = stock_road
 		rail.material_override.set_shader_parameter("tint", rail_tint)
+		rail.material_override.set_shader_parameter("floor_opacity",clampf(float(world.game.highway_opacity),.3,1.6))
+		rail.material_override.set_shader_parameter("floor_tint",world.element_color("track",Color.BLACK))

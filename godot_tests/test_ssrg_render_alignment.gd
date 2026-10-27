@@ -14,6 +14,10 @@ func run():
  game.field.sync_projection_style();freeze(game)
  game.field.show();game.field.screen.show();game.field.viewport.render_target_update_mode=SubViewport.UPDATE_ALWAYS
  var world=game.field.world;world.apply_camera();world.update_ssrg_warp()
+ for material in world.track_materials:
+  check(is_zero_approx(material.get_shader_parameter("opacity")),"Old rectangular floor cannot tint the SSRG stage")
+ check(not world.highway_shadow.visible,"Old floor shadow is hidden in the 2D stage")
+ check(world.track_nodes.all(func(node):return not node.visible),"Obsolete floor passes are not drawn")
  var note=SynkChart.note(5,4.5)
  world.build_note_node("early",note)
  var parent:Node3D=world.notes.early.node
@@ -44,10 +48,12 @@ func run():
    game.pointers={1:{"position":Vector2(.07+(lane+.5)/10.0*.86,.85)}}
    world.update_finger_beams()
    var beam=world.finger_beams[0]
-   check(absf(beam.position.x-world.ssrg_x(lane))<.001,"Beam matches its note lane in %d lanes" % lanes)
-   check(beam.mesh.size.x<(world.ssrg_x(9)-world.ssrg_x(0))/(lanes-1),"Beam fits between neighbouring lane centres")
+   check(absf(beam.position.x-world.ssrg_beam_center(lane))<.001,"Beam matches its source channel in %d lanes" % lanes)
+   check(absf(beam.position.x-world.ssrg_x(lane))<4.0*world.SSRG_UNIT,"Beam and note share the same channel within original sprite layout tolerance")
+   check(is_equal_approx(beam.mesh.size.x,295.0*520.0/606.0*world.SSRG_UNIT),"Beam uses the original 295-unit bottom width projected to judgment")
+   check(absf(beam.position.x)+beam.mesh.size.x*.5<world.HIGHWAY_HALF_WIDTH,"Outer beam edge stays inside the highway at judgment")
    var far=beam.position.z-beam.mesh.size.y*.5
-   check(absf(far+world.SSRG_STAGE_DISTANCE)<.001,"Beam begins at the note highway apex")
+   check(absf(far+world.SSRG_BEAM_REACH)<.001,"Beam begins at its original UI y286 apex")
    var flash=game.field.world.ssrg_theme.flash_point(world.ssrg_x(lane))
    var line=world.camera.unproject_position(Vector3(world.ssrg_x(lane),.035,0))
    check(line.distance_to(world.camera.unproject_position(flash))<.001,"Hit flash stays aligned at outer and central lanes")
@@ -63,6 +69,7 @@ func run():
  check(is_equal_approx(world.render_time(),1.25),"Pausing retains the displayed note time without snapping")
  game.set_mode("record");game.field.sync_projection_style();world.update_finger_beams()
  check(not game.field.screen.material.get_shader_parameter("ssrg_canvas"),"Recorder restores its postprocessing")
+ check(float(world.track_materials[0].get_shader_parameter("opacity"))>0.0,"Recorder restores its original floor")
  check(is_equal_approx(world.finger_beams[0].mesh.size.y,59),"Recorder restores its original beam layout")
  game.set_mode("play");game.countdown=3
  world._process(0)
