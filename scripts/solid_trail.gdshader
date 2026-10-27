@@ -7,9 +7,13 @@ uniform float ghost_fade=1.0;
 uniform float desaturate=0.0;
 uniform bool joint=false;
 uniform float ssrg_half_width=0.0;
+uniform float ssrg_line_x_scale=1.3;
+uniform vec4 source_tint : source_color=vec4(1.0);
+varying vec3 source_chip;
 varying float world_z;
 #include "res://scripts/ssrg_warp.gdshaderinc"
 void vertex(){
+    source_chip=CUSTOM1.yzw;
     // world_z stays the linear track position, so clip_z and the far fade are unchanged.
     world_z=(MODEL_MATRIX*vec4(VERTEX,1.0)).z;
     // Ribbons carry their centreline depth in UV2 (make_ribbon in highway_3d.gd).
@@ -21,7 +25,8 @@ void vertex(){
         vec2 normal=length(delta)>0.00001?normalize(vec2(-delta.y,delta.x)):vec2(1.0,0.0);
         float section=MODEL_MATRIX[3].z+UV2.x;
         bool at_start=abs(UV2.x-CUSTOM0.y)<0.00001;
-        vec2 point=(at_start?a:b)+normal*UV2.y*ssrg_half_width*ssrg_scale(section);
+        vec2 point=(at_start?a:b)+normal*vec2(ssrg_line_x_scale,1.0)*UV2.y*ssrg_half_width*ssrg_scale(section);
+        point.x+=UV2.y*CUSTOM1.x;
         vec3 target=vec3(point.x,(MODEL_MATRIX*vec4(VERTEX,1.0)).y,point.y);
         VERTEX=inverse(mat3(MODEL_MATRIX))*(target-MODEL_MATRIX[3].xyz);
     }else{
@@ -36,8 +41,8 @@ void fragment(){
         if(rail_position.z>ssrg_warp_z(clip_z)) discard;
         if(rail_position.z<ssrg_warp.z*(pow(0.5,ssrg_warp.y)-1.0)) discard;
     }else if(world_z>clip_z) discard;
-    vec3 color=tint*.87;
-    float opacity=.8;
+    vec3 color=ssrg_warp.x>0.5?source_chip:tint*.87;
+    float opacity=ssrg_warp.x>0.5?.2:.8;
     if(!joint){
         float edge=min(UV.x,1.0-UV.x);
         float feather=max(fwidth(UV.x),.001);
@@ -52,6 +57,7 @@ void fragment(){
         opacity=1.0-smoothstep(.94,1.0,radius);
     }
     float gray=dot(color,vec3(.299,.587,.114));
-    ALBEDO=mix(color,vec3(gray*.6),desaturate);
-    ALPHA=opacity*ghost_fade*(ssrg_warp.x>0.5?1.0:smoothstep(-60.0,-55.0,world_z));
+    ALBEDO=mix(color,vec3(gray*.6),desaturate)*source_tint.rgb;
+    float missed_alpha=source_tint.a;
+    ALPHA=(ssrg_warp.x>0.5 && source_tint.a<1.0?missed_alpha:opacity)*ghost_fade*(ssrg_warp.x>0.5?1.0:smoothstep(-60.0,-55.0,world_z));
 }

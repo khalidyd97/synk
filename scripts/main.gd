@@ -8,6 +8,7 @@ const ResultsScreen = preload("res://scripts/results_screen.gd")
 const NeonAction = preload("res://scripts/neon_action.gd")
 const ECLIPSE_COVER = preload("res://assets/lobby/eclipse_cover.png")
 const CUSTOM_COVER = preload("res://assets/lobby/custom_cover.png")
+const SsrgRules = preload("res://scripts/ssrg_input_rules.gd")
 
 const COMBO_ATLAS = preload("res://assets/hud/Combo_Digits_1_to_9.png")
 const COMBO_ZERO = preload("res://assets/hud/Combo_Digit_0.png")
@@ -115,7 +116,17 @@ func uses_ssrg_gameplay() -> bool:
 func gameplay_lane_count() -> int:
 	return ssrg_lane_count if ssrg_playable_run else 10
 # SSRG Playables keeps its own note speed (set on that screen), separate from SYNK's.
-func ssrg_note_speed() -> float: return clampf(float(prefs.get_value("ssrg","speed",1.0)),.5,4.0)
+func ssrg_speed_setting() -> float:
+	return clampf(float(prefs.get_value("ssrg","speed_value",float(prefs.get_value("ssrg","speed",1.0))*3.0)),1.0,10.0)
+func ssrg_note_speed() -> float: return ssrg_speed_setting()/3.0
+
+func ssrg_touch_lane(point: Vector3, lane: float) -> bool:
+	var ui_point=Vector2(point.x/field.world.SSRG_UNIT,-point.z/field.world.SSRG_UNIT-234.0)
+	var channel=lane*12.0/9.0
+	return SsrgRules.contains_lane(ui_point,channel,ssrg_lane_count) or (roundi(channel) in [0,12] and SsrgRules.side_channel(ui_point,ssrg_lane_count)==roundi(channel))
+
+func hit_good_window(kind: String = "tap") -> float:
+	return SsrgRules.good_window() if ssrg_playable_run else (.23*extras.scale() if kind=="slide" else extras.good_window())
 var ssrg_playable_previous_style = "gold"
 var rail_color = ""
 var band_color = ""
@@ -1038,7 +1049,7 @@ func total_judgements() -> int:
 	if judgement_total_size!=live.size():
 		judgement_total_cache=live.size()
 		for entry in live:
-			if entry.note.kind=="hold": judgement_total_cache+=1
+			if entry.note.kind=="hold" or (ssrg_playable_run and entry.note.kind=="slide"): judgement_total_cache+=1
 			judgement_total_cache+=entry.note.get("checkpoints",[]).size()
 		judgement_total_size=live.size()
 	return judgement_total_cache
@@ -1052,6 +1063,13 @@ func process_checkpoints(entry: Dictionary, finger_lane: float, automated: bool)
 		var at=float(entry.note.time)+float(checks[index])
 		if song_time<at: break
 		var lane=SynkChart.lane_at(entry.note,at)
+		if ssrg_playable_run and not automated:
+			if song_time>=at+SsrgRules.good_window(true):
+				judge(entry,-1);return false
+			if pointers.has(entry.pointer) and ssrg_touch_lane(pointers[entry.pointer].world,lane):
+				entry.checks_done=index+1;pass_checkpoint(entry,lane,absf(song_time-at));continue
+			if song_time<at+SsrgRules.good_window(true): break
+			judge(entry,-1);return false
 		var tolerance=SSRG_CHECKPOINT_LANES if uses_ssrg_gameplay() else CHECKPOINT_LANE_TOLERANCE
 		if automated or absf(finger_lane-lane)<=tolerance:
 			entry.checks_done=index+1; pass_checkpoint(entry,lane)
@@ -1060,13 +1078,15 @@ func process_checkpoints(entry: Dictionary, finger_lane: float, automated: bool)
 		else: entry.checks_done=index+1; judge(entry,-1); return false
 	return true
 
-func pass_checkpoint(entry: Dictionary, lane: float) -> void:
-	performance_samples.append({"time":song_time,"weight":1.0,"amount":1})
+func pass_checkpoint(entry: Dictionary, lane: float, error: float = 0.0) -> void:
+	var grade=SsrgRules.grade(error,true) if ssrg_playable_run else "PERFECT"
+	var weight=1.0 if grade=="PERFECT" else (.8 if grade=="GREAT" else .5)
+	performance_samples.append({"time":song_time,"weight":weight,"amount":1})
 	field.world.spawn_hit(lane,str(entry.note.kind))
-	judged+=1; earned+=1; judgment_counts.PERFECT+=1
+	judged+=1; earned+=weight; judgment_counts[grade]+=1
 	combo+=1; combo_pulse=1.0; max_combo=maxi(combo,max_combo)
-	judgement="PERFECT"; flash=1; flash_lane=roundi(lane)
-	add_points("PERFECT")
+	judgement=grade; flash=1; flash_lane=roundi(lane)
+	add_points(grade)
 
 func forfeit_checkpoints(entry: Dictionary) -> void:
 	# A missed or broken note also misses any dots it had not reached.
@@ -1879,26 +1899,27 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 	if began:
 		pointers[id]={"start":p,"position":p,"world":touch_world}
 		# Taps anywhere on the lower highway count; the grade comes only from timing at the judgement bar.
-		if p.y>=.35:
-			var nearest: Dictionary={}; var best=.231; var best_gap=INF
+		if ssrg_playable_run or p.y>=.35:
+			var nearest: Dictionary={}; var best=(SsrgRules.good_window()+.001 if ssrg_playable_run else .231); var best_gap=INF
 			# Where the finger is across the judgement bar, in world units: notes are hit by touching
 			# the note itself (its drawn width), whatever lane it is in.
 			var world=field.world; var touch_x=world.lane_world_x(SynkCapture.lane(p.x)); var reach=world.note_reach()
 			for live_index in range(first_live_index(),live.size()):
 				var entry: Dictionary=live[live_index]
-				if float(entry.note.time)>song_time+.23: break
+				if float(entry.note.time)>song_time+(SsrgRules.good_window() if ssrg_playable_run else .23): break
 				if entry.done: continue
 				var n: Dictionary=entry.note
 				if entry.started:
-					if entry.pointer==-999 and absf(touch_x-world.note_x(SynkChart.lane_at(n,song_time)))<=reach: entry.pointer=id
+					if entry.pointer==-999 and (ssrg_touch_lane(touch_world,SynkChart.lane_at(n,song_time)) if ssrg_playable_run else absf(touch_x-world.note_x(SynkChart.lane_at(n,song_time)))<=reach): entry.pointer=id
 					continue
 				var error=absf(song_time-float(n.time))
-				var timing_limit=.23*extras.scale() if n.kind=="slide" else extras.good_window()
+				var timing_limit=hit_good_window(str(n.kind))
 				var gap=absf(touch_x-world.note_x(float(n.lane)))
-				if gap>reach*(1.4 if n.kind=="slide" else 1.0) or error>timing_limit: continue
+				var touching=ssrg_touch_lane(touch_world,float(n.lane)) if ssrg_playable_run else gap<=reach*(1.4 if n.kind=="slide" else 1.0)
+				if not touching or error>timing_limit: continue
 				# Best timing wins; between notes timed alike (a chord), the one under the finger.
 				if error<best-.001 or (absf(error-best)<=.001 and gap<best_gap): best=error; best_gap=gap; nearest=entry
-			if nearest.is_empty() and bool(extras.settings.touch_assist):
+			if nearest.is_empty() and not ssrg_playable_run and bool(extras.settings.touch_assist):
 				# Touch assist: accept a touch a little beyond the note's edge when nothing else is hit.
 				for live_index in range(first_live_index(),live.size()):
 					var entry: Dictionary=live[live_index]
@@ -1911,7 +1932,9 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 				nearest.started=true; nearest.pointer=id; nearest.error=best; nearest.timing_error=song_time-float(nearest.note.time)
 				if nearest.note.kind=="tap": judge(nearest,best)
 				elif nearest.note.kind=="hold": judge(nearest,best,false)
-				elif nearest.note.kind=="slide": field.world.spawn_hit(SynkChart.lane_at(nearest.note,song_time),"slide",0,nearest,id)
+				elif nearest.note.kind=="slide":
+					if ssrg_playable_run: judge(nearest,best,false)
+					else: field.world.spawn_hit(SynkChart.lane_at(nearest.note,song_time),"slide",0,nearest,id)
 	if pointers.has(id):
 		pointers[id].position=p; pointers[id].world=touch_world
 	if ended:
@@ -1922,15 +1945,17 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 			if entry.done or entry.pointer!=id or entry.note.kind!="hold": continue
 			var hold_end=float(entry.note.time)+float(entry.note.duration)
 			# Letting go a little early still completes the hold; the score keeps the head's accuracy.
-			judge(entry,tail_error(entry) if not canceled and song_time>=hold_end-tail_grace(entry) else -1)
+			var correct_lane=not ssrg_playable_run or ssrg_touch_lane(touch_world,SynkChart.lane_at(entry.note,hold_end))
+			judge(entry,tail_error(entry) if not canceled and correct_lane and song_time>=hold_end-tail_grace(entry) else -1)
 		for live_index in range(first_live_index(),live.size()):
 			var entry: Dictionary=live[live_index]
 			if entry.done or entry.pointer!=id or entry.note.kind!="slide": continue
 			var end_time=float(entry.note.time)+float(entry.note.duration)
 			var lane_error=absf(SynkCapture.lane(p.x)-SynkChart.lane_at(entry.note,end_time))
 			var end_lanes=SSRG_SLIDE_END_LANES if uses_ssrg_gameplay() else SLIDE_END_LANES
-			if not canceled and lane_error<=end_lanes and p.y>=(.25 if uses_ssrg_gameplay() else .4) and song_time>=end_time-tail_grace(entry) and song_time<=end_time+.30:
-				judge(entry,float(entry.error))
+			var end_touch=ssrg_touch_lane(touch_world,SynkChart.lane_at(entry.note,end_time)) if ssrg_playable_run else lane_error<=end_lanes and p.y>=(.25 if uses_ssrg_gameplay() else .4)
+			if not canceled and end_touch and song_time>=end_time-tail_grace(entry) and song_time<=end_time+.30:
+				judge(entry,absf(song_time-end_time) if ssrg_playable_run else float(entry.error))
 		pointers.erase(id)
 		if canceled:
 			for live_index in range(first_live_index(),live.size()):
@@ -1946,7 +1971,9 @@ func update_autoplay() -> void:
 		if not entry.started and song_time>=float(n.time):
 			entry.started=true
 			if n.kind=="hold": judge(entry,0.0,false)
-			elif n.kind=="slide": field.world.spawn_hit(SynkChart.lane_at(n,song_time),"slide",0,entry)
+			elif n.kind=="slide":
+				if ssrg_playable_run: judge(entry,0.0,false)
+				else: field.world.spawn_hit(SynkChart.lane_at(n,song_time),"slide",0,entry)
 			elif n.kind in ["tap","flick"]: judge(entry,0.0)
 		if entry.started and not entry.done: process_checkpoints(entry,0.0,true)
 		if entry.started and not entry.done and song_time>=float(n.time)+float(n.duration):
@@ -1957,9 +1984,18 @@ func update_autoplay() -> void:
 # than GREAT, so a clean start isn't lost to a slightly early lift.
 const SLIDE_END_LANES = 3.5
 func tail_grace(entry: Dictionary) -> float:
+	if ssrg_playable_run: return SsrgRules.early_release_window()
 	return clampf(float(entry.note.duration)*.2,.2,.45)*extras.scale()
 func tail_error(entry: Dictionary) -> float:
+	if ssrg_playable_run: return absf(song_time-float(entry.note.time)-float(entry.note.duration))
 	return minf(float(entry.get("error",0.0)),extras.great_window())
+
+func count_unstarted_tail(entry: Dictionary) -> void:
+	if entry.note.kind=="hold" or (ssrg_playable_run and entry.note.kind=="slide"):
+		judged+=1
+		if ssrg_playable_run:
+			judgment_counts.MISS+=1
+			performance_samples.append({"time":float(entry.note.time)+float(entry.note.duration),"weight":0.0,"amount":1})
 
 func update_game() -> void:
 	for i in range(pending_end_hits.size()-1,-1,-1):
@@ -1969,13 +2005,13 @@ func update_game() -> void:
 		pending_end_hits.remove_at(i)
 	for live_index in range(first_live_index(),live.size()):
 		var entry: Dictionary=live[live_index]
-		if float(entry.note.time)>song_time+.23: break
+		if float(entry.note.time)>song_time+(SsrgRules.good_window() if ssrg_playable_run else .23): break
 		if entry.done: continue
 		var n: Dictionary=entry.note
 		if not entry.started:
-			if song_time>float(n.time)+(.23*extras.scale() if n.kind=="slide" else extras.good_window()):
+			if song_time>float(n.time)+hit_good_window(str(n.kind)):
 				judge(entry,-1)
-				if n.kind=="hold": judged+=1
+				count_unstarted_tail(entry)
 			continue
 		if entry.pointer==-999 and resume_grace>0: continue
 		if not pointers.has(entry.pointer): judge(entry,-1); continue
@@ -1989,20 +2025,27 @@ func update_game() -> void:
 			continue
 		elif n.kind=="slide":
 			var end_time=float(n.time)+float(n.duration)
-			if song_time>=end_time-.045:
+			if song_time>=end_time-(0.0 if ssrg_playable_run else .045):
 				var lane_error=absf(SynkCapture.lane(p.position.x)-SynkChart.lane_at(n,end_time))
 				var end_lanes=SSRG_SLIDE_END_LANES if uses_ssrg_gameplay() else SLIDE_END_LANES
-				if lane_error<=end_lanes and p.position.y>=(.25 if uses_ssrg_gameplay() else .4): judge(entry,tail_error(entry))
+				var end_touch=ssrg_touch_lane(p.world,SynkChart.lane_at(n,end_time)) if ssrg_playable_run else lane_error<=end_lanes and p.position.y>=(.25 if uses_ssrg_gameplay() else .4)
+				if end_touch: judge(entry,tail_error(entry))
 				elif song_time>end_time+.30: judge(entry,-1)
 		elif n.kind=="hold":
 			var hold_end=float(n.time)+float(n.duration)
-			if song_time>=hold_end-.045: judge(entry,tail_error(entry))
+			if song_time>=hold_end-(0.0 if ssrg_playable_run else .045):
+				if not ssrg_playable_run or ssrg_touch_lane(p.world,SynkChart.lane_at(n,hold_end)): judge(entry,tail_error(entry))
+				elif song_time>hold_end+SsrgRules.good_window():judge(entry,-1)
 
 func judge(entry: Dictionary,error: float,complete: bool = true) -> void:
+	var grade=SsrgRules.grade(error) if ssrg_playable_run else ("MISS" if error<0 else ("PERFECT" if error<=extras.perfect_window() else ("GREAT" if error<=extras.great_window() else "GOOD")))
+	if grade=="MISS": error=-1
 	var at=float(entry.note.time)
-	if entry.note.kind=="hold" and entry.get("note_hit",false): at=minf(song_time,float(entry.note.time)+float(entry.note.duration))
-	performance_samples.append({"time":at,"weight":0.0 if error<0 else (1.0 if error<=extras.perfect_window() else (.8 if error<=extras.great_window() else .5)),"amount":1})
-	if error>=0: entry.note_hit=true
+	if (entry.note.kind=="hold" or (ssrg_playable_run and entry.note.kind=="slide")) and entry.get("note_hit",false): at=minf(song_time,float(entry.note.time)+float(entry.note.duration))
+	performance_samples.append({"time":at,"weight":0.0 if error<0 else (1.0 if grade=="PERFECT" else (.8 if grade=="GREAT" else .5)),"amount":1})
+	if error>=0:
+		entry.note_hit=true
+		if not complete and field.world.notes.has(str(entry.key)): field.world.notes[str(entry.key)].head_hit=true
 	if error<0: timing_label.text=""
 	if error>=0 and not auto_play and not entry.get("timing_logged",false):
 		entry.timing_logged=true
@@ -2013,8 +2056,8 @@ func judge(entry: Dictionary,error: float,complete: bool = true) -> void:
 	var end_at=float(entry.note.time)+float(entry.note.duration)
 	# An early lift completes a slide before its end reaches the line; flashing then would land
 	# on the head's flash, so the end flashes on its own puck when it gets there.
-	if error>=0 and entry.note.kind=="slide" and song_time<end_at: pending_end_hits.append({"at":end_at,"note":entry.note})
-	elif error>=0: field.world.spawn_hit(SynkChart.lane_at(entry.note,song_time),str(entry.note.kind),int(entry.note.direction),entry if entry.note.kind=="hold" and not complete else {},int(entry.get("pointer",-999)))
+	if error>=0 and complete and entry.note.kind=="slide" and song_time<end_at: pending_end_hits.append({"at":end_at,"note":entry.note})
+	elif error>=0: field.world.spawn_hit(SynkChart.lane_at(entry.note,song_time),str(entry.note.kind),int(entry.note.direction),entry if entry.note.kind in ["hold","slide"] and not complete else {},int(entry.get("pointer",-999)))
 	else: field.world.shake_on_miss()
 	if error<0 and entry.note.kind in ["slide","hold"]:
 		entry.missed_at=song_time
@@ -2025,9 +2068,9 @@ func judge(entry: Dictionary,error: float,complete: bool = true) -> void:
 	if error<0: judgement="MISS"; combo=0; combo_pulse=0; forfeit_checkpoints(entry); score_panel.energy=maxf(0,score_panel.energy-.08)
 	else:
 		combo+=1; combo_pulse=1.0; max_combo=maxi(combo,max_combo)
-		score_panel.energy=minf(1,score_panel.energy+(.02 if error<=extras.perfect_window() else (.012 if error<=extras.great_window() else .004)))
-		if error<=extras.perfect_window(): judgement="PERFECT"; earned+=1
-		elif error<=extras.great_window(): judgement="GREAT"; earned+=.8
+		score_panel.energy=minf(1,score_panel.energy+(.02 if grade=="PERFECT" else (.012 if grade=="GREAT" else .004)))
+		if grade=="PERFECT": judgement="PERFECT"; earned+=1
+		elif grade=="GREAT": judgement="GREAT"; earned+=.8
 		else: judgement="GOOD"; earned+=.5
 	judgment_counts[judgement]+=1
 	if error>=0: add_points(judgement)
@@ -2040,7 +2083,7 @@ func _audio_finished() -> void:
 		for entry in live:
 			if not entry.done:
 				judge(entry,-1)
-				if entry.note.kind=="hold" and not entry.started: judged+=1
+				if not entry.started: count_unstarted_tail(entry)
 		var chart_key=(str(song.id)+JSON.stringify(live.map(func(e):return e.note))).sha256_text()
 		var previous_best=int(prefs.get_value("scores",chart_key,0))
 		var best=previous_best

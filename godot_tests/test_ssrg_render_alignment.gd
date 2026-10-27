@@ -31,6 +31,8 @@ func run():
  var pixel=world.camera.unproject_position(expected)
  var color=image.get_pixelv(Vector2i(pixel))
  check(maxf(color.r,maxf(color.g,color.b))>.55,"Early approach note is actually rendered before its raw depth enters the camera")
+ var below_pixel=Vector2i(world.camera.unproject_position(Vector3(0,.13,.15)))
+ var bar_below_color=image.get_pixelv(below_pixel)
  var hold=SynkChart.note(5,0,"hold");hold.duration=1.0
  world.build_note_node("held",hold)
  var held_node:Node3D=world.notes.held.node
@@ -40,14 +42,14 @@ func run():
  image=game.field.viewport.get_texture().get_image()
  var below=Vector3(world.ssrg_x(0)*(1.0+.15/world.SSRG_STAGE_DISTANCE),.13,.15)
  var below_color=image.get_pixelv(Vector2i(world.camera.unproject_position(below)))
- check(below_color.r<.4 and below_color.g<.4,"Held ribbon clips at the drawn judgment line instead of old raw Z")
+ check(Vector3(below_color.r,below_color.g,below_color.b).distance_to(Vector3(bar_below_color.r,bar_below_color.g,bar_below_color.b))<.03,"Held ribbon clips at the drawn judgment line instead of painting over the gold bar")
  for lanes in [4,7,13]:
   game.ssrg_lane_count=lanes
   for slot in [0,int((lanes-1)/2),lanes-1]:
    var lane=float(slot)*9.0/(lanes-1)
    game.pointers={1:{"position":Vector2(.07+(lane+.5)/10.0*.86,.85)}}
    world.update_finger_beams()
-   var beam=world.finger_beams[0]
+   var beam=world.finger_beams[clampi(roundi(lane/.75),0,12)]
    check(absf(beam.position.x-world.ssrg_beam_center(lane))<.001,"Beam matches its source channel in %d lanes" % lanes)
    check(absf(beam.position.x-world.ssrg_x(lane))<4.0*world.SSRG_UNIT,"Beam and note share the same channel within original sprite layout tolerance")
    check(is_equal_approx(beam.mesh.size.x,295.0*520.0/606.0*world.SSRG_UNIT),"Beam uses the original 295-unit bottom width projected to judgment")

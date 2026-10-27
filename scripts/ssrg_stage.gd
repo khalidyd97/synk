@@ -15,7 +15,7 @@ func _init() -> void :
 		rail.rotation_degrees.x=-90
 		if side>0: rail.scale.x=-1
 		var mat=ShaderMaterial.new(); mat.shader=preload("res://scripts/ssrg_stage.gdshader")
-		mat.render_priority=-7
+		mat.render_priority=-8
 		mat.set_shader_parameter("artwork",preload("res://assets/ssrg/imported/rail_original.png"))
 		mat.set_shader_parameter("along_rail",false)
 		rail.material_override=mat; add_child(rail); rails.append(rail)
@@ -23,7 +23,8 @@ func _init() -> void :
 	plane.size=Vector2(1156,130)*UNIT; press.mesh=plane
 	press.position=Vector3(-5*UNIT,.035,16*UNIT)
 	var mat=ShaderMaterial.new(); mat.shader=preload("res://scripts/ssrg_press.gdshader")
-	mat.set_shader_parameter("base_color",Color(.08,.08,.09)); mat.render_priority=-8
+	mat.set_shader_parameter("artwork",preload("res://assets/ssrg/imported/judgment_Main_black_BG3.png"))
+	mat.set_shader_parameter("base_color",Color8(255,220,65,149)); mat.render_priority=-7
 	press.material_override=mat; add_child(press)
 	for lane in 13:
 		var ring = MeshInstance3D.new(); var disc = QuadMesh.new();disc.size = Vector2(212.0, 116.0)*9.75/512.0   # SSRG guide sprite size
@@ -85,9 +86,8 @@ func warmup(world: Node3D) -> void :
 func configure(world: Node3D) -> void :
 	var stock_road = true
 	press.visible = stock_road
-	# SSRG colours: a dark grey glass judgement bar and white-silver rails (a rail colour picked
-	# in Settings still wins).
-	press.material_override.set_shader_parameter("base_color", Color(0.16, 0.17, 0.21))
+	# Fixed source gold tier, independent of combo/rave/card UI or song palette.
+	press.material_override.set_shader_parameter("base_color",Color8(255,220,65,149))
 	var rail_tint = world.custom_color("rail_color")
 	if rail_tint == null: rail_tint = Color.WHITE
 	for rail in rails:

@@ -29,7 +29,7 @@ func run() -> void:
 	check(world.ssrg_theme.original_stage.receptors[0].material_override.get_shader_parameter("artwork").resource_path.ends_with("guide_original.png"),"Guide uses APK sprite padding and ellipse position")
 	var holder=Node3D.new(); world.add_child(holder)
 	var head=world.make_ssrg_cap(holder,Vector3.ZERO,1)
-	check(head.material_override.get_shader_parameter("artwork").resource_path.ends_with("imported/hold.png"),"Hold uses extracted yellow artwork")
+	check(head.material_override.get_shader_parameter("artwork").resource_path.contains("note_animation/nb"),"Hold uses original animated yellow artwork")
 	for i in 35: world.ssrg_theme.spawn(4,"tap",{},-999)
 	check(world.ssrg_theme.hits.size()==35,"Dense hits do not evict preceding effects")
 	check(world.ssrg_theme.special_frames.size()==11,"Special-event artwork remains available")

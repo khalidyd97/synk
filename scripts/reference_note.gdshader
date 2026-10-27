@@ -7,6 +7,7 @@ uniform float value_scale = 1.0;
 uniform float opacity = 1.0;
 uniform float ghost_fade = 1.0;
 uniform float desaturate = 0.0;
+uniform vec4 source_tint : source_color = vec4(1.0);
 uniform float clip_z = 1000.0;
 // SSRG Playables: falling notes play a 6-frame glow loop like a sprite sequence (white-hot
 // centre and halo down to the plain colour, then again), and stay hot over the last
@@ -63,6 +64,6 @@ void fragment(){
         color=mix(color,vec3(1.0),rim/max(0.001,alpha+rim));
         alpha=max(alpha,rim);
     }
-    ALBEDO=mix(color,vec3(gray*0.52),desaturate);
-    ALPHA=alpha*opacity*ghost_fade*smoothstep(-60.0,-55.0,world_z)*ssrg_reveal(centre_z);
+    ALBEDO=mix(color,vec3(gray*0.52),desaturate)*source_tint.rgb;
+    ALPHA=alpha*opacity*ghost_fade*source_tint.a*smoothstep(-60.0,-55.0,world_z)*ssrg_reveal(centre_z);
 }

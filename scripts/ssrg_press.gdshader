@@ -1,8 +1,9 @@
 shader_type spatial;
 render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, fog_disabled;
-uniform vec3 base_color : source_color = vec3(.58,.45,.12);
+uniform vec4 base_color : source_color = vec4(1.0,.8627451,.254902,.58431375);
+uniform sampler2D artwork : source_color, filter_linear, repeat_disable;
 void fragment(){
-    float edge=smoothstep(0.0,.10,UV.y)*(1.0-smoothstep(.85,1.0,UV.y));
-    ALBEDO=base_color;
-    ALPHA=edge*.96;
+    vec4 art=texture(artwork,UV);
+    ALBEDO=art.rgb*base_color.rgb;
+    ALPHA=art.a*base_color.a;
 }

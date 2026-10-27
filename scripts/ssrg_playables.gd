@@ -116,9 +116,9 @@ func _ready() -> void:
 	action(self,"+ FILES",.455,.045,.555,.135,open_import,"small")
 	logout_button = action(self,"LOG OUT",.37,.045,.445,.135,log_out,"small")
 	# Note speed for SSRG songs only (0.5x to 4x).
-	action(self,"−",.57,.045,.62,.135,func(): change_speed(-.25),"small")
+	action(self,"−",.57,.045,.62,.135,func(): change_speed(-1),"small")
 	speed_label = text(self,"",.625,.045,.725,.135,18); speed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	action(self,"+",.73,.045,.78,.135,func(): change_speed(.25),"small")
+	action(self,"+",.73,.045,.78,.135,func(): change_speed(1),"small")
 	ScreenStyle.rule(self,.035,.965,.165)
 
 	# Song list
@@ -530,12 +530,12 @@ func refresh_detail() -> void:
 	delete_button = action(detail,"DELETE SONG",.7,.895,.96,.97,delete_selected,"small")
 
 func change_speed(step: float) -> void:
-	game.prefs.set_value("ssrg","speed",clampf(snappedf(game.ssrg_note_speed()+step,.25),.5,4.0))
+	game.prefs.set_value("ssrg","speed_value",clampf(game.ssrg_speed_setting()+step,1.0,10.0))
 	game.prefs.save("user://preferences.cfg")
 	refresh_speed()
 
 func refresh_speed() -> void:
-	speed_label.text = "SPEED %s×" % str(game.ssrg_note_speed())
+	speed_label.text = "SPEED %s" % str(snappedf(game.ssrg_speed_setting(),.01))
 
 # --- Actions ---------------------------------------------------------------------------
 func choose_background() -> void:

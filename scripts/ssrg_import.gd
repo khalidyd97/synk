@@ -46,7 +46,7 @@ static func parse(bytes: PackedByteArray) -> Dictionary:
 		var kind = bytes.decode_u32(at + 16)
 		if position > 12 or tick < 0: continue
 		positions[position] = true
-		var point = {"time": (tick - start_tick) * seconds_per_tick, "position": position}
+		var point = {"time": (tick - start_tick) * seconds_per_tick, "position": position, "order":i}
 		match kind:
 			0: taps.append(point)
 			21, 11:
@@ -65,12 +65,13 @@ static func parse(bytes: PackedByteArray) -> Dictionary:
 	for point in taps:
 		var n = SynkChart.note(point.time, roundi(lane(point.position)))
 		n.lane=lane(point.position); n.end_lane=n.lane
+		n.ssrg_order=int(point.order)
 		var key = "%d|%d" % [roundi(n.time * 1000), point.position]
 		if taken.has(key): continue
 		taken[key] = true; notes.append(n)
 	for start in chains:
 		for chain in chains[start]: notes.append(long_note(chain))
-	notes.sort_custom(func(a, b): return a.time < b.time)
+	notes.sort_custom(func(a, b): return a.time < b.time if not is_equal_approx(float(a.time),float(b.time)) else int(a.ssrg_order)<int(b.ssrg_order))
 	# Beats stay on chart ticks that are multiples of a beat, now counted from the music start.
 	var beat_offset = posmod(-start_tick, ticks) * seconds_per_tick
 	return {"keys": keys, "bpm": bpm, "length": song_length - start_tick * seconds_per_tick, "beat_offset": beat_offset,
@@ -80,6 +81,9 @@ static func long_note(chain: Array) -> Dictionary:
 	var first: Dictionary = chain[0]; var last: Dictionary = chain[-1]
 	var n = SynkChart.note(first.time, roundi(lane(first.position)))
 	n.lane=lane(first.position); n.end_lane=n.lane
+	n.ssrg_order=int(first.order)
+	n.ssrg_orders=[]
+	for point in chain: n.ssrg_orders.append({"offset":float(point.time)-float(first.time),"order":int(point.order)})
 	var duration = float(last.time) - float(first.time)
 	if chain.size() < 2 or duration <= 0: return n
 	# Continuation records are playable connector pucks, not just curve samples.
@@ -211,7 +215,7 @@ static func scan(root: String) -> Array:
 # Changes when any of the song's files change, so an unchanged song is not imported again.
 static func signature(entry: Dictionary) -> String:
 	# Bumped when parsing changes, so songs imported before are read again (v2: music start).
-	var parts: Array = ["v2"]
+	var parts: Array = ["v3"]
 	for path in entry.charts.values() + [entry.audio, entry.background]:
 		if not str(path).is_empty(): parts.append("%s:%d" % [str(path).get_file(), FileAccess.get_modified_time(path)])
 	return "|".join(parts)

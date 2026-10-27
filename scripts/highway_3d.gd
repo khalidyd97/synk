@@ -1,4 +1,6 @@
 extends Node3D
+const SsrgNotes = preload("res://scripts/ssrg_note_animation.gd")
+const SsrgCurves = preload("res://scripts/ssrg_runtime_curves.gd")
 
 # All note positions are in world units. Camera perspective supplies the depth.
 const CENTER_LANE = (SynkChart.LANES-1)*.5
@@ -501,7 +503,7 @@ func build_effects() -> void:
 	ssrg_finger_beam_material.set_shader_parameter("ssrg_beam_art",preload("res://assets/ssrg/imported/beam_original.png"))
 	ssrg_finger_beam_material.set_shader_parameter("tint",element_color("beams",Color(0,.7843137383,1)))
 	var beam_mesh = PlaneMesh.new(); beam_mesh.size = Vector2(NOTE_WIDTH,58+JUDGMENT_DEPTH*.5)
-	for i in 10:
+	for i in 13:
 		var finger_beam = mesh_node(beam_mesh,self,finger_beam_material)
 		finger_beam.position = Vector3(0,.045,(-58+JUDGMENT_DEPTH*.5)*.5); finger_beam.visible = false
 		finger_beams.append(finger_beam)
@@ -874,6 +876,7 @@ func modifier_hides(z: float) -> bool:
 func clear_hit_effects() -> void:
 	# Pooled effects for the previous chart are freed; prefill_hits builds the next set.
 	if ssrg_theme: ssrg_theme.clear_hits()
+	ssrg_beam_release.clear()
 	for burst in bursts+hit_pool: burst.node.queue_free()
 	bursts.clear(); hit_pool.clear()
 
@@ -994,11 +997,12 @@ const SSRG_ART=[preload("res://assets/ssrg/hold.png"),preload("res://assets/ssrg
 func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size = 1.0) -> MeshInstance3D:
 	var tail = size < game.note_size*.99
 	# Connector pucks along slides (and the end puck) are the head note's own art at 60%.
-	var art: Texture2D = preload("res://assets/ssrg/imported/tap.png") if palette in [0,2] else preload("res://assets/ssrg/imported/hold.png")
-	if tail: art=preload("res://assets/ssrg/imported/end.png")
+	var phase=fposmod((render_time()-game.chart_offset())*game.chart_bpm()/60.0,1.0)
+	var art: Texture2D = SsrgNotes.artwork(palette in [1,3],not tail,phase)
 	var mat = shared("ssrg|%d|%s" % [palette,tail], func():
 		var m = ShaderMaterial.new(); m.shader = preload("res://scripts/reference_note.gdshader")
 		m.set_shader_parameter("artwork",art); m.set_shader_parameter("approach_glow",false)
+		m.set_meta("ssrg_palette",palette);m.set_meta("ssrg_tail",tail)
 		m.set_shader_parameter("core_tint",Color("4fc8ff") if palette==0 else Color("ffc23a")); return m)
 	var mesh_key = "ssrg|%s|%s|%s" % [size, tail, palette]
 	if not reference_note_meshes.has(mesh_key):
@@ -1009,6 +1013,7 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 	var head = mesh_node(reference_note_meshes[mesh_key],parent,mat)
 	head.position = Vector3(position_value.x,.13,position_value.z)
 	head.rotation = camera.rotation
+	head.set_meta("ssrg_long_start",palette in [1,3] and not tail)
 	# The GPU projects the raw timing depth onto a short 2D canvas. CPU frustum
 	# culling must cover that displacement or notes pop in late despite p>=.5.
 	head.extra_cull_margin=TRACK_LENGTH+SSRG_STAGE_DISTANCE
@@ -1100,38 +1105,56 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 	var half_width = TRAIL_HALF*.65*game.hold_trail_width
 	# SSRG footage: holds and slides are a thin bar, about 23 px times p wide where the
 	# note is 148 px times p (0.12 of the 212-unit sprite); drawn a little thicker, at 0.16.
-	if game.uses_ssrg_gameplay() and not recording: half_width = 116.0*.4*.5*1.3*SSRG_UNIT*game.note_size*game.note_size
+	if game.uses_ssrg_gameplay() and not recording: half_width = 116.0*.4*.5*SSRG_UNIT*game.note_size
 	var count = clampi(ceili(duration*96),32,1024)
 	var st = SurfaceTool.new(); st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	st.set_custom_format(0,SurfaceTool.CUSTOM_RGBA_FLOAT)
+	st.set_custom_format(1,SurfaceTool.CUSTOM_RGBA_FLOAT)
 	var edge = SurfaceTool.new(); edge.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var centers = trail_centers(note,count,recording)
 	var sides = trail_sides(centers)
+	var ordered_segments:Array=[]
+	var split_source=game.uses_ssrg_gameplay() and not recording and note.has("ssrg_orders")
 	if game.uses_ssrg_gameplay() and not recording and note.kind=="slide" and note.path.size()>1:
 		centers=[]
 		for point in note.path:
 			centers.append(Vector3(note_x(float(point.lane)),trail_height(),-float(point.offset)*travel_speed()))
 		count=centers.size()-1
 		sides=connector_sides(centers)
+	elif game.uses_ssrg_gameplay() and not recording:
+		centers=[]
+		for offset in [0.0]+solid_trail_offsets(note):
+			centers.append(Vector3(note_x(float(note.lane)),trail_height(),-float(offset)*travel_speed()))
+		count=centers.size()-1;sides=connector_sides(centers)
 	for i in count:
 		var a: Vector3 = centers[i]; var b: Vector3 = centers[i+1]
 		var sa: Vector3 = sides[i]; var sb: Vector3 = sides[i+1]
-		for index in [0,1,2,0,2,3]:
-			st.set_uv([Vector2(0,float(i)/count),Vector2(0,float(i+1)/count),Vector2(1,float(i+1)/count),Vector2(1,float(i)/count)][index])
-			# The centreline depth, so the SSRG warp moves each cross-section as one piece.
-			st.set_uv2(Vector2([a.z,b.z,b.z,a.z][index],[-1.0,-1.0,1.0,1.0][index]))
-			st.set_custom(0,Color(a.x,a.z,b.x,b.z) if game.uses_ssrg_gameplay() and not recording else Color(0,0,0,0))
-			st.add_vertex([a-sa*half_width,b-sb*half_width,b+sb*half_width,a+sa*half_width][index])
+		var source=game.uses_ssrg_gameplay() and not recording
+		for layer in (3 if source else 1):
+			var color=[Color8(255,199,33),Color8(255,242,111),Color8(255,220,89)][layer]
+			for index in [0,1,2,0,2,3]:
+				st.set_uv([Vector2(0,float(i)/count),Vector2(0,float(i+1)/count),Vector2(1,float(i+1)/count),Vector2(1,float(i)/count)][index])
+				# Source l1/l2/l3 are uniform chips. CUSTOM1 retains their colors
+				# and the fixed horizontal 0/1/2-pixel expansions for each quad.
+				st.set_custom(1,Color(layer*SSRG_UNIT,color.r,color.g,color.b) if source else Color(0,1,1,1))
+				st.set_uv2(Vector2([a.z,b.z,b.z,a.z][index],[-1.0,-1.0,1.0,1.0][index]))
+				st.set_custom(0,Color(a.x,a.z,b.x,b.z) if source else Color(0,0,0,0))
+				st.add_vertex([a-sa*half_width,b-sb*half_width,b+sb*half_width,a+sa*half_width][index])
 		for side in [-1,1]:
 			var lift = Vector3(0,.01,0)
 			for index in [0,1,2,0,2,3]:
 				edge.add_vertex([a+sa*(side*half_width-.012),b+sb*(side*half_width-.012),b+sb*(side*half_width+.012),a+sa*(side*half_width+.012)][index]+lift)
+		if split_source:
+			ordered_segments.append({"mesh":st.commit(),"offset":-a.z/travel_speed()})
+			st=SurfaceTool.new();st.begin(Mesh.PRIMITIVE_TRIANGLES)
+			st.set_custom_format(0,SurfaceTool.CUSTOM_RGBA_FLOAT);st.set_custom_format(1,SurfaceTool.CUSTOM_RGBA_FLOAT)
 	var solid=game.trail_style=="solid" or (game.uses_ssrg_gameplay() and not recording)
 	var trail_material: ShaderMaterial
 	if solid:
 		trail_material=shared("solid_trail|%s|%s|%s" % [trail_color(palette),half_width,game.uses_ssrg_gameplay() and not recording], func():
 			var m=ShaderMaterial.new(); m.shader=preload("res://scripts/solid_trail.gdshader")
 			if game.uses_ssrg_gameplay() and not recording: m.render_priority=-4
+			m.set_shader_parameter("ssrg_line_x_scale",game.note_size*1.3)
 			m.set_shader_parameter("tint",trail_color(palette)); m.set_shader_parameter("ssrg_half_width",half_width); return m)
 	else:
 		var still = note.kind=="hold"
@@ -1141,7 +1164,13 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 			if still:
 				m.set_shader_parameter("motion",0.0); m.set_shader_parameter("glow_pulse",0.0)
 			return m)
-	st.set_material(trail_material); mesh_node(st.commit(),parent)
+	if split_source:
+		for segment in ordered_segments:
+			segment.mesh.surface_set_material(0,trail_material)
+			var mesh=mesh_node(segment.mesh,parent)
+			mesh.set_meta("checkpoint_offset",segment.offset)
+	else:
+		st.set_material(trail_material); mesh_node(st.commit(),parent)
 	if solid:
 		make_solid_trail_joints(parent,note,palette,recording,half_width)
 	else:
@@ -1242,7 +1271,7 @@ func build_note_node(key: String, note: Dictionary, recording = false) -> void:
 				child.extra_cull_margin=TRACK_LENGTH+SSRG_STAGE_DISTANCE
 				# Native batch order: heads 20,000,000-100*Id; lines
 				# 10,000,000-100*Id. Farther notes draw first on this flat canvas.
-				child.sorting_offset=-(float(note.time)+float(child.get_meta("checkpoint_offset",0.0)))
+				child.sorting_offset=-ssrg_note_order(note,float(child.get_meta("checkpoint_offset",0.0)))
 	var own_materials: Array = []
 	for ref in animated_materials.slice(first_material):
 		var m = ref.get_ref()
@@ -1250,6 +1279,11 @@ func build_note_node(key: String, note: Dictionary, recording = false) -> void:
 	var keep_shared = animated_materials.slice(first_material).filter(func(ref): return ref.get_ref() != null and ref.get_ref().has_meta("shared"))
 	animated_materials.resize(first_material); animated_materials.append_array(keep_shared)
 	notes[key] = {"node":node,"signature":signature,"lines":lines,"held":false,"prebuilt":false,"materials":own_materials}
+
+func ssrg_note_order(note: Dictionary, offset: float = 0.0) -> float:
+	for point in note.get("ssrg_orders",[]):
+		if point is Dictionary and is_equal_approx(float(point.get("offset",-1)),offset): return float(point.get("order",0))
+	return float(note.get("ssrg_order",float(note.time)+offset))
 
 func begin_prebuild() -> void:
 	clear_notes()
@@ -1293,6 +1327,7 @@ func sync_note(key: String, note: Dictionary, visible_keys: Dictionary, recordin
 		notes[key].node.queue_free(); notes.erase(key)
 	if not notes.has(key): build_note_node(key, note, recording)
 	notes[key].node.visible = true
+	if held: notes[key].head_hit=true
 	if notes[key].held != held:
 		notes[key].held = held
 		set_trail_clip(notes[key].node, 0.02 if held else 1000.0)
@@ -1319,9 +1354,17 @@ func ssrg_beam_center(lane: float) -> float:
 	return (lane/.75-6.0)*73.75*(520.0/606.0)*SSRG_UNIT
 func ssrg_beam_width() -> float:
 	return 295.0*(520.0/606.0)*SSRG_UNIT
-func update_finger_beams() -> void:
+var ssrg_beam_release: Dictionary={}
+func update_finger_beams(delta: float = 0.0) -> void:
 	var touches: Array = game.pointers.values() if game.mode=="play" else []
 	var ssrg=game.uses_ssrg_gameplay()
+	if ssrg and game.mode=="paused": return
+	var pressed:Dictionary={}
+	if ssrg and game.countdown<=0:
+		for touch in touches:
+			var lane=ssrg_beam_lane(SynkCapture.lane(touch.position.x))
+			if game.ssrg_playable_run and touch.has("world") and not game.ssrg_touch_lane(touch.world,lane): continue
+			pressed[clampi(roundi(lane/.75),0,12)]=lane
 	for i in finger_beams.size():
 		var beam: MeshInstance3D = finger_beams[i]
 		# Reuse one mesh per view; rebuild only when switching view/lane layout.
@@ -1332,9 +1375,20 @@ func update_finger_beams() -> void:
 			var reach=SSRG_BEAM_REACH if ssrg else 58.0
 			mesh.size=Vector2(ssrg_beam_width() if ssrg else NOTE_WIDTH,reach+near)
 			beam.mesh=mesh; beam.position.z=(near-reach)*.5
-			beam.material_override=ssrg_finger_beam_material if ssrg else finger_beam_material
+			beam.material_override=ssrg_finger_beam_material.duplicate() if ssrg else finger_beam_material
 			beam.extra_cull_margin=SSRG_STAGE_DISTANCE if ssrg else 0.0
 			beam.set_meta("layout",signature)
+		if ssrg:
+			var age=float(ssrg_beam_release.get(i,SsrgCurves.BEAM_RELEASE_SECONDS))
+			if pressed.has(i):
+				age=0.0;beam.position.x=ssrg_beam_center(pressed[i])
+			else: age+=delta
+			ssrg_beam_release[i]=age
+			var alpha=SsrgCurves.beam_alpha(age) if game.mode=="play" and game.countdown<=0 else 0.0
+			beam.material_override.set_shader_parameter("release_alpha",alpha)
+			for parameter in ["tint","intensity"]: beam.material_override.set_shader_parameter(parameter,ssrg_finger_beam_material.get_shader_parameter(parameter))
+			beam.visible=alpha>0.0
+			continue
 		beam.visible=i<touches.size()
 		if beam.visible:
 			var lane=SynkCapture.lane(touches[i].position.x)
@@ -1353,6 +1407,16 @@ func set_trail_clip(node: Node3D, clip_z: float) -> void:
 
 # fade=false keeps the note fully visible (missed holds stay gray and scroll past).
 func fade_missed_slide(key: String, age: float, fade_out: bool = true) -> void:
+	if game.uses_ssrg_gameplay():
+		set_trail_clip(notes[key].node,1000.0)
+		for mesh in notes[key].node.get_children():
+			if not mesh is GeometryInstance3D: continue
+			var mat=own_material(mesh)
+			if mat is ShaderMaterial:
+				var successful_head=mesh.get_meta("ssrg_long_start",false) and notes[key].get("head_hit",false)
+				mat.set_shader_parameter("source_tint",Color.WHITE if successful_head else SsrgNotes.MISSED_TINT)
+				mat.set_shader_parameter("desaturate",0.0);mat.set_shader_parameter("ghost_fade",1.0)
+		return
 	var gray=clampf(age/.16,0,1)
 	var fade=1.0-smoothstep(.40,.9,age) if fade_out else 1.0
 	for mesh in notes[key].node.get_children():
@@ -1399,6 +1463,23 @@ func first_visible_play_index() -> int:
 	return play_render_cursor
 
 var shown_keys: Dictionary = {}
+var ssrg_animation_frame=-1
+func animate_ssrg_notes() -> void:
+	if not game.uses_ssrg_gameplay(): ssrg_animation_frame=-1;return
+	var beat=fposmod((render_time()-game.chart_offset())*game.chart_bpm()/60.0,1.0)
+	var frame=SsrgNotes.frame_index(beat)
+	if frame==ssrg_animation_frame: return
+	ssrg_animation_frame=frame
+	var candidates=shared_materials.values()
+	for entry in notes.values():
+		for ref in entry.materials:
+			var material=ref.get_ref()
+			if material: candidates.append(material)
+	for mat in candidates:
+		if mat.has_meta("ssrg_palette"):
+			var long_note=int(mat.get_meta("ssrg_palette")) in [1,3]
+			mat.set_shader_parameter("artwork",SsrgNotes.artwork(long_note,not bool(mat.get_meta("ssrg_tail")),beat))
+
 func _process(delta: float) -> void:
 	if game==null: return
 	step_prebuild()
@@ -1416,7 +1497,7 @@ func _process(delta: float) -> void:
 	animate_effects(delta)
 	var visible_keys = {}
 	for beam in active_beams: beam.visible = false
-	update_finger_beams()
+	update_finger_beams(delta)
 	if (game.mode=="play" or (game.mode=="paused" and game.paused_mode=="play")) and game.countdown<=0:
 		for i in range(first_visible_play_index(),game.live.size()):
 			if game.live[i].note.time>render_time()+game.note_travel_seconds(): break
@@ -1436,6 +1517,7 @@ func _process(delta: float) -> void:
 				sync_note(key,game.live[i].note,visible_keys)
 				if notes.has(key) and visible_keys.has(key):
 					fade_missed_slide(key,maxf(0,game.song_time-float(game.live[i].missed_at)),false)
+	animate_ssrg_notes()
 	if game.mode=="record" or (game.mode=="paused" and game.paused_mode=="record"):
 		if game.overdub:
 			for i in game.document.notes.size():

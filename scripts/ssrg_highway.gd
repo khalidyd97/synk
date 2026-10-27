@@ -98,7 +98,8 @@ func flash_point(x: float) -> Vector3:
 	return on_line + Vector3.UP*FLASH_PULL if world.game.uses_ssrg_gameplay() else on_line + (world.camera.global_position - on_line).normalized() * FLASH_PULL
 
 func make_hit() -> Dictionary:
-	var mesh = QuadMesh.new(); mesh.size = Vector2(10.1, 6.1) * .8   # 25% smaller than the 1.5x size
+	# Source centered 310x186 sprite under def_c_trans scale (2,2,1).
+	var mesh = QuadMesh.new(); mesh.size = Vector2(620,372)*world.SSRG_UNIT
 	var mat = ShaderMaterial.new(); mat.shader = preload("res://scripts/ssrg_hit.gdshader"); mat.render_priority = 6
 	var node = world.mesh_node(mesh, self, mat); node.rotation = world.camera.rotation; node.visible = false
 	return {"node": node, "material": mat, "age": 0.0, "sustain_entry": {}, "pointer_id": -999, "kind": "tap"}
