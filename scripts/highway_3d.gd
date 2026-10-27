@@ -1076,8 +1076,9 @@ func connector_sides(centers: Array) -> Array:
 func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = false) -> void:
 	var duration = float(note.duration)
 	var half_width = TRAIL_HALF*.65*game.hold_trail_width
-	# SSRG footage: holds and slides are a thin bar about a fifth of the note's width.
-	if game.uses_ssrg_gameplay() and not recording: half_width = SSRG_NOTE_SIZE.x*.1*game.note_size
+	# SSRG footage: holds and slides are a thin bar, about 23 px times p wide where the
+	# note is 148 px times p (0.12 of the 212-unit sprite).
+	if game.uses_ssrg_gameplay() and not recording: half_width = SSRG_NOTE_SIZE.x*.06*game.note_size
 	var count = clampi(ceili(duration*96),32,1024)
 	var st = SurfaceTool.new(); st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var edge = SurfaceTool.new(); edge.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -1094,6 +1095,8 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 		var sa: Vector3 = sides[i]; var sb: Vector3 = sides[i+1]
 		for index in [0,1,2,0,2,3]:
 			st.set_uv([Vector2(0,float(i)/count),Vector2(0,float(i+1)/count),Vector2(1,float(i+1)/count),Vector2(1,float(i)/count)][index])
+			# The centreline depth, so the SSRG warp moves each cross-section as one piece.
+			st.set_uv2(Vector2([a.z,b.z,b.z,a.z][index],0))
 			st.add_vertex([a-sa*half_width,b-sb*half_width,b+sb*half_width,a+sa*half_width][index])
 		for side in [-1,1]:
 			var lift = Vector3(0,.01,0)

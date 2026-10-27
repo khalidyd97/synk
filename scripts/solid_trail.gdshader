@@ -11,7 +11,8 @@ varying float world_z;
 void vertex(){
     // world_z stays the linear track position, so clip_z and the far fade are unchanged.
     world_z=(MODEL_MATRIX*vec4(VERTEX,1.0)).z;
-    VERTEX=joint?ssrg_warp_rigid(VERTEX,MODEL_MATRIX):ssrg_warp_vertex(VERTEX,MODEL_MATRIX);
+    // Ribbons carry their centreline depth in UV2 (make_ribbon in highway_3d.gd).
+    VERTEX=joint?ssrg_warp_rigid(VERTEX,MODEL_MATRIX):ssrg_warp_section(VERTEX,UV2.x,MODEL_MATRIX);
     rail_position=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz;
 }
 void fragment(){

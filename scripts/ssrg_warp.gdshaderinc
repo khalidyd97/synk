@@ -18,9 +18,10 @@ vec3 ssrg_warp_rigid(vec3 vertex, mat4 model){
     float centre=model[3].z;
     return vertex+inverse(mat3(model))*vec3(0.0,0.0,ssrg_warp_z(centre)-centre);
 }
-// Moves each vertex, so trails stretch between their warped ends.
-vec3 ssrg_warp_vertex(vec3 vertex, mat4 model){
-    vec4 world=model*vec4(vertex,1.0);
-    world.z=ssrg_warp_z(world.z);
-    return (inverse(model)*world).xyz;
+// Moves a trail cross-section by the warp at its centreline depth (local z), so trails
+// stretch between their warped ends while both edges stay the same width apart. Warping
+// each edge by its own depth would pull diagonal bars apart near the vanishing point.
+vec3 ssrg_warp_section(vec3 vertex, float section_z, mat4 model){
+    float centre=(model*vec4(vertex.x,vertex.y,section_z,1.0)).z;
+    return vertex+inverse(mat3(model))*vec3(0.0,0.0,ssrg_warp_z(centre)-centre);
 }
