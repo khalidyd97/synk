@@ -139,6 +139,16 @@ const SSRG_UNIT = 9.75/512.0
 const SSRG_LINE_DOWN = .379
 const SSRG_RAIL_OUT = .826
 const SSRG_FOOTAGE_ASPECT = 2.246
+# Fixed SSRG view. The lens is the fitted 45 degrees. SSRG notes first show at progress 0.19
+# (its vanishing point is behind the song card), so that point sits on the top edge and notes
+# travel in from the very top; the rails meet above the screen.
+const SSRG_LENS = 45.0
+const SSRG_TOP_PROGRESS = .19
+# Tilt that puts the vanishing point where p = SSRG_TOP_PROGRESS meets the top edge.
+func ssrg_tilt() -> float:
+	var line = .5+SSRG_LINE_DOWN
+	var vanishing = -SSRG_TOP_PROGRESS*line/(1.0-SSRG_TOP_PROGRESS)
+	return rad_to_deg(atan(2.0*(.5-vanishing)*tan(deg_to_rad(SSRG_LENS)*.5)))
 const SSRG_STEP = 62.7*SSRG_UNIT
 const SSRG_NOTE_SIZE = Vector2(212.0,116.0)*SSRG_UNIT
 # SYNK lanes 0..9 hold SSRG positions 0..12 (lane = position * 0.75).
@@ -192,9 +202,9 @@ func apply_camera(shake: Vector3 = Vector3.ZERO) -> void:
 		# judgement line sits 88% down the screen, and the rails there are 72% of the width apart.
 		# Fitted to the rails in SSRG footage (25 frames): the judgement line 87.9% down the
 		# screen, the rails there 0.826 screen heights from the centre (at the rail's middle),
-		# and the rails meeting 5.7% from the top, which is ANGLE 20 at LENS 45 (the defaults).
-		# Any tilt and lens keep the line and rail spacing; only depth and slope change.
-		var lens: float = game.ssrg_fov
+		# and the rails meeting 5.7% from the top (tilt 20 at lens 45). The tilt is now raised
+		# so notes enter at the top edge (ssrg_tilt()); the line and rail spacing stay put.
+		var lens: float = SSRG_LENS
 		var t = tan(deg_to_rad(lens)*.5)
 		var below = atan(SSRG_LINE_DOWN*2.0*t)               # judgement line below the view centre
 		# Narrower screens than the 2.25:1 footage (16:9 phones, tablets) pull the camera back so
@@ -203,10 +213,10 @@ func apply_camera(shake: Vector3 = Vector3.ZERO) -> void:
 		var aspect = view.x/maxf(1.0,view.y)
 		var rail_out = SSRG_RAIL_OUT*minf(1.0,aspect/SSRG_FOOTAGE_ASPECT)
 		var distance = 9.75/(2.0*rail_out*t)/cos(below) # camera to judgement line
-		var direction = deg_to_rad(game.ssrg_tilt)+below
+		var direction = deg_to_rad(ssrg_tilt())+below
 		camera.fov = lens
 		camera.position = Vector3(0,distance*sin(direction),distance*cos(direction))+shake
-		camera.rotation_degrees.x = -game.ssrg_tilt
+		camera.rotation_degrees.x = -ssrg_tilt()
 
 func _ready() -> void:
 	var aids=preload("res://scripts/record_aids.gd").new(); aids.world=self; add_child.call_deferred(aids)

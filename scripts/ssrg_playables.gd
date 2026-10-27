@@ -655,9 +655,10 @@ func store_song(audio_path: String, charts: Dictionary, meta: Dictionary) -> Dic
 		var chart: Dictionary = charts[count]
 		var notes = chart.notes.filter(func(n): return float(n.time)+float(n.duration) <= length)
 		if not SynkChart.valid(notes): continue
-		var settings = {"bpm":float(chart.bpm),"beat_offset":0.0,"verse2":-1.0,"bridge":-1.0}
+		var offset = float(chart.get("beat_offset",0.0))
+		var settings = {"bpm":float(chart.bpm),"beat_offset":offset,"verse2":-1.0,"bridge":-1.0}
 		var variant = Levels.key(int(count))
-		var data = {"version":SynkChart.FORMAT_VERSION,"song_id":id,"chart_name":variant,"title":str(song.title),"bpm":float(chart.bpm),"beat_offset":0.0,"chart_settings":settings,"notes":notes}
+		var data = {"version":SynkChart.FORMAT_VERSION,"song_id":id,"chart_name":variant,"title":str(song.title),"bpm":float(chart.bpm),"beat_offset":offset,"chart_settings":settings,"notes":notes}
 		if SynkLibrary.atomic_write(Levels.chart_path(id,variant),data) != OK: continue
 		if int(count) not in keys: keys.append(int(count))
 		saved += 1

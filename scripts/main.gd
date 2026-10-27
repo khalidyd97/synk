@@ -114,16 +114,6 @@ func gameplay_lane_count() -> int:
 	return ssrg_lane_count if ssrg_playable_run else 10
 # SSRG Playables keeps its own note speed (set on that screen), separate from SYNK's.
 func ssrg_note_speed() -> float: return clampf(float(prefs.get_value("ssrg","speed",1.0)),.5,4.0)
-# SSRG Playables camera: tilt (degrees down) and lens (vertical field of view), set in game.
-var ssrg_tilt = 20.0
-var ssrg_fov = 45.0
-func load_ssrg_view() -> void:
-	ssrg_tilt = clampf(float(prefs.get_value("ssrg","fit_tilt",20.0)),10.0,70.0)
-	ssrg_fov = clampf(float(prefs.get_value("ssrg","fit_fov",45.0)),30.0,100.0)
-func change_ssrg_view(tilt_step: float, fov_step: float) -> void:
-	ssrg_tilt = clampf(ssrg_tilt+tilt_step,10.0,70.0); ssrg_fov = clampf(ssrg_fov+fov_step,30.0,100.0)
-	prefs.set_value("ssrg","fit_tilt",ssrg_tilt); prefs.set_value("ssrg","fit_fov",ssrg_fov); prefs.save("user://preferences.cfg")
-	field.world.apply_camera(); field.world.face_ssrg_billboards()
 var ssrg_playable_previous_style = "gold"
 var rail_color = ""
 var band_color = ""
@@ -385,9 +375,6 @@ func _ready() -> void:
 	ssrg_playables=Control.new(); ssrg_playables.set_script(load("res://scripts/ssrg_playables.gd")); ssrg_playables.game=self
 	ui.add_child(ssrg_playables); ssrg_playables.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.move_child(ssrg_playables,3); ssrg_playables.visible=false
-	load_ssrg_view()
-	var view_tuner=Control.new(); view_tuner.set_script(load("res://scripts/ssrg_view_tuner.gd")); view_tuner.game=self
-	ui.add_child(view_tuner); view_tuner.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	saved_notes = library.load_chart("eclipse")
 	get_window().files_dropped.connect(func(files):
 		if files.size()>0 and mode in ["menu","library","editor"]:

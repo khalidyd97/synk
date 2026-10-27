@@ -80,7 +80,7 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 	if not frames.is_empty(): h.material.set_shader_parameter("atlas", frames[0])
 	h.age = 0.0; h.sustain_entry = sustain_entry; h.pointer_id = pointer_id; h.kind = kind
 	# SSRG flashes sit on the note itself (not where the finger landed) and face the
-	# current camera, which ANGLE/LENS may have changed since the pool was made.
+	# current camera, which may have moved since the pool was made.
 	h.node.position = flash_point(world.note_x(lane))
 	h.node.rotation = world.camera.rotation
 	h.material.set_shader_parameter("opacity", 1.0)

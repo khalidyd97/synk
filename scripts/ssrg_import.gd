@@ -5,7 +5,9 @@ extends RefCounted
 #           BPM (double, 0x50); the header fills the file up to the note records.
 #   records: 24 bytes each - tick (int64), position 0..12, flag, type, unused.
 #   types: 0 tap; 21 then 22s = one finger's long note, 11 then 12s = the other finger's.
-#          Positions above 12 are start/end markers.
+#          Positions above 12 are markers. The one flagged 1 is where the music starts: chart
+#          ticks count from before the audio (1004_13.seq: tick 896, and onsets in its .ogg
+#          line up with the notes only when 1.721 s is taken off). Position 13 is the end.
 # A long note that stays in place is a hold and one that moves is a slide, however short:
 # SSRG has no flicks. The 13 positions spread across SYNK's 10 lanes. The song audio is plain Ogg Vorbis.
 const RECORD = 24
@@ -28,6 +30,11 @@ static func parse(bytes: PackedByteArray) -> Dictionary:
 	if ticks == 0: ticks = 256
 	if not is_finite(bpm) or bpm < 20 or bpm > 500: return {}
 	var seconds_per_tick = 60.0 / bpm / ticks
+	var start_tick = 0
+	for i in count:
+		var at = header + i * RECORD
+		if bytes.decode_u32(at + 8) > 12 and bytes.decode_u32(at + 12) == 1:
+			start_tick = maxi(0, bytes.decode_s64(at)); break
 	var positions = {}
 	var taps: Array = []
 	var chains = {21: [], 11: []}
@@ -39,7 +46,7 @@ static func parse(bytes: PackedByteArray) -> Dictionary:
 		var kind = bytes.decode_u32(at + 16)
 		if position > 12 or tick < 0: continue
 		positions[position] = true
-		var point = {"time": tick * seconds_per_tick, "position": position}
+		var point = {"time": (tick - start_tick) * seconds_per_tick, "position": position}
 		match kind:
 			0: taps.append(point)
 			21, 11:
@@ -64,7 +71,10 @@ static func parse(bytes: PackedByteArray) -> Dictionary:
 	for start in chains:
 		for chain in chains[start]: notes.append(long_note(chain))
 	notes.sort_custom(func(a, b): return a.time < b.time)
-	return {"keys": keys, "bpm": bpm, "length": song_length, "title": title_from(bytes, header), "notes": notes}
+	# Beats stay on chart ticks that are multiples of a beat, now counted from the music start.
+	var beat_offset = posmod(-start_tick, ticks) * seconds_per_tick
+	return {"keys": keys, "bpm": bpm, "length": song_length - start_tick * seconds_per_tick, "beat_offset": beat_offset,
+		"title": title_from(bytes, header), "notes": notes}
 
 static func long_note(chain: Array) -> Dictionary:
 	var first: Dictionary = chain[0]; var last: Dictionary = chain[-1]
@@ -200,7 +210,8 @@ static func scan(root: String) -> Array:
 
 # Changes when any of the song's files change, so an unchanged song is not imported again.
 static func signature(entry: Dictionary) -> String:
-	var parts: Array = []
+	# Bumped when parsing changes, so songs imported before are read again (v2: music start).
+	var parts: Array = ["v2"]
 	for path in entry.charts.values() + [entry.audio, entry.background]:
 		if not str(path).is_empty(): parts.append("%s:%d" % [str(path).get_file(), FileAccess.get_modified_time(path)])
 	return "|".join(parts)
