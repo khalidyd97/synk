@@ -15,7 +15,7 @@ Source: `D:\stayc\extract 2`, inspected on 2026-10-27.
 
 Normal SYNK play and SSRG Playables now share the SSRG renderer, lane-space projection, note art, straight slide connectors, receptor geometry, judgment artwork and hit frame playback. The recorder remains separate. Import identity, chart filtering and lane-count metadata remain separate from the shared renderer. Existing normal charts retain their ten note positions; imported charts retain their original 4/7/13 positions. Slide interpolation is selected on runtime copies rather than modifying saved charts.
 
-The existing perspective camera is a fitted Godot reconstruction of the original flat sprite projection; there is no exported original FOV in the GLB. Shared travel remains 2.2 seconds at speed 1, with arrival at the original chart timestamp. A frames are assigned to taps and B frames to sustains as a reconstruction choice. Dense effects are not forcibly evicted at 24 hits.
+The existing perspective camera is a fitted Godot reconstruction of the original flat sprite projection; there is no exported original FOV in the GLB. Shared travel is calibrated to 1.07 seconds across 60 world units at speed 1, with arrival at the original chart timestamp. Three saved reference frames at 5.0/5.2/5.4 seconds place the same right-hand tap at y=197/260/403 in a 1240x552 frame. Inverse projection into the fitted camera gives z=-25.20/-14.01/-2.77, approximately 56.1 world units per second. This is a footage fit, not a recovered source speed. A frames are assigned to taps and B frames to sustains as a reconstruction choice. Dense effects are not forcibly evicted at 24 hits.
 
 ## Limits
 

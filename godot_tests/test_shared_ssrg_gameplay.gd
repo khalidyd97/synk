@@ -18,7 +18,7 @@ func run() -> void:
 	check(game.gameplay_lane_count()==10,"Normal charts retain 10 unique lanes")
 	check(game.live[1].note.get("ssrg_path",false),"Runtime slides use straight connectors")
 	check(not slide.has("ssrg_path"),"Original chart data stays intact")
-	check(is_equal_approx(game.note_travel_seconds(),2.2),"Shared travel uses note speed")
+	check(is_equal_approx(game.note_travel_seconds(),1.07),"Shared travel uses note speed")
 	check(world.ssrg_theme.original_stage.receptors[0].mesh!=null,"Receptors have visible geometry")
 	world.ssrg_theme.original_stage.update(world)
 	check(world.ssrg_theme.original_stage.receptors.any(func(n):return n.visible),"Approaching notes reveal a receptor")
