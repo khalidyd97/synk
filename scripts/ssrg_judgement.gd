@@ -10,6 +10,30 @@ var count: Label
 var seen_judged = -1
 var pop = 0.0
 var since_hit = 99.0
+var seen_combo = -1
+var perfect_art: Texture2D = preload("res://assets/ssrg/imported/Text_perpect_super.png")
+var digit_art: Array[Texture2D] = []
+
+func _draw() -> void:
+	if not visible: return
+	var unit = minf(size.x / 1280.0, size.y / 720.0)
+	if word.text == "PERFECT":
+		var height = 44.0 * unit * (1.0 + pop * .12)
+		var dimensions = Vector2(height * perfect_art.get_width() / float(perfect_art.get_height()), height)
+		draw_texture_rect(perfect_art, Rect2(Vector2(size.x * .5, size.y * .40) - dimensions * .5, dimensions), false, Color(1,1,1,word.modulate.a))
+	if game.combo <= 0: return
+	var digits = str(game.combo)
+	var height = 76.0 * unit * (1.0 + pop * .10)
+	var total = 0.0
+	for character in digits:
+		var texture = digit_art[int(character)]
+		total += height * texture.get_width() / float(texture.get_height())
+	var x = (size.x - total) * .5
+	for character in digits:
+		var texture = digit_art[int(character)]
+		var width = height * texture.get_width() / float(texture.get_height())
+		draw_texture_rect(texture, Rect2(x, size.y * .48, width, height), false)
+		x += width
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -17,6 +41,7 @@ func _ready() -> void:
 	word = make_label(.36, .44, 44)
 	count = make_label(.44, .6, 72)
 	visible = false
+	for index in range(10): digit_art.append(load("res://assets/ssrg/imported/s%d.png" % index))
 
 func make_label(top: float, bottom: float, size: int) -> Label:
 	var label = Label.new(); add_child(label)
@@ -30,23 +55,28 @@ func make_label(top: float, bottom: float, size: int) -> Label:
 	return label
 
 func _process(delta: float) -> void:
-	var playing = game.ssrg_playable_run and game.mode in ["play", "paused"] and game.countdown <= 0 and not game.finishing
+	var playing = game.uses_ssrg_gameplay() and game.mode in ["play", "paused"] and game.countdown <= 0 and not game.finishing
 	visible = playing
 	if not playing:
 		seen_judged = game.judged
+		seen_combo = game.combo
 		return
-	if game.judged != seen_judged:
+	if game.judged != seen_judged or game.combo != seen_combo:
+		seen_combo = game.combo
 		seen_judged = game.judged; pop = 1.0; since_hit = 0.0
 		var grade = str(game.judgement)
-		var color: Color = GRADE_COLORS.get(grade, Color.WHITE)
+		var color: Color = Color.WHITE
 		word.text = grade
 		word.add_theme_color_override("font_color", color)
 		count.add_theme_color_override("font_color", Color.WHITE.lerp(color, .25))
 	if game.mode == "play":
 		pop = maxf(0.0, pop - delta / POP_TIME); since_hit += delta
 	count.text = str(game.combo) if game.combo > 0 else ""
+	count.visible = false
+	word.visible = word.text != "PERFECT"
 	for label in [word, count]: label.pivot_offset = label.size * .5
 	word.scale = Vector2.ONE * (1.0 + pop * .22)
 	count.scale = Vector2.ONE * (1.0 + pop * .16)
 	# The word fades after a moment without hits; the combo count stays.
 	word.modulate.a = clampf(1.6 - since_hit, 0.0, 1.0) * (.75 if word.text == "MISS" else 1.0)
+	queue_redraw()

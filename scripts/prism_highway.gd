@@ -12,7 +12,7 @@ func _ready() -> void:
     node.position=Vector3(0,.028,-51); node.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     add_child(node); refresh()
 func refresh() -> void:
-    visible=world.game.highway_style=="prism" and not world.game.uses_recorder_colors()
+    visible=not world.game.uses_ssrg_gameplay() and world.game.highway_style=="prism" and not world.game.uses_recorder_colors()
     if not floor_material: return
     var adaptive=world.game.highway_colors=="adaptive" and world.cover_palette_active
     var left: Color=world.colors[0] if adaptive else Color("05cfff")

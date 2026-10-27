@@ -108,6 +108,10 @@ var highway_angle = 35.0
 var highway_style = "gold"
 var ssrg_playable_run = false
 var ssrg_lane_count = 13
+func uses_ssrg_gameplay() -> bool:
+	return mode=="play" or (mode=="paused" and paused_mode=="play") or (ssrg_playable_run and not uses_recorder_colors())
+func gameplay_lane_count() -> int:
+	return ssrg_lane_count if ssrg_playable_run else 10
 # SSRG Playables keeps its own note speed (set on that screen), separate from SYNK's.
 func ssrg_note_speed() -> float: return clampf(float(prefs.get_value("ssrg","speed",1.0)),.5,4.0)
 # SSRG Playables camera: tilt (degrees down) and lens (vertical field of view), set in game.
@@ -705,6 +709,10 @@ func set_mode(value: String) -> void:
 	if value!=mode and value in ["menu","library","editor","guide"]: UiSound.play(self,"transition")
 	if value!="record" and arrange_preview: arrange_preview.stop()
 	mode=value; menu_settings_open=false
+	if field and field.world:
+		field.world.apply_camera()
+		field.world.refresh_highway_look()
+		field.world.face_ssrg_billboards()
 	if value in ["menu","library","editor","record"]: run_settings_active=false
 	if practice and value in ["menu","editor","library","record"]: practice.active=false
 	# Leaving the finish for anything but its results ends it immediately.
@@ -1013,7 +1021,7 @@ func space_authored_notes(incoming: Array,fixed: Array) -> bool:
 	return resolved
 
 func note_travel_seconds() -> float:
-	if ssrg_playable_run and not uses_recorder_colors(): return 2.2/ssrg_note_speed()
+	if uses_ssrg_gameplay() and not uses_recorder_colors(): return 2.2/(ssrg_note_speed() if ssrg_playable_run else note_speed)
 	return 2.6 / (recorder_note_speed if uses_recorder_colors() else note_speed)
 
 func cycle_recorder_note_speed() -> void:
@@ -1054,11 +1062,11 @@ func process_checkpoints(entry: Dictionary, finger_lane: float, automated: bool)
 		var at=float(entry.note.time)+float(checks[index])
 		if song_time<at: break
 		var lane=SynkChart.lane_at(entry.note,at)
-		var tolerance=SSRG_CHECKPOINT_LANES if ssrg_playable_run else CHECKPOINT_LANE_TOLERANCE
+		var tolerance=SSRG_CHECKPOINT_LANES if uses_ssrg_gameplay() else CHECKPOINT_LANE_TOLERANCE
 		if automated or absf(finger_lane-lane)<=tolerance:
 			entry.checks_done=index+1; pass_checkpoint(entry,lane)
 		# SSRG Playables: a finger still on its way gets a moment to reach the connector.
-		elif ssrg_playable_run and song_time<at+SSRG_CHECKPOINT_GRACE: break
+		elif uses_ssrg_gameplay() and song_time<at+SSRG_CHECKPOINT_GRACE: break
 		else: entry.checks_done=index+1; judge(entry,-1); return false
 	return true
 
@@ -1123,6 +1131,7 @@ func start_game(notes: Array,automated: bool = false,section: String = "",is_pra
 	var sorted=notes.duplicate(true); sorted.sort_custom(func(a,b): return a.time<b.time)
 	sorted=sorted.filter(func(n): return float(n.time)>=play_range.x-.001 and float(n.time)<play_range.y)
 	for n in sorted:
+		if n.kind=="slide": n.ssrg_path=true
 		if n.kind=="flick" and int(n.direction)==2: n.direction=0
 	last_play_notes=sorted.duplicate(true)
 	# A section ends at its boundary, or once its last note (and hold tail) has passed.
@@ -1713,8 +1722,8 @@ func _process(delta: float) -> void:
 		countdown_label.pivot_offset=countdown_label.size*.5
 		countdown_label.scale=Vector2.ONE*(1.0+fmod(remaining,1.0)*.2)
 	# SSRG Playables show their own centre judgement and combo (ssrg_judgement.gd).
-	combo_hud.visible=mode in ["play","paused"] and not counting and combo>0 and not finishing and not ssrg_playable_run
-	hit_label.visible=mode in ["play","record"] and not counting and not ssrg_playable_run
+	combo_hud.visible=mode in ["play","paused"] and not counting and combo>0 and not finishing and not uses_ssrg_gameplay()
+	hit_label.visible=mode in ["play","record"] and not counting and not uses_ssrg_gameplay()
 	if mode=="editor" and audio.playing:
 		cursor=clampf(chart_time(),0,length())
 		if not recorder.reviewing_audio and loop_enabled and loop_b>loop_a+.1 and cursor>=loop_b: audio.play(loop_a); cursor=loop_a
@@ -1753,7 +1762,7 @@ func _process(delta: float) -> void:
 		hit_art.scale=Vector2.ONE*(1.0+(0.0 if active_hold else flash*.04))
 	# The finish and the results never show the last judgment.
 	var play_judgement=mode=="play" and not finishing and JUDGEMENT_ART.has(judgement)
-	hit_label.visible=(mode=="record" or play_judgement) and not counting and not ssrg_playable_run
+	hit_label.visible=(mode=="record" or play_judgement) and not counting and not uses_ssrg_gameplay()
 	hit_label.text=judgement
 	if play_judgement:
 		# The last judgment stays readable; each hit gives it a small pop.
@@ -1928,8 +1937,8 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 			if entry.done or entry.pointer!=id or entry.note.kind!="slide": continue
 			var end_time=float(entry.note.time)+float(entry.note.duration)
 			var lane_error=absf(SynkCapture.lane(p.x)-SynkChart.lane_at(entry.note,end_time))
-			var end_lanes=SSRG_SLIDE_END_LANES if ssrg_playable_run else SLIDE_END_LANES
-			if not canceled and lane_error<=end_lanes and p.y>=(.25 if ssrg_playable_run else .4) and song_time>=end_time-tail_grace(entry) and song_time<=end_time+.30:
+			var end_lanes=SSRG_SLIDE_END_LANES if uses_ssrg_gameplay() else SLIDE_END_LANES
+			if not canceled and lane_error<=end_lanes and p.y>=(.25 if uses_ssrg_gameplay() else .4) and song_time>=end_time-tail_grace(entry) and song_time<=end_time+.30:
 				judge(entry,float(entry.error))
 		pointers.erase(id)
 		if canceled:
@@ -1986,8 +1995,8 @@ func update_game() -> void:
 			var end_time=float(n.time)+float(n.duration)
 			if song_time>=end_time-.045:
 				var lane_error=absf(SynkCapture.lane(p.position.x)-SynkChart.lane_at(n,end_time))
-				var end_lanes=SSRG_SLIDE_END_LANES if ssrg_playable_run else SLIDE_END_LANES
-				if lane_error<=end_lanes and p.position.y>=(.25 if ssrg_playable_run else .4): judge(entry,tail_error(entry))
+				var end_lanes=SSRG_SLIDE_END_LANES if uses_ssrg_gameplay() else SLIDE_END_LANES
+				if lane_error<=end_lanes and p.position.y>=(.25 if uses_ssrg_gameplay() else .4): judge(entry,tail_error(entry))
 				elif song_time>end_time+.30: judge(entry,-1)
 		elif n.kind=="hold":
 			var hold_end=float(n.time)+float(n.duration)

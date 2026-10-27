@@ -128,7 +128,7 @@ func lane_x(lane: float) -> float: return (lane-CENTER_LANE)*LANE_WIDTH
 # Taps are judged on the note itself, not its lane: a touch counts when it lands within the
 # note's drawn half-width at the judgement bar (plus a little grace).
 func note_reach() -> float:
-	if game.ssrg_playable_run: return SSRG_NOTE_SIZE.x * .5 * game.note_size * 1.1
+	if game.uses_ssrg_gameplay(): return SSRG_NOTE_SIZE.x * .5 * game.note_size * 1.1
 	return NOTE_WIDTH * .5 * game.note_size * 1.1
 # SSRG Playables use SSRG's own layout, in its 2D units scaled so its rail edge at the
 # judgement line (512 units from centre) meets the rails at x = 9.75: 13 positions 62.7 units
@@ -145,13 +145,13 @@ const SSRG_NOTE_SIZE = Vector2(212.0,116.0)*SSRG_UNIT
 func ssrg_x(lane: float) -> float: return (lane/.75-6.0)*SSRG_STEP
 # Lane <-> world x for touches. SSRG Playables use the SSRG spacing above, so a finger is
 # measured in the same lane units as the notes it is judged against.
-func lane_world_x(lane: float) -> float: return ssrg_x(lane) if game.ssrg_playable_run else lane_x(lane)
+func lane_world_x(lane: float) -> float: return ssrg_x(lane) if game.uses_ssrg_gameplay() else lane_x(lane)
 func world_lane(x: float) -> float:
-	if game.ssrg_playable_run: return clampf((x/SSRG_STEP+6.0)*.75,0.0,float(SynkChart.MAX_LANE))
+	if game.uses_ssrg_gameplay(): return clampf((x/SSRG_STEP+6.0)*.75,0.0,float(SynkChart.MAX_LANE))
 	return x/LANE_WIDTH+CENTER_LANE
 func note_x(lane: float) -> float:
 	var limit = HIGHWAY_HALF_WIDTH - EDGE_MARGIN - NOTE_WIDTH*.5*game.note_size
-	if game.ssrg_playable_run: return ssrg_x(lane)
+	if game.uses_ssrg_gameplay(): return ssrg_x(lane)
 	return clampf(lane_x(lane), -limit, limit)
 # Notes travel the whole 60-unit track, from the far end to the judgement bar.
 func visible_length() -> float: return TRACK_LENGTH
@@ -163,11 +163,11 @@ func note_position(lane: float, chart_time: float) -> Vector3:
 func apply_camera(shake: Vector3 = Vector3.ZERO) -> void:
 	camera.projection = Camera3D.PROJECTION_PERSPECTIVE; camera.fov = GAMEPLAY_FOV
 	# SSRG Playables draw their track out to 1500 units (ssrg_stage.gd); other views stop at 260.
-	camera.far = 1600.0 if game != null and game.ssrg_playable_run else 260.0
+	camera.far = 1600.0 if game != null and game.uses_ssrg_gameplay() else 260.0
 	camera.position = camera_rest_position() + shake; camera.rotation_degrees = Vector3(-highway_angle(), 0, 0)
 	# Place the SSRG judgment area near the bottom while preserving the camera's
 	# projection for note rendering and touch raycasts together.
-	if game != null and game.ssrg_playable_run:
+	if game != null and game.uses_ssrg_gameplay():
 		# Reference framing: distant rails converge near the top, while their near
 		# ends reach the lower corners. Keep the judgment plane low in the view.
 		# Measured from SSRG footage (about 2.25:1): the rails meet at the top edge, the
@@ -396,7 +396,7 @@ func element_color(key: String,fallback: Color) -> Color:
 	return SynkGameplayColors.resolve(game,key,fallback) if game!=null else fallback
 
 func trail_color(palette: int) -> Color:
-	if game.ssrg_playable_run and palette in [1,3]: return Color("f9d568")
+	if game.uses_ssrg_gameplay() and palette in [1,3]: return Color("f9d568")
 	return element_color("slide_trail" if palette==3 else "hold_trail",colors[palette])
 
 func rail_glow_colors() -> Array:
@@ -409,8 +409,8 @@ func rail_glow_colors() -> Array:
 # Applies the chosen highway style, custom rail/band colors and highway darkness.
 func refresh_highway_look() -> void:
 	if judgment_material == null or track_materials.size() < 2: return
-	var prism = game != null and game.highway_style in ["prism","ssrg"] and not game.uses_recorder_colors()
-	var gold = game == null or game.uses_recorder_colors() or game.highway_style=="gold"
+	var prism = game != null and (game.uses_ssrg_gameplay() or game.highway_style in ["prism","ssrg"]) and not game.uses_recorder_colors()
+	var gold = game == null or game.uses_recorder_colors() or (game.highway_style=="gold" and not game.uses_ssrg_gameplay())
 	var darkness = clampf(float(game.get("highway_opacity")),.3,1.6) if game != null and game.get("highway_opacity") != null else 1.0
 	if game.uses_recorder_colors(): darkness=1.0
 	for node in gold_nodes: node.visible = gold
@@ -956,12 +956,13 @@ const SSRG_ART=[preload("res://assets/ssrg/hold.png"),preload("res://assets/ssrg
 func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size = 1.0) -> MeshInstance3D:
 	var tail = size < game.note_size*.99
 	# Connector pucks along slides (and the end puck) are the head note's own art at 60%.
-	var art: Texture2D = preload("res://assets/ssrg/imported/tap.png") if palette==0 else (preload("res://assets/ssrg/hold.png") if palette in [1,3] else SSRG_ART[clampi(palette,0,3)])
-	var mat = shared("ssrg|%d" % palette, func():
+	var art: Texture2D = preload("res://assets/ssrg/imported/tap.png") if palette in [0,2] else preload("res://assets/ssrg/imported/hold.png")
+	if tail: art=preload("res://assets/ssrg/imported/end.png")
+	var mat = shared("ssrg|%d|%s" % [palette,tail], func():
 		var m = ShaderMaterial.new(); m.shader = preload("res://scripts/reference_note.gdshader")
-		m.set_shader_parameter("artwork",art); m.set_shader_parameter("approach_glow",true)
+		m.set_shader_parameter("artwork",art); m.set_shader_parameter("approach_glow",false)
 		m.set_shader_parameter("core_tint",Color("4fc8ff") if palette==0 else Color("ffc23a")); return m)
-	var mesh_key = "ssrg|%s|%s" % [size, tail]
+	var mesh_key = "ssrg|%s|%s|%s" % [size, tail, palette]
 	if not reference_note_meshes.has(mesh_key):
 		# About 11% of the screen width at the line and flat, as in SSRG footage.
 		var quad = QuadMesh.new()
@@ -1008,7 +1009,7 @@ func make_flick(parent: Node3D, note: Dictionary, palette: int) -> void:
 # Trails run through the middle of their notes: just above the track for flat rectangle
 # notes, and at half height through the thicker circle pucks.
 func trail_height() -> float:
-	return (.38 if game.round_notes() else .09)*game.note_size
+	return (.38 if game.uses_ssrg_gameplay() or game.round_notes() else .09)*game.note_size
 
 func trail_centers(note: Dictionary, count: int, recording = false) -> Array:
 	var duration = float(note.duration)
@@ -1056,13 +1057,13 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 	var duration = float(note.duration)
 	var half_width = TRAIL_HALF*.65*game.hold_trail_width
 	# SSRG footage: holds and slides are a thin bar about a fifth of the note's width.
-	if game.ssrg_playable_run and not recording: half_width = SSRG_NOTE_SIZE.x*.1*game.note_size
+	if game.uses_ssrg_gameplay() and not recording: half_width = SSRG_NOTE_SIZE.x*.1*game.note_size
 	var count = clampi(ceili(duration*96),32,1024)
 	var st = SurfaceTool.new(); st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var edge = SurfaceTool.new(); edge.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var centers = trail_centers(note,count,recording)
 	var sides = trail_sides(centers)
-	if game.ssrg_playable_run and not recording and note.kind=="slide" and note.path.size()>1:
+	if game.uses_ssrg_gameplay() and not recording and note.kind=="slide" and note.path.size()>1:
 		centers=[]
 		for point in note.path:
 			centers.append(Vector3(note_x(float(point.lane)),trail_height(),-float(point.offset)*travel_speed()))
@@ -1078,7 +1079,7 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 			var lift = Vector3(0,.01,0)
 			for index in [0,1,2,0,2,3]:
 				edge.add_vertex([a+sa*(side*half_width-.012),b+sb*(side*half_width-.012),b+sb*(side*half_width+.012),a+sa*(side*half_width+.012)][index]+lift)
-	var solid=game.trail_style=="solid" or (game.ssrg_playable_run and not recording)
+	var solid=game.trail_style=="solid" or (game.uses_ssrg_gameplay() and not recording)
 	var trail_material: ShaderMaterial
 	if solid:
 		trail_material=shared("solid_trail|%s" % trail_color(palette), func():
@@ -1125,7 +1126,7 @@ func solid_trail_offsets(note: Dictionary) -> Array:
 	var offsets: Array=[duration] if duration>0 else []
 	var checkpoints: Array=note.get("checkpoints",[]).duplicate()
 	# Earlier SSRG imports kept the original connector records in the path.
-	if game.ssrg_playable_run:
+	if game.uses_ssrg_gameplay():
 		for point in note.get("path",[]): checkpoints.append(point.offset)
 	for value in checkpoints:
 		var offset=float(value)
@@ -1143,7 +1144,7 @@ func make_solid_trail_joints(parent: Node3D,note: Dictionary,palette: int,record
 	for offset in offsets:
 		# The endpoint is the smaller note cap, rather than a second disc beneath it.
 		if is_equal_approx(float(offset),float(note.duration)): continue
-		if game.ssrg_playable_run and not recording:
+		if game.uses_ssrg_gameplay() and not recording:
 			var cap=make_tail_cap(parent,SynkChart.lane_at(note,float(note.time)+float(offset)),float(offset),palette,false)
 			cap.set_meta("solid_trail_joint",true); cap.set_meta("checkpoint_offset",offset)
 			continue
@@ -1186,7 +1187,7 @@ func build_note_node(key: String, note: Dictionary, recording = false) -> void:
 	if note.kind in ["hold","slide"]: make_ribbon(node,note,palette,recording)
 	var lines: Array = []
 	if recording: lines = make_alignment_lines(node,note,palette)
-	var signature = (hash(note) if recording or game.mode=="record" else 0)^hash([game.note_speed,game.note_shape,game.note_size,game.hold_trail_width,game.trail_style,game.ssrg_playable_run])
+	var signature = (hash(note) if recording or game.mode=="record" else 0)^hash([game.note_speed,game.note_shape,game.note_size,game.hold_trail_width,game.trail_style,game.uses_ssrg_gameplay()])
 	var own_materials: Array = []
 	for ref in animated_materials.slice(first_material):
 		var m = ref.get_ref()
@@ -1231,7 +1232,7 @@ func sync_note(key: String, note: Dictionary, visible_keys: Dictionary, recordin
 	visible_keys[key] = true
 	if look_signature_frame != Engine.get_process_frames():
 		look_signature_frame = Engine.get_process_frames()
-		look_signature = hash([game.note_speed,game.note_shape,game.note_size,game.hold_trail_width,game.trail_style,game.ssrg_playable_run])
+		look_signature = hash([game.note_speed,game.note_shape,game.note_size,game.hold_trail_width,game.trail_style,game.uses_ssrg_gameplay()])
 	var signature = (hash(note) if recording or game.mode=="record" else 0)^look_signature
 	if notes.has(key) and notes[key].signature != signature:
 		notes[key].node.queue_free(); notes.erase(key)
@@ -1261,7 +1262,7 @@ func update_finger_beams() -> void:
 		# Keep the full note-width glow centered on its lane, including outer notes.
 		if beam.visible:
 			var touch_lane = SynkCapture.lane(touches[i].position.x)
-			beam.position.x = clampf(lane_world_x(touch_lane if game.ssrg_playable_run else float(roundi(touch_lane))),-BEAM_MAX_X,BEAM_MAX_X)
+			beam.position.x = clampf(lane_world_x(touch_lane if game.uses_ssrg_gameplay() else float(roundi(touch_lane))),-BEAM_MAX_X,BEAM_MAX_X)
 
 func set_trail_clip(node: Node3D, clip_z: float) -> void:
 	for mesh in node.get_children():

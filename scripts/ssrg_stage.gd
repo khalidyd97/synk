@@ -28,7 +28,8 @@ func _init() -> void :
 	mat.render_priority = -3
 	press.material_override = mat;press.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF;add_child(press)
 	for lane in 13:
-		var ring = MeshInstance3D.new(); var disc = QuadMesh.new();disc.size = Vector2(212.0, 116.0)*9.75/512.0   # SSRG guide sprite size;ring.mesh = disc
+		var ring = MeshInstance3D.new(); var disc = QuadMesh.new();disc.size = Vector2(212.0, 116.0)*9.75/512.0   # SSRG guide sprite size
+		ring.mesh = disc
 		ring.name = "Receptor" + str(receptors.size() + 1);ring.position = Vector3(0, 0.2, 0);ring.visible = false
 		var material = ShaderMaterial.new();material.shader = preload("res://scripts/ssrg_receptor.gdshader")
 		material.render_priority = -2
@@ -83,7 +84,7 @@ func update(world: Node3D) -> void :
 			span = minf(travel, maxf(0.001, at - previous))
 			lane = SynkChart.lane_at(note, at)
 		if at - now > span: continue
-		var slot = clampi(roundi(lane / float(SynkChart.MAX_LANE) * (game.ssrg_lane_count-1)), 0, game.ssrg_lane_count-1)
+		var slot = clampi(roundi(lane / float(SynkChart.MAX_LANE) * (game.gameplay_lane_count()-1)), 0, game.gameplay_lane_count()-1)
 		if targets.has(slot) and targets[slot].at <= at: continue
 		targets[slot] = {"at": at, "lane": lane, "progress": clampf(1.0 - (at - now) / span, 0.0, 1.0)}
 	for slot in targets:

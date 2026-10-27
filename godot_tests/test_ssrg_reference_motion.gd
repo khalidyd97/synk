@@ -5,6 +5,8 @@ func run() -> void:
 	await process_frame
 	game.note_speed=1; game.recorder_note_speed=1
 	assert(is_equal_approx(game.note_travel_seconds(),2.6))
+	game.set_mode("play")
+	assert(game.uses_ssrg_gameplay() and is_equal_approx(game.note_travel_seconds(),2.2),"Normal play shares SSRG motion")
 	game.ssrg_playable_run=true; game.highway_style="ssrg"; game.set_mode("play")
 	assert(is_equal_approx(game.note_travel_seconds(),2.2))
 	var world=game.field.world; world.apply_camera()
