@@ -64,5 +64,5 @@ void fragment(){
         alpha=max(alpha,rim);
     }
     ALBEDO=mix(color,vec3(gray*0.52),desaturate);
-    ALPHA=alpha*opacity*ghost_fade*smoothstep(-60.0,-55.0,world_z);
+    ALPHA=alpha*opacity*ghost_fade*smoothstep(-60.0,-55.0,world_z)*ssrg_reveal(centre_z);
 }

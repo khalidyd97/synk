@@ -13,6 +13,14 @@ float ssrg_warp_z(float z){
     float p=max((pow(k,u)-1.0)/(k-1.0),0.012);
     return depth*(1.0-1.0/p);
 }
+// SSRG hides its vanishing point behind the song card: notes first show at about p = 0.19,
+// already small pucks, rather than growing visibly out of a speck. 1 elsewhere.
+float ssrg_reveal(float z){
+    if(ssrg_warp.x<0.5) return 1.0;
+    float k=ssrg_warp.y;
+    float p=(pow(k,clamp(1.0+z/ssrg_warp.w,0.0,1.0))-1.0)/(k-1.0);
+    return smoothstep(0.16,0.21,p);
+}
 // Moves a whole mesh with its origin, so note art keeps its shape.
 vec3 ssrg_warp_rigid(vec3 vertex, mat4 model){
     float centre=model[3].z;

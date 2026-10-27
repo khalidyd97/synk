@@ -34,5 +34,5 @@ void fragment(){
     }
     float gray=dot(color,vec3(.299,.587,.114));
     ALBEDO=mix(color,vec3(gray*.6),desaturate);
-    ALPHA=opacity*ghost_fade*smoothstep(-60.0,-55.0,world_z);
+    ALPHA=opacity*ghost_fade*smoothstep(-60.0,-55.0,world_z)*ssrg_reveal(world_z);
 }

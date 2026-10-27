@@ -13,7 +13,8 @@ float segment_distance(vec2 p, vec2 a, vec2 b) {
 }
 
 #include "res://scripts/ssrg_warp.gdshaderinc"
-void vertex(){VERTEX=ssrg_warp_rigid(VERTEX,MODEL_MATRIX); rail_position=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz;}
+varying float centre_z;
+void vertex(){centre_z=MODEL_MATRIX[3].z; VERTEX=ssrg_warp_rigid(VERTEX,MODEL_MATRIX); rail_position=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz;}
 
 void fragment() {
 	if(outside_rails(INV_VIEW_MATRIX[3].xyz)) discard;
@@ -26,5 +27,5 @@ void fragment() {
     vec3 color = mix(tint,vec3(1.0,0.96,1.0),core);
     float gray = dot(color,vec3(0.299,0.587,0.114));
     ALBEDO = mix(color,vec3(gray*0.52),desaturate);
-    ALPHA = clamp(rim+glow,0.0,1.0)*ghost_fade;
+    ALPHA = clamp(rim+glow,0.0,1.0)*ghost_fade*ssrg_reveal(centre_z);
 }
