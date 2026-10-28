@@ -27,6 +27,7 @@ var use_tap_button: Button
 var taps: Array = []
 var flash = 0.0
 var last_flash_beat = -1
+var last_tap_usec=-1000000
 
 static func beat_period() -> float: return 60.0/BPM
 
@@ -57,6 +58,14 @@ static func measured_delay_ms(errors: Array) -> float:
 	var middle = sorted.size()/2
 	var median = sorted[middle] if sorted.size()%2==1 else (sorted[middle-1]+sorted[middle])*.5
 	return clampf(median*1000.0,0,600)
+
+static func measurement_stable(errors:Array) -> bool:
+	if errors.size()<TAPS_NEEDED:return false
+	var center=measured_delay_ms(errors)/1000.0
+	var deviations:Array=[]
+	for error in errors:deviations.append(absf(float(error)-center))
+	deviations.sort()
+	return float(deviations[deviations.size()/2])<=.035
 
 func place(node: Control, parent: Control, left: float, top: float, right: float, bottom: float) -> void:
 	if parent==self and safe_content!=null: parent=safe_content
@@ -126,6 +135,7 @@ func _ready() -> void:
 	move_child(safe_content,get_child_count()-1)
 
 func open() -> void:
+	game.refresh_output_latency()
 	delay_input.value = game.bluetooth_latency_ms
 	reset_taps()
 	visible = true
@@ -145,7 +155,7 @@ func save() -> void:
 # Seconds since the loop started, as heard from this device's audio clock.
 func clock() -> float:
 	if not player.playing: return 0.0
-	return maxf(0,player.get_playback_position()+AudioServer.get_time_since_last_mix()-AudioServer.get_output_latency())
+	return game.AudioClock.heard_position(player.get_playback_position(),AudioServer.get_time_since_last_mix(),game.output_latency(),player.pitch_scale)
 
 # Where notes are drawn: behind the audio clock by the chosen delay, like the real game.
 func visual_time() -> float:
@@ -160,8 +170,12 @@ func _process(delta: float) -> void:
 	lane.queue_redraw()
 
 func lane_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.device==-1:return
 	var pressed = (event is InputEventScreenTouch and event.pressed) or (event is InputEventMouseButton and event.pressed and event.button_index==MOUSE_BUTTON_LEFT)
 	if not pressed: return
+	var now=Time.get_ticks_usec()
+	if now-last_tap_usec<180000:return
+	last_tap_usec=now
 	# Error from the nearest scheduled click, kept in the range of a plausible headset delay.
 	var period = beat_period()
 	var error = fposmod(clock(),period)
@@ -175,14 +189,15 @@ func refresh_taps() -> void:
 		tap_result_label.text = "Taps: %d / %d" % [taps.size(),TAPS_NEEDED]
 		use_tap_button.disabled = true
 	else:
-		tap_result_label.text = "Measured delay: %d ms" % roundi(measured_delay_ms(taps))
-		use_tap_button.disabled = false
+		var stable=measurement_stable(taps)
+		tap_result_label.text = ("Suggested delay: %d ms" % roundi(measured_delay_ms(taps))) if stable else "Keep tapping steadily to refine the delay"
+		use_tap_button.disabled = not stable
 
 func use_measurement() -> void:
-	if taps.size() >= TAPS_NEEDED: delay_input.value = roundf(measured_delay_ms(taps))
+	if measurement_stable(taps): delay_input.value = roundf(measured_delay_ms(taps))
 
 func reset_taps() -> void:
-	taps.clear(); refresh_taps()
+	taps.clear();last_tap_usec=-1000000;refresh_taps()
 
 func draw_lane() -> void:
 	var size_value = lane.size

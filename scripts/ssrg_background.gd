@@ -29,17 +29,22 @@ func configure(index: int = 0) -> void:
 	meshes.clear()
 	materials.clear()
 	for texture_name in DATA.PROFILES[profile_index].textures:
-		var node = MeshInstance3D.new()
-		node.mesh = ImmediateMesh.new()
+		var node = MultiMeshInstance3D.new()
+		var batch=MultiMesh.new()
+		batch.transform_format=MultiMesh.TRANSFORM_3D
+		batch.use_colors=true;batch.use_custom_data=true
+		batch.mesh=QuadMesh.new()
+		batch.instance_count=int(DATA.PROFILES[profile_index].countmax)*DATA.PROFILES[profile_index].polygons.size()
+		batch.visible_instance_count=0;node.multimesh=batch
 		var material = ShaderMaterial.new()
 		material.shader = preload("res://scripts/ssrg_background.gdshader")
 		material.set_shader_parameter("artwork", load("res://assets/ssrg/imported/background/" + str(texture_name) + ".png"))
 		material.render_priority = -19
 		node.material_override = material
 		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		node.extra_cull_margin = 100.0
+		node.custom_aabb=AABB(Vector3(-100,-1,-100),Vector3(200,2,200))
 		add_child(node)
-		meshes.append(node.mesh)
+		meshes.append(batch)
 		materials.append(material)
 
 static func progress(raw_age: float, accel: float, decel: float) -> float:
@@ -123,9 +128,9 @@ func advance(delta: float, paused: bool = false) -> void:
 
 func _render() -> void:
 	var p: Dictionary = DATA.PROFILES[profile_index]
-	var vertices: Array = []
+	var counts: Array = []
 	for _i in meshes.size():
-		vertices.append([])
+		counts.append(0)
 	for particle in particles:
 		var q = progress((elapsed - float(particle.birth)) / float(particle.life), particle.accel, particle.decel)
 		var pos: Vector3 = particle.start.lerp(Vector3(0, 280, 0), q)
@@ -134,18 +139,13 @@ func _render() -> void:
 			var color = particle_color(p.polygons[i], unit.color, q) * tint
 			color.a *= intensity * float(p.forcealpha)
 			var quad = source_vertices(pos, particle.direction, unit.size, p.zmax)
-			vertices[int(unit.texture)].append({"quad": quad, "color": color})
-	var uvs = [Vector2(1, 1), Vector2(1, 0), Vector2(0, 0), Vector2(0, 1)]
+			var texture_index=int(unit.texture)
+			var batch:MultiMesh=meshes[texture_index]
+			var index=int(counts[texture_index]);counts[texture_index]+=1
+			var near=(quad[0]+quad[1])*.5
+			var far=(quad[2]+quad[3])*.5
+			batch.set_instance_transform(index,Transform3D(Basis(Vector3(UNIT,0,0),Vector3(0,0,-UNIT),Vector3(0,UNIT,0)),Vector3(near.x*UNIT,-.1,-(near.y+234.0)*UNIT)))
+			batch.set_instance_color(index,color)
+			batch.set_instance_custom_data(index,Color(far.x-near.x,far.y-near.y,(quad[1].y-quad[0].y)*.5,(quad[2].y-quad[3].y)*.5))
 	for i in meshes.size():
-		var mesh: ImmediateMesh = meshes[i]
-		mesh.clear_surfaces()
-		if vertices[i].is_empty():
-			continue
-		mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
-		for item in vertices[i]:
-			for v in [0, 1, 2, 0, 2, 3]:
-				var point: Vector2 = item.quad[v]
-				mesh.surface_set_color(item.color)
-				mesh.surface_set_uv(uvs[v])
-				mesh.surface_add_vertex(Vector3(point.x * UNIT, -0.1, -(point.y + 234.0) * UNIT))
-		mesh.surface_end()
+		meshes[i].visible_instance_count=counts[i]

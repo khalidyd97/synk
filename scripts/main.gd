@@ -10,6 +10,8 @@ const ECLIPSE_COVER = preload("res://assets/lobby/eclipse_cover.png")
 const CUSTOM_COVER = preload("res://assets/lobby/custom_cover.png")
 const SsrgRules = preload("res://scripts/ssrg_input_rules.gd")
 const SsrgSustain = preload("res://scripts/ssrg_sustain_rules.gd")
+const AudioClock = preload("res://scripts/audio_clock.gd")
+var cached_output_latency=-1.0
 var ssrg_touch_router=preload("res://scripts/ssrg_touch_router.gd").new()
 
 const COMBO_ATLAS = preload("res://assets/hud/Combo_Digits_1_to_9.png")
@@ -962,7 +964,13 @@ func baseline_notes() -> Array:
 	return saved_notes if features.chart_exists() else []
 
 func audio_time() -> float:
-	return maxf(0,audio.get_playback_position()+(AudioServer.get_time_since_last_mix()-AudioServer.get_output_latency())*audio.pitch_scale)
+	if audio.stream_paused:return maxf(0,audio.get_playback_position())
+	return AudioClock.heard_position(audio.get_playback_position(),AudioServer.get_time_since_last_mix(),output_latency(),audio.pitch_scale)
+func refresh_output_latency() -> void:
+	cached_output_latency=maxf(0,AudioServer.get_output_latency())
+func output_latency() -> float:
+	if cached_output_latency<0:refresh_output_latency()
+	return cached_output_latency
 func effective_timing_ms() -> float: return timing_ms-(bluetooth_latency_ms if bluetooth_mode else 0.0)
 func chart_time() -> float: return maxf(0,audio_time()+effective_timing_ms()/1000.0)
 func apply_timing_change(previous_ms: float) -> void:
@@ -1005,11 +1013,7 @@ func smooth_visual_time(target: float,delta: float) -> void:
 	if not visual_clock_ready or absf(target-visual_clock_target)>seek_limit:
 		visual_song_time=target; visual_clock_target=target; visual_clock_ready=true; return
 	visual_clock_target=target
-	var predicted=visual_song_time+step
-	# Notes advance by exactly one frame of music; drift from the audio clock is folded in
-	# a little each frame (at most 8% of a step) so motion stays even, never jerky.
-	var correction=(target-predicted)*(1.0-exp(-maxf(0,delta)*6.0))
-	visual_song_time=maxf(visual_song_time,predicted+clampf(correction,-step*.08,step*.08))
+	visual_song_time=AudioClock.visual_step(visual_song_time,target,delta,audio.pitch_scale)
 func uses_recorder_colors() -> bool:
 	return mode=="record" or (mode=="paused" and paused_mode=="record") or (recorder!=null and recorder.reviewing_audio)
 
@@ -1135,6 +1139,7 @@ func start_game(notes: Array,automated: bool = false,section: String = "",is_pra
 	run_settings_active=true
 	practice.active=is_practice; timing_samples.clear(); performance_samples.clear(); timing_label.text=""
 	audio.stop(); audio.pitch_scale=1; pointers.clear(); live.clear()
+	refresh_output_latency()
 	ssrg_touch_router.reset()
 	live_cursor=0; judgement_total_size=-1
 	field.world.clear_hit_effects()
@@ -1399,6 +1404,7 @@ func toggle_pause() -> void:
 		pause_tween.tween_property(modal,"modulate:a",1.0,.18)
 		pause_tween.tween_property(pause_backdrop,"modulate:a",1.0,.22)
 	elif mode=="paused":
+		refresh_output_latency()
 		if pause_tween and pause_tween.is_running(): pause_tween.kill()
 		if paused_mode=="record" and arranging:
 			set_mode("record"); modal.scale=Vector2.ONE; modal.modulate.a=1; return
@@ -1769,7 +1775,8 @@ func _process(delta: float) -> void:
 	hud.text=format_score(roundi(displayed_score))
 	# The score counter glows gold while a combo multiplier is active, brighter as it climbs.
 	var boost=clampf((combo_multiplier()-1.0)/1.0,0.0,1.0) if mode in ["play","paused"] else 0.0
-	hud.add_theme_color_override("font_color",Color.WHITE.lerp(Color("ffd257"),.35+.65*boost) if boost>0 else Color.WHITE)
+	var score_color=Color.WHITE.lerp(Color("ffd257"),.35+.65*boost) if boost>0 else Color.WHITE
+	if hud.get_theme_color("font_color")!=score_color:hud.add_theme_color_override("font_color",score_color)
 	var current_rank=rank_name()
 	if current_rank!=shown_rank:
 		if mode=="play" and judged>0: rank_pulse=1.0

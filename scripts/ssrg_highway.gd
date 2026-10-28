@@ -116,6 +116,7 @@ func resume_sustain(entry:Dictionary) -> void:
 	spawn(SynkChart.lane_at(entry.note,world.game.song_time),str(entry.note.kind),entry,int(entry.pointer))
 
 func clear_hits() -> void:
+	if original_stage:original_stage.clear_touch_feedback()
 	for hit in hits+hit_pool:
 		hit.node.hide();hit.node.queue_free()
 	hits.clear();hit_pool.clear()

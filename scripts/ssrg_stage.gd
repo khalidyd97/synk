@@ -3,6 +3,8 @@ var receptors: Array = []
 var press: MeshInstance3D
 var rails: Array = []
 var entrance_shadow: MeshInstance3D
+var feedback_marks:Array=[]
+var feedback_states:Dictionary={}
 const TRACK_REACH = 1500.0
 func _init() -> void :
 	name = "SSRGStage"
@@ -46,6 +48,10 @@ func _init() -> void :
 		material.render_priority = -5
 		ring.material_override = material;ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(ring);receptors.append(ring)
+		var feedback=ring.duplicate() as MeshInstance3D
+		feedback.name="TouchFeedback"+str(lane)
+		feedback.material_override=material.duplicate();feedback.material_override.render_priority=5
+		add_child(feedback);feedback_marks.append(feedback)
 
 
 # SSRG's bottom bar is 130 of 640 screen units tall, centred 250 units below the middle
@@ -55,9 +61,11 @@ const BAND_BOTTOM = .5 + 315.0/640.0
 func update(world: Node3D) -> void :
 	if not visible: return
 	for receptor in receptors: receptor.hide()
+	for mark in feedback_marks:mark.hide()
 	var game = world.game
 	if game.countdown>0 or not (game.mode == "play" or (game.mode == "paused" and game.paused_mode == "play")): return
 	var now: float = world.render_time()
+	update_touch_feedback(world)
 	var travel: float = game.note_travel_seconds()
 	# Original RenderNoteGuide: fade starts at projected q=.3 and is complete
 	# by q=.8. Sprite padding, not an offset hit line, places the visible ellipse.
@@ -87,6 +95,36 @@ func update(world: Node3D) -> void :
 		receptor.rotation = world.camera.rotation
 		receptor.material_override.set_shader_parameter("progress", target.progress)
 		receptor.show()
+
+func clear_touch_feedback() -> void:
+	feedback_states.clear()
+	for mark in feedback_marks:mark.hide()
+
+func update_touch_feedback(world:Node3D) -> void:
+	var game=world.game
+	if not game.ssrg_playable_run:return
+	var retained:Dictionary={};var index=0
+	var intensity=clampf(game.features.effect("Hit flashes"),0.0,1.0)
+	for i in range(game.first_live_index(),game.live.size()):
+		var entry:Dictionary=game.live[i]
+		if float(entry.note.time)>game.song_time+.3:break
+		if entry.done or not entry.started or entry.note.kind not in ["hold","slide"]:continue
+		var contact=bool(entry.get("ssrg_contact",true))
+		var state:Dictionary=feedback_states.get(entry.key,{"contact":true,"regrab_at":-INF})
+		if contact and not state.contact:state.regrab_at=game.hud_motion_time
+		state.contact=contact;retained[entry.key]=state
+		var age=game.hud_motion_time-float(state.regrab_at)
+		if contact and age>=.22:continue
+		if index>=feedback_marks.size():break
+		var mark:MeshInstance3D=feedback_marks[index];index+=1
+		mark.position=Vector3(world.note_x(SynkChart.lane_at(entry.note,game.song_time)),.25,0)
+		mark.rotation=world.camera.rotation
+		var pop=clampf(age/.22,0.0,1.0) if contact else 0.0
+		mark.scale=Vector3.ONE*(1.0+pop*.18)
+		mark.material_override.set_shader_parameter("tint",Color("70edff") if contact else Color("ffc76b"))
+		mark.material_override.set_shader_parameter("progress",intensity*((1.0-pop) if contact else .45))
+		mark.visible=intensity>0
+	feedback_states=retained
 
 func warmup(world: Node3D) -> void :
 	if not visible: return
