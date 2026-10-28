@@ -9,13 +9,14 @@ func freeze(node:Node):
 func point(y:float=-234.0) -> Vector2:
 	var world=game.field.world
 	return world.camera.unproject_position(Vector3(0,.035,-(y+234)*world.SSRG_UNIT))/Vector2(game.field.viewport.size)
-func fixture() -> Dictionary:
+func fixture(flush:bool=true) -> Dictionary:
 	game.pointers.clear();game.ssrg_touch_router.reset();game.live_cursor=0;game.song_time=1.0
 	game.judged=0;game.judgment_counts={"PERFECT":0,"GREAT":0,"GOOD":0,"MISS":0}
 	var note=SynkChart.note(1,4,"slide");note.lane=4.5;note.end_lane=4.5;note.duration=2.0;note.checkpoints=[1.0];note.ssrg_path=true
 	note.path=[{"offset":0.0,"lane":4.5},{"offset":2.0,"lane":4.5}]
 	var entry={"key":"contact","note":note,"started":false,"done":false,"pointer":-999,"error":0.0}
-	game.live=[entry];game.pointer_event(1,point(),true,false,false);game.update_game()
+	game.live=[entry];game.pointer_event(1,point(),true,false,false)
+	if flush:game.update_game()
 	return entry
 func _initialize():run.call_deferred()
 func run():
@@ -38,5 +39,27 @@ func run():
 	game.song_time=1.3;game.pointer_event(1,point(80),false,false,false);game.update_game()
 	game.song_time=2.201;game.update_game()
 	check(entry.done and game.judgment_counts.MISS==2,"Remaining outside the valid contact region still misses at the real deadline")
+	entry=fixture();entry.note.duration=.1;entry.note.checkpoints=[];entry.note.end_lane=6.75
+	entry.note.path=[{"offset":0.0,"lane":4.5},{"offset":.1,"lane":6.75}]
+	var tap=SynkChart.note(1.11,4);tap.lane=4.5
+	var next={"key":"following_tap","note":tap,"started":false,"done":false,"pointer":-999,"error":0.0}
+	game.live.append(next)
+	var world=game.field.world
+	var end_point=world.camera.unproject_position(Vector3(world.note_x(6.75),.035,0))/Vector2(game.field.viewport.size)
+	game.song_time=1.1;game.pointer_event(1,end_point,false,true,false)
+	game.song_time=1.11;game.pointer_event(1,point(),true,false,false)
+	game.song_time=1.12;game.update_game()
+	check(entry.done and next.done and game.judgment_counts.MISS==0,"Rapid same-finger slide release and following tap preserve both contacts")
+	game.song_time=1.5;game.update_game()
+	check(game.judgment_counts.MISS==0,"Previous slide does not expire after its released finger ID was reused")
+	entry=fixture(false);entry.note.duration=.1;entry.note.checkpoints=[];entry.note.end_lane=6.75
+	entry.note.path=[{"offset":0.0,"lane":4.5},{"offset":.1,"lane":6.75}]
+	tap=SynkChart.note(1.11,0);tap.lane=6.75
+	next={"key":"same_lane_next","note":tap,"started":false,"done":false,"pointer":-999,"error":0.0};game.live.append(next)
+	game.song_time=1.1;game.pointer_event(1,end_point,false,true,false)
+	game.song_time=1.11;game.pointer_event(1,end_point,true,false,false)
+	game.song_time=1.12;game.update_game()
+	check(entry.done and next.done and game.judged==3 and game.judgment_counts.MISS==0,"A full short slide and next same-lane press survive one delayed frame")
+	game.update_game();check(game.judged==3,"Queued contacts cannot score twice")
 	print("SSRG slide contact recovery: %d failures"%failures)
 	game.queue_free();await process_frame;quit(1 if failures else 0)

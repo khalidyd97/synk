@@ -59,3 +59,7 @@ See [SSRG_TOUCH_ROUTING_IMPLEMENTATION.md](SSRG_TOUCH_ROUTING_IMPLEMENTATION.md)
 ## Slide contact recovery follow-up
 
 [SSRG_SLIDE_FALSE_MISS_FIX.md](SSRG_SLIDE_FALSE_MISS_FIX.md) documents reproduced false misses after touch-band re-entry and shared-lane release, and the explicit SYNK identity/recovery protections added to fix them.
+
+## Rapid 13-lane slide transitions
+
+[SSRG_RAPID_CONTACT_TRANSITIONS.md](SSRG_RAPID_CONTACT_TRANSITIONS.md) documents the reproduced release/press overwrite when a physical finger index is reused, and the per-contact batching fix. Distinct input events remain distinct even when one render frame is late.

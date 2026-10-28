@@ -100,6 +100,6 @@ func route(pointers:Dictionary,candidates:Array,keys:int,token:Variant) -> void:
 		var channel=int(aim.channel) if not aim.is_empty() else raw
 		parse(int(id),touch,channel,phase)
 
-func consume(channel:int) -> bool:
+func consume(channel:Variant) -> bool:
 	if consumed.has(channel):return false
 	consumed[channel]=true;return true

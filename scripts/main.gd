@@ -13,6 +13,8 @@ const SsrgSustain = preload("res://scripts/ssrg_sustain_rules.gd")
 const AudioClock = preload("res://scripts/audio_clock.gd")
 var cached_output_latency=-1.0
 var ssrg_touch_router=preload("res://scripts/ssrg_touch_router.gd").new()
+var ssrg_contact_ids:Dictionary={}
+var ssrg_contact_serial=1000000
 
 const COMBO_ATLAS = preload("res://assets/hud/Combo_Digits_1_to_9.png")
 const COMBO_ZERO = preload("res://assets/hud/Combo_Digit_0.png")
@@ -1141,6 +1143,7 @@ func start_game(notes: Array,automated: bool = false,section: String = "",is_pra
 	audio.stop(); audio.pitch_scale=1; pointers.clear(); live.clear()
 	refresh_output_latency()
 	ssrg_touch_router.reset()
+	ssrg_contact_ids.clear();ssrg_contact_serial=1000000
 	live_cursor=0; judgement_total_size=-1
 	field.world.clear_hit_effects()
 	field.world.clear_notes()
@@ -1392,6 +1395,7 @@ func toggle_pause() -> void:
 		if mode=="record": recorder.seal_gestures(); commit_take_history()
 		paused_mode=mode; pause_had_audio=audio.playing; audio.stream_paused=true; pointers.clear(); capture.gestures.clear()
 		ssrg_touch_router.reset()
+		ssrg_contact_ids.clear()
 		for entry in live:
 			if entry.started and not entry.done: entry.pointer=-999
 		set_mode("paused"); modal_title.text="PAUSED"; modal_body.text=""; primary.text="RESUME"
@@ -1929,6 +1933,18 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 				if not capture.last_spacing_resolved: tell("This chord is too crowded to separate. Move a note or reduce its size.")
 		return
 	if ssrg_playable_run:
+		var physical_id=id
+		if began:
+			var previous=int(ssrg_contact_ids.get(physical_id,physical_id))
+			if pointers.has(previous) and not pointers[previous].get("ssrg_ended",false):
+				pointers[previous].ssrg_phase=4;pointers[previous].ssrg_ended=true;pointers[previous].ssrg_canceled=true
+			# Keep a queued release alive when Android reuses its finger index
+			# for another press before the next gameplay update.
+			if pointers.has(id):
+				ssrg_contact_serial+=1;id=ssrg_contact_serial
+				while pointers.has(id):ssrg_contact_serial+=1;id=ssrg_contact_serial
+			ssrg_contact_ids[physical_id]=id
+		else:id=int(ssrg_contact_ids.get(physical_id,physical_id))
 		if began:pointers[id]={"start":p,"position":p,"world":touch_world,"ssrg_pending_begin":true,"ssrg_press_time":input_time,"ssrg_begin_world":touch_world}
 		if pointers.has(id):
 			pointers[id].position=p;pointers[id].world=touch_world
@@ -1936,6 +1952,7 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 			pointers[id].ssrg_phase=4 if canceled else (0 if pointers[id].get("ssrg_pending_begin",false) else (3 if ended else 1))
 			pointers[id].ssrg_ended=ended or canceled
 			pointers[id].ssrg_canceled=canceled
+		if ended or canceled:ssrg_contact_ids.erase(physical_id)
 		# Judge the complete touch batch in the gameplay update, not halfway
 		# through two crossing fingers' movement events.
 		return
@@ -2075,13 +2092,19 @@ func update_ssrg_sustain(entry: Dictionary) -> void:
 	var chosen=int(track.pointer)
 	var state=int(track.state)
 	var owner=int(entry.pointer)
+	var own_release=false
+	if next.is_end and pointers.has(owner):
+		var contact:Dictionary=pointers[owner]
+		own_release=contact.get("ssrg_ended",false) and not contact.get("ssrg_canceled",false) and ssrg_touch_lane(contact.world,lane)
+		if own_release:state=SsrgSustain.TrackState.ENDED;chosen=owner
 	var was_contact=bool(entry.get("ssrg_contact",true))
 	entry.ssrg_contact=pointers.has(owner) and not pointers[owner].get("ssrg_ended",false) and (int(pointers[owner].get("ssrg_channel",-1))==channel or ssrg_touch_lane(pointers[owner].world,SynkChart.lane_at(entry.note,song_time)))
 	if entry.ssrg_contact and not was_contact:field.world.ssrg_theme.resume_sustain(entry)
-	var judged_at=float(track.get("event_time",song_time)) if state==SsrgSustain.TrackState.ENDED else song_time
+	var judged_at=float(pointers[owner].ssrg_event_time) if own_release else (float(track.get("event_time",song_time)) if state==SsrgSustain.TrackState.ENDED else song_time)
 	var action=SsrgSustain.action(judged_at,float(next.time),bool(next.is_end),state)
 	if action=="miss":judge(entry,-1);return
-	if action!="hit" or not ssrg_touch_router.consume(channel):return
+	var gate=str(channel)+":release:"+str(owner) if own_release else channel
+	if action!="hit" or not ssrg_touch_router.consume(gate):return
 	var grade=SsrgSustain.node_grade(absf(judged_at-float(next.time)),bool(next.is_end),str(entry.get("sustain_grade","GOOD")),state==SsrgSustain.TrackState.ENDED)
 	entry.pointer=chosen
 	if next.is_end:
@@ -2090,8 +2113,34 @@ func update_ssrg_sustain(entry: Dictionary) -> void:
 	entry.checks_done=int(entry.get("checks_done",0))+1
 	pass_checkpoint(entry,lane,absf(song_time-float(next.time)),grade)
 
+func process_ssrg_press_events() -> void:
+	var presses:Array=[]
+	for id in pointers:
+		var touch:Dictionary=pointers[id]
+		if touch.get("ssrg_pending_begin",false) and not touch.get("ssrg_canceled",false) and not touch.get("ssrg_head_consumed",false):
+			presses.append({"id":id,"at":float(touch.ssrg_press_time),"order":presses.size()})
+	presses.sort_custom(func(a,b):return a.at<b.at if a.at!=b.at else a.order<b.order)
+	for press in presses:
+		var touch:Dictionary=pointers[press.id]
+		touch.ssrg_head_consumed=true
+		var channel=int(touch.get("ssrg_channel",-1))
+		if channel<0:continue
+		var best:Dictionary={};var best_error=INF
+		for i in range(first_live_index(),live.size()):
+			var entry:Dictionary=live[i]
+			if float(entry.note.time)>float(press.at)+SsrgRules.HEAD_WINDOW:break
+			if entry.done or entry.started or roundi(float(entry.note.lane)*12.0/9.0)!=channel:continue
+			var error=absf(float(press.at)-float(entry.note.time))
+			if error<=SsrgRules.good_window() and error<best_error:best_error=error;best=entry
+		if best.is_empty():continue
+		best.started=true;best.pointer=int(press.id);best.error=best_error;best.timing_error=float(press.at)-float(best.note.time)
+		ssrg_touch_router.consume(channel)
+		judge(best,best_error,best.note.kind not in ["hold","slide"])
+
 func update_game() -> void:
-	if ssrg_playable_run:prepare_ssrg_input()
+	if ssrg_playable_run:
+		prepare_ssrg_input()
+		process_ssrg_press_events()
 	var head_targets:Dictionary={}
 	if ssrg_playable_run:
 		# Prefer the note nearest the recorded press, not an older note whose
@@ -2102,7 +2151,7 @@ func update_game() -> void:
 			if candidate.done or candidate.started:continue
 			var channel=roundi(float(candidate.note.lane)*12.0/9.0)
 			var track=ssrg_touch_router.track(channel)
-			var eligible=track.state==SsrgSustain.TrackState.BEGAN or (candidate.note.kind in ["hold","slide"] and track.state==SsrgSustain.TrackState.MOVED)
+			var eligible=candidate.note.kind in ["hold","slide"] and track.state==SsrgSustain.TrackState.MOVED
 			if not eligible:continue
 			var at=float(track.get("event_time",song_time)) if track.state==SsrgSustain.TrackState.BEGAN else song_time
 			var error=absf(at-float(candidate.note.time))
@@ -2122,7 +2171,7 @@ func update_game() -> void:
 			if ssrg_playable_run:
 				var channel=roundi(float(n.lane)*12.0/9.0)
 				var track=ssrg_touch_router.track(channel)
-				var eligible=track.state==SsrgSustain.TrackState.BEGAN or (n.kind in ["hold","slide"] and track.state==SsrgSustain.TrackState.MOVED)
+				var eligible=n.kind in ["hold","slide"] and track.state==SsrgSustain.TrackState.MOVED
 				var judged_at=float(track.get("event_time",song_time)) if track.state==SsrgSustain.TrackState.BEGAN else song_time
 				var error=absf(judged_at-float(n.time))
 				if eligible and error<=SsrgRules.good_window() and head_targets.get(channel,{}).get("key","")==entry.key and ssrg_touch_router.consume(channel):
@@ -2172,6 +2221,9 @@ func update_game() -> void:
 func judge(entry: Dictionary,error: float,complete: bool = true,source_grade: String = "") -> void:
 	var grade=source_grade if not source_grade.is_empty() else (SsrgRules.grade(error) if ssrg_playable_run else ("MISS" if error<0 else ("PERFECT" if error<=extras.perfect_window() else ("GREAT" if error<=extras.great_window() else "GOOD"))))
 	if grade=="MISS": error=-1
+	if OS.is_debug_build() and ssrg_playable_run and error<0 and entry.note.kind=="slide":
+		var next=SsrgSustain.next_node(entry.note,int(entry.get("checks_done",0)))
+		print("SSRG_SLIDE_MISS ",JSON.stringify({"time":song_time,"head":entry.note.time,"started":entry.started,"next":next.time,"end":next.is_end,"checks_done":entry.get("checks_done",0),"owner":entry.pointer,"contacts":pointers.size()}))
 	var at=float(entry.note.time)
 	if (entry.note.kind=="hold" or (ssrg_playable_run and entry.note.kind=="slide")) and entry.get("note_hit",false): at=minf(song_time,float(entry.note.time)+float(entry.note.duration))
 	performance_samples.append({"time":at,"weight":0.0 if error<0 else (1.0 if grade=="PERFECT" else (.8 if grade=="GREAT" else .5)),"amount":1})
