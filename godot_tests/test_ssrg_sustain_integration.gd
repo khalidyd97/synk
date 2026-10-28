@@ -37,7 +37,7 @@ func run() -> void:
 	point=game.field.world.camera.unproject_position(Vector3(0,.035,0))/Vector2(game.field.viewport.size)
 	var entry=fixture([1.0])
 	game.song_time=1.81;game.update_game()
-	check(int(entry.get("checks_done",0))==0,"Held connector does not score before crossing the line")
+	check(int(entry.get("checks_done",0))==1,"Connector accepts eligible pre-line contact")
 	game.song_time=2.0;game.update_game()
 	check(game.judged==2 and game.judgment_counts.PERFECT==2,"Line-crossing middle inherits PERFECT head grade")
 	check(not entry.done,"Early middle does not retire later end")
@@ -62,7 +62,7 @@ func run() -> void:
 	entry=fixture()
 	game.song_time=2.78;game.pointer_event(1,point,false,true,false)
 	game.update_game() # Flush the source-style per-frame touch batch.
-	check(entry.done and game.judgment_counts.GOOD==1,"Accepted terminal release receives GOOD")
+	check(entry.done and game.judgment_counts.PERFECT==2 and game.judgment_counts.GOOD==0,"Accepted terminal release inherits the earned chain grade")
 	entry=fixture()
 	game.song_time=2.995;game.pointer_event(1,point,false,true,false)
 	game.song_time=3.12;game.update_game()

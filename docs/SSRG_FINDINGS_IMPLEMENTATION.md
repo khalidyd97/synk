@@ -1,5 +1,7 @@
 # Remaining APK findings applied
 
+> Applied connector corrections and validation: [SSRG_AUDITED_CONNECTORS_IMPLEMENTED.md](SSRG_AUDITED_CONNECTORS_IMPLEMENTED.md). Terminal continuations now inherit chain grades; the earlier independently timed tail-grade description below is superseded.
+
 > Latest connector analysis: [SSRG_CONNECTOR_JUDGMENT_REAUDIT.md](SSRG_CONNECTOR_JUDGMENT_REAUDIT.md) corrects the earlier tail-grade, Lost-state and same-tick slide interpretations. Current implementation adjustments must not be described as complete original-game parity.
 
 Scope: ordinary shared SSRG rendering and imported SSRG playable input. Special event/item note effects are excluded. Source evidence is static APK/ARM64/Unity data, not execution of the reference game. This supersedes older notes that describe approximate hit size, constant note artwork, and time-only imported draw order.

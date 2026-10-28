@@ -25,9 +25,10 @@ func run_slide(fps:int,holding:bool=false):
 		game.song_time=1.0+float(frame)/fps
 		var lane=SynkChart.lane_at(note,game.song_time)
 		game.pointer_event(1,screen_point(lane),false,false,false);game.update_game()
-		if game.song_time<3.0:check(int(entry.get("checks_done",0))==0,"First connector never judges early")
-		elif game.song_time<5.0:check(int(entry.get("checks_done",0))==1,"Second connector never judges early")
-		if game.song_time<7.0:check(not entry.done,"Held tail never completes before reaching bar")
+		if game.song_time<=2.8:check(int(entry.get("checks_done",0))==0,"First connector waits outside its front window")
+		elif game.song_time<=4.8:check(int(entry.get("checks_done",0))<=1,"Second connector waits outside its front window")
+		if game.song_time>=3.0 and game.song_time<=4.8:check(int(entry.get("checks_done",0))==1,"First connector judges once valid contact reaches its node")
+		if game.song_time<=6.7:check(not entry.done,"Held tail waits outside its end window")
 	check(entry.done and game.judged==4,"All connector points and tail judged at %d FPS"%fps)
 	check(game.judgment_counts.PERFECT==4 and game.judgment_counts.GOOD==0 and game.judgment_counts.MISS==0,"Following the full long zigzag earns its correct grades at %d FPS"%fps)
 func _initialize():run.call_deferred()
@@ -38,5 +39,5 @@ func run():
 	game.ssrg_playable_run=true;game.ssrg_lane_count=13;game.auto_play=false;game.set_mode("play");game.countdown=0;game.resume_grace=0
 	game.field.sync_projection_style();game.field.world.apply_camera()
 	for fps in [30,60,120]:run_slide(fps);run_slide(fps,true)
-	print("SSRG long slide line-crossing timing: %d failures"%failures)
+	print("SSRG long slide source-window timing: %d failures"%failures)
 	game.queue_free();await process_frame;quit(1 if failures else 0)

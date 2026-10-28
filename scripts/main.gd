@@ -2101,11 +2101,15 @@ func update_ssrg_sustain(entry: Dictionary) -> void:
 	entry.ssrg_contact=pointers.has(owner) and not pointers[owner].get("ssrg_ended",false) and (int(pointers[owner].get("ssrg_channel",-1))==channel or ssrg_touch_lane(pointers[owner].world,SynkChart.lane_at(entry.note,song_time)))
 	if entry.ssrg_contact and not was_contact:field.world.ssrg_theme.resume_sustain(entry)
 	var judged_at=float(pointers[owner].ssrg_event_time) if own_release else (float(track.get("event_time",song_time)) if state==SsrgSustain.TrackState.ENDED else song_time)
-	var action=SsrgSustain.action(judged_at,float(next.time),bool(next.is_end),state)
+	var action=SsrgSustain.action(judged_at,float(next.time),bool(next.is_end),state,false,note_travel_seconds(),bool(entry.get("sustain_released",false)),own_release)
 	if action=="miss":judge(entry,-1);return
 	var gate=str(channel)+":release:"+str(owner) if own_release else channel
 	if action!="hit" or not ssrg_touch_router.consume(gate):return
-	var grade=SsrgSustain.node_grade(absf(judged_at-float(next.time)),bool(next.is_end),str(entry.get("sustain_grade","GOOD")),state==SsrgSustain.TrackState.ENDED)
+	var released=state==SsrgSustain.TrackState.ENDED
+	var history=bool(entry.get("sustain_penalty",false))
+	var grade=SsrgSustain.node_grade(absf(judged_at-float(next.time)),bool(next.is_end),str(entry.get("sustain_grade","GOOD")),released,history)
+	entry.sustain_rate=SsrgSustain.node_rate(float(entry.get("sustain_rate",.1)),released,history)
+	if released:entry.sustain_released=true
 	entry.pointer=chosen
 	if next.is_end:
 		judge(entry,absf(judged_at-float(next.time)),true,grade)
@@ -2257,7 +2261,7 @@ func judge(entry: Dictionary,error: float,complete: bool = true,source_grade: St
 		elif grade=="GREAT": judgement="GREAT"; earned+=.8
 		else: judgement="GOOD"; earned+=.5
 	judgment_counts[judgement]+=1
-	if ssrg_playable_run and error>=0 and not complete:entry.sustain_grade=judgement;entry.ssrg_contact=true
+	if ssrg_playable_run and error>=0 and not complete:entry.sustain_grade=judgement;entry.sustain_rate=SsrgRules.rate(error);entry.ssrg_contact=true
 	if error>=0: add_points(judgement)
 	if extras: extras.on_judged(entry,judgement,combo)
 
