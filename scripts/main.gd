@@ -9,6 +9,7 @@ const NeonAction = preload("res://scripts/neon_action.gd")
 const ECLIPSE_COVER = preload("res://assets/lobby/eclipse_cover.png")
 const CUSTOM_COVER = preload("res://assets/lobby/custom_cover.png")
 const SsrgRules = preload("res://scripts/ssrg_input_rules.gd")
+const SsrgSustain = preload("res://scripts/ssrg_sustain_rules.gd")
 
 const COMBO_ATLAS = preload("res://assets/hud/Combo_Digits_1_to_9.png")
 const COMBO_ZERO = preload("res://assets/hud/Combo_Digit_0.png")
@@ -1057,6 +1058,9 @@ func total_judgements() -> int:
 # Checkpoint dots: when one reaches the bar, the finger must be over the trail's lane.
 # Returns false if the hold or slide broke on a missed dot.
 func process_checkpoints(entry: Dictionary, finger_lane: float, automated: bool) -> bool:
+	if ssrg_playable_run and not automated:
+		update_ssrg_sustain(entry)
+		return not entry.done or not entry.has("missed_at")
 	var checks: Array=entry.note.get("checkpoints",[])
 	while int(entry.get("checks_done",0))<checks.size():
 		var index=int(entry.get("checks_done",0))
@@ -1078,8 +1082,9 @@ func process_checkpoints(entry: Dictionary, finger_lane: float, automated: bool)
 		else: entry.checks_done=index+1; judge(entry,-1); return false
 	return true
 
-func pass_checkpoint(entry: Dictionary, lane: float, error: float = 0.0) -> void:
-	var grade=SsrgRules.grade(error,true) if ssrg_playable_run else "PERFECT"
+func pass_checkpoint(entry: Dictionary, lane: float, error: float = 0.0, source_grade: String = "") -> void:
+	var grade=source_grade if not source_grade.is_empty() else (SsrgSustain.node_grade(error,false,str(entry.get("sustain_grade","GOOD"))) if ssrg_playable_run else "PERFECT")
+	if ssrg_playable_run:entry.sustain_grade=grade
 	var weight=1.0 if grade=="PERFECT" else (.8 if grade=="GREAT" else .5)
 	performance_samples.append({"time":song_time,"weight":weight,"amount":1})
 	field.world.spawn_hit(lane,str(entry.note.kind))
@@ -1910,7 +1915,7 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 				if entry.done: continue
 				var n: Dictionary=entry.note
 				if entry.started:
-					if entry.pointer==-999 and (ssrg_touch_lane(touch_world,SynkChart.lane_at(n,song_time)) if ssrg_playable_run else absf(touch_x-world.note_x(SynkChart.lane_at(n,song_time)))<=reach): entry.pointer=id
+					if not ssrg_playable_run and entry.pointer==-999 and absf(touch_x-world.note_x(SynkChart.lane_at(n,song_time)))<=reach: entry.pointer=id
 					continue
 				var error=absf(song_time-float(n.time))
 				var timing_limit=hit_good_window(str(n.kind))
@@ -1938,6 +1943,15 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 	if pointers.has(id):
 		pointers[id].position=p; pointers[id].world=touch_world
 	if ended:
+		if ssrg_playable_run:
+			if pointers.has(id):pointers[id].ssrg_ended=true;pointers[id].ssrg_canceled=canceled
+			update_game()
+			for live_index in range(first_live_index(),live.size()):
+				var entry:Dictionary=live[live_index]
+				if not entry.done and entry.pointer==id and entry.note.kind in ["hold","slide"]:
+					entry.pointer=-999;entry.ssrg_contact=false
+			pointers.erase(id)
+			return
 		# Process final swipe motion before removing the finger.
 		update_game()
 		for live_index in range(first_live_index(),live.size()):
@@ -1997,6 +2011,43 @@ func count_unstarted_tail(entry: Dictionary) -> void:
 			judgment_counts.MISS+=1
 			performance_samples.append({"time":float(entry.note.time)+float(entry.note.duration),"weight":0.0,"amount":1})
 
+func update_ssrg_sustain(entry: Dictionary) -> void:
+	# Track contact may be lost, but only the next source node's rear deadline
+	# can miss the chain. Another finger may take over before that deadline.
+	while not entry.done:
+		var next=SsrgSustain.next_node(entry.note,int(entry.get("checks_done",0)))
+		var lane=SynkChart.lane_at(entry.note,float(next.time))
+		var state=SsrgSustain.TrackState.IDLE
+		var chosen=int(entry.pointer)
+		if pointers.has(chosen) and ssrg_touch_lane(pointers[chosen].world,lane):
+			state=SsrgSustain.TrackState.IDLE if pointers[chosen].get("ssrg_canceled",false) else (SsrgSustain.TrackState.ENDED if pointers[chosen].get("ssrg_ended",false) else SsrgSustain.TrackState.HELD)
+		else:
+			chosen=-999
+			for id in pointers:
+				var touch:Dictionary=pointers[id]
+				if touch.get("ssrg_ended",false) or touch.get("sustain_owner",str(entry.key))!=str(entry.key):continue
+				if ssrg_touch_lane(touch.world,lane):chosen=int(id);state=SsrgSustain.TrackState.BEGAN;break
+		# A held finger can still follow the current segment before the next
+		# checkpoint is eligible; this keeps its visual burst continuous.
+		var contact_id=chosen if chosen!=-999 else int(entry.pointer)
+		var contact=pointers.has(contact_id) and not pointers[contact_id].get("ssrg_ended",false) and ssrg_touch_lane(pointers[contact_id].world,SynkChart.lane_at(entry.note,song_time))
+		var was_contact=bool(entry.get("ssrg_contact",true))
+		entry.ssrg_contact=contact
+		if chosen!=-999:
+			entry.pointer=chosen
+			pointers[chosen].sustain_owner=str(entry.key)
+		if contact and not was_contact:field.world.ssrg_theme.resume_sustain(entry)
+		var action=SsrgSustain.action(song_time,float(next.time),bool(next.is_end),state)
+		if action=="miss":judge(entry,-1);return
+		if action!="hit":return
+		var grade=SsrgSustain.node_grade(absf(song_time-float(next.time)),bool(next.is_end),str(entry.get("sustain_grade","GOOD")),state==SsrgSustain.TrackState.ENDED)
+		if next.is_end:
+			judge(entry,absf(song_time-float(next.time)),true,grade)
+			if pointers.has(chosen):pointers[chosen].erase("sustain_owner")
+			return
+		entry.checks_done=int(entry.get("checks_done",0))+1
+		pass_checkpoint(entry,lane,absf(song_time-float(next.time)),grade)
+
 func update_game() -> void:
 	for i in range(pending_end_hits.size()-1,-1,-1):
 		var pending: Dictionary=pending_end_hits[i]
@@ -2014,6 +2065,8 @@ func update_game() -> void:
 				count_unstarted_tail(entry)
 			continue
 		if entry.pointer==-999 and resume_grace>0: continue
+		if ssrg_playable_run and n.kind in ["hold","slide"]:
+			update_ssrg_sustain(entry);continue
 		if not pointers.has(entry.pointer): judge(entry,-1); continue
 		var p: Dictionary=pointers[entry.pointer]
 		if n.kind=="flick":
@@ -2037,8 +2090,8 @@ func update_game() -> void:
 				if not ssrg_playable_run or ssrg_touch_lane(p.world,SynkChart.lane_at(n,hold_end)): judge(entry,tail_error(entry))
 				elif song_time>hold_end+SsrgRules.good_window():judge(entry,-1)
 
-func judge(entry: Dictionary,error: float,complete: bool = true) -> void:
-	var grade=SsrgRules.grade(error) if ssrg_playable_run else ("MISS" if error<0 else ("PERFECT" if error<=extras.perfect_window() else ("GREAT" if error<=extras.great_window() else "GOOD")))
+func judge(entry: Dictionary,error: float,complete: bool = true,source_grade: String = "") -> void:
+	var grade=source_grade if not source_grade.is_empty() else (SsrgRules.grade(error) if ssrg_playable_run else ("MISS" if error<0 else ("PERFECT" if error<=extras.perfect_window() else ("GREAT" if error<=extras.great_window() else "GOOD"))))
 	if grade=="MISS": error=-1
 	var at=float(entry.note.time)
 	if (entry.note.kind=="hold" or (ssrg_playable_run and entry.note.kind=="slide")) and entry.get("note_hit",false): at=minf(song_time,float(entry.note.time)+float(entry.note.duration))
@@ -2064,6 +2117,9 @@ func judge(entry: Dictionary,error: float,complete: bool = true) -> void:
 		entry.missed_visual_time=field.world.render_time()
 	judgement_kind = str(entry.note.kind)
 	entry.done=complete; judged+=1; flash=1; flash_lane=roundi(SynkChart.lane_at(entry.note,song_time))
+	if ssrg_playable_run and complete:
+		for touch in pointers.values():
+			if touch.get("sustain_owner","")==str(entry.key):touch.erase("sustain_owner")
 	# Energy is a performance gauge only: hits refill it, misses drain it, the song never fails.
 	if error<0: judgement="MISS"; combo=0; combo_pulse=0; forfeit_checkpoints(entry); score_panel.energy=maxf(0,score_panel.energy-.08)
 	else:
@@ -2073,6 +2129,7 @@ func judge(entry: Dictionary,error: float,complete: bool = true) -> void:
 		elif grade=="GREAT": judgement="GREAT"; earned+=.8
 		else: judgement="GOOD"; earned+=.5
 	judgment_counts[judgement]+=1
+	if ssrg_playable_run and error>=0 and not complete:entry.sustain_grade=judgement;entry.ssrg_contact=true
 	if error>=0: add_points(judgement)
 	if extras: extras.on_judged(entry,judgement,combo)
 

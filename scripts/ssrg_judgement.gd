@@ -32,7 +32,7 @@ func _draw() -> void:
 		var center=Vector2(size.x*.5,size.y*.40)
 		if displayed_grade=="MISS": center.y+=65.0*(44.0/54.0)*unit
 		draw_texture_rect(art, Rect2(center+source_offset - dimensions * .5, dimensions), false, Color(1,1,1,word.modulate.a))
-	if game.combo <= 0: return
+	if not SOURCE_CURVES.combo_visible(since_hit,game.combo): return
 	var digits = str(game.combo)
 	var combo_scale=SOURCE_CURVES.judgement_scale(since_hit)
 	var height = 76.0 * unit
@@ -81,6 +81,8 @@ func _process(delta: float) -> void:
 	if not playing:
 		seen_judged = game.judged
 		seen_combo = game.combo
+		since_hit = 99.0
+		displayed_grade = ""
 		return
 	if game.judged != seen_judged or game.combo != seen_combo:
 		seen_combo = game.combo
@@ -102,7 +104,6 @@ func _process(delta: float) -> void:
 	var source_offset=SOURCE_CURVES.judgement_offset(since_hit,word.text=="MISS")*minf(size.x/1280.0,size.y/720.0)
 	word.offset_top=source_offset.y; word.offset_bottom=source_offset.y
 	count.scale = SOURCE_CURVES.judgement_scale(since_hit)
-	# The word fades after a moment without hits; the combo count stays.
-	var source_alpha=float(SOURCE_CURVES.sample("JudgementGood","float","trans/sprite","Color.a",since_hit))
-	word.modulate.a = clampf(1.6 - since_hit, 0.0, 1.0) * (1.0 if word.text=="MISS" else source_alpha)
+	# Native EndRender auto-hides the word and its combo after the source clip.
+	word.modulate.a = SOURCE_CURVES.word_alpha(since_hit,displayed_grade=="MISS")
 	queue_redraw()

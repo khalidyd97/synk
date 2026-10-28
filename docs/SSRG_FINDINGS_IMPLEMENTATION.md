@@ -41,3 +41,8 @@ The earlier user-facing list included research candidates as well as recovered b
 New integration tests exercise actual pointer input, source grade boundaries, adjacent-channel rejection, separate slide start/end scores, stable released beams and pause, immediate missed-tail tint, inherited hit dimensions, import order and speed migration. Native-data unit checks cover source curves, frame sequences, touch rectangles and imports. Existing GPU overlap/alignment, shared gameplay, movement and restored recorder checks are retained. The supplied 239-note/13-key chart and Ogg audio complete a full desktop autoplay run with no backward visual-clock steps. This is not human phone testing.
 
 Supporting source locations, hashes and limitations are in SSRG_INPUT_RULES_EVIDENCE.md, SSRG_NOTE_ANIMATION_FINDINGS.md, SSRG_SOURCE_STAGE_ANIMATIONS.md and SSRG_EFFECT_TIMING_LAYERS.md. Local uncommitted evidence includes assets/hit-geometry.json under .tools/ssrg-apk-analysis.
+
+## Follow-up implementation, 2026-10-28
+
+The older remaining-work rows above are superseded by [SSRG_REMAINING_PROGRESS.md](SSRG_REMAINING_PROGRESS.md): sustain re-grab, reconstructed background, narrow-screen fitting, confirmed clip lifetime and measured material-animation optimization are now applied. That report records validation and explicit source-parity limits.
+

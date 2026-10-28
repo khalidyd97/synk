@@ -86,6 +86,7 @@ func build_asset_guide() -> void:
 
 func resize_viewport() -> void:
 	if viewport: viewport.size = Vector2i(maxi(1,roundi(size.x)),maxi(1,roundi(size.y)))
+	if world and world.camera:world.apply_camera()
 
 func sync_projection_style() -> void:
 	if not screen: return
@@ -108,6 +109,9 @@ func _process(_delta: float) -> void:
 
 func depth(time: float) -> float: return (time-game.song_time)/game.note_travel_seconds()
 func project(lane: float, d: float) -> Vector2:
+	if game.uses_ssrg_gameplay():
+		var raw=-d*world.visible_length()
+		return world.camera.unproject_position(Vector3(world.note_x(lane)*world.ssrg_approach(raw),.035,world.ssrg_warped_z(raw)))
 	return world.camera.unproject_position(Vector3(world.lane_x(lane),.035,-d*world.visible_length()))
 
 func touch_world_position(p: Vector2) -> Vector3:

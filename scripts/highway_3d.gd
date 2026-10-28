@@ -170,6 +170,13 @@ func travel_speed() -> float: return TRACK_LENGTH / game.note_travel_seconds()
 const SSRG_APPROACH_POWER = 6.0
 const SSRG_STAGE_DISTANCE = 514.0*SSRG_UNIT
 const SSRG_UI_HEIGHT = 640.0
+func ssrg_canvas_height() -> float:
+	var view=get_viewport().get_visible_rect().size
+	var aspect=maxf(.1,view.x/maxf(1.0,view.y))
+	# Keep the reference canvas on phones. Narrow landscape screens/tablets
+	# must still fit the full outer note sprites and their touch rectangles.
+	var playable_width=12.0*62.71392+212.0*game.note_size+32.0
+	return maxf(SSRG_UI_HEIGHT,playable_width/aspect)
 func ssrg_approach(z: float) -> float:
 	return pow(maxf(1.0+z/TRACK_LENGTH,0.0),SSRG_APPROACH_POWER)
 # Mirrors ssrg_warp_z() in ssrg_warp.gdshaderinc.
@@ -195,8 +202,11 @@ func apply_camera(shake: Vector3 = Vector3.ZERO) -> void:
 		# UI y=280 at the top, y=-234 at judgment. X/Z is a flat UI canvas;
 		# camera centre corresponds to original UI (0,0), never a fitted lens.
 		camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-		camera.size = SSRG_UI_HEIGHT*SSRG_UNIT
-		camera.position = Vector3(0,30,-234.0*SSRG_UNIT)+shake
+		var canvas_height=ssrg_canvas_height()
+		camera.size = canvas_height*SSRG_UNIT
+		# UI bottom -320 remains attached to the display bottom during fitting.
+		var center_ui=canvas_height*.5-320.0
+		camera.position = Vector3(0,30,-(234.0+center_ui)*SSRG_UNIT)+shake
 		camera.rotation_degrees = Vector3(-90,0,0)
 
 func _ready() -> void:
@@ -517,14 +527,18 @@ func build_effects() -> void:
 # materials instead of hundreds. A note that needs its own state (a held trail being eaten,
 # a missed note turning grey, a recorder ghost) gets a private copy at that moment.
 var shared_materials: Dictionary = {}
+var ssrg_note_materials: Array = []
 func shared(key: String, build: Callable) -> Material:
 	if shared_materials.has(key): return shared_materials[key]
 	var mat: Material = build.call()
 	mat.set_meta("shared", true)
+	if mat.has_meta("ssrg_palette"): ssrg_note_materials.append(weakref(mat))
 	shared_materials[key] = mat
 	return mat
 func clear_shared_materials() -> void:
 	shared_materials.clear()
+	ssrg_note_materials.clear()
+	ssrg_animation_frame=-1
 # Gives this mesh its own copy of a shared material before it is changed.
 func own_material(mesh: GeometryInstance3D) -> Material:
 	var mat: Material = mesh.material_override
@@ -534,6 +548,7 @@ func own_material(mesh: GeometryInstance3D) -> Material:
 	copy.remove_meta("shared")
 	mesh.material_override = copy
 	if copy is ShaderMaterial: animated_materials.append(weakref(copy))
+	if copy.has_meta("ssrg_palette"): ssrg_note_materials.append(weakref(copy))
 	return copy
 
 func asset_material(name: String, palette: int, region = Vector4(0,0,1,1), opacity = 1.0) -> ShaderMaterial:
@@ -1470,15 +1485,15 @@ func animate_ssrg_notes() -> void:
 	var frame=SsrgNotes.frame_index(beat)
 	if frame==ssrg_animation_frame: return
 	ssrg_animation_frame=frame
-	var candidates=shared_materials.values()
-	for entry in notes.values():
-		for ref in entry.materials:
-			var material=ref.get_ref()
-			if material: candidates.append(material)
-	for mat in candidates:
+	var alive: Array = []
+	for ref in ssrg_note_materials:
+		var mat=ref.get_ref()
+		if mat==null: continue
+		alive.append(ref)
 		if mat.has_meta("ssrg_palette"):
 			var long_note=int(mat.get_meta("ssrg_palette")) in [1,3]
 			mat.set_shader_parameter("artwork",SsrgNotes.artwork(long_note,not bool(mat.get_meta("ssrg_tail")),beat))
+	ssrg_note_materials=alive
 
 func _process(delta: float) -> void:
 	if game==null: return

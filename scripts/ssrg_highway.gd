@@ -24,6 +24,7 @@ var hit_pool: Array = []
 var hits: Array = []
 var active = false
 var original_stage: Node3D
+var source_background: Node3D
 var imported_frames: Array[Texture2D] = []
 var special_frames: Array[Texture2D] = []
 
@@ -34,6 +35,7 @@ func _ready() -> void:
 		var special_path="res://assets/ssrg/imported/Effect_B_%02d.png" % index
 		if ResourceLoader.exists(special_path): special_frames.append(load(special_path))
 	original_stage=preload("res://scripts/ssrg_stage.gd").new(); add_child(original_stage)
+	source_background=preload("res://scripts/ssrg_background.gd").new();add_child(source_background);source_background.configure(0)
 	var w = world
 	var half = w.FRAME_HALF_WIDTH
 	floor_node = shaded_plane(Vector2(half * 2.0, 62.0), preload("res://scripts/ssrg_floor.gdshader"), Vector3(0, .026, -30.5), -7)
@@ -71,7 +73,8 @@ func refresh() -> void:
 	if original_stage:
 		original_stage.configure(world)
 		for child in get_children():
-			if child != original_stage: child.visible=false
+			if child != original_stage and child != source_background: child.visible=false
+	if source_background:source_background.visible=active and world.game.countdown<=0
 	if world.cover_material: world.cover_material.set_shader_parameter("photo", active)
 
 # --- Hit effects ---------------------------------------------------------------------
@@ -107,10 +110,17 @@ func make_hit() -> Dictionary:
 func release(h: Dictionary) -> void:
 	h.node.visible = false; hit_pool.append(h)
 
+func resume_sustain(entry:Dictionary) -> void:
+	for hit in hits:
+		if hit.sustain_entry.get("key","")==entry.get("key",""):return
+	spawn(SynkChart.lane_at(entry.note,world.game.song_time),str(entry.note.kind),entry,int(entry.pointer))
+
 func clear_hits() -> void:
 	for hit in hits+hit_pool:
 		hit.node.hide();hit.node.queue_free()
 	hits.clear();hit_pool.clear()
+	if source_background:
+		source_background.particles.clear();source_background.elapsed=0.0;source_background.frame_credit=0.0;source_background.momentum=0.0
 
 func prefill(count: int = 16) -> void:
 	while hit_pool.size() + hits.size() < count: hit_pool.append(make_hit())
@@ -120,11 +130,16 @@ func _process(delta: float) -> void:
 	original_stage.update(world)
 	var game = world.game
 	var playing = game.mode == "play"
+	source_background.intensity=game.features.effect("Lasers")
+	var custom=world.custom_color("lasers")
+	source_background.tint=custom if custom!=null else Color.WHITE
+	source_background.visible=game.mode in ["play","paused"] and game.countdown<=0 and not game.finishing and source_background.intensity>0
+	if source_background.visible:source_background.advance(delta,not playing)
 	# Source RenderLongCoolbombTouch rewinds after normalized time > .3.
 	# Independent tap instances intentionally preserve SYNK's uninterrupted dense-hit flow.
 	for i in range(hits.size() - 1, -1, -1):
 		var h: Dictionary = hits[i]
-		var held = not h.sustain_entry.is_empty() and not h.sustain_entry.done
+		var held = not h.sustain_entry.is_empty() and not h.sustain_entry.done and (not game.ssrg_playable_run or h.sustain_entry.get("ssrg_contact",true))
 		if playing: h.age += delta
 		if playing and held and h.age > HOLD_RETRIGGER: h.age = 0.0
 		if (not held and h.age >= HIT_LIFE) or game.mode not in ["play", "paused"]:

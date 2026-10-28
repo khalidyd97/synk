@@ -2,6 +2,16 @@ extends RefCounted
 ## Source Unity legacy animation keys, including their separate incoming/outgoing tangents.
 const DATA: Dictionary = preload("res://scripts/ssrg_source_curve_data.gd").CLIPS
 const BEAM_RELEASE_SECONDS := .1 # alpha_out_linear length1 / Awake state speed10.
+const MISS_LIFETIME_SECONDS := 1.0 # Break position/scale final keys and stopTime agree.
+const SUCCESS_LIFETIME_SECONDS := .5 # Legacy authored curve end; native get_length scans key ranges.
+
+static func word_alpha(age: float,miss: bool = false) -> float:
+	if miss: return 1.0 if age<MISS_LIFETIME_SECONDS else 0.0
+	if age>=SUCCESS_LIFETIME_SECONDS: return 0.0
+	return float(sample("JudgementGood","float","trans/sprite","Color.a",age))
+
+static func combo_visible(age: float,combo: int) -> bool:
+	return combo>0 and age<SUCCESS_LIFETIME_SECONDS
 
 static func beam_alpha(age: float) -> float:
 	return clampf(1.0-age/BEAM_RELEASE_SECONDS,0.0,1.0)
@@ -38,8 +48,7 @@ static func judgement_scale(age: float,miss: bool = false) -> Vector2:
 	return Vector2(result.x,result.y)
 
 static func judgement_alpha(age: float,miss: bool = false) -> float:
-	if age>=1.0: return 0.0
-	return 1.0 if miss else float(sample("JudgementGood","float","trans/sprite","Color.a",age))
+	return word_alpha(age,miss)
 
 static func judgement_offset(age: float,miss: bool = false) -> Vector2:
 	if not miss: return Vector2.ZERO
