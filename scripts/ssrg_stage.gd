@@ -2,11 +2,22 @@ extends Node3D
 var receptors: Array = []
 var press: MeshInstance3D
 var rails: Array = []
+var entrance_shadow: MeshInstance3D
 const TRACK_REACH = 1500.0
 func _init() -> void :
 	name = "SSRGStage"
 	# Direct original UI canvas: world Z = -(UI y + 234) * UNIT.
 	const UNIT = 9.75/512.0
+	# A stationary veil over the distant entrance lets notes emerge gradually.
+	entrance_shadow=MeshInstance3D.new();entrance_shadow.name="HighwayEntranceShadow"
+	var shadow_plane=PlaneMesh.new();shadow_plane.size=Vector2(1440,600)*UNIT
+	entrance_shadow.mesh=shadow_plane
+	entrance_shadow.position=Vector3(0,.3,-214*UNIT)
+	entrance_shadow.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var shadow_material=ShaderMaterial.new()
+	shadow_material.shader=preload("res://scripts/ssrg_entrance_shadow.gdshader")
+	shadow_material.render_priority=3
+	entrance_shadow.material_override=shadow_material;add_child(entrance_shadow)
 	for side in [-1,1]:
 		# Original BottomRight-pivot sprite at (0,-320), mirrored on the right.
 		var rail=MeshInstance3D.new(); var quad=QuadMesh.new()
