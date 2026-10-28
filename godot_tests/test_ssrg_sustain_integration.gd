@@ -37,8 +37,9 @@ func run() -> void:
 	point=game.field.world.camera.unproject_position(Vector3(0,.035,0))/Vector2(game.field.viewport.size)
 	var entry=fixture([1.0])
 	game.song_time=1.81;game.update_game()
-	check(int(entry.get("checks_done",0))==1,"Source middle accepts held finger within 200ms early")
-	check(game.judged==2 and game.judgment_counts.PERFECT==2,"Early middle inherits PERFECT head grade")
+	check(int(entry.get("checks_done",0))==0,"Held connector does not score before crossing the line")
+	game.song_time=2.0;game.update_game()
+	check(game.judged==2 and game.judgment_counts.PERFECT==2,"Line-crossing middle inherits PERFECT head grade")
 	check(not entry.done,"Early middle does not retire later end")
 	entry=fixture([1.0],"slide")
 	game.song_time=1.3;game.pointer_event(1,point,false,true,false)
@@ -62,6 +63,10 @@ func run() -> void:
 	game.song_time=2.78;game.pointer_event(1,point,false,true,false)
 	game.update_game() # Flush the source-style per-frame touch batch.
 	check(entry.done and game.judgment_counts.GOOD==1,"Accepted terminal release receives GOOD")
+	entry=fixture()
+	game.song_time=2.995;game.pointer_event(1,point,false,true,false)
+	game.song_time=3.12;game.update_game()
+	check(entry.done and game.judgment_counts.PERFECT==2 and game.judgment_counts.GOOD==0,"On-time release is graded at input time instead of forced GOOD")
 	entry=fixture()
 	game.song_time=2.77;game.pointer_event(1,point,false,true,false)
 	game.update_game() # Flush the source-style per-frame touch batch.

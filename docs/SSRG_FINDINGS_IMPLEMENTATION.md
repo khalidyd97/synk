@@ -51,3 +51,7 @@ The older remaining-work rows above are superseded by [SSRG_REMAINING_PROGRESS.m
 
 See [SSRG_TOUCH_ROUTING_IMPLEMENTATION.md](SSRG_TOUCH_ROUTING_IMPLEMENTATION.md) for the applied projected touch rectangles, frame-batched channel routing, tests and intentional crossing/cancellation safeguards. This supersedes the earlier unresolved autoaim rows; live original-game parity and online configuration remain unverified.
 
+
+## Long connector judgment follow-up
+
+[SSRG_CONNECTOR_JUDGMENT_FIX.md](SSRG_CONNECTOR_JUDGMENT_FIX.md) records the user's requested playability adjustment: held connector pucks judge at line crossing, and terminal releases use their captured timing instead of an unconditional GOOD. Original research evidence is retained; these adjustments are explicitly distinguished from original-game parity.
