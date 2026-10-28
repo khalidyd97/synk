@@ -1,6 +1,6 @@
 # Validation workflow
 
-- After game code, UI, asset, or export changes, build the Android APK and send it to the connected Samsung's Downloads folder. The user will test it; do not launch or test the game on the phone, or install the APK, unless explicitly asked.
+- After game code, UI, asset, or export changes, build the Android APK, send it to the connected Samsung's Downloads folder, and install it. The user has explicitly authorized always installing updates. The user will test it; do not launch or test the game on the phone unless explicitly asked.
 - The known Samsung serial is `RZCW10J7R7A` (SM-A736B); verify that it is connected and authorized before transferring the APK. Use `install-in-samsung.bat` only when installation is explicitly requested.
 - Build into a fresh output folder and verify the APK signature. For explicitly requested installations, use `adb install --no-incremental -r` to preserve app data and avoid incremental-install file locks.
 - Do not uninstall the app or clear its data. Keep the user's charts and drafts.
