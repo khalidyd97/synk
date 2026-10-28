@@ -96,6 +96,7 @@ var flash_lane = 6
 var judgement = ""
 var judgement_kind = "tap"
 var countdown = 0.0
+var gameplay_start_lead = 0.0
 var resume_countdown = 0.0
 var resume_start_audio = false
 var start_position = 0.0
@@ -1169,11 +1170,17 @@ func start_game(notes: Array,automated: bool = false,section: String = "",is_pra
 			section_fade_out_start=play_finish_time-SECTION_FADE_OUT
 	for n in sorted: live.append({"note":n,"started":false,"done":false,"pointer":-999,"error":0.0,"key":"play"+str(live.size())})
 	total_judgements()
+	# Keep chart/audio timestamps intact. After the hidden countdown, advance
+	# through a silent approach so even a note at time zero travels in fully.
+	start_position=play_range.x-lead_in
+	var first_note_time=float(sorted[0].time) if not sorted.is_empty() else start_position
 	score=0; displayed_score=0; combo=0; combo_pulse=0; rank_pulse=0; shown_rank="SS"; hold_pulse_time=0; max_combo=0; earned=0; judged=0; score_panel.energy=.5; score_panel.shown_energy=.5; judgment_counts={"PERFECT":0,"GREAT":0,"GOOD":0,"MISS":0}; countdown=3; start_position=play_range.x-lead_in; song_time=start_position-3; judgement="READY"; flash=1
 	update_section_volume()
 	# A restart only replays the stage entrance; coming from a menu shows the loading card first.
 	var restarting=mode in ["play","paused"]
 	set_mode("play")
+	gameplay_start_lead=maxf(2.0,note_travel_seconds()-(first_note_time-start_position))
+	song_time=start_position-gameplay_start_lead-countdown
 	apply_stage_cover()
 	# Build every note of the chart now (behind the loading card); play only shows and hides them.
 	field.world.begin_prebuild()
@@ -1676,16 +1683,23 @@ func _process(delta: float) -> void:
 		elif resume_countdown>0:
 			resume_countdown=maxf(0,resume_countdown-delta)
 			if resume_countdown==0:
-				if resume_start_audio: audio.play(start_position)
+				if resume_start_audio and not (mode=="play" and gameplay_start_lead>0): audio.play(start_position)
 				UiSound.play(self,"go")
 				audio.stream_paused=false; resume_grace=.35
 		elif countdown>0:
-			countdown=maxf(0,countdown-delta); song_time=start_position-countdown
+			countdown=maxf(0,countdown-delta); song_time=start_position-countdown-(gameplay_start_lead if mode=="play" else 0.0)
 			visual_song_time=song_time; visual_clock_ready=false
 			judgement="READY "+str(ceili(countdown)); flash=1
 			if countdown==0:
-				audio.stream_paused=false; audio.play(start_position); UiSound.play(self,"go")
+				audio.stream_paused=false
+				if mode!="play" or gameplay_start_lead<=0:audio.play(start_position)
+				UiSound.play(self,"go")
 				if extras and mode=="play": extras.on_song_start()
+		elif mode=="play" and gameplay_start_lead>0:
+			gameplay_start_lead=maxf(0,gameplay_start_lead-delta)
+			song_time=start_position-gameplay_start_lead
+			smooth_visual_time(song_time,delta)
+			if gameplay_start_lead==0:audio.stream_paused=false;audio.play(start_position)
 		else:
 			song_time=maxf(song_time,chart_time())
 			smooth_visual_time(song_time,delta)
@@ -2487,7 +2501,9 @@ func test_editor_here() -> void:
 	var from=maxf(0,cursor-2.0*60.0/float(chart_bpm()))
 	var notes=document.notes.filter(func(n): return float(n.time)>=from)
 	start_game(notes,false,"full")
-	start_position=from; song_time=from-countdown
+	start_position=from
+	gameplay_start_lead=maxf(2.0,note_travel_seconds()-(float(notes[0].time)-from)) if not notes.is_empty() else 2.0
+	song_time=from-gameplay_start_lead-countdown
 	visual_song_time=song_time; visual_clock_ready=false
 
 func chart_empty_point() -> float:
