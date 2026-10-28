@@ -100,9 +100,11 @@ func flash_point(x: float) -> Vector3:
 	var on_line = Vector3(x, .035, 0)
 	return on_line + Vector3.UP*FLASH_PULL if world.game.uses_ssrg_gameplay() else on_line + (world.camera.global_position - on_line).normalized() * FLASH_PULL
 
+# Drawn a little larger than the source sprite so hits read clearly on phone screens.
+const HIT_SCALE = 1.2
 func make_hit() -> Dictionary:
 	# Source centered 310x186 sprite under def_c_trans scale (2,2,1).
-	var mesh = QuadMesh.new(); mesh.size = Vector2(620,372)*world.SSRG_UNIT
+	var mesh = QuadMesh.new(); mesh.size = Vector2(620,372)*world.SSRG_UNIT*HIT_SCALE
 	var mat = ShaderMaterial.new(); mat.shader = preload("res://scripts/ssrg_hit.gdshader"); mat.render_priority = 6
 	var node = world.mesh_node(mesh, self, mat); node.rotation = world.camera.rotation; node.visible = false
 	return {"node": node, "material": mat, "age": 0.0, "sustain_entry": {}, "pointer_id": -999, "kind": "tap"}

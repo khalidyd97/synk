@@ -77,7 +77,7 @@ func run():
 	game.update_game()
 	check(game.judged==2 and game.judgment_counts.MISS==2,"Missing an imported slide start accounts for both head and end")
 	var effect=world.ssrg_theme.make_hit()
-	check(effect.node.mesh.size.is_equal_approx(Vector2(620,372)*world.SSRG_UNIT),"Hit flash includes source parent scale and centered dimensions")
+	check(effect.node.mesh.size.is_equal_approx(Vector2(620,372)*world.SSRG_UNIT*world.ssrg_theme.HIT_SCALE),"Hit flash includes source parent scale and centered dimensions")
 	effect.node.queue_free()
 	game.prefs.set_value("ssrg","speed",1.0)
 	if game.prefs.has_section_key("ssrg","speed_value"):game.prefs.erase_section_key("ssrg","speed_value")
