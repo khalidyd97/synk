@@ -745,10 +745,9 @@ func prefill_hits() -> void:
 	for burst in made: recycle_hit(burst)
 
 # --- Play aids -------------------------------------------------------------------------
-# Lane hints, the hit-window preview, miss lane flashes, combo flares, chord lines,
+# Lane hints, the hit-window preview, combo flares, chord lines,
 # Hidden/Sudden modifiers and a loudness-driven stage pulse. Settings live in game.extras.
 var window_bands: Array = []
-var miss_flashes: Array = []
 var flare = 0.0
 var chords: Array = []
 var loudness = 0.0
@@ -763,12 +762,6 @@ func build_play_aids() -> void:
 	for i in 2:
 		var band = mesh_node(PlaneMesh.new(), self, material(Color("7dffcf") if i == 0 else Color("6fc8ff"), .22 if i == 0 else .12))
 		band.position = Vector3(0, .05 + i * .002, 0); band.visible = false; window_bands.append(band)
-	# One red flash per lane for misses.
-	for lane in SynkChart.LANES:
-		var mesh = PlaneMesh.new(); mesh.size = Vector2(LANE_WIDTH * .96, 9.0)
-		var flash_material = material(Color("ff3355"), 0.0); flash_material.render_priority = 3
-		var node = mesh_node(mesh, self, flash_material); node.position = Vector3(lane_x(lane), .06, -4.5); node.visible = false
-		miss_flashes.append({"node": node, "material": flash_material, "amount": 0.0})
 	# Loudness from the master bus, for a stage that pulses with the music rather than a metronome.
 	var analyzer = AudioEffectSpectrumAnalyzer.new(); analyzer.buffer_length = .1; analyzer.fft_size = AudioEffectSpectrumAnalyzer.FFT_SIZE_512
 	AudioServer.add_bus_effect(0, analyzer)
@@ -776,11 +769,6 @@ func build_play_aids() -> void:
 
 func refresh_play_aids() -> void:
 	pass  # Settings are read every frame; nothing needs rebuilding.
-
-func flash_miss_lane(lane: float) -> void:
-	if miss_flashes.is_empty(): return
-	var flash_entry: Dictionary = miss_flashes[clampi(roundi(lane), 0, SynkChart.MAX_LANE)]
-	flash_entry.amount = 1.0; flash_entry.node.visible = true
 
 func rail_flare() -> void:
 	flare = 1.0
@@ -833,11 +821,6 @@ func update_play_aids(delta: float) -> void:
 		if show_bands:
 			var window = game.extras.perfect_window() if i == 0 else game.extras.great_window()
 			(window_bands[i].mesh as PlaneMesh).size = Vector2(HIGHWAY_HALF_WIDTH * 2.0, maxf(.05, window * travel_speed() * 2.0))
-	for flash_entry in miss_flashes:
-		if flash_entry.amount <= 0.0: continue
-		flash_entry.amount = maxf(0.0, flash_entry.amount - delta * 3.0)
-		flash_entry.material.albedo_color.a = .35 * flash_entry.amount
-		flash_entry.node.visible = flash_entry.amount > 0.0
 	flare = maxf(0.0, flare - delta * 1.6)
 	if spectrum and game.audio.playing:
 		var low = spectrum.get_magnitude_for_frequency_range(30, 180).length()

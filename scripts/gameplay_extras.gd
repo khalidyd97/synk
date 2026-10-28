@@ -61,9 +61,7 @@ func good_window() -> float: return GOOD * scale()
 
 # --- Hits ---------------------------------------------------------------------------
 func on_judged(entry: Dictionary, judgement: String, combo: int) -> void:
-	if judgement == "MISS":
-		if game.field: game.field.world.flash_miss_lane(SynkChart.lane_at(entry.note, game.song_time))
-		return
+	if judgement == "MISS":return
 	var kind = str(entry.note.kind)
 	play_hit("flick" if kind == "flick" else ("hold" if kind in ["hold", "slide"] else "tap"))
 	if bool(settings.vibration) and not game.auto_play and (judgement == "PERFECT" or kind == "flick"):
