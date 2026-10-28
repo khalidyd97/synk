@@ -459,7 +459,7 @@ func build_audio(items: VBoxContainer,headset: VBoxContainer) -> void:
     add_control(row(items,"Menu music","Background music on the menus. 0% turns it off."),music)
     music.value_changed.connect(func(v): game.menu_music.set_volume(v/100))
     timing_input=Stepper.new(-200,200,5,game.timing_ms," ms",0)
-    add_control(row(items,"Timing offset","Move notes earlier (−) or later (+) to match the music."),timing_input)
+    add_control(row(items,"Timing offset","Positive: notes earlier. Negative: notes later. Match their arrival to the music."),timing_input)
     timing_input.value_changed.connect(game.change_audio_offset)
     bluetooth_toggle=Switch.new(); add_control(row(headset,"Bluetooth headset mode","Compensate for wireless audio delay."),bluetooth_toggle,152)
     bluetooth_toggle.button_pressed=game.bluetooth_mode; connect_switch(bluetooth_toggle,game.change_bluetooth_mode)

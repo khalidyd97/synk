@@ -37,12 +37,12 @@ func parse(id:int,touch:Dictionary,channel:int,phase:int) -> void:
 	var current=track(channel) if channel>=0 else {}
 	var previous=track(old) if old>=0 else {}
 	if phase==0:
-		if channel>=0:current.state=State.BEGAN;current.pointer=id
+		if channel>=0:current.state=State.BEGAN;current.pointer=id;current.event_time=touch.get("ssrg_press_time",touch.get("ssrg_event_time",0.0))
 	elif phase in [1,2]:
 		if channel>=0 and (current.state==State.HELD or (old>=0 and previous.state in [State.BEGAN,State.MOVED,State.HELD])):
 			current.state=State.HELD if channel==old else State.MOVED;current.pointer=id
 	elif phase in [3,4]:
-		if channel>=0:current.state=State.IDLE if phase==4 else State.ENDED;current.pointer=-999
+		if channel>=0:current.state=State.IDLE if phase==4 else State.ENDED;current.pointer=-999;current.event_time=touch.get("ssrg_event_time",0.0)
 		if old>=0 and old!=channel:previous.state=State.IDLE if phase==4 else State.ENDED;previous.pointer=-999
 		touch.ssrg_channel=channel
 		return
@@ -75,7 +75,11 @@ func route(pointers:Dictionary,candidates:Array,keys:int,token:Variant) -> void:
 		var best=point.distance_to(aim.center) if not aim.is_empty() else INF
 		var found=false
 		if phase in [0,1,2]:
-			for candidate in candidates:
+			for source_candidate in candidates:
+				var candidate:Dictionary=source_candidate
+				if phase==0 and candidate.has("at") and touch.has("ssrg_press_time"):
+					candidate=source_candidate.duplicate()
+					candidate.merge(node_geometry(int(candidate.channel),float(candidate.at),float(touch.ssrg_press_time),float(candidate.travel),bool(candidate.sustain)),true)
 				if not candidate.rect.has_point(point):continue
 				if phase!=0 and (not candidate.sustain or candidate.owner!=id or not candidate.eligible):continue
 				if phase==0 and candidate.sustain:continue

@@ -69,9 +69,13 @@ func run() -> void:
 	w.set_trail_clip(w.notes[keys[0]].node,.02)
 	var clipped_any=false; var other_clean=true
 	for child in w.notes[keys[0]].node.get_children():
-		if child is GeometryInstance3D and child.material_override is ShaderMaterial and not child.material_override.has_meta("shared") and float(child.material_override.get_shader_parameter("clip_z"))<1.0: clipped_any=true
+		if child is GeometryInstance3D and child.material_override is ShaderMaterial and not child.material_override.has_meta("shared"):
+			var clip=child.material_override.get_shader_parameter("clip_z")
+			if clip!=null and float(clip)<1.0:clipped_any=true
 	for child in w.notes[keys[1]].node.get_children():
-		if child is GeometryInstance3D and child.material_override is ShaderMaterial and float(child.material_override.get_shader_parameter("clip_z"))<1.0: other_clean=false
+		if child is GeometryInstance3D and child.material_override is ShaderMaterial:
+			var clip=child.material_override.get_shader_parameter("clip_z")
+			if clip!=null and float(clip)<1.0:other_clean=false
 	check(clipped_any and other_clean,"Holding one note clips only that note's trail")
 	check(Engine.max_fps==g.display_refresh_rate() or g.frame_rate_setting()>0,"Frame rate follows the display refresh rate")
 	# Stats

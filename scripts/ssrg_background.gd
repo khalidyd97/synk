@@ -11,6 +11,7 @@ var frame_credit: float = 0.0
 var momentum: float = 0.0
 var meshes: Array = []
 var materials: Array = []
+var instance_buffers:Array=[]
 var intensity: float = 1.0
 var tint: Color = Color.WHITE
 
@@ -28,6 +29,7 @@ func configure(index: int = 0) -> void:
 		child.queue_free()
 	meshes.clear()
 	materials.clear()
+	instance_buffers.clear()
 	for texture_name in DATA.PROFILES[profile_index].textures:
 		var node = MultiMeshInstance3D.new()
 		var batch=MultiMesh.new()
@@ -36,6 +38,8 @@ func configure(index: int = 0) -> void:
 		batch.mesh=QuadMesh.new()
 		batch.instance_count=int(DATA.PROFILES[profile_index].countmax)*DATA.PROFILES[profile_index].polygons.size()
 		batch.visible_instance_count=0;node.multimesh=batch
+		var buffer=PackedFloat32Array();buffer.resize(batch.instance_count*20)
+		instance_buffers.append(buffer)
 		var material = ShaderMaterial.new()
 		material.shader = preload("res://scripts/ssrg_background.gdshader")
 		material.set_shader_parameter("artwork", load("res://assets/ssrg/imported/background/" + str(texture_name) + ".png"))
@@ -138,14 +142,22 @@ func _render() -> void:
 			var unit: Dictionary = particle.units[i]
 			var color = particle_color(p.polygons[i], unit.color, q) * tint
 			color.a *= intensity * float(p.forcealpha)
-			var quad = source_vertices(pos, particle.direction, unit.size, p.zmax)
 			var texture_index=int(unit.texture)
-			var batch:MultiMesh=meshes[texture_index]
 			var index=int(counts[texture_index]);counts[texture_index]+=1
-			var near=(quad[0]+quad[1])*.5
-			var far=(quad[2]+quad[3])*.5
-			batch.set_instance_transform(index,Transform3D(Basis(Vector3(UNIT,0,0),Vector3(0,0,-UNIT),Vector3(0,UNIT,0)),Vector3(near.x*UNIT,-.1,-(near.y+234.0)*UNIT)))
-			batch.set_instance_color(index,color)
-			batch.set_instance_custom_data(index,Color(far.x-near.x,far.y-near.y,(quad[1].y-quad[0].y)*.5,(quad[2].y-quad[3].y)*.5))
+			var scale_z=pos.z/float(p.zmax)
+			var far:Vector3=pos-particle.direction*unit.size.x*scale_z
+			var offset=index*20
+			# One packed upload per texture, rather than three rendering-server
+			# calls per particle. Layout: 3x4 transform, color, custom data.
+			var buffer:PackedFloat32Array=instance_buffers[texture_index]
+			instance_buffers[texture_index]=null # Keep the writable array unshared during this update.
+			buffer[offset]=UNIT;buffer[offset+1]=0;buffer[offset+2]=0;buffer[offset+3]=pos.x*UNIT
+			buffer[offset+4]=0;buffer[offset+5]=0;buffer[offset+6]=UNIT;buffer[offset+7]=-.1
+			buffer[offset+8]=0;buffer[offset+9]=-UNIT;buffer[offset+10]=0;buffer[offset+11]=-(pos.y+234)*UNIT
+			buffer[offset+12]=color.r;buffer[offset+13]=color.g;buffer[offset+14]=color.b;buffer[offset+15]=color.a
+			buffer[offset+16]=far.x-pos.x;buffer[offset+17]=far.y-pos.y
+			buffer[offset+18]=unit.size.y*scale_z*.5;buffer[offset+19]=unit.size.y*(scale_z+far.z/float(p.zmax))*.5
+			instance_buffers[texture_index]=buffer
 	for i in meshes.size():
+		meshes[i].buffer=instance_buffers[i]
 		meshes[i].visible_instance_count=counts[i]

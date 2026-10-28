@@ -169,9 +169,9 @@ func begin_run(notes: Array, is_replay: bool) -> void:
 	if not is_replay: recording = []
 	last_replay.notes = notes.duplicate(true) if not is_replay else last_replay.get("notes", notes)
 
-func record_input(id: int, p: Vector2, began: bool, ended: bool, canceled: bool) -> void:
+func record_input(id: int, p: Vector2, began: bool, ended: bool, canceled: bool, at:float=NAN) -> void:
 	if replaying or game.auto_play or game.mode != "play": return
-	recording.append([game.song_time, id, p.x, p.y, began, ended, canceled])
+	recording.append([game.song_time if is_nan(at) else at, id, p.x, p.y, began, ended, canceled])
 
 func finish_run() -> void:
 	if not replaying and not recording.is_empty(): last_replay.events = recording.duplicate()
