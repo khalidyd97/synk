@@ -1453,6 +1453,11 @@ func animate_miss_shake(delta: float) -> void:
 	# The loading card fades away over a stationary highway. No entrance zoom.
 	apply_camera(Vector3(sin(phase)*.065,sin(phase*1.3)*.025,0)*strength)
 
+# A completed hold or slide is judged slightly before its tail is drawn at the line (early
+# release, and the render clock trails the judgment clock), so keep drawing it until then.
+func finishing_sustain(entry: Dictionary) -> bool:
+	return entry.done and entry.started and entry.note.kind in ["hold","slide"] and not entry.has("missed_at") and render_time()<float(entry.note.time)+float(entry.note.duration)
+
 # A missed sustain remains visible until its tail exits, even after judgment retires it.
 func first_visible_play_index() -> int:
 	while play_render_cursor<game.live.size():
@@ -1460,6 +1465,7 @@ func first_visible_play_index() -> int:
 		if not entry.done: break
 		if entry.note.kind in ["hold","slide"] and entry.has("missed_at"):
 			if (render_time()-float(entry.note.time)-float(entry.note.duration))*travel_speed()<=5: break
+		if finishing_sustain(entry): break
 		play_render_cursor+=1
 	return play_render_cursor
 
@@ -1512,6 +1518,8 @@ func _process(delta: float) -> void:
 					var pulse = .5+.5*sin(animation_time*TAU*3.0)
 					beam.get_child(0).scale = Vector3(1+pulse*.12,.9+pulse*.25,1)
 					beam.get_child(0).material_override.set_shader_parameter("opacity",.45+pulse*.3)
+			elif finishing_sustain(game.live[i]):
+				sync_note(game.live[i].key,game.live[i].note,visible_keys,false,-1.0,true)
 			elif game.live[i].note.kind in ["hold","slide"] and game.live[i].has("missed_at"):
 				# A missed hold or slide turns gray and keeps travelling down the highway until it leaves.
 				var key: String=game.live[i].key
