@@ -14,6 +14,8 @@ func run():
  game.field.sync_projection_style();freeze(game)
  game.field.show();game.field.screen.show();game.field.viewport.render_target_update_mode=SubViewport.UPDATE_ALWAYS
  var world=game.field.world;world.apply_camera();world.update_ssrg_warp()
+ # This check isolates shader culling; the entrance veil intentionally dims this pixel.
+ world.ssrg_theme.original_stage.entrance_shadow.hide()
  for material in world.track_materials:
   check(is_zero_approx(material.get_shader_parameter("opacity")),"Old rectangular floor cannot tint the SSRG stage")
  check(not world.highway_shadow.visible,"Old floor shadow is hidden in the 2D stage")
@@ -31,6 +33,7 @@ func run():
  var pixel=world.camera.unproject_position(expected)
  var color=image.get_pixelv(Vector2i(pixel))
  check(maxf(color.r,maxf(color.g,color.b))>.55,"Early approach note is actually rendered before its raw depth enters the camera")
+ world.ssrg_theme.original_stage.entrance_shadow.show()
  var below_pixel=Vector2i(world.camera.unproject_position(Vector3(0,.13,.15)))
  var bar_below_color=image.get_pixelv(below_pixel)
  var hold=SynkChart.note(5,0,"hold");hold.duration=1.0

@@ -1378,7 +1378,10 @@ func update_finger_beams(delta: float = 0.0) -> void:
 	if ssrg and game.countdown<=0:
 		for touch in touches:
 			var lane=ssrg_beam_lane(SynkCapture.lane(touch.position.x))
-			if game.ssrg_playable_run and touch.has("world") and not game.ssrg_touch_lane(touch.world,lane): continue
+			if game.ssrg_playable_run and touch.has("ssrg_channel"):
+				if int(touch.ssrg_channel)<0 or touch.get("ssrg_ended",false):continue
+				lane=float(touch.ssrg_channel)*.75
+			elif game.ssrg_playable_run and touch.has("world") and not game.ssrg_touch_lane(touch.world,lane): continue
 			pressed[clampi(roundi(lane/.75),0,12)]=lane
 	for i in finger_beams.size():
 		var beam: MeshInstance3D = finger_beams[i]

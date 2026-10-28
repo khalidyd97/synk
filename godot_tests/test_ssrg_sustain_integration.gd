@@ -11,7 +11,7 @@ func freeze(node:Node) -> void:
 	for child in node.get_children():freeze(child)
 
 func fixture(checkpoints:Array=[],kind:String="hold") -> Dictionary:
-	game.pointers.clear();game.field.world.clear_hit_effects()
+	game.pointers.clear();game.ssrg_touch_router.reset();game.field.world.clear_hit_effects()
 	game.song_time=1.0;game.live_cursor=0;game.judged=0;game.earned=0;game.combo=0
 	game.judgment_counts={"PERFECT":0,"GREAT":0,"GOOD":0,"MISS":0}
 	game.pending_end_hits.clear();game.judgement_total_size=-1
@@ -21,6 +21,7 @@ func fixture(checkpoints:Array=[],kind:String="hold") -> Dictionary:
 	var entry={"note":note,"key":"sustain_test","started":false,"done":false,"pointer":-999,"error":0.0}
 	game.live=[entry]
 	game.pointer_event(1,point,true,false,false)
+	game.update_game() # Flush the source-style per-frame touch batch.
 	check(entry.started and not entry.done,"Fixture head starts")
 	return entry
 
@@ -41,30 +42,38 @@ func run() -> void:
 	check(not entry.done,"Early middle does not retire later end")
 	entry=fixture([1.0],"slide")
 	game.song_time=1.3;game.pointer_event(1,point,false,true,false)
+	game.update_game() # Flush the source-style per-frame touch batch.
 	check(not entry.done and entry.pointer==-999 and game.judgment_counts.MISS==0,"Early release detaches without whole-chain miss")
 	check(not bool(entry.get("ssrg_contact",true)),"Detached sustain visual contact stops")
 	game.song_time=2.1;game.pointer_event(2,point,true,false,false);game.update_game()
+	game.update_game() # Flush the source-style per-frame touch batch.
 	check(not entry.done and int(entry.get("checks_done",0))==1,"Another finger regrabs before next checkpoint deadline")
 	check(game.judgment_counts.PERFECT==2 and game.judgment_counts.GOOD==0,"Generic lift/regrab preserves middle inheritance")
 	entry=fixture([1.0])
 	game.song_time=1.3;game.pointer_event(1,point,false,true,false)
+	game.update_game() # Flush the source-style per-frame touch batch.
 	game.song_time=2.201;game.update_game()
 	check(entry.done and game.judgment_counts.MISS==2,"Expired checkpoint misses both remaining checkpoint and end")
 	var scored=game.judged
 	game.pointer_event(3,point,true,false,false);game.update_game()
+	game.update_game() # Flush the source-style per-frame touch batch.
 	check(game.judged==scored and game.judgment_counts.MISS==2,"Expired chain cannot revive or double count")
 	entry=fixture()
 	game.song_time=2.78;game.pointer_event(1,point,false,true,false)
+	game.update_game() # Flush the source-style per-frame touch batch.
 	check(entry.done and game.judgment_counts.GOOD==1,"Accepted terminal release receives GOOD")
 	entry=fixture()
 	game.song_time=2.77;game.pointer_event(1,point,false,true,false)
+	game.update_game() # Flush the source-style per-frame touch batch.
 	check(not entry.done and game.judgment_counts.GOOD==0,"Too-early terminal release waits for regrab")
 	entry=fixture()
 	game.song_time=2.78;game.pointer_event(1,point,false,true,true)
+	game.update_game() # Flush the source-style per-frame touch batch.
 	check(not entry.done and game.judgment_counts.GOOD==0,"OS cancellation does not award release GOOD")
 	game.ssrg_playable_run=false
 	entry=fixture()
 	game.song_time=1.3;game.pointer_event(1,point,false,true,false)
+	game.update_game() # Flush the source-style per-frame touch batch.
 	check(entry.done and game.judgment_counts.MISS==1,"Normal SYNK retains immediate early-release miss")
 	print("SSRG sustain actual-main integration: %d failures"%failures)
 	game.queue_free();await process_frame

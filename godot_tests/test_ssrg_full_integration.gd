@@ -24,26 +24,30 @@ func run():
 	var tap=SynkChart.note(5.12,4);tap.lane=4.5
 	var hit=entry(tap,"tap");game.live=[hit];game.live_cursor=0
 	game.pointer_event(1,point,true,false,false)
+	game.update_game() # Flush the source-style per-frame touch batch.
 	check(hit.done and game.judgement=="GREAT","Imported tap uses packaged 210ms ordinary-perfect threshold")
-	game.pointers.clear();world.clear_hit_effects()
+	game.pointers.clear();game.ssrg_touch_router.reset();world.clear_hit_effects()
 	tap=SynkChart.note(5.25,4);tap.lane=4.5;hit=entry(tap,"early");game.live=[hit];game.live_cursor=0
 	game.pointer_event(1,point,true,false,false)
+	game.update_game() # Flush the source-style per-frame touch batch.
 	check(hit.done and game.judgement=="GOOD","Imported tap accepts the full packaged 300ms good window")
-	game.pointers.clear();world.clear_hit_effects()
+	game.pointers.clear();game.ssrg_touch_router.reset();world.clear_hit_effects()
 	hit=entry(tap,"wrong_lane");game.live=[hit];game.live_cursor=0
-	var other=world.camera.unproject_position(Vector3(world.SSRG_STEP,.035,0))/Vector2(game.field.viewport.size)
+	var other=world.camera.unproject_position(Vector3(world.SSRG_STEP*2,.035,0))/Vector2(game.field.viewport.size)
 	game.pointer_event(1,other,true,false,false)
-	check(not hit.started,"Adjacent 13-key channel does not hit a visually wide puck")
-	game.pointers.clear();world.clear_hit_effects()
+	game.update_game() # Flush the source-style per-frame touch batch.
+	check(not hit.started,"Touch outside the recovered head autoaim rectangle cannot hit a puck")
+	game.pointers.clear();game.ssrg_touch_router.reset();world.clear_hit_effects()
 	var slide=SynkChart.note(5,4,"slide");slide.lane=4.5;slide.end_lane=4.5;slide.duration=1
 	slide.path=[{"offset":0.0,"lane":4.5},{"offset":1.0,"lane":4.5}];slide.ssrg_path=true
 	hit=entry(slide,"slide");game.live=[hit];game.live_cursor=0;game.judged=0;game.judgement_total_size=-1
 	game.pointer_event(1,point,true,false,false)
+	game.update_game() # Flush the source-style per-frame touch batch.
 	check(hit.started and not hit.done and game.judged==1,"Imported slide scores its start immediately")
 	check(game.total_judgements()==2,"Imported slide includes both start and end in accuracy total")
 	game.song_time=6.0;game.update_game()
 	check(hit.done and game.judged==2,"Imported slide end is a separate judgment")
-	game.pointers.clear();world.clear_hit_effects()
+	game.pointers.clear();game.ssrg_touch_router.reset();world.clear_hit_effects()
 	game.pointers={1:{"position":Vector2(.113,.85)},2:{"position":Vector2(.5,.85)}}
 	world.update_finger_beams()
 	var released=world.finger_beams[0];var retained:float=released.position.x

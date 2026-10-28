@@ -46,3 +46,8 @@ Supporting source locations, hashes and limitations are in SSRG_INPUT_RULES_EVID
 
 The older remaining-work rows above are superseded by [SSRG_REMAINING_PROGRESS.md](SSRG_REMAINING_PROGRESS.md): sustain re-grab, reconstructed background, narrow-screen fitting, confirmed clip lifetime and measured material-animation optimization are now applied. That report records validation and explicit source-parity limits.
 
+
+## Slide autoaim and multi-finger follow-up
+
+See [SSRG_TOUCH_ROUTING_IMPLEMENTATION.md](SSRG_TOUCH_ROUTING_IMPLEMENTATION.md) for the applied projected touch rectangles, frame-batched channel routing, tests and intentional crossing/cancellation safeguards. This supersedes the earlier unresolved autoaim rows; live original-game parity and online configuration remain unverified.
+
