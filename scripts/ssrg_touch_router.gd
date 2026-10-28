@@ -39,11 +39,16 @@ func parse(id:int,touch:Dictionary,channel:int,phase:int) -> void:
 	if phase==0:
 		if channel>=0:current.state=State.BEGAN;current.pointer=id;current.event_time=touch.get("ssrg_press_time",touch.get("ssrg_event_time",0.0))
 	elif phase in [1,2]:
-		if channel>=0 and (current.state==State.HELD or (old>=0 and previous.state in [State.BEGAN,State.MOVED,State.HELD])):
+		var tracked=current.get("state",State.IDLE)==State.HELD or (old>=0 and previous.state in [State.BEGAN,State.MOVED,State.HELD])
+		if channel>=0 and tracked:
 			current.state=State.HELD if channel==old else State.MOVED;current.pointer=id
+		elif channel>=0 and touch.get("ssrg_sustain_active",false):
+			# An already-started chain may recover its still-down finger after
+			# a brief lane/band gap. This is not a fresh tap or long-note head.
+			current.state=State.HELD;current.pointer=id
 	elif phase in [3,4]:
-		if channel>=0:current.state=State.IDLE if phase==4 else State.ENDED;current.pointer=-999;current.event_time=touch.get("ssrg_event_time",0.0)
-		if old>=0 and old!=channel:previous.state=State.IDLE if phase==4 else State.ENDED;previous.pointer=-999
+		if channel>=0 and current.pointer in [id,-999]:current.state=State.IDLE if phase==4 else State.ENDED;current.pointer=-999;current.event_time=touch.get("ssrg_event_time",0.0)
+		if old>=0 and old!=channel and previous.pointer in [id,-999]:previous.state=State.IDLE if phase==4 else State.ENDED;previous.pointer=-999
 		touch.ssrg_channel=channel
 		return
 	# Keep a crossing finger from clearing a channel another touch has just

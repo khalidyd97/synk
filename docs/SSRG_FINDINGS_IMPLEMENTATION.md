@@ -55,3 +55,7 @@ See [SSRG_TOUCH_ROUTING_IMPLEMENTATION.md](SSRG_TOUCH_ROUTING_IMPLEMENTATION.md)
 ## Long connector judgment follow-up
 
 [SSRG_CONNECTOR_JUDGMENT_FIX.md](SSRG_CONNECTOR_JUDGMENT_FIX.md) records the user's requested playability adjustment: held connector pucks judge at line crossing, and terminal releases use their captured timing instead of an unconditional GOOD. Original research evidence is retained; these adjustments are explicitly distinguished from original-game parity.
+
+## Slide contact recovery follow-up
+
+[SSRG_SLIDE_FALSE_MISS_FIX.md](SSRG_SLIDE_FALSE_MISS_FIX.md) documents reproduced false misses after touch-band re-entry and shared-lane release, and the explicit SYNK identity/recovery protections added to fix them.

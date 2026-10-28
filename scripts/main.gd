@@ -2043,11 +2043,13 @@ func count_unstarted_tail(entry: Dictionary) -> void:
 func prepare_ssrg_input() -> void:
 	var candidates:Array=[]
 	var travel=note_travel_seconds()
+	for touch in pointers.values():touch.ssrg_sustain_active=false
 	for i in range(first_live_index(),live.size()):
 		var entry:Dictionary=live[i]
 		if float(entry.note.time)>song_time+SsrgRules.HEAD_WINDOW:break
 		if entry.done:continue
 		var sustain=bool(entry.started) and entry.note.kind in ["hold","slide"]
+		if sustain and pointers.has(int(entry.pointer)):pointers[int(entry.pointer)].ssrg_sustain_active=true
 		var next=SsrgSustain.next_node(entry.note,int(entry.get("checks_done",0))) if sustain else {"time":float(entry.note.time),"is_end":false}
 		if not sustain and absf(song_time-float(next.time))>SsrgRules.HEAD_WINDOW:
 			var pending_press=false

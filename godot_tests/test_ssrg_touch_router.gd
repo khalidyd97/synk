@@ -95,14 +95,13 @@ func _initialize() -> void:
 	check(not router.consume(6),"Repeated same-frame routing cannot reset consumed flag")
 	router.begin_frame(2)
 	check(router.consume(6),"New frame clears channel consumption")
-	# A later ending touch clears the channel even after another finger has
-	# populated it; cancellation deliberately cannot award a successful tail.
+	# A departing touch cannot clear another finger's live channel.
 	router.reset();early=touch(6);late=touch(6)
 	router.route({10:early,3:late},[],13,1)
 	early.ssrg_phase=0;late.ssrg_phase=3
 	router.route({10:early,3:late},[],13,2)
-	check(router.track(6).state==State.ENDED and router.track(6).pointer==-999,"End clears shared channel without pointer-identity guard")
-	late.ssrg_phase=4
+	check(router.track(6).state==State.BEGAN and router.track(6).pointer==10,"End preserves a channel held by another finger")
+	router.reset();late=touch(6);router.route({3:late},[],13,1);late.ssrg_phase=4
 	router.route({3:late},[],13,3)
 	check(router.track(6).state==State.IDLE and router.track(6).pointer==-999,"OS cancel cannot leave End eligible for release scoring")
 	router.reset();owned=touch(6);router.route({7:owned},[],13,1)
