@@ -1,5 +1,7 @@
 # SSRG sustained touch and recovery
 
+> Correction: the original held tail normally inherits the preceding rate and grade, transient Lost may judge, and provisional End rate.1 does not establish an unconditional final GOOD. See SSRG_CONNECTOR_JUDGMENT_REAUDIT.md; the historical interpretation below is superseded on those points.
+
 Source identity: supplied arm64 `libil2cpp.so`, SHA256 `e4ee507e90cc435d0401a4085881a3c322ca8bb306b47b92a389f58762fc053b`; IL2CPP metadata SHA256 `39ae1f606d8572219a263f2934c0e8f688de3e2128f7b8513f600552496fccfe`. This follows the REA workflow using retained artifact evidence and direct Capstone ARM64 decoding because the native provider was unavailable. Observations below are static control flow, not a live original-game touch test.
 
 ## Recovered behavior

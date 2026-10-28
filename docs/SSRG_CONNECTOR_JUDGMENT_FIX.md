@@ -1,5 +1,7 @@
 # Long slide connector judgment fix — 2026-10-28
 
+> Audit note: this file describes SYNK playability adjustments. SSRG_CONNECTOR_JUDGMENT_REAUDIT.md corrects the earlier original-game interpretation: line-crossing-only credit and independent tail grading are not the normal recovered SSRG flow.
+
 The user reports long slide connector judgment feels off. Continuous actual-main simulation reproduced two integration behaviors that made the visual crossing disagree with scoring:
 
 1. Held middle nodes were automatically consumed as soon as their200ms front window opened. Held ends were automatically consumed at the300ms front edge, which also produced GOOD on an otherwise accurate sustained hold.
