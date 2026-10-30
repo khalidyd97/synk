@@ -44,6 +44,9 @@ func _initialize() -> void:
 	hud._ready()
 	fake.combo=1; fake.judged=1
 	hud._process(.1)
+	assert(hud.word.text=="S.PERFECT")
+	assert(hud.grade_text("GREAT")=="PERFECT")
+	assert(hud.grade_text("GOOD")=="GOOD")
 	assert(is_equal_approx(hud.since_hit,.1))
 	assert(hud.word.modulate.a>0)
 	fake.mode="paused"

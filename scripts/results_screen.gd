@@ -129,7 +129,9 @@ func _ready() -> void:
     buttons.append(button("☷  S O N G  L I S T",68,994,350,128,open_song_list))
     buttons.append(button("↶  R E T R Y",440,994,290,128,retry))
     next_button=button("N E X T   S O N G   →",1460,994,520,128,next_song,true); buttons.append(next_button)
-    replay_button=button("▶  R E P L A Y",752,994,300,128,func(): game.extras.start_replay()); buttons.append(replay_button)
+    replay_button=button("▶  R E P L A Y",752,994,300,128,func():
+        if info.get("ssrg",false): game.ssrg_screens.restore_run()
+        game.extras.start_replay()); buttons.append(replay_button)
     practice_button=button("⟲  P R A C T I C E  M I S S",1074,994,364,128,practice_first_miss); buttons.append(practice_button)
     visible=false
 func layout() -> void:
@@ -185,7 +187,7 @@ func show_results(data: Dictionary) -> void:
     timing_graph.samples=info.get("timing",[]).duplicate(true); timing_graph.samples.sort_custom(func(a,b): return float(a.time)<float(b.time))
     timing_graph.queue_redraw(); accuracy_graph.visible=true; timing_graph.visible=false; timing_button.text="TIMING"
     graph_title.text="ACCURACY OVER THE SONG"; breakdown.visible=true
-    next_button.disabled=practice or next_candidate().is_empty()
+    next_button.disabled=practice or bool(info.get("ssrg",false)) or next_candidate().is_empty()
     replay_button.disabled=not bool(info.get("replay",false))
     replay_button.tooltip_text="Watch your last run" if not replay_button.disabled else "No replay for this run"
     practice_button.disabled=automated or not info.get("performance",[]).any(func(s): return float(s.get("weight",1.0))<=0.0)
@@ -209,14 +211,19 @@ func practice_first_miss() -> void:
     for sample in info.get("performance",[]):
         if float(sample.get("weight",1.0))<=0.0: first=float(sample.time); break
     if first<0: return
+    if info.get("ssrg",false): game.ssrg_screens.restore_run()
     var a=maxf(0.0,first-3.0); var b=minf(game.length(),first+6.0)
     pending_next_id=""
     game.practice.active=true
     if not game.practice.launch(game.last_play_notes,a,b,.75,true): game.practice.active=false
 func open_song_list() -> void:
+    if info.get("ssrg",false):
+        game.ssrg_screens.leave_results(); return
     pending_next_id=""; game.set_mode("menu"); game.lobby.show_play_browser()
 func retry() -> void:
     pending_next_id=""
+    if info.get("ssrg",false):
+        game.ssrg_screens.retry(); return
     if game.practice.active: game.practice.restart()
     else: game.start_game(game.last_play_notes,game.auto_play,game.last_section)
 func next_candidate() -> Dictionary:

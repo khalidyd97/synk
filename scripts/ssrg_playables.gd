@@ -413,8 +413,8 @@ func song_row(song: Dictionary) -> Control:
 	chips.add_theme_constant_override("separation",6)
 	for chart in charts_for(id):
 		var chip = Label.new(); chip.text = " %dK " % chart.keys; chip.add_theme_font_size_override("font_size",13)
-		chip.add_theme_color_override("font_color",KEY_COLORS[chart.keys])
-		chip.add_theme_stylebox_override("normal",box(Color(KEY_COLORS[chart.keys],.12),Color(KEY_COLORS[chart.keys],.5),8))
+		chip.add_theme_color_override("font_color",KEY_COLORS[int(chart.keys)])
+		chip.add_theme_stylebox_override("normal",box(Color(KEY_COLORS[int(chart.keys)],.12),Color(KEY_COLORS[int(chart.keys)],.5),8))
 		chips.add_child(chip)
 		var record = best(id,chart.variant)
 		if not record.is_empty():
@@ -502,7 +502,7 @@ func refresh_detail() -> void:
 		var chart: Dictionary = charts[i]
 		var left = .04+i*width; var right = left+width-.015
 		var chosen = chart.variant == selected_variant
-		var color: Color = KEY_COLORS[chart.keys]
+		var color: Color = KEY_COLORS[int(chart.keys)]
 		var card = Button.new(); place(card,detail,left,.45,right,.72); card.focus_mode = Control.FOCUS_NONE
 		var style = box(Color(color,.16) if chosen else Color(1,1,1,.035),Color(color,.9) if chosen else Color(1,1,1,.08),16)
 		if chosen: style.set_border_width_all(2)
@@ -649,6 +649,22 @@ func store_song(audio_path: String, charts: Dictionary, meta: Dictionary) -> Dic
 	if not song.has("added"): song.added = Time.get_unix_time_from_system()
 	var length = result.stream.get_length()
 	song.length = length
+	if meta.get("presentation") is Dictionary:
+		song.ssrg_presentation=meta.presentation.duplicate(true)
+		var portraits=[]
+		for source_card in song.ssrg_presentation.get("cards",[]):
+			if not source_card is Dictionary:continue
+			var card=source_card.duplicate(true)
+			var portrait_path=str(card.get("portrait",""))
+			if not portrait_path.is_empty():
+				var picked=game.load_picked_image(portrait_path)
+				if picked is Image:
+					var folder=library.root_path.path_join("songs/"+id+"-cards")
+					DirAccess.make_dir_recursive_absolute(folder)
+					var target=folder.path_join("%d.png" % portraits.size())
+					if picked.save_png(target)==OK:card.portrait=target
+			portraits.append(card)
+		song.ssrg_presentation.cards=portraits
 	var keys: Array = song.get("ssrg",[]).duplicate()
 	var saved = 0
 	for count in charts:
@@ -659,7 +675,8 @@ func store_song(audio_path: String, charts: Dictionary, meta: Dictionary) -> Dic
 		var settings = {"bpm":float(chart.bpm),"beat_offset":offset,"verse2":-1.0,"bridge":-1.0}
 		var variant = Levels.key(int(count))
 		var data = {"version":SynkChart.FORMAT_VERSION,"song_id":id,"chart_name":variant,"title":str(song.title),"bpm":float(chart.bpm),"beat_offset":offset,"chart_settings":settings,"notes":notes}
-		if SynkLibrary.atomic_write(Levels.chart_path(id,variant),data) != OK: continue
+		var chart_path=library.root_path.path_join("charts/"+id+"_"+variant+".json")
+		if SynkLibrary.atomic_write(chart_path,data) != OK: continue
 		if int(count) not in keys: keys.append(int(count))
 		saved += 1
 	keys.sort(); song.ssrg = keys
@@ -721,7 +738,16 @@ func import_next_scanned() -> void:
 		if not chart.is_empty(): charts[int(keys) if int(keys) in [4,7,13] else int(chart.keys)] = chart
 	if not charts.is_empty():
 		var names = SsrgImport.artist_and_title(str(entry.name)) if not str(entry.name).is_empty() else ["",str(entry.song_id)]
-		var stored = store_song(entry.audio,charts,{"artist":names[0],"title":names[1],"album":entry.game,"background":entry.background})
+		var meta={"artist":names[0],"title":names[1],"album":entry.game,"background":entry.background}
+		var folder=str(entry.charts.values()[0]).get_base_dir()
+		var sidecar=folder.path_join("presentation.json")
+		if FileAccess.file_exists(sidecar):
+			var supplied=JSON.parse_string(FileAccess.get_file_as_string(sidecar))
+			if supplied is Dictionary:
+				meta.presentation=supplied
+				for card in supplied.get("cards",[]):
+					if card is Dictionary and not str(card.get("portrait","")).is_empty() and not str(card.portrait).is_absolute_path():card.portrait=folder.path_join(card.portrait)
+		var stored = store_song(entry.audio,charts,meta)
 		if not stored.has("error"):
 			scan_added += 1
 			var seen: Dictionary = game.prefs.get_value("ssrg","scanned",{})

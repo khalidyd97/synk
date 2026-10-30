@@ -1,5 +1,24 @@
 # Original SSRG background reconstruction
 
+## Reference-photo correction (2026-10-29)
+
+The retained `ssrg-reference-video.jpg` and `ssrg-motion-3.png` show the Ultra
+Rave magenta wash concentrated around the screen perimeter, with the song photo
+clearer in the middle. The cropped `Fever_bg_1..4` quarter textures have their
+strong alpha at (0,0) and weak alpha at (1,1). The cover shader previously mapped
+the strong corner into the screen center. It now maps each outer screen corner
+to (0,0) and the center to (1,1). All four rave levels were rendered and visually
+checked on desktop. This fixes the reversed color gradient; it does not establish
+complete runtime parity with SSRG or constitute a phone play test.
+
+Follow-up: clamp all four quarter-texture samplers at their borders. Wrapping
+at the mirrored center sampled the opposite, opaque border and drew a cross.
+The user-requested rave pulse now modulates overlay alpha from 65% to 100%
+using the existing cosine song-beat clock, which freezes during pause. The
+one-second state entrance uses smoothstep easing and alpha-weighted color
+mixing, avoiding a second multiplication of fade weight into the color. This
+pulse is a requested presentation adjustment, not a recovered native timing rule.
+
 ## Confirmed static evidence
 
 The four `Perspective2dParticle` components in APK `level10` have their complete serialized profiles in `scripts/ssrg_background_particle_data.gd` (396/436/476/396 bytes consumed). Source artwork is cropped in `assets/ssrg/imported/background/`. The code is ARM64 reconstruction from supplied `libil2cpp.so`, not execution of the original game. Relevant retained disassembly is under `.tools/ssrg-apk-analysis/`.

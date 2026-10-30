@@ -14,11 +14,20 @@ func run() -> void:
 	game.countdown=0; game.song_time=2.0
 	var world=game.field.world
 	check(not game.ssrg_playable_run,"Normal song does not become an SSRG import")
-	check(game.uses_ssrg_gameplay() and world.ssrg_theme.active,"Normal gameplay activates SSRG stage")
-	check(game.gameplay_lane_count()==10,"Normal charts retain 10 unique lanes")
-	check(game.live[1].note.get("ssrg_path",false),"Runtime slides use straight connectors")
-	check(not slide.has("ssrg_path"),"Original chart data stays intact")
-	check(is_equal_approx(game.note_travel_seconds(),3.5),"Shared travel uses note speed")
+	check(not game.uses_ssrg_gameplay() and not world.ssrg_theme.active,"Normal play uses SYNK OG stage")
+	check(not game.live[1].note.get("ssrg_path",false),"Normal slides retain OG curves")
+	check(not slide.has("ssrg_path"),"Source chart remains intact")
+	check(is_equal_approx(game.note_travel_seconds(),2.6),"Normal play uses OG timing")
+	game.paused_mode="play"; game.set_mode("paused")
+	check(not game.uses_ssrg_gameplay(),"Normal pause retains OG stage")
+	game.set_mode("menu")
+	game.prefs.set_value("ssrg","speed_value",3.0)
+	game.ssrg_playable_run=true
+	game.start_game(notes,true)
+	game.countdown=0; game.song_time=2.0
+	check(game.uses_ssrg_gameplay() and world.ssrg_theme.active,"SSRG playable uses SSRG stage")
+	check(game.live[1].note.get("ssrg_path",false),"SSRG slides use straight connectors")
+	check(is_equal_approx(game.note_travel_seconds(),3.5),"SSRG timing remains intact")
 	check(world.ssrg_theme.original_stage.receptors[0].mesh!=null,"Receptors have visible geometry")
 	world.ssrg_theme.original_stage.update(world)
 	check(not world.ssrg_theme.original_stage.receptors.any(func(n):return n.visible),"Receptors wait for the original projected-progress threshold")

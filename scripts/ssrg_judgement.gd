@@ -27,11 +27,23 @@ func _draw() -> void:
 	var art: Texture2D=grade_art(displayed_grade)
 	if art:
 		var source_dimensions=Vector2(192,70) if displayed_grade=="MISS" else Vector2(art.get_width(),54)
+		var prefix_font=word.get_theme_font("font")
+		var prefix_width=prefix_font.get_string_size("S.",HORIZONTAL_ALIGNMENT_LEFT,-1,58).x+4.0 if displayed_grade=="PERFECT" else 0.0
+		source_dimensions.x+=prefix_width
 		var dimensions = source_dimensions*(44.0/54.0)*unit*source_scale
 		# Keep the user's accepted central layout; use source relative miss placement.
 		var center=Vector2(size.x*.5,size.y*.40)
 		if displayed_grade=="MISS": center.y+=65.0*(44.0/54.0)*unit
-		draw_texture_rect(art, Rect2(center+source_offset - dimensions * .5, dimensions), false, Color(1,1,1,word.modulate.a))
+		var top_left=center+source_offset-dimensions*.5
+		var prefix_size=prefix_width*(44.0/54.0)*unit*source_scale.x
+		if prefix_width>0:
+			# The packaged silver sprite only spells PERFECT. Supply its missing
+			# S. prefix explicitly so the top grade reads like the reference footage.
+			draw_set_transform(top_left,0,source_scale*unit*(44.0/54.0))
+			draw_string_outline(prefix_font,Vector2(0,44),"S.",HORIZONTAL_ALIGNMENT_LEFT,-1,58,2,Color(0,0,0,word.modulate.a*.7))
+			draw_string(prefix_font,Vector2(0,44),"S.",HORIZONTAL_ALIGNMENT_LEFT,-1,58,Color(1,1,1,word.modulate.a))
+			draw_set_transform(Vector2.ZERO)
+		draw_texture_rect(art, Rect2(top_left+Vector2(prefix_size,0), dimensions-Vector2(prefix_size,0)), false, Color(1,1,1,word.modulate.a))
 	if not SOURCE_CURVES.combo_visible(since_hit,game.combo): return
 	var digits = str(game.combo)
 	var combo_scale=SOURCE_CURVES.judgement_scale(since_hit)
@@ -64,6 +76,9 @@ func grade_art(grade: String) -> Texture2D:
 		"MISS": return miss_art
 	return null
 
+static func grade_text(grade:String) -> String:
+	return "S.PERFECT" if grade=="PERFECT" else ("PERFECT" if grade=="GREAT" else grade)
+
 func make_label(top: float, bottom: float, size: int) -> Label:
 	var label = Label.new(); add_child(label)
 	label.anchor_left = .25; label.anchor_right = .75; label.anchor_top = top; label.anchor_bottom = bottom
@@ -91,7 +106,7 @@ func _process(delta: float) -> void:
 		displayed_grade=grade
 		var color: Color = Color.WHITE
 		# SYNK's internal GREAT is the source game's ordinary PERFECT grade.
-		word.text = "PERFECT" if grade=="GREAT" else grade
+		word.text = grade_text(grade)
 		word.add_theme_color_override("font_color", color)
 		count.add_theme_color_override("font_color", Color.WHITE.lerp(color, .25))
 	if game.mode == "play":
