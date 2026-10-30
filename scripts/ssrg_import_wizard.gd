@@ -79,12 +79,15 @@ func _ready() -> void:
 	import_button=button("IMPORT SELECTED",footer,start_import);import_button.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	cancel_button=button("CANCEL",footer,func():job.cancel();status.text="Canceling after the current safe step…")
 	retry_button=button("RETRY FAILED",footer,func():job.retry_failed())
-	report_button=button("SAVE REPORT",footer,func():report_picker.popup_centered_ratio(.8))
+	report_button=button("SAVE REPORT",footer,func():
+		# Set the name only when saving: FileDialog focuses its name field (and so opens the
+		# phone keyboard) whenever the name is set while it is in the tree.
+		report_picker.current_file="SYNK-import-report.json";report_picker.popup_centered_ratio(.8))
 	picker=FileDialog.new();add_child(picker);picker.file_mode=FileDialog.FILE_MODE_OPEN_FILES;picker.access=FileDialog.ACCESS_FILESYSTEM;picker.use_native_dialog=true
 	picker.filters=PackedStringArray(["*.zip,*.seq,*.bytes,*.ogg,*.mp3,*.wav,*.png,*.jpg,*.jpeg,*.webp;SSRG song files"])
 	picker.files_selected.connect(picked);picker.file_selected.connect(func(path):picked(PackedStringArray([path])))
 	folder_picker=FileDialog.new();add_child(folder_picker);folder_picker.file_mode=FileDialog.FILE_MODE_OPEN_DIR;folder_picker.access=FileDialog.ACCESS_FILESYSTEM;folder_picker.use_native_dialog=true;folder_picker.dir_selected.connect(func(path):add_sources(PackedStringArray([path])))
-	report_picker=FileDialog.new();add_child(report_picker);report_picker.file_mode=FileDialog.FILE_MODE_SAVE_FILE;report_picker.access=FileDialog.ACCESS_FILESYSTEM;report_picker.use_native_dialog=true;report_picker.current_file="SYNK-import-report.json"
+	report_picker=FileDialog.new();add_child(report_picker);report_picker.file_mode=FileDialog.FILE_MODE_SAVE_FILE;report_picker.access=FileDialog.ACCESS_FILESYSTEM;report_picker.use_native_dialog=true
 	report_picker.file_selected.connect(save_report)
 	visible=false;show_details();update_controls()
 
