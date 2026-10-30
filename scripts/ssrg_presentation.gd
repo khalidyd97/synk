@@ -19,6 +19,11 @@ var best_score=0
 var cards:Array=[]
 var card_index=0
 var active=false
+var life=100.0
+var difficulty_index=2
+var score_rules=preload("res://scripts/ssrg_score_rules.gd").new()
+const LIFE_RECOVERY=[1.0,.5,.33340001106262207]
+const LIFE_PENALTY=[10.0,20.0,30.0]
 func _ready() -> void:
 	# Compile/load variants behind the loading screen, not during a chain.
 	for type in 5:
@@ -26,6 +31,9 @@ func _ready() -> void:
 func reset(count:int,config:Dictionary={}) -> void:
 	note_count=maxi(1,count);metadata=config.duplicate(true)
 	state=0;gauge=0;remaining=maxi(1,ceili(note_count/10.0))
+	life=100.0
+	difficulty_index=0 if game.ssrg_lane_count==4 else (1 if game.ssrg_lane_count==7 else 2)
+	score_rules.reset(note_count,game.ssrg_lane_count,metadata)
 	weights=[0.0,0.0,0.0,0.0];phase_weights=[1.0,0.0,0.0,0.0,0.0,0.0]
 	beam_color=profile_color(0);collected=0;triggered_specials.clear();event_age=99;event_kind=-1;event_item=-1
 	cards=metadata.get("cards",[]).duplicate(true) if metadata.get("cards",[]) is Array else [];card_index=0
@@ -41,14 +49,20 @@ func select_state(value:int) -> void:
 	state=clampi(value,0,5);gauge=0.0;remaining=maxi(1,ceili(note_count/10.0))
 func judged(grade:String,note:Dictionary={}) -> void:
 	if not game.ssrg_playable_run or not active:return
-	if grade=="MISS":select_state(0);return
+	if grade=="MISS":
+		game.score=score_rules.settle()
+		life=maxf(0.0,life-LIFE_PENALTY[difficulty_index])
+		select_state(1 if life>=100.0 else 0)
+		return
 	var event_key=str(note.get("ssrg_order",hash(note)))
 	if note.has("ssrg_special") and not triggered_specials.has(event_key):
 		triggered_specials[event_key]=true
 		event_kind=clampi(int(note.ssrg_special),0,4);event_item=clampi(int(note.get("ssrg_item",0)),0,5);event_age=0
 		if event_kind==0:collected+=1
 	if state==0:
-		if game.score_panel.energy>=1.0:select_state(1)
+		# Packaged JudgementLifeRate is GOOD=0, Perfect/SuperPerfect=1.
+		if grade in ["PERFECT","GREAT"]:life=minf(100.0,life+LIFE_RECOVERY[difficulty_index])
+		if life>=100.0:select_state(1)
 		return
 	remaining-=1
 	# Native CalcLifeAndFeverState adds ScoreData's default grade points only
@@ -59,7 +73,7 @@ func judged(grade:String,note:Dictionary={}) -> void:
 func threshold() -> float:
 	return maxf(.001,DATA.FEVER_THRESHOLDS[state]*note_count/100.0)
 func gauge_fraction() -> float:
-	return clampf(float(game.score_panel.shown_energy),0,1) if state==0 else clampf(gauge/threshold(),0,1)
+	return clampf(life/100.0,0,1) if state==0 else clampf(gauge/threshold(),0,1)
 func _process(delta:float) -> void:
 	if not game.uses_ssrg_gameplay():
 		active=false;return

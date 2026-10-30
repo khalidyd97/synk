@@ -21,6 +21,9 @@ jobs:
           unzip -q /tmp/templates.zip -d /tmp/templates
           mkdir -p "$HOME/Library/Application Support/Godot/export_templates/4.7.2.stable"
           cp -R /tmp/templates/templates/. "$HOME/Library/Application Support/Godot/export_templates/4.7.2.stable/"
+      - name: Build iOS file picker extension
+        shell: bash
+        run: bash tools/ios_file_picker/build.sh "$PWD"
       - name: Export Xcode project
         shell: bash
         run: |

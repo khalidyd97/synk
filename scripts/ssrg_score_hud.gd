@@ -83,7 +83,7 @@ func draw_source_extras(presentation:Node,origin:Vector2,unit:float,color:Color)
 		words("%s / %s" % [game.format_score(game.score),game.format_score(mission)],origin+Vector2(84,174)*unit,maxi(12,roundi(16*unit)),color)
 	if presentation.collected>0:
 		words("COLLECTED  %d" % presentation.collected,Vector2(right-20*unit,320*unit),maxi(12,roundi(18*unit)),color)
-	var bonus=int(presentation.metadata.get("rave_bonus",0))
+	var bonus=int(presentation.score_rules.pending_bonus)
 	if bonus>0:
 		if artwork.has("ui_rave_T"):draw_texture_rect(artwork.ui_rave_T,Rect2(origin+Vector2(84,190)*unit,Vector2(134,30)*unit),false,color)
 		words("+"+game.format_score(bonus),origin+Vector2(84,247)*unit,maxi(12,roundi(24*unit)),color)
