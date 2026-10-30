@@ -218,4 +218,7 @@ static func signature(entry: Dictionary) -> String:
 	var parts: Array = ["v3"]
 	for path in entry.charts.values() + [entry.audio, entry.background]:
 		if not str(path).is_empty(): parts.append("%s:%d" % [str(path).get_file(), FileAccess.get_modified_time(path)])
+	if not entry.charts.is_empty():
+		var sidecar=str(entry.charts.values()[0]).get_base_dir().path_join("presentation.json")
+		if FileAccess.file_exists(sidecar):parts.append("presentation:"+FileAccess.get_sha256(sidecar))
 	return "|".join(parts)

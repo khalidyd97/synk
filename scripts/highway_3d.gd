@@ -60,6 +60,7 @@ var play_render_cursor = 0
 var reference_note_meshes: Dictionary = {}
 var spark_mesh: SphereMesh
 var miss_shake_remaining = 0.0
+var ssrg_shake_x=0.0
 var cover_backdrop: MeshInstance3D
 var rail_atmosphere: Node3D
 var prism_theme: Node3D
@@ -243,6 +244,7 @@ func build_cover_backdrop() -> void:
 	# Child of the camera so it always fills the view; drawn first so the highway blends over it.
 	cover_material = ShaderMaterial.new(); cover_material.shader = preload("res://scripts/cover_backdrop.gdshader")
 	cover_material.render_priority = -20
+	for index in 4:cover_material.set_shader_parameter("ssrg_fever_%d" % index,load("res://assets/ssrg/imported/presentation/Fever_bg_%d.png" % (index+1)))
 	animated_materials.append(weakref(cover_material))
 	cover_backdrop = mesh_node(QuadMesh.new(),camera,cover_material)
 	cover_backdrop.position = Vector3(0,0,-COVER_DISTANCE)
@@ -1260,9 +1262,14 @@ func build_note_node(key: String, note: Dictionary, recording = false) -> void:
 	if note.kind=="flick": make_flick(node,note,palette)
 	else: make_cap(node,float(note.lane),0,palette,recording)
 	if note.kind in ["hold","slide"]: make_ribbon(node,note,palette,recording)
+	if game.uses_ssrg_gameplay() and not recording and note.has("ssrg_special") and game.ssrg_presentation:
+		var head=node.get_child(0)
+		var mat=own_material(head)
+		mat.set_meta("ssrg_special",int(note.ssrg_special));mat.set_meta("ssrg_item",int(note.get("ssrg_item",0)))
+		mat.set_shader_parameter("artwork",game.ssrg_presentation.special_art(int(note.ssrg_special),int(note.get("ssrg_item",0)),0.0))
 	var lines: Array = []
 	if recording: lines = make_alignment_lines(node,note,palette)
-	var signature = (hash(note) if recording or game.mode=="record" else 0)^hash([game.note_speed,game.note_shape,game.note_size,game.hold_trail_width,game.trail_style,game.uses_ssrg_gameplay()])
+	var signature = (hash(note) if recording or game.mode=="record" else 0)^hash([game.note_speed,game.ssrg_speed_setting() if game.ssrg_playable_run else 0,game.note_shape,game.note_size,game.hold_trail_width,game.trail_style,game.uses_ssrg_gameplay()])
 	if game.uses_ssrg_gameplay() and not recording:
 		for child in node.get_children():
 			if child is GeometryInstance3D:
@@ -1319,7 +1326,7 @@ func sync_note(key: String, note: Dictionary, visible_keys: Dictionary, recordin
 	visible_keys[key] = true
 	if look_signature_frame != Engine.get_process_frames():
 		look_signature_frame = Engine.get_process_frames()
-		look_signature = hash([game.note_speed,game.note_shape,game.note_size,game.hold_trail_width,game.trail_style,game.uses_ssrg_gameplay()])
+		look_signature = hash([game.note_speed,game.ssrg_speed_setting() if game.ssrg_playable_run else 0,game.note_shape,game.note_size,game.hold_trail_width,game.trail_style,game.uses_ssrg_gameplay()])
 	var signature = (hash(note) if recording or game.mode=="record" else 0)^look_signature
 	if notes.has(key) and notes[key].signature != signature:
 		notes[key].node.queue_free(); notes.erase(key)
@@ -1442,10 +1449,20 @@ func camera_rest_position() -> Vector3:
 
 func shake_on_miss() -> void:
 	# Repeated misses refresh the short shake without increasing its strength.
-	miss_shake_remaining = .22
+	if game.uses_ssrg_gameplay():
+		if miss_shake_remaining<=0:miss_shake_remaining=.3
+	else:miss_shake_remaining = .22
 
 func animate_miss_shake(delta: float) -> void:
 	if game.mode=="paused": return
+	if game.uses_ssrg_gameplay():
+		if game.mode!="play" or game.countdown>0 or (game.stage_intro and game.stage_intro.running()):miss_shake_remaining=0
+		if miss_shake_remaining>0:
+			ssrg_shake_x=(1.0 if ssrg_shake_x<0 else -1.0)*20.0*SSRG_UNIT*(miss_shake_remaining/.3)
+			miss_shake_remaining=maxf(0,miss_shake_remaining-delta)
+		else:ssrg_shake_x=0
+		apply_camera(Vector3(-ssrg_shake_x,0,0));return
+	ssrg_shake_x=0
 	if game.mode!="play" or (game.stage_intro and game.stage_intro.running()): miss_shake_remaining=0
 	miss_shake_remaining=maxf(0,miss_shake_remaining-delta)
 	var strength=miss_shake_remaining/.22
@@ -1482,7 +1499,9 @@ func animate_ssrg_notes() -> void:
 		var mat=ref.get_ref()
 		if mat==null: continue
 		alive.append(ref)
-		if mat.has_meta("ssrg_palette"):
+		if mat.has_meta("ssrg_special") and game.ssrg_presentation:
+			mat.set_shader_parameter("artwork",game.ssrg_presentation.special_art(int(mat.get_meta("ssrg_special")),int(mat.get_meta("ssrg_item",0)),beat))
+		elif mat.has_meta("ssrg_palette"):
 			var long_note=int(mat.get_meta("ssrg_palette")) in [1,3]
 			mat.set_shader_parameter("artwork",SsrgNotes.artwork(long_note,not bool(mat.get_meta("ssrg_tail")),beat))
 	ssrg_note_materials=alive

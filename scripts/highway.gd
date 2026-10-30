@@ -117,6 +117,8 @@ func project(lane: float, d: float) -> Vector2:
 func touch_world_position(p: Vector2) -> Vector3:
 	var point=p*Vector2(viewport.size)
 	var hit=Plane(Vector3.UP,.035).intersects_ray(world.camera.project_ray_origin(point),world.camera.project_ray_normal(point))
+	# Native miss shake moves the drawn objects, not calibrated channel rectangles.
+	if hit!=null and game.uses_ssrg_gameplay():hit.x+=world.ssrg_shake_x
 	return hit if hit!=null else Vector3(0,.035,0)
 
 func input_position(p: Vector2) -> Vector2:
@@ -137,6 +139,7 @@ func input_position(p: Vector2) -> Vector2:
 		origin=world.camera.project_ray_origin(screen_point)
 		direction=world.camera.project_ray_normal(screen_point)
 		hit=Plane(Vector3.UP,0).intersects_ray(origin,direction)
+	if hit!=null and game.uses_ssrg_gameplay():hit.x+=world.ssrg_shake_x
 	if hit != null: p.x = .07 + (world.world_lane(hit.x)+.5)/SynkChart.LANES*.86
 	if on_pad and absf(hit.x)<=world.PAD_HALF_WIDTH+.001:
 		p.x=clampf(p.x,.070001,.929999)
