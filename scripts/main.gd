@@ -210,6 +210,7 @@ var finish_elapsed = 0.0
 var pending_results: Dictionary = {}
 var slide_tools: Control
 var sync_helper: Control
+var song_sync: Control
 var bluetooth_toggle: Button
 var bluetooth_latency_input: Control
 var primary: Button
@@ -395,6 +396,8 @@ func _ready() -> void:
 	sync_helper=Control.new(); sync_helper.set_script(load("res://scripts/sync_helper.gd")); sync_helper.game=self
 	ui.add_child(sync_helper); sync_helper.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.move_child(sync_helper,3); sync_helper.visible=false
+	song_sync=Control.new(); song_sync.set_script(load("res://scripts/song_sync.gd")); song_sync.game=self
+	ui.add_child(song_sync); song_sync.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ssrg_playables=Control.new(); ssrg_playables.set_script(load("res://scripts/ssrg_playables.gd")); ssrg_playables.game=self
 	ui.add_child(ssrg_playables); ssrg_playables.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.move_child(ssrg_playables,3); ssrg_playables.visible=false
@@ -833,6 +836,24 @@ func open_sync_helper() -> void:
 	settings_panel.visible=false
 	sync_helper.open()
 	UiMotion.reveal(sync_helper)
+
+# Song sync: tune the headset delay while Eclipse plays on the real highway (song_sync.gd).
+func open_song_sync() -> void:
+	if mode!="menu": return
+	if document.dirty: tell("Save or RELOAD your chart before syncing."); return
+	sync_helper.player.stop(); sync_helper.visible=false
+	settings_panel.visible=false; menu_settings_open=false
+	ui.move_child(song_sync,ui.get_child_count()-1)
+	song_sync.begin()
+
+func end_song_sync(previous_song: Dictionary,previous_stream: AudioStream) -> void:
+	audio.stop(); audio.stream_paused=false; pointers.clear(); live.clear()
+	countdown=0; resume_countdown=0; song_time=0; flash=0
+	field.world.clear_notes(); field.world.clear_hit_effects()
+	if previous_stream: apply_song(previous_song,previous_stream)
+	else: apply_song(eclipse_song(),demo_stream)
+	set_mode("menu")
+	open_lobby_settings()
 
 func close_sync_helper() -> void:
 	UiMotion.back(self)
@@ -1410,6 +1431,8 @@ func cycle_record_speed() -> void:
 
 func toggle_pause(animate_transition:bool=true) -> void:
 	if finishing: return
+	# Song sync has no pause menu: BACK leaves it without saving.
+	if song_sync and song_sync.active and mode=="play": song_sync.finish(false); return
 	if mode in ["play","record"]:
 		resume_countdown=0
 		if ssrg_playable_run and mode=="play" and song_time>=0 and countdown<=0 and gameplay_start_lead<=0:
@@ -2360,6 +2383,7 @@ func judge(entry: Dictionary,error: float,complete: bool = true,source_grade: St
 func _audio_finished() -> void:
 	if mode=="record": stop_take()
 	elif mode=="play":
+		if song_sync and song_sync.active: song_sync.restart(); return
 		if practice.finish_round(): return
 		for entry in live:
 			if not entry.done:
