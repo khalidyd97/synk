@@ -58,7 +58,7 @@ jobs:
           set -euo pipefail
           app=builds/ipa/Payload/SYNK.app
           executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Info.plist")
-          lipo -verify_arch arm64 "$app/$executable"
+          lipo "$app/$executable" -verify_arch arm64
           python3 - <<'PYBUILD'
           import json,os,plistlib,pathlib
           app=pathlib.Path('builds/ipa/Payload/SYNK.app')
