@@ -154,7 +154,7 @@ func refresh_previews() -> void:
 
 func pick(kind: String) -> void:
 	picking=kind; message.text=""
-	if NativeFilePicker.open(false,func(paths): picked(paths[0])): return
+	if NativeFilePicker.open_image(func(paths): picked(paths[0])): return
 	if OS.get_name()=="iOS":
 		picker.access=FileDialog.ACCESS_USERDATA; picker.current_dir="user://"
 	picker.popup_centered_ratio(.75)

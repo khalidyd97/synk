@@ -6,15 +6,29 @@
 #include <godot_cpp/godot.hpp>
 #include <godot_cpp/variant/packed_string_array.hpp>
 
+#import <PhotosUI/PhotosUI.h>
 #import <UIKit/UIKit.h>
 
 using namespace godot;
 
 class IOSFilePicker;
 
-@interface SynkPickerDelegate : NSObject <UIDocumentPickerDelegate>
+@interface SynkPickerDelegate : NSObject <UIDocumentPickerDelegate, PHPickerViewControllerDelegate>
 @property(nonatomic, assign) IOSFilePicker *owner;
 @end
+
+static UIViewController *top_controller() {
+	UIWindow *window = nil;
+	for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+		if (![scene isKindOfClass:UIWindowScene.class]) continue;
+		for (UIWindow *candidate in ((UIWindowScene *)scene).windows) {
+			if (candidate.isKeyWindow || window == nil) window = candidate;
+		}
+	}
+	UIViewController *top = window.rootViewController;
+	while (top.presentedViewController) top = top.presentedViewController;
+	return top;
+}
 
 class IOSFilePicker : public RefCounted {
 	GDCLASS(IOSFilePicker, RefCounted);
@@ -23,6 +37,7 @@ class IOSFilePicker : public RefCounted {
 protected:
 	static void _bind_methods() {
 		ClassDB::bind_method(D_METHOD("open", "multiple"), &IOSFilePicker::open);
+		ClassDB::bind_method(D_METHOD("open_image"), &IOSFilePicker::open_image);
 		ADD_SIGNAL(MethodInfo("picked", PropertyInfo(Variant::PACKED_STRING_ARRAY, "paths")));
 	}
 
@@ -31,26 +46,61 @@ public:
 		if (delegate) delegate.owner = nullptr;
 	}
 
-	void open(bool multiple) {
-		UIWindow *window = nil;
-		for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
-			if (![scene isKindOfClass:UIWindowScene.class]) continue;
-			for (UIWindow *candidate in ((UIWindowScene *)scene).windows) {
-				if (candidate.isKeyWindow || window == nil) window = candidate;
-			}
-		}
-		UIViewController *top = window.rootViewController;
-		while (top.presentedViewController) top = top.presentedViewController;
-		if (top == nil) return;
-		// Import mode copies each file into the app's tmp folder, so the game reads plain paths.
-		UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc] initWithDocumentTypes:@[ @"public.item" ] inMode:UIDocumentPickerModeImport];
-		picker.allowsMultipleSelection = multiple;
+	SynkPickerDelegate *ensure_delegate() {
 		if (delegate == nil) {
 			delegate = [SynkPickerDelegate new];
 			delegate.owner = this;
 		}
-		picker.delegate = delegate;
+		return delegate;
+	}
+
+	void open(bool multiple) {
+		open_documents(@[ @"public.item" ], multiple);
+	}
+
+	void open_documents(NSArray<NSString *> *types, bool multiple) {
+		UIViewController *top = top_controller();
+		if (top == nil) return;
+		// Import mode copies each file into the app's tmp folder, so the game reads plain paths.
+		UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc] initWithDocumentTypes:types inMode:UIDocumentPickerModeImport];
+		picker.allowsMultipleSelection = multiple;
+		picker.delegate = ensure_delegate();
 		[top presentViewController:picker animated:YES completion:nil];
+	}
+
+	// Asks where an image comes from: the photo library or the Files app.
+	void open_image() {
+		UIViewController *top = top_controller();
+		if (top == nil) return;
+		UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"Choose an image" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+		[sheet addAction:[UIAlertAction actionWithTitle:@"Photo Library" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+			this->open_photos();
+		}]];
+		[sheet addAction:[UIAlertAction actionWithTitle:@"Files" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+			this->open_documents(@[ @"public.image" ], false);
+		}]];
+		[sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+		// iPad shows action sheets as popovers, which need an anchor.
+		sheet.popoverPresentationController.sourceView = top.view;
+		sheet.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(top.view.bounds), CGRectGetMidY(top.view.bounds), 1, 1);
+		sheet.popoverPresentationController.permittedArrowDirections = 0;
+		[top presentViewController:sheet animated:YES completion:nil];
+	}
+
+	// The system photo picker needs no photo permission; only the chosen picture is shared.
+	void open_photos() {
+		UIViewController *top = top_controller();
+		if (top == nil) return;
+		PHPickerConfiguration *config = [PHPickerConfiguration new];
+		config.filter = [PHPickerFilter imagesFilter];
+		config.selectionLimit = 1;
+		PHPickerViewController *picker = [[PHPickerViewController alloc] initWithConfiguration:config];
+		picker.delegate = ensure_delegate();
+		[top presentViewController:picker animated:YES completion:nil];
+	}
+
+	void finish_paths(PackedStringArray paths) {
+		if (!paths.is_empty()) call_deferred("emit_signal", "picked", paths);
 	}
 
 	void finish(NSArray<NSURL *> *urls) {
@@ -58,7 +108,7 @@ public:
 		for (NSURL *url in urls) {
 			if (url.isFileURL) paths.push_back(String::utf8(url.path.UTF8String));
 		}
-		if (!paths.is_empty()) call_deferred("emit_signal", "picked", paths);
+		finish_paths(paths);
 	}
 };
 
@@ -67,6 +117,25 @@ public:
 	if (self.owner) self.owner->finish(urls);
 }
 - (void)documentPickerWasCancelled:(UIDocumentPickerViewController *)controller {
+}
+- (void)picker:(PHPickerViewController *)picker didFinishPicking:(NSArray<PHPickerResult *> *)results {
+	[picker dismissViewControllerAnimated:YES completion:nil];
+	NSItemProvider *provider = results.firstObject.itemProvider;
+	if (provider == nil || ![provider canLoadObjectOfClass:UIImage.class]) return;
+	// Photos are often HEIC, which Godot cannot read: re-encode as JPEG in the tmp folder.
+	[provider loadObjectOfClass:UIImage.class completionHandler:^(id<NSItemProviderReading> object, NSError *error) {
+		NSData *jpeg = [object isKindOfClass:UIImage.class] ? UIImageJPEGRepresentation((UIImage *)object, 0.92) : nil;
+		if (jpeg == nil) return;
+		NSString *name = [NSString stringWithFormat:@"synk-photo-%@.jpg", NSUUID.UUID.UUIDString];
+		NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:name];
+		if (![jpeg writeToFile:path atomically:YES]) return;
+		dispatch_async(dispatch_get_main_queue(), ^{
+			if (self.owner == nullptr) return;
+			PackedStringArray paths;
+			paths.push_back(String::utf8(path.UTF8String));
+			self.owner->finish_paths(paths);
+		});
+	}];
 }
 @end
 

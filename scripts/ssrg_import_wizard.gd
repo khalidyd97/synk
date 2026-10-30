@@ -121,12 +121,16 @@ func clear() -> void:
 func choose_match(kind:String,path:String="") -> void:
 	if job.busy() or selected<0:return
 	pick_kind=kind;pick_chart=path
-	if NativeFilePicker.open(false,picked):return
+	if kind in ["art","cover"] and NativeFilePicker.open_image(picked):return
+	if kind not in ["art","cover"] and NativeFilePicker.open(false,picked):return
 	picker.file_mode=FileDialog.FILE_MODE_OPEN_FILE;picker.popup_centered_ratio(.85)
 func picked(paths:PackedStringArray) -> void:
 	if paths.is_empty() or job.busy():return
 	if pick_kind=="sources":add_sources(paths);return
 	if selected<0 or selected>=job.plan.size():return
+	if pick_kind=="cover":
+		# Album art needs no recheck; it is saved once the song is imported.
+		job.plan[selected].cover=paths[0];public_items[selected].cover=paths[0];show_details();return
 	var changes={}
 	match pick_kind:
 		"audio":changes={"audio":paths[0],"audio_manual":true}
@@ -182,6 +186,14 @@ func show_details() -> void:
 		var image=Image.load_from_file(ProjectSettings.globalize_path(str(item.background)))
 		if image:
 			var art=TextureRect.new();art.texture=ImageTexture.create_from_image(image);art.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;art.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;art.custom_minimum_size.y=110;details.add_child(art)
+	var cover_row=row(details);button("CHOOSE COVER",cover_row,func():choose_match("cover"))
+	var cover_path=str(item.get("cover",""))
+	if not cover_path.is_empty():
+		button("NO COVER",cover_row,func():
+			if not job.busy():job.plan[index].erase("cover");public_items[index].erase("cover");show_details())
+		var cover_image=Image.load_from_file(ProjectSettings.globalize_path(cover_path))
+		if cover_image:
+			var cover=TextureRect.new();cover.texture=ImageTexture.create_from_image(cover_image);cover.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;cover.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;cover.custom_minimum_size.y=110;details.add_child(cover)
 	label("Difficulties",details,19)
 	for chart in item.get("chart_reports",[]):
 		var line=row(details);var checked=CheckBox.new();checked.text="%d keys · %d notes · %.2f BPM" % [int(chart.keys),int(chart.notes),float(chart.bpm)];checked.button_pressed=int(chart.keys) in item.get("selected_keys",[]);checked.disabled=not chart.errors.is_empty();line.add_child(checked)
@@ -275,6 +287,7 @@ func _process(_delta:float) -> void:
 		var result=job.commit_prepared(host.game.library.songs)
 		if result.has("songs"):
 			host.game.library.songs=result.songs;host.chart_cache.erase(str(result.id));host.game.song_metadata.erase(str(result.id));host.game.song_background_textures.erase(str(result.id))
+			save_chosen_cover(str(result.id),str(job.plan[job.current].get("cover","")))
 	if job.importing:job.advance(host.game.library.songs)
 	elif refresh_pending and job.phase()=="done":
 		refresh_pending=false;host.game.refresh_library()
@@ -283,3 +296,12 @@ func _process(_delta:float) -> void:
 		if host.game.lobby:host.game.lobby.refresh()
 		host.refresh_songs();host.status_label.text=status.text
 func _exit_tree() -> void:job.shutdown()
+
+# A cover picked during review becomes the song's album art once it has been imported.
+func save_chosen_cover(id:String,path:String) -> void:
+	if path.is_empty() or id.is_empty():return
+	var image:Variant=host.game.load_picked_image(path)
+	if image is Image:
+		var problem=host.game.save_cover_image(id,image)
+		if not problem.is_empty():status.text=problem
+	else:status.text=str(image)

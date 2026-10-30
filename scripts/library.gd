@@ -109,12 +109,16 @@ func import_song(path: String) -> Dictionary:
 	if title.is_empty() or (path.begins_with("content://") and source_name.get_extension().to_lower() not in ["mp3", "wav", "ogg"]):
 		title = "Imported Audio " + id.substr(0, 6)
 	var song = {"id": id, "title": title, "file": id + "." + format, "bpm": 128.0}
+	# Title, artist, album, track, BPM and cover art come from the file's own tags when present.
+	var tags = AudioTags.read(temporary)
+	for key in ["title", "artist", "album", "track", "bpm"]:
+		if tags.has(key): song[key] = tags[key]
 	var error = DirAccess.rename_absolute(temporary, root_path.path_join("songs/" + str(song.file)))
 	if error != OK: message = "Could not keep audio on this device. Check storage."; return {}
 	songs.append(song)
 	if atomic_write(root_path.path_join("songs/library.json"), songs) != OK:
 		songs.pop_back(); message = "Could not save the song library."; return {}
-	return {"song": song, "stream": stream}
+	return {"song": song, "stream": stream, "cover": tags.get("cover")}
 
 func save_chart(id: String, notes: Array) -> Error:
 	return atomic_write(root_path.path_join("charts/" + id + ".json"), {"version": SynkChart.FORMAT_VERSION, "song_id": id, "notes": notes})

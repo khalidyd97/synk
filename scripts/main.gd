@@ -2630,6 +2630,7 @@ func import_audio(path: String) -> void:
 	var result=library.import_song(path)
 	if result.is_empty(): tell(library.message); return
 	if song_metadata.get(str(result.song.id),{}).has("error"): song_metadata.erase(str(result.song.id))
+	if result.get("cover") is Image and not has_custom_cover(str(result.song.id)): save_cover_image(str(result.song.id),result.cover)
 	apply_song(result.song,result.stream); refresh_library(); set_mode("editor")
 	tell("Audio imported. Add notes or record from the playhead, then SAVE your chart.")
 

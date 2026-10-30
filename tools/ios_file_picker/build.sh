@@ -17,7 +17,7 @@ fw="$work/synk_ios_picker.framework"
 mkdir -p "$fw"
 xcrun --sdk iphoneos clang++ -arch arm64 -isysroot "$sdk" -miphoneos-version-min=15.0 -std=c++17 -fobjc-arc -fPIC -O2 \
   -I"$work/godot-cpp/include" -I"$work/godot-cpp/gen/include" -I"$work/godot-cpp/gdextension" \
-  -dynamiclib "$here/synk_ios_picker.mm" "$cpp_lib" -framework UIKit -framework Foundation \
+  -dynamiclib "$here/synk_ios_picker.mm" "$cpp_lib" -framework UIKit -framework PhotosUI -framework Foundation \
   -install_name @rpath/synk_ios_picker.framework/synk_ios_picker -o "$fw/synk_ios_picker"
 cat > "$fw/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>

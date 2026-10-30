@@ -24,6 +24,8 @@ var game: Control
 var safe_content: Control
 var picker: FileDialog
 var image_picker: FileDialog
+# Which picture the image picker is choosing: "background" or "cover".
+var image_target = "background"
 var staged_audio = ""
 var staged_charts: Dictionary = {}
 var staged_label: Label
@@ -152,7 +154,7 @@ func _ready() -> void:
 	image_picker = FileDialog.new(); add_child(image_picker)
 	image_picker.file_mode = FileDialog.FILE_MODE_OPEN_FILE; image_picker.access = FileDialog.ACCESS_FILESYSTEM; image_picker.use_native_dialog = true
 	image_picker.filters = PackedStringArray(["*.png,*.jpg,*.jpeg;Images;image/png,image/jpeg"])
-	image_picker.file_selected.connect(set_background)
+	image_picker.file_selected.connect(func(path): set_cover(path) if image_target=="cover" else set_background(path))
 	move_child(safe_content,get_child_count()-1)
 	preview_player = AudioStreamPlayer.new(); add_child(preview_player); preview_player.volume_db = -10
 	var stored = game.prefs.get_value("ssrg","favorites",[])
@@ -503,11 +505,13 @@ func refresh_detail() -> void:
 		var best_label = text(card,best_text,.05,.68,.95,.94,13,MUTED)
 		best_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
-	action(detail,"▶  PLAY",.04,.76,.5,.88,func(): play(id,selected_variant,false),"primary")
-	action(detail,"AUTO PLAY",.52,.76,.72,.88,func(): play(id,selected_variant,true))
-	action(detail,"BACKGROUND",.74,.76,.96,.88,choose_background)
-	if game.has_background(id): action(detail,"REMOVE BACKGROUND",.04,.895,.36,.97,func(): game.remove_background(id); refresh_detail(),"small")
-	action(detail,"PREVIEW  " + ("ON" if preview_enabled() else "OFF"),.38,.895,.68,.97,toggle_preview,"small")
+	action(detail,"▶  PLAY",.04,.76,.44,.88,func(): play(id,selected_variant,false),"primary")
+	action(detail,"AUTO PLAY",.46,.76,.62,.88,func(): play(id,selected_variant,true))
+	action(detail,"COVER",.64,.76,.79,.88,choose_cover)
+	action(detail,"BACKGROUND",.81,.76,.96,.88,choose_background)
+	if game.has_background(id): action(detail,"REMOVE BACKGROUND",.04,.895,.27,.97,func(): game.remove_background(id); refresh_detail(),"small")
+	if game.has_custom_cover(id): action(detail,"REMOVE COVER",.29,.895,.5,.97,func(): game.remove_cover(id); refresh_songs(); refresh_detail(),"small")
+	action(detail,"PREVIEW  " + ("ON" if preview_enabled() else "OFF"),.52,.895,.8,.97,toggle_preview,"small")
 	var star = Button.new(); place(star,detail,.88,.045,.955,.14); star.focus_mode = Control.FOCUS_NONE
 	star.add_theme_font_size_override("font_size",30)
 	for state in ["normal","hover","pressed"]: star.add_theme_stylebox_override(state,box(Color(0,0,0,.35),Color(1,1,1,.12),14))
@@ -525,9 +529,23 @@ func refresh_speed() -> void:
 
 # --- Actions ---------------------------------------------------------------------------
 func choose_background() -> void:
-	if NativeFilePicker.open(false,func(paths): set_background(paths[0])): return
+	image_target = "background"
+	if NativeFilePicker.open_image(func(paths): set_background(paths[0])): return
 	if OS.get_name()=="iOS": image_picker.access=FileDialog.ACCESS_USERDATA; image_picker.current_dir="user://"
 	image_picker.popup_centered_ratio(.8)
+
+func choose_cover() -> void:
+	image_target = "cover"
+	if NativeFilePicker.open_image(func(paths): set_cover(paths[0])): return
+	if OS.get_name()=="iOS": image_picker.access=FileDialog.ACCESS_USERDATA; image_picker.current_dir="user://"
+	image_picker.popup_centered_ratio(.8)
+
+func set_cover(path: String) -> void:
+	var picked = game.load_picked_image(path)
+	if picked is String: status_label.text = picked; return
+	var problem = game.save_cover_image(selected_id,picked)
+	refresh_songs(); refresh_detail()
+	status_label.text = problem if not problem.is_empty() else "Cover saved."
 
 func set_background(path: String) -> void:
 	var picked = game.load_picked_image(path)
