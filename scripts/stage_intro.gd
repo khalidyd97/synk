@@ -37,6 +37,9 @@ var accent = Color("a36aff")
 var accent_2 = Color("38baff")
 var info_x = 0.0
 var info_width = 0.0
+# SSRG runs: the cover glides into the play_cover panel instead of sliding away.
+var play_cover: Control
+var gliding = false
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -126,6 +129,8 @@ func begin(cover: Texture2D, tint: Color, song_title: String, details: String, s
 	var rim = StyleBoxFlat.new(); rim.bg_color = Color(0,0,0,0); rim.set_corner_radius_all(22)
 	rim.border_color = Color(accent.lerp(Color.WHITE,.45),.45); rim.set_border_width_all(2)
 	card_rim.add_theme_stylebox_override("panel",rim)
+	gliding = game != null and game.ssrg_playable_run and play_cover != null
+	if gliding: play_cover.style_from(cover,tint,frame,rim)
 	load_time = 0.0 if skip_loading else LOAD_TIME
 	elapsed = 0.0; visible = true
 	layout(); animate()
@@ -190,7 +195,9 @@ func _process(delta: float) -> void:
 		if load_time > 0.0 and build_progress() < 1.0: elapsed = minf(elapsed, load_time * .95)
 	elif game and game.mode != "paused": visible = false; return
 	animate()
-	if elapsed >= load_time + ENTER_TIME: visible = false
+	if elapsed >= load_time + ENTER_TIME:
+		visible = false
+		if gliding: play_cover.take_over()
 
 func animate() -> void:
 	var appear=smoothstep(0.0,.5,elapsed) if load_time>0 else 1.0
@@ -198,10 +205,12 @@ func animate() -> void:
 	backdrop.color=Color(loading_shadow,1.0-smoothstep(.2,.95,e))
 	backdrop_art.modulate.a=.10*alpha
 	backdrop_art.pivot_offset=size*.5;backdrop_art.scale=Vector2.ONE*1.06
-	card.position=card_home()+Vector2(e*e*size.x*.35,(1.0-appear)*25)
-	card.rotation=-.025*(1.0-e)
-	card.scale=Vector2.ONE*lerpf(.96,1.0,appear)
-	card.modulate=Color(.9,.9,.9,alpha)
+	if gliding: glide_card(appear)
+	else:
+		card.position=card_home()+Vector2(e*e*size.x*.35,(1.0-appear)*25)
+		card.rotation=-.025*(1.0-e)
+		card.scale=Vector2.ONE*lerpf(.96,1.0,appear)
+		card.modulate=Color(.9,.9,.9,alpha)
 	reflection.visible=false
 	for label in [eyebrow,title,meta_label]:
 		label.modulate.a=alpha;label.position.x=info_x-(e*e*size.x*.2)+(1.0-appear)*15
@@ -211,6 +220,26 @@ func animate() -> void:
 	status.text="PREPARING YOUR STAGE" if load_progress()<1 else "READY TO PLAY"
 	percent.text="%02d%%" % roundi(load_progress()*100)
 	bar.queue_redraw();fx.queue_redraw()
+
+# The cover keeps full opacity and travels on an eased curve from the loading card to the
+# gameplay panel's rectangle, shrinking as it goes, so the hand-off has no visible jump.
+func glide_card(appear: float) -> void:
+	var raw=clampf((elapsed-load_time)/ENTER_TIME,0.0,1.0) if visible else 1.0
+	var t=raw*raw*raw*(raw*(raw*6.0-15.0)+10.0)
+	var side=card_side()
+	var start=Rect2(card_home()+Vector2(0,(1.0-appear)*25),Vector2(side,side))
+	var target=play_cover.target_rect()
+	var to_local=get_global_transform_with_canvas().affine_inverse()*play_cover.get_global_transform_with_canvas()
+	var end=Rect2(to_local*target.position,to_local.basis_xform(target.size))
+	card.size=start.size.lerp(end.size,t);card.pivot_offset=card.size*.5
+	card.position=start.position.lerp(end.position,t)
+	# A gentle lift along the way instead of a straight line.
+	card.position.y-=sin(t*PI)*size.y*.04
+	card.rotation=-.025*(1.0-t)*(1.0-t)
+	card.scale=Vector2.ONE*lerpf(.96,1.0,appear)
+	var light=lerpf(.9,1.0,t)
+	card.modulate=Color(light,light,light,appear)
+	card_art.material.set_shader_parameter("rect_size",card.size)
 
 func draw_fx() -> void:
 	var alpha=1.0-smoothstep(0.0,.8,entrance())

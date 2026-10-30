@@ -3,8 +3,6 @@ extends Control
 var game:Control
 var digits:Array[Texture2D]=[]
 var artwork:Dictionary=preload("res://scripts/ssrg_presentation_art.gd").TEXTURES
-var card_texture:Texture2D
-var card_texture_path=""
 var caption:Texture2D=preload("res://assets/ssrg/imported/hud/text_score.png")
 var backing:Texture2D=preload("res://assets/ssrg/imported/hud/UI_max_combo.png")
 var gauge:Texture2D=preload("res://assets/ssrg/imported/hud/Fever_G_BG.png")
@@ -56,27 +54,7 @@ func words(value:String,at:Vector2,font_size:int,tint:Color) -> void:
 func draw_source_extras(presentation:Node,origin:Vector2,unit:float,color:Color) -> void:
 	var right=size.x-origin.x-200*unit
 	words("BEST  "+game.format_score(presentation.best_score),Vector2(right-80*unit,47*unit),maxi(12,roundi(17*unit)),color)
-	var card:Dictionary=presentation.current_card()
-	var portrait:Texture2D=game.cover_texture_for_id(str(game.song.id))
-	var path=str(card.get("portrait",""))
-	if not path.is_empty():
-		if path!=card_texture_path:
-			card_texture_path=path
-			var picked=game.load_picked_image(path)
-			card_texture=ImageTexture.create_from_image(picked) if picked is Image else null
-		if card_texture:portrait=card_texture
-	var card_rect=Rect2(Vector2(right,130*unit),Vector2(112,150)*unit)
-	if artwork.has("card_beam"):draw_texture_rect(artwork.card_beam,card_rect.grow(15*unit),false,Color(1,1,1,color.a*.5))
-	draw_rect(card_rect,Color(.025,.025,.035,color.a))
-	if portrait:
-		var texture_size=portrait.get_size()
-		var crop_width=minf(texture_size.x,texture_size.y*card_rect.size.x/card_rect.size.y)
-		var crop_height=crop_width*card_rect.size.y/card_rect.size.x
-		draw_texture_rect_region(portrait,card_rect,Rect2((texture_size-Vector2(crop_width,crop_height))*.5,Vector2(crop_width,crop_height)),color)
-	var tier=str(card.get("tier","CUSTOM")).substr(0,8)
-	var tier_color=Color("ffdc41") if tier=="R" else Color("63d8ff")
-	tier_color.a=color.a;draw_rect(card_rect,tier_color,false,maxf(1,unit))
-	words(tier,card_rect.position+Vector2(5,18)*unit,maxi(12,roundi(14*unit)),tier_color)
+	# Album art is shown by play_cover.gd; the old portrait card box is gone.
 	var mission=int(presentation.metadata.get("mission_score",0))
 	if mission>0:
 		if artwork.has("ui_mission"):draw_texture_rect(artwork.ui_mission,Rect2(origin+Vector2(84,132)*unit,Vector2(80,20)*unit),false,color)

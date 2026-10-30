@@ -608,6 +608,8 @@ func build_ui() -> void:
 	guide_back=button(safe_parent("SafeGuideBack"),"‹  BACK",.40,.85,.60,.96,func(): set_mode("menu"),"nav")
 	# Song intro sits above the HUD and below the pause/results modal.
 	stage_intro=StageIntro.new(); stage_intro.game=self; ui.add_child(stage_intro)
+	var play_cover=preload("res://scripts/play_cover.gd").new(); play_cover.game=self
+	safe_parent("SafePlayCover").add_child(play_cover); stage_intro.play_cover=play_cover
 	results_screen=ResultsScreen.new(); results_screen.game=self; ui.add_child(results_screen)
 	# Pause: the stage behind is blurred and dimmed, with a frosted card on top (same glass as
 	# the lobby cards) holding three icon tiles.
