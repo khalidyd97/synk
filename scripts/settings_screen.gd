@@ -472,7 +472,7 @@ func section(items: VBoxContainer,title: String) -> void:
     var heading=label(items,title,13,ACCENT); heading.custom_minimum_size.y=26
 func build_highway(items: VBoxContainer) -> void:
     highway_angle_input=Stepper.new(18,44,2,game.highway_angle,"°",0)
-    add_control(row(items,"Recorder angle","Adjust the recorder view. Gameplay uses the fixed projected highway."),highway_angle_input)
+    add_control(row(items,"Highway angle","Choose how flat or steep the SYNK highway looks."),highway_angle_input)
     highway_angle_input.value_changed.connect(game.change_highway_angle)
     var preview=preload("res://scripts/highway_look_preview.gd").new(); preview.game=game; items.add_child(preview)
     var styles=row(items,"Highway style","Gold or Neon rails and judgment band.",166)

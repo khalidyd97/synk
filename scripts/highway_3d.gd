@@ -63,6 +63,7 @@ var miss_shake_remaining = 0.0
 var ssrg_shake_x=0.0
 var cover_backdrop: MeshInstance3D
 var rail_atmosphere: Node3D
+var synk_hits:Node3D
 var ssrg_theme: Node3D
 var cover_material: ShaderMaterial
 var rail_edge_materials: Array = []
@@ -163,7 +164,7 @@ func note_x(lane: float) -> float:
 	return clampf(lane_x(lane), -limit, limit)
 # Notes travel the whole 60-unit track, from the far end to the judgement bar.
 func uses_projected_highway() -> bool:
-	return game != null and not game.uses_recorder_colors()
+	return game != null and game.uses_ssrg_gameplay()
 func visible_length() -> float: return TRACK_LENGTH
 func travel_speed() -> float: return TRACK_LENGTH / game.note_travel_seconds()
 # Recovered from Perspective2dSettings.ToAcceleration in the supplied APK:
@@ -238,6 +239,7 @@ func _ready() -> void:
 	build_track()
 	ssrg_theme=preload("res://scripts/ssrg_highway.gd").new(); ssrg_theme.world=self; add_child(ssrg_theme)
 	build_effects()
+	synk_hits=preload("res://scripts/synk_hit_effects.gd").new();synk_hits.world=self;add_child(synk_hits)
 	build_play_aids()
 	build_cover_backdrop()
 	rail_atmosphere=preload("res://scripts/stage_rail_effects.gd").new(); rail_atmosphere.world=self; add_child(rail_atmosphere)
@@ -407,7 +409,7 @@ func build_track() -> void:
 	judgment_material = ShaderMaterial.new(); judgment_material.shader = preload("res://scripts/judgment_bar.gdshader")
 	# Fixed canvas layers: road, band, ribbons, note faces, then hit effects.
 	# Transparent distance sorting must not put the band over approaching notes.
-	judgment_material.render_priority=-6
+	judgment_material.render_priority=-6 if uses_projected_highway() else 0
 	animated_materials.append(weakref(judgment_material))
 	var judgment_bar = mesh_node(judgment_mesh,self,judgment_material)
 	judgment_bar.name = "JudgmentPads"
@@ -415,7 +417,7 @@ func build_track() -> void:
 	for edge in [-1,1]:
 		var edge_mesh = QuadMesh.new(); edge_mesh.size = Vector2(PAD_HALF_WIDTH*2.0,.025)
 		var border_material=ShaderMaterial.new();border_material.shader=preload("res://scripts/synk_canvas_color.gdshader")
-		border_material.render_priority=-5
+		border_material.render_priority=-5 if uses_projected_highway() else 0
 		border_material.set_shader_parameter("color",Color(Color("fff1cf"),.85))
 		var border = mesh_node(edge_mesh,judgment_bar,border_material)
 		border.position = Vector3(0,edge*JUDGMENT_DEPTH*.5,.005)
@@ -450,6 +452,7 @@ func refresh_highway_look() -> void:
 	var prism = game != null and game.uses_ssrg_gameplay() and not game.uses_recorder_colors()
 	var gold = game == null or game.uses_recorder_colors() or (game.highway_style=="gold" and not game.uses_ssrg_gameplay())
 	var darkness = clampf(float(game.get("highway_opacity")),.3,1.6) if game != null and game.get("highway_opacity") != null else 1.0
+	judgment_material.render_priority=-6 if uses_projected_highway() else 0
 	if game.uses_recorder_colors(): darkness=1.0
 	for node in gold_nodes: node.visible = gold
 	for node in neon_nodes: node.visible = not gold and not prism
@@ -483,7 +486,9 @@ func refresh_highway_look() -> void:
 		track_materials[0].set_shader_parameter("opacity",minf(.95,.36*darkness))
 		track_materials[1].set_shader_parameter("opacity",minf(.95,.42*darkness))
 		for m in track_materials: m.set_shader_parameter("near_fraction",1.0)
-	for m in judgment_borders: m.set_shader_parameter("color",Color(Color("fff1cf") if gold else Color("ead6ff"),.85 if gold else 1.0))
+	for m in judgment_borders:
+		m.render_priority=-5 if uses_projected_highway() else 0
+		m.set_shader_parameter("color",Color(Color("fff1cf") if gold else Color("ead6ff"),.85 if gold else 1.0))
 	var judgment_color: Color=judgment_material.get_shader_parameter("base_color")
 	highway_shadow_material.set_shader_parameter("tint",judgment_color.darkened(.65))
 	highway_shadow_material.set_shader_parameter("opacity",.2)
@@ -565,6 +570,7 @@ func build_asset_material(name: String, palette: int, region = Vector4(0,0,1,1),
 		mat.shader=preload("res://scripts/synk_canvas_art.gdshader");mat.render_priority=3
 	mat.set_shader_parameter("artwork",load("res://assets/neon/"+name+".png"))
 	mat.set_shader_parameter("region",region); mat.set_shader_parameter("opacity",opacity)
+	if name.begins_with("Hit_"):mat.set_shader_parameter("project_geometry",false)
 	# Blue tap artwork keeps its gradient; sustained and flick art takes its type color.
 	mat.set_shader_parameter("recolor",palette!=0 or cover_palette_active or (game.highway_colors=="theme" and game.gameplay_colors.has("tap"))); mat.set_shader_parameter("tint",colors[palette])
 	mat.set_shader_parameter("motion",.7 if name.begins_with("Hold_") else (.35 if name.begins_with("Flick_") else .12))
@@ -587,6 +593,9 @@ const BLOOM_LIFE = .38
 var prewarming_hits = false
 var bloom_pool: Array = []
 var blooms: Array = []
+func projected_synk_effects() -> bool:
+	return uses_projected_highway() and not game.uses_ssrg_gameplay()
+
 func make_bloom() -> Dictionary:
 	var node = Node3D.new(); add_child(node)
 	var flat_mesh = PlaneMesh.new(); flat_mesh.size = Vector2(10.0, 6.0)
@@ -595,6 +604,7 @@ func make_bloom() -> Dictionary:
 	var spark_mesh = QuadMesh.new(); spark_mesh.size = Vector2(6.0, 5.0)
 	var spark_mat = ShaderMaterial.new(); spark_mat.shader = preload("res://scripts/bloom_sparks.gdshader"); spark_mat.render_priority = 6
 	var sparks = mesh_node(spark_mesh, node, spark_mat); sparks.position = Vector3(0, 2.4, 0); sparks.rotation = camera.rotation
+	if projected_synk_effects():sparks.position.z=-spark_mesh.size.y*.5
 	node.visible = false
 	return {"node": node, "flat": flat_mat, "sparks": spark_mat, "age": 0.0, "sustain_entry": {}, "pointer_id": -999, "kind": "tap"}
 func prefill_blooms(count: int = 24) -> void:
@@ -609,6 +619,8 @@ func spawn_bloom(lane: float, kind: String, sustain_entry: Dictionary, pointer_i
 	b.sparks.set_shader_parameter("seed", randf() * 100.0)
 	b.age = 0.0; b.kind = kind; b.sustain_entry = sustain_entry; b.pointer_id = pointer_id
 	b.node.position = touch_hit_position(lane, pointer_id) + Vector3(0, .06, 0)
+	b.node.scale=Vector3.ONE*(.55*game.note_size if projected_synk_effects() else 1.0)
+	b.node.get_child(1).position.z=-b.node.get_child(1).mesh.size.y*.5 if projected_synk_effects() else 0.0
 	b.node.visible = true; blooms.append(b)
 func animate_blooms(delta: float, running: bool) -> void:
 	var intensity = game.features.effect("Hit flashes"); var particles = game.features.effect("Particles")
@@ -626,12 +638,24 @@ func animate_blooms(delta: float, running: bool) -> void:
 		if (not sustained and b.age >= BLOOM_LIFE) or game.mode not in ["play","record","paused"]:
 			b.node.visible = false; blooms.remove_at(i); bloom_pool.append(b); continue
 		var t = b.age / BLOOM_LIFE
-		b.flat.set_shader_parameter("age", t); b.flat.set_shader_parameter("strength", intensity)
-		b.sparks.set_shader_parameter("age", t); b.sparks.set_shader_parameter("strength", particles)
+		b.flat.set_shader_parameter("age", t); b.flat.set_shader_parameter("strength", intensity*(.42 if projected_synk_effects() else 1.0))
+		b.sparks.set_shader_parameter("age", t); b.sparks.set_shader_parameter("strength", particles*(.65 if projected_synk_effects() else 1.0))
+
+func layout_classic_hit(burst:Dictionary) -> void:
+	burst.node.scale=Vector3.ONE*(.62*game.note_size if projected_synk_effects() else 1.0)
+	if projected_synk_effects():
+		# Bright centers are low in the original upright sprites. On the flat
+		# canvas, offset in screen space so they land on the timing line.
+		burst.flash.position.z=-(.83/(1.0+HIT_MIRROR)-.5)*burst.flash.mesh.size.y*burst.flash.scale.y
+		burst.fill.position.z=-.18*burst.fill.mesh.size.y*burst.fill.scale.y
+	else:
+		burst.flash.position.z=0.0;burst.fill.position.z=0.0
 
 func spawn_hit(lane: float, kind: String, direction: int = 0, sustain_entry: Dictionary = {},pointer_id: int=-999) -> void:
 	if ssrg_theme and ssrg_theme.active and not prewarming_hits:
 		ssrg_theme.spawn(lane, kind, sustain_entry, pointer_id); return
+	if projected_synk_effects() and not prewarming_hits:
+		synk_hits.spawn(lane,kind,sustain_entry,pointer_id,direction);return
 	if game.hit_style == "bloom" and not prewarming_hits:
 		spawn_bloom(lane, kind, sustain_entry, pointer_id); return
 	if bursts.size() >= 32:
@@ -658,6 +682,7 @@ func spawn_hit(lane: float, kind: String, direction: int = 0, sustain_entry: Dic
 				var sideways=camera.basis*[Vector3.RIGHT,Vector3.DOWN,Vector3.LEFT,Vector3.UP][clampi(direction,0,3)]
 				particle.velocity=axis*(5.0+float(particle_index%7)*1.4)+sideways*sin(particle_index*TAU/24.0)*4.8
 				particle.node.quaternion=Quaternion(Vector3.BACK,particle.velocity.normalized())
+		layout_classic_hit(reused)
 		reused.node.show()
 		bursts.append(reused)
 		return
@@ -692,6 +717,7 @@ func spawn_hit(lane: float, kind: String, direction: int = 0, sustain_entry: Dic
 			particle.quaternion=Quaternion(Vector3.BACK,velocity.normalized())
 		particles.append({"node":particle,"velocity":velocity})
 	bursts.append({"node":node,"age":0.0,"flash":flash,"fill":fill,"ring":ring,"particles":particles,"kind":kind,"flick_axis":flick_axis,"sustain_entry":sustain_entry,"pointer_id":pointer_id,"pool_key":pool_key})
+	layout_classic_hit(bursts[-1])
 
 func recycle_hit(burst: Dictionary) -> void:
 	burst.node.hide(); burst.sustain_entry={}
@@ -716,6 +742,7 @@ func prewarm() -> void:
 	prewarming_hits = true
 	for kind in ["tap", "hold", "flick"]: spawn_hit(5, kind, 1)
 	prewarming_hits = false
+	if projected_synk_effects():synk_hits.spawn(5,"tap",{},-999)
 	if game.hit_style == "bloom": spawn_bloom(5, "tap", {}, -999)
 	for beam in finger_beams.slice(0, 1): beam.visible = true
 	for i in 4: await get_tree().process_frame
@@ -723,6 +750,9 @@ func prewarm() -> void:
 	# Keep the warm-up hits: they go back into the pool for the song to reuse.
 	for burst in bursts: recycle_hit(burst)
 	bursts.clear()
+	if synk_hits:
+		for hit in synk_hits.hits:synk_hits.release(hit)
+		synk_hits.hits.clear()
 
 # Fill the hit-effect pool for the chart before play, so even a dense opening never builds a
 # flash, ring and spark set mid-song. Counts cover the most hits of each kind that can be on
@@ -730,6 +760,7 @@ func prewarm() -> void:
 const HIT_POOL_LIMIT = 48
 func prefill_hits() -> void:
 	if ssrg_theme and ssrg_theme.active: ssrg_theme.prefill(); return
+	if projected_synk_effects():synk_hits.prefill();return
 	var counts = {"tap": 0, "hold": 0}
 	var flick_dirs = {}
 	for entry in game.live:
@@ -883,6 +914,7 @@ func modifier_hides(z: float) -> bool:
 func clear_hit_effects() -> void:
 	# Pooled effects for the previous chart are freed; prefill_hits builds the next set.
 	if ssrg_theme: ssrg_theme.clear_hits()
+	if synk_hits:synk_hits.clear()
 	ssrg_beam_release.clear()
 	for burst in bursts+hit_pool: burst.node.queue_free()
 	bursts.clear(); hit_pool.clear()
@@ -895,6 +927,7 @@ func clear_notes() -> void:
 	notes.clear()
 
 func animate_effects(delta: float) -> void:
+	if synk_hits:synk_hits.advance(delta)
 	var running = game.mode in ["play","record"]
 	if running: animation_time += delta
 	# Every highway shader reads this one global clock (project setting shader_globals/synk_time).
@@ -930,12 +963,13 @@ func animate_effects(delta: float) -> void:
 		if sustained and burst.kind=="slide":
 			var slide_flash = .18+.82*pow(hold_wave,2.0)
 			flash_opacity = lerpf(attack*fade,slide_flash,hold_blend); fill_opacity = flash_opacity
-		burst.flash.material_override.set_shader_parameter("opacity",flash_opacity*hit_intensity)
-		burst.fill.material_override.set_shader_parameter("opacity",fill_opacity*hit_intensity)
+		burst.flash.material_override.set_shader_parameter("opacity",flash_opacity*hit_intensity*(.65 if projected_synk_effects() else 1.0))
+		burst.fill.material_override.set_shader_parameter("opacity",fill_opacity*hit_intensity*(.20 if projected_synk_effects() else 1.0))
 		burst.fill.scale = Vector3(1.0+t*.7,1.0+t*.35,1).lerp(Vector3(1.18+hold_wave*.15,1.05+hold_wave*.14,1),hold_blend)
 		burst.flash.scale = Vector3(1.0+t*.6,1.0+t*.25,1).lerp(Vector3(1.14+hold_wave*.12,1.0+hold_wave*.12,1),hold_blend)
 		burst.ring.scale = Vector3.ONE*lerpf(.8+t*.75,1.12+hold_wave*.22,hold_blend)
-		burst.ring.material_override.albedo_color.a = lerpf(fade*.8,.15+hold_wave*.25,hold_blend)*hit_intensity
+		burst.ring.material_override.albedo_color.a = lerpf(fade*.8,.15+hold_wave*.25,hold_blend)*hit_intensity*(.5 if projected_synk_effects() else 1.0)
+		layout_classic_hit(burst)
 		var particle_count=burst.particles.size()
 		for particle_index in particle_count:
 			var particle=burst.particles[particle_index]
@@ -943,8 +977,10 @@ func animate_effects(delta: float) -> void:
 			particle.node.visible=shown
 			if not shown: continue
 			particle.node.position = particle.velocity*burst.age
-			if burst.kind=="flick": particle.node.position += Vector3(0,1.8,0)
-			if burst.kind!="flick": particle.node.position += Vector3(0,-2.5*burst.age*burst.age,0)
+			if burst.kind=="flick": particle.node.position += camera.basis*Vector3(0,1.8,0) if projected_synk_effects() else Vector3(0,1.8,0)
+			else:
+				if projected_synk_effects():particle.node.position=camera.basis*Vector3(particle.velocity.x*burst.age,particle.velocity.y*burst.age,0)
+				particle.node.position += (camera.basis*Vector3.UP if projected_synk_effects() else Vector3.UP)*(-2.5*burst.age*burst.age)
 			particle.node.scale = Vector3.ONE*maxf(.01,1-t)
 
 func artwork(parent: Node3D, name: String, palette: int, position_value: Vector3, dimensions: Vector2, region = Vector4(0,0,1,1), opacity = 1.0) -> MeshInstance3D:
@@ -1173,7 +1209,7 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 		trail_material=shared("art_trail|%d|%s|%s" % [palette, trail_color(palette), still], func():
 			var m=build_asset_material("Hold_Note_Pink",palette,TRAIL_REGION,.85)
 			m.set_shader_parameter("projected_ribbon",true)
-			m.render_priority=-4
+			m.render_priority=-4 if uses_projected_highway() else 0
 			m.set_shader_parameter("tint",trail_color(palette))
 			if still:
 				m.set_shader_parameter("motion",0.0); m.set_shader_parameter("glow_pulse",0.0)
@@ -1190,7 +1226,7 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 	else:
 		var edge_material = shared("ribbon_edge|%s" % trail_color(palette), func():
 			var m = ShaderMaterial.new(); m.shader = preload("res://scripts/ribbon_edge.gdshader")
-			m.render_priority=-3
+			m.render_priority=-3 if uses_projected_highway() else 0
 			m.set_shader_parameter("color",trail_color(palette).lightened(.4));m.set_shader_parameter("projected_ribbon",true); return m)
 		edge.set_material(edge_material); mesh_node(edge.commit(),parent)
 	# Checkpoint dots: glowing beads where the finger must be when they reach the bar.

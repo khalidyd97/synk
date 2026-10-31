@@ -18,9 +18,8 @@ func custom(key: String) -> Variant:
 
 # Point on the highway: across in -1..1 from rail to rail, depth 0 at the bar end, 1 far away.
 func at(across: float,depth: float) -> Vector2:
-    var q=pow(maxf(1.0-depth,0.0),6.0)
-    var y=lerpf(size.y*.10,size.y*.92,q)
-    var half=size.x*.40*q
+    var y=lerpf(size.y*.92,size.y*.10,depth)
+    var half=lerpf(size.x*.40,size.x*.08,depth)
     return Vector2(size.x*.5+across*half,y)
 
 func strip(a: float,b: float,d0: float,d1: float,color: Color) -> void:

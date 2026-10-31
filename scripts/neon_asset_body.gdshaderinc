@@ -24,12 +24,13 @@ uniform vec3 tint : source_color = vec3(0.6, 0.2, 1.0);
 varying float world_z;
 varying float centre_z;
 uniform bool projected_ribbon=false;
+uniform bool project_geometry=true;
 #include "res://scripts/ssrg_warp.gdshaderinc"
 
 void vertex() {
 	world_z=(MODEL_MATRIX*vec4(VERTEX,1.0)).z;
 	centre_z=MODEL_MATRIX[3].z;
-	VERTEX=projected_ribbon?ssrg_warp_section(VERTEX,UV2.x,MODEL_MATRIX):ssrg_warp_rigid(VERTEX,MODEL_MATRIX);
+	if(project_geometry)VERTEX=projected_ribbon?ssrg_warp_section(VERTEX,UV2.x,MODEL_MATRIX):ssrg_warp_rigid(VERTEX,MODEL_MATRIX);
 	rail_position=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz;
 }
 

@@ -39,6 +39,19 @@ var row_stripes:Array[ColorRect]=[]
 var showing_results=false
 var busy_time=0.0
 const STEPS=["CHOOSE","CHECK","REVIEW","IMPORT","DONE"]
+# Touch scrolling: the rows are buttons, which keep a finger's drag from the ScrollContainer.
+# A press that moves past DRAG_START scrolls the list instead, cancels the tap, and flicks on.
+const DRAG_START=12.0
+var list_scroll:ScrollContainer
+var detail_scroll:ScrollContainer
+var drag_scroll:ScrollContainer
+var dragging=false
+var drag_from=Vector2.ZERO
+var drag_start_scroll=0
+var drag_velocity=0.0
+var drag_moved_at=0
+var fling_scroll:ScrollContainer
+var fling=0.0
 const GOOD=Color("7ee2a0")
 const WARN=Color("ffd36a")
 const BAD=Color("ff9c9c")
@@ -87,10 +100,10 @@ func _ready() -> void:
 	var body=HBoxContainer.new();body.size_flags_vertical=Control.SIZE_EXPAND_FILL;body.add_theme_constant_override("separation",18);content.add_child(body)
 	var left=VBoxContainer.new();left.size_flags_horizontal=Control.SIZE_EXPAND_FILL;left.size_flags_stretch_ratio=.8;body.add_child(left)
 	var select_row=row(left);button("SELECT VALID",select_row,func():select_all(true));button("NONE",select_row,func():select_all(false))
-	var scroll=ScrollContainer.new();scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;left.add_child(scroll)
+	var scroll=ScrollContainer.new();scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;left.add_child(scroll);list_scroll=scroll
 	list=VBoxContainer.new();list.size_flags_horizontal=Control.SIZE_EXPAND_FILL;list.add_theme_constant_override("separation",8);scroll.add_child(list)
 	var right=ScrollContainer.new();right.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;right.size_flags_horizontal=Control.SIZE_EXPAND_FILL;right.size_flags_stretch_ratio=1.25;body.add_child(right)
-	details=VBoxContainer.new();details.size_flags_horizontal=Control.SIZE_EXPAND_FILL;details.add_theme_constant_override("separation",9);right.add_child(details)
+	details=VBoxContainer.new();details.size_flags_horizontal=Control.SIZE_EXPAND_FILL;details.add_theme_constant_override("separation",9);right.add_child(details);detail_scroll=right
 	blocker=ColorRect.new();body.add_child(blocker);blocker.top_level=true;blocker.color=Color(0,0,0,.35);blocker.hide()
 	body.resized.connect(func():blocker.position=body.global_position;blocker.size=body.size)
 	warning_ack=CheckBox.new();warning_ack.text="I reviewed the warnings for the selected songs.";content.add_child(warning_ack);warning_ack.toggled.connect(func(_value):update_controls())
@@ -434,6 +447,47 @@ func _process(_delta:float) -> void:
 		if host.game.lobby:host.game.lobby.refresh()
 		host.refresh_songs();host.status_label.text=status.text
 func _exit_tree() -> void:job.shutdown()
+
+func _input(event:InputEvent) -> void:
+	if not visible:return
+	if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT:
+		if event.position.x<-5000:return
+		if event.pressed:
+			fling=0.0;dragging=false;drag_scroll=null
+			for scroll in [list_scroll,detail_scroll]:
+				if scroll.is_visible_in_tree() and scroll.get_global_rect().has_point(event.position):drag_scroll=scroll
+			if drag_scroll:drag_from=event.position;drag_start_scroll=drag_scroll.scroll_vertical;drag_velocity=0.0;drag_moved_at=0
+		else:
+			if dragging:
+				# Keep gliding only if the finger was still moving when it lifted.
+				if Time.get_ticks_msec()-drag_moved_at<80:fling_scroll=drag_scroll;fling=drag_velocity
+				get_viewport().set_input_as_handled()
+			dragging=false;drag_scroll=null
+	elif event is InputEventMouseMotion and drag_scroll and event.position.x>-5000:
+		var distance=event.position.y-drag_from.y
+		if not dragging:
+			if absf(distance)<DRAG_START:return
+			dragging=true;drag_from=event.position;drag_start_scroll=drag_scroll.scroll_vertical;distance=0.0
+			cancel_press()
+		var now=Time.get_ticks_msec();var seconds=maxf(.001,(now-drag_moved_at)/1000.0) if drag_moved_at>0 else .016
+		drag_velocity=lerpf(drag_velocity,-event.relative.y/minf(seconds,.05),.6);drag_moved_at=now
+		drag_scroll.scroll_vertical=int(drag_start_scroll-distance)
+		get_viewport().set_input_as_handled()
+
+# Lifts the press far off screen, so the row or box under the finger is not tapped by a scroll.
+func cancel_press() -> void:
+	# Buttons decide "pressed inside" from motion, so move off the button before lifting.
+	var away=InputEventMouseMotion.new();away.button_mask=MOUSE_BUTTON_MASK_LEFT;away.position=Vector2(-10000,-10000);away.global_position=away.position
+	var up=InputEventMouseButton.new();up.button_index=MOUSE_BUTTON_LEFT;up.pressed=false
+	up.position=away.position;up.global_position=up.position
+	get_viewport().push_input.call_deferred(away,true);get_viewport().push_input.call_deferred(up,true)
+
+func _physics_process(delta:float) -> void:
+	if fling_scroll==null or absf(fling)<30.0:fling=0.0;return
+	var before=fling_scroll.scroll_vertical
+	fling_scroll.scroll_vertical=int(before+fling*delta)
+	fling*=exp(-4.0*delta)
+	if fling_scroll.scroll_vertical==before:fling=0.0
 
 # A cover picked during review becomes the song's album art once it has been imported.
 func save_chosen_cover(id:String,path:String) -> void:

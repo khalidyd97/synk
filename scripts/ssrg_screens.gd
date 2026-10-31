@@ -30,9 +30,9 @@ func _ready() -> void:
 	make_button(card,"SONG LIST",.05,.43,.27,.36,leave_pause)
 	make_button(card,"RETRY",.365,.43,.27,.36,game.restart_from_pause)
 	make_button(card,"RESUME",.68,.43,.27,.36,game.toggle_pause)
-	make_button(card,"−",.28,.83,.08,.14,func():change_speed(-.25))
+	game.ssrg_playables.hold_speed(make_button(card,"−",.28,.83,.08,.14,func():pass),-.1)
 	speed_label=label(card,"",.37,.83,.26,.14,18)
-	make_button(card,"+",.64,.83,.08,.14,func():change_speed(.25))
+	game.ssrg_playables.hold_speed(make_button(card,"+",.64,.83,.08,.14,func():pass),.1)
 	result_root=make_root();result_root.hide()
 	var banner=TextureRect.new();result_root.add_child(banner);place(banner,.33,.055,.34,.10)
 	banner.texture=preload("res://assets/ssrg/imported/presentation/stage_cleared.png")
@@ -78,7 +78,7 @@ func _process(delta:float) -> void:
 	if source:
 		game.pause_button.hide()
 		if pausing:game.modal.hide();game.pause_backdrop.hide()
-	speed_label.text="SPEED %.2f" % game.ssrg_speed_setting()
+	speed_label.text="SPEED %.1f" % game.ssrg_speed_setting()
 	result_root.visible=game.mode=="results" and result_info.get("ssrg",false) and not details_open
 	if game.mode!=old_mode:age=0;old_mode=game.mode
 	if pausing or result_root.visible:
@@ -104,8 +104,8 @@ func restore_run() -> void:
 func retry() -> void:
 	details_open=false;restore_run();game.start_game(game.last_play_notes,game.auto_play,game.last_section)
 func leave_pause() -> void:
-	game.return_home();game.ssrg_playables.open()
+	game.return_home();game.open_ssrg_playables()
 func leave_results() -> void:
-	result_info={};game.set_mode("menu");game.ssrg_playables.open()
+	result_info={};game.set_mode("menu");game.open_ssrg_playables()
 func show_details() -> void:
 	details_open=true;result_root.hide();game.results_screen.show_results(result_info)

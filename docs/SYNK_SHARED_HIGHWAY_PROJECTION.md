@@ -1,5 +1,7 @@
 # SYNK highway projection
 
+**Retired:** Regular SYNK has been restored to its original perspective highway, 2.6-second approach and original postprocessing/effects. Shared canvas projection is now restricted to imported SSRG runs. The experimental regression scripts are retained under `.tools/retired-synk-projection-tests`; current behavior is covered by `test_synk_og_restored.gd` and `test_shared_ssrg_gameplay.gd`.
+
 Gold and Neon gameplay use SSRG's orthographic canvas, original canvas fitting and progress-to-the-sixth approach curve. Notes share the same scaling and position transform; hold and slide sections use the same projected cross-sections. Rendering travel is 3.5 seconds at 1x. Imported SSRG runs retain their own speed mapping, artwork and stage.
 
 `highway_3d.gd::uses_projected_highway` selects the visual mechanism independently from `main.gd::uses_ssrg_gameplay`. SYNK retains its note textures, solid/neon trail choices, rail and band styles, colors, lane mapping and judgment rules. Static SYNK track/rail shaders project their geometry onto the shared canvas. The recorder disables this projection and retains its perspective camera and 2.6-second travel.

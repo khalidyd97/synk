@@ -35,6 +35,10 @@ var import_panel: Control
 var import_wizard:Control
 var status_label: Label
 var speed_label: Label
+# Speed goes from 1.0 to 10.0 in steps of 0.1; holding − or + keeps stepping.
+const SPEED_STEP = 0.1
+var speed_held_step = 0.0
+var speed_held_time = 0.0
 var search: LineEdit
 # Category tabs: one per game folder (SSYG, SSFNC, ...) plus ALL; "" shows every game.
 var game_tabs: HBoxContainer
@@ -140,9 +144,9 @@ func _ready() -> void:
 	search.text_changed.connect(func(_t): refresh_songs())
 	sort_button = action(self,"",.54,.035,.64,.115,cycle_sort,"small")
 	action(self,"SHUFFLE",.645,.035,.715,.115,shuffle,"small")
-	action(self,"−",.725,.035,.755,.115,func(): change_speed(-1),"small")
+	hold_speed(action(self,"−",.725,.035,.755,.115,func(): pass,"small"),-SPEED_STEP)
 	speed_label = text(self,"",.755,.035,.83,.115,14); speed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	action(self,"+",.83,.035,.86,.115,func(): change_speed(1),"small")
+	hold_speed(action(self,"+",.83,.035,.86,.115,func(): pass,"small"),SPEED_STEP)
 	action(self,"+ FILES",.87,.035,.925,.115,open_import,"small")
 	action(self,"SCAN",.93,.035,.98,.115,scan_phone,"small")
 	# Game tabs (one per game folder, plus favourites) and the sign-out button.
@@ -554,12 +558,24 @@ func refresh_detail() -> void:
 		start.caption_size = 34
 
 func change_speed(step: float) -> void:
-	game.prefs.set_value("ssrg","speed_value",clampf(game.ssrg_speed_setting()+step,1.0,10.0))
+	game.prefs.set_value("ssrg","speed_value",clampf(snappedf(game.ssrg_speed_setting()+step,SPEED_STEP),1.0,10.0))
 	game.prefs.save("user://preferences.cfg")
 	refresh_speed()
 
+# One step on touch, then repeating while held (also used by the pause menu's − and +).
+func hold_speed(button: BaseButton, step: float) -> void:
+	button.button_down.connect(func(): change_speed(step); speed_held_step = step; speed_held_time = 0.0)
+	button.button_up.connect(func(): speed_held_step = 0.0)
+
+func repeat_held_speed(delta: float) -> void:
+	if speed_held_step == 0.0: return
+	var before = speed_held_time; speed_held_time += delta
+	# After 0.4 s, about 12 steps a second.
+	var steps = int(maxf(0.0,speed_held_time-.4)/.08)-int(maxf(0.0,before-.4)/.08)
+	for i in steps: change_speed(speed_held_step)
+
 func refresh_speed() -> void:
-	speed_label.text = "SPEED %s" % str(snappedf(game.ssrg_speed_setting(),.01))
+	speed_label.text = "SPEED %.1f" % game.ssrg_speed_setting()
 
 # --- Actions ---------------------------------------------------------------------------
 func choose_background() -> void:
@@ -680,6 +696,7 @@ func play(id: String, variant: String, automated: bool) -> void:
 	if game.select_song(index): launch()
 
 func _process(delta: float) -> void:
+	repeat_held_speed(delta)
 	finish_preview_load()
 	if preview_delay >= 0:
 		preview_delay -= delta
