@@ -21,7 +21,7 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
     var showing=is_visible_in_tree() and game!=null and game.field!=null
-    if game: game.set_highway_preview(showing)
+    if game: game.set_highway_preview(showing,self)
     if not showing: return
     var field=game.field
     view.texture=field.viewport.get_texture(); view.material=field.screen.material
@@ -33,4 +33,4 @@ func _process(_delta: float) -> void:
     view.size=fit; view.position=Vector2((size.x-fit.x)*.5,size.y-fit.y)
 
 func _exit_tree() -> void:
-    if game: game.set_highway_preview(false)
+    if game: game.set_highway_preview(false,self)

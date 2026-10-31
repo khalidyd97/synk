@@ -239,6 +239,9 @@ func press_play() -> void:
     if game.loading_song_index>0 or filtered_entries.is_empty(): return
     var notes: Array=game.baseline_notes()
     if notes.is_empty(): return
+    # The selected cover flies from the song list into the loading card.
+    if browser and browser.cover and browser.cover.is_visible_in_tree() and game.stage_intro:
+        game.stage_intro.arrive(browser.cover.get_global_rect())
     stop_preview(); game.start_game(notes,auto_enabled)
 func set_preview_enabled(enabled: bool) -> void:
     preview_enabled=enabled; game.prefs.set_value("audio","song_preview",enabled); game.prefs.save("user://preferences.cfg")

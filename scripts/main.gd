@@ -132,9 +132,15 @@ func change_ssrg_mode(on: bool) -> void:
 # SSRG judging and scoring rules stay with ssrg_playable_run.
 func uses_ssrg_gameplay() -> bool:
 	return (ssrg_playable_run or (highway_style=="ssrg" and (mode in ["play","paused"] or highway_preview))) and not uses_recorder_colors()
-# True while the settings preview shows the live highway outside gameplay.
+# True while a settings preview shows the live highway outside gameplay. Each visible
+# preview registers itself, so switching pages never turns the stage off under another one.
 var highway_preview = false
-func set_highway_preview(on: bool) -> void:
+var highway_preview_users: Dictionary = {}
+func set_highway_preview(on: bool, user: Object = null) -> void:
+	if user:
+		if on: highway_preview_users[user.get_instance_id()]=true
+		else: highway_preview_users.erase(user.get_instance_id())
+		on=not highway_preview_users.is_empty()
 	if highway_preview==on: return
 	var was_ssrg_look=uses_ssrg_gameplay()
 	highway_preview=on
@@ -305,6 +311,15 @@ func apply_frame_rate() -> void:
 # Hit effect style (Settings > Visual effects > Hit effects): "classic" bursts or "bloom".
 const HIT_STYLES = ["classic","bloom"]
 var hit_style = "classic"
+# Hit effect size (0.6-1.6) and an optional colour ("" follows the note colours).
+var hit_size = 1.0
+var hit_color = ""
+func change_hit_look(key: String,value: Variant) -> void:
+	if key=="size": hit_size=clampf(float(value),.6,1.6); prefs.set_value("effects","hit_size",hit_size)
+	elif key=="color": hit_color=str(value); prefs.set_value("effects","hit_color",hit_color)
+	else: return
+	prefs.save("user://preferences.cfg")
+	if settings_panel: settings_panel.refresh()
 func change_hit_style(value: String) -> void:
 	hit_style=value if value in HIT_STYLES else "classic"
 	prefs.set_value("effects","hit_style",hit_style); prefs.save("user://preferences.cfg")
@@ -352,6 +367,9 @@ func _ready() -> void:
 	note_speed = clampf(float(prefs.get_value("gameplay","note_speed",1.0)), .5, 3.0)
 	hit_style = str(prefs.get_value("effects","hit_style","classic"))
 	if hit_style not in HIT_STYLES: hit_style="classic"
+	hit_size = clampf(float(prefs.get_value("effects","hit_size",1.0)),.6,1.6)
+	hit_color = str(prefs.get_value("effects","hit_color",""))
+	if hit_color!="" and not Color.html_is_valid(hit_color): hit_color=""
 	note_shape = str(prefs.get_value("gameplay","note_shape","circle"))
 	if note_shape not in ["rectangle","circle","puck"]: note_shape="rectangle"
 	highway_angle = clampf(float(prefs.get_value("gameplay","highway_angle",35.0)),18.0,44.0)
@@ -923,6 +941,13 @@ func change_highway_look(key: String,value: Variant) -> void:
 	field.world.refresh_highway_look()
 	if settings_panel: settings_panel.refresh()
 
+# While the colour picker is open: show a colour without saving it.
+func preview_gameplay_color(key: String,code: String) -> void:
+	if not SynkGameplayColors.valid_key(key) or (code!="" and not Color.html_is_valid(code)): return
+	if code=="": gameplay_colors.erase(key)
+	else: gameplay_colors[key]=code
+	apply_stage_cover()
+	if field and field.world: field.world.refresh_highway_look()
 func change_gameplay_color(key: String,code: String) -> void:
 	if not SynkGameplayColors.valid_key(key) or (code!="" and not Color.html_is_valid(code)): return
 	if code=="": gameplay_colors.erase(key)

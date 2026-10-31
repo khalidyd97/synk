@@ -17,6 +17,8 @@ var metronome_toggle: Switch
 var shape_tiles: Dictionary = {}
 var render_scale_buttons: Dictionary = {}
 var hit_style_buttons: Dictionary = {}
+var hit_swatches: Array = []
+var hit_size_input: Stepper
 var style_tiles: Dictionary = {}
 var ssrg_mode_row: PanelContainer
 # The SSRG highway is a fixed flat view: its style hides the angle row.
@@ -511,12 +513,38 @@ func build_colors(items: VBoxContainer) -> void:
         for key in SynkGameplayColors.GROUPS[group]:
             var panel=row(items,SynkGameplayColors.GROUPS[group][key],"Follows the rail color." if key=="glow" else "Choose a color, or restore the theme default.",104)
             var controls=HBoxContainer.new(); controls.add_theme_constant_override("separation",12); add_control(panel,controls,316)
-            var picker=ColorPickerButton.new(); picker.custom_minimum_size=Vector2(132,72); picker.edit_alpha=false
+            var picker=ColorChip.new(); picker.custom_minimum_size=Vector2(132,72)
             controls.add_child(picker); color_pickers[key]=picker
-            picker.color_changed.connect(func(color): game.change_gameplay_color(key,color.to_html(false)))
+            var heading: String=SynkGameplayColors.GROUPS[group][key]
+            picker.pressed.connect(func(): if not Action.was_dragged(picker): open_color_picker(key,heading,picker.color))
             var reset=action(controls,"FOLLOW RAIL" if key=="glow" else "DEFAULT",func(): game.change_gameplay_color(key,""))
             reset.custom_minimum_size=Vector2(172,72); reset.caption_size=17; color_reset_buttons[key]=reset
     action(items,"RESET CUSTOM COLORS",game.reset_gameplay_colors)
+
+# Opens the centred picker; the colour shows live and is saved on Done, restored on Cancel.
+func open_color_picker(key: String,heading: String,start: Color) -> void:
+    var had=game.gameplay_colors.has(key); var before=str(game.gameplay_colors.get(key,""))
+    preload("res://scripts/color_picker_sheet.gd").open(self,heading,start,
+        func(color): game.preview_gameplay_color(key,color.to_html(false)),
+        func(color): game.change_gameplay_color(key,color.to_html(false)),
+        func(): game.change_gameplay_color(key,before if had else ""),game)
+
+# The colour setting's button: a rounded swatch with its hex code.
+class ColorChip extends Button:
+    var color=Color.WHITE:
+        set(v): color=v; queue_redraw()
+    func _ready() -> void:
+        focus_mode=Control.FOCUS_ALL; mouse_default_cursor_shape=Control.CURSOR_POINTING_HAND
+        for state in ["normal","hover","pressed","disabled","focus","hover_pressed"]: add_theme_stylebox_override(state,StyleBoxEmpty.new())
+    func _draw() -> void:
+        var Soft=preload("res://scripts/soft_button.gd")
+        Soft.draw_plate(self,size,"quiet",1.0 if is_hovered() else 0.0,1.0 if is_pressed() else 0.0,0.0,disabled,16.0)
+        var dot=Rect2(Vector2(12,(size.y-40)*.5),Vector2(40,40))
+        var face=StyleBoxFlat.new(); face.bg_color=color if not disabled else color.darkened(.5); face.set_corner_radius_all(12)
+        face.set_border_width_all(1); face.border_color=Color(1,1,1,.2)
+        draw_style_box(face,dot)
+        var code="#"+color.to_html(false).to_upper()
+        draw_string(Soft.BOLD,Vector2(62,size.y*.5+6),code,HORIZONTAL_ALIGNMENT_LEFT,size.x-68,16,Soft.text_color("quiet",0.0,disabled))
 
 func build_notes(items: VBoxContainer) -> void:
     var shapes=row(items,"Note shape","Choose the note style you see on the highway.",166)
@@ -547,16 +575,28 @@ func effect_row(items: VBoxContainer,key: String,hint: String) -> void:
     add_control(row(items,key,hint,96),control)
     control.value_changed.connect(func(v): game.features.set_effect(key,v/100))
 func build_hit_effects(items: VBoxContainer) -> void:
-    var style=row(items,"Hit effect style","Classic bursts, or Bloom: a bright flash with rings on the line.")
+    # The live highway keeps firing hits here, so every change shows at once.
+    var preview=preload("res://scripts/hit_effect_preview.gd").new(); preview.game=game; items.add_child(preview)
+    var style=row(items,"Hit effect style","Classic bursts or Bloom rings. SSRG uses its own art.")
     var choices=HBoxContainer.new(); choices.add_theme_constant_override("separation",10); add_control(style,choices,330)
     for value in game.HIT_STYLES:
         var key: String=value
         var b=action(choices,key.capitalize(),func(): game.change_hit_style(key))
         b.custom_minimum_size=Vector2(150,72); b.caption_size=21; hit_style_buttons[key]=b
+    hit_size_input=Stepper.new(60,160,10,game.hit_size*100,"%",0)
+    add_control(row(items,"Hit size","How big each hit flash and burst is, on every highway style."),hit_size_input)
+    hit_size_input.value_changed.connect(func(v): game.change_hit_look("size",v/100))
+    var colors=row(items,"Hit color","A follows each note's own color.",128)
+    var line=HBoxContainer.new(); line.add_theme_constant_override("separation",4)
+    add_control(colors,line,LOOK_COLORS.size()*56)
+    for code in LOOK_COLORS:
+        var swatch=Swatch.new(code); line.add_child(swatch); hit_swatches.append(swatch)
+        swatch.pressed.connect(func(): if not Action.was_dragged(swatch): game.change_hit_look("color",code))
     effect_row(items,"Hit flashes","Set the brightness of hit flashes and impact rings.")
     effect_row(items,"Particles","Set particle density for note-hit sparks.")
     action(items,"RESET HIT EFFECTS",func():
-        for key in ["Hit flashes","Particles"]: effect_inputs[key].value=100)
+        for key in ["Hit flashes","Particles"]: effect_inputs[key].value=100
+        hit_size_input.value=100; game.change_hit_look("color",""))
 func build_stage_effects(items: VBoxContainer) -> void:
     for key in game.features.OPTIONAL_STAGE_EFFECTS:
         var control=Switch.new(); stage_effect_switches[key]=control
@@ -587,7 +627,7 @@ func build_editor(items: VBoxContainer,guides: VBoxContainer) -> void:
     action(items,"RECORDER PREFERENCES  →",func(): game.recorder.show_setup(true))
 func refresh() -> void:
     for key in color_pickers:
-        var picker: ColorPickerButton=color_pickers[key]
+        var picker=color_pickers[key]
         picker.disabled=game.highway_colors=="adaptive"
         picker.color=Color.from_string(str(game.gameplay_colors[key]),Color.WHITE) if game.gameplay_colors.has(key) else SynkGameplayColors.preview_default(game,key)
         color_reset_buttons[key].disabled=picker.disabled
@@ -595,6 +635,8 @@ func refresh() -> void:
     if trail_style_input: trail_style_input.select(1 if game.trail_style=="solid" else 0)
     for kind in shape_tiles: shape_tiles[kind].selected=kind==game.note_shape
     for key in hit_style_buttons: hit_style_buttons[key].set_selected(key==game.hit_style)
+    for swatch in hit_swatches: swatch.selected=swatch.color_code==game.hit_color
+    if hit_size_input: hit_size_input.sync_value(game.hit_size*100)
     for value in render_scale_buttons: render_scale_buttons[value].set_selected(is_equal_approx(value,game.render_scale()))
     for kind in style_tiles: style_tiles[kind].selected=kind==game.highway_style
     if ssrg_mode_row:

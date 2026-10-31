@@ -40,6 +40,10 @@ var info_width = 0.0
 # Every song: the cover glides into the play_cover panel instead of sliding away.
 var play_cover: Control
 var gliding = false
+# Pressing Play: the cover starts where it sat in the song list and grows into the loading card.
+const ARRIVE_TIME = .55
+var arrive_from = Rect2()
+var arriving = false
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -133,7 +137,24 @@ func begin(cover: Texture2D, tint: Color, song_title: String, details: String, s
 	if gliding: play_cover.style_from(cover,tint,frame,rim)
 	load_time = 0.0 if skip_loading else LOAD_TIME
 	elapsed = 0.0; visible = true
+	arriving = arrive_from.has_area() and not skip_loading
 	layout(); animate()
+	if not arriving: arrive_from = Rect2()
+
+# Called just before begin(): the on-screen rectangle the cover flies in from.
+func arrive(global_rect: Rect2) -> void:
+	var to_local = get_global_transform_with_canvas().affine_inverse()
+	arrive_from = Rect2(to_local * global_rect.position, to_local.basis_xform(global_rect.size))
+
+# The card's resting rectangle on the loading screen, or on its way there from the song list.
+func home_rect(appear: float) -> Rect2:
+	var side = card_side()
+	if not arriving: return Rect2(card_home()+Vector2(0,(1.0-appear)*25),Vector2(side,side))
+	var k = smoothstep(0.0,ARRIVE_TIME,elapsed)
+	var rect = Rect2(arrive_from.position.lerp(card_home(),k),arrive_from.size.lerp(Vector2(side,side),k))
+	rect.position.y -= sin(k*PI)*size.y*.03
+	if k >= 1.0: arriving = false; arrive_from = Rect2()
+	return rect
 
 func skip() -> void:
 	elapsed = load_time + ENTER_TIME; visible = false
@@ -190,7 +211,8 @@ func load_progress() -> float:
 func _process(delta: float) -> void:
 	if not visible: return
 	if game and game.mode == "play":
-		elapsed += delta
+		# The first loading frames can stall while the chart builds; the arrival still plays out.
+		elapsed += minf(delta,.034) if arriving else delta
 		# Hold on the loading card until every note is built.
 		if load_time > 0.0 and build_progress() < 1.0: elapsed = minf(elapsed, load_time * .95)
 	elif game and game.mode != "paused": visible = false; return
@@ -207,10 +229,12 @@ func animate() -> void:
 	backdrop_art.pivot_offset=size*.5;backdrop_art.scale=Vector2.ONE*1.06
 	if gliding: glide_card(appear)
 	else:
-		card.position=card_home()+Vector2(e*e*size.x*.35,(1.0-appear)*25)
+		var rest=home_rect(appear); card.size=rest.size; card.pivot_offset=card.size*.5
+		card_art.material.set_shader_parameter("rect_size",card.size)
+		card.position=rest.position+Vector2(e*e*size.x*.35,0)
 		card.rotation=-.025*(1.0-e)
 		card.scale=Vector2.ONE*lerpf(.96,1.0,appear)
-		card.modulate=Color(.9,.9,.9,alpha)
+		card.modulate=Color(.9,.9,.9,alpha if not arriving else 1.0-smoothstep(0.0,.8,e))
 	reflection.visible=false
 	for label in [eyebrow,title,meta_label]:
 		label.modulate.a=alpha;label.position.x=info_x-(e*e*size.x*.2)+(1.0-appear)*15
@@ -226,8 +250,8 @@ func animate() -> void:
 func glide_card(appear: float) -> void:
 	var raw=clampf((elapsed-load_time)/ENTER_TIME,0.0,1.0) if visible else 1.0
 	var t=raw*raw*raw*(raw*(raw*6.0-15.0)+10.0)
-	var side=card_side()
-	var start=Rect2(card_home()+Vector2(0,(1.0-appear)*25),Vector2(side,side))
+	var flying=arriving
+	var start=home_rect(appear)
 	var target=play_cover.target_rect()
 	var to_local=get_global_transform_with_canvas().affine_inverse()*play_cover.get_global_transform_with_canvas()
 	var end=Rect2(to_local*target.position,to_local.basis_xform(target.size))
@@ -238,7 +262,7 @@ func glide_card(appear: float) -> void:
 	card.rotation=-.025*(1.0-t)*(1.0-t)
 	card.scale=Vector2.ONE*lerpf(.96,1.0,appear)
 	var light=lerpf(.9,1.0,t)
-	card.modulate=Color(light,light,light,appear)
+	card.modulate=Color(light,light,light,1.0 if flying else appear)
 	card_art.material.set_shader_parameter("rect_size",card.size)
 
 func draw_fx() -> void:

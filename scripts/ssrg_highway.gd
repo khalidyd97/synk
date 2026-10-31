@@ -94,7 +94,11 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 	if world.game.ssrg_playable_run and not sustain_entry.is_empty():x=sustain_finger_x(sustain_entry,world.game.pointers,x)
 	h.node.position = flash_point(x)
 	h.node.rotation = world.camera.rotation
-	h.material.set_shader_parameter("opacity", 1.0)
+	h.material.set_shader_parameter("opacity", world.game.features.effect("Hit flashes"))
+	# Hit effects page: size, and an optional colour over the source art.
+	h.node.scale = Vector3.ONE * world.game.hit_size
+	h.material.set_shader_parameter("tint", Color.from_string(world.game.hit_color, Color.WHITE) if world.game.hit_color != "" else Color.WHITE)
+	h.material.set_shader_parameter("recolor", world.game.hit_color != "")
 	h.node.visible = true; hits.append(h)
 
 # Where a flash goes: the note's point on the judgement line, pulled toward the camera along
@@ -157,7 +161,7 @@ func _process(delta: float) -> void:
 	if not active: return
 	original_stage.update(world)
 	var game = world.game
-	var playing = game.mode == "play" and game.countdown<=0 and game.resume_countdown<=0
+	var playing = (game.mode == "play" and game.countdown<=0 and game.resume_countdown<=0) or game.highway_preview
 	var presentation=game.ssrg_presentation
 	var using_state=presentation and presentation.active
 	var weights=presentation.weights if using_state else [1.0,0.0,0.0,0.0]
@@ -183,7 +187,7 @@ func _process(delta: float) -> void:
 		var held = sustain_effect_active(h.sustain_entry,world.render_time(),game.ssrg_playable_run)
 		if playing: h.age += delta
 		if playing and held and h.age > HOLD_RETRIGGER: h.age = fmod(h.age,HOLD_RETRIGGER)
-		if (not held and h.age >= HIT_LIFE) or game.mode not in ["play", "paused"]:
+		if (not held and h.age >= HIT_LIFE) or (game.mode not in ["play", "paused"] and not game.highway_preview):
 			hits.remove_at(i); release(h); continue
 		if held:
 			var x=world.note_x(SynkChart.lane_at(h.sustain_entry.note, world.render_time()))
@@ -191,6 +195,7 @@ func _process(delta: float) -> void:
 			h.node.position = flash_point(x)
 		var frames: Array=h.get("frames",imported_frames)
 		if not frames.is_empty(): h.material.set_shader_parameter("atlas",frames[mini(frames.size()-1,int(h.age*HIT_FPS))])
+		h.material.set_shader_parameter("opacity",game.features.effect("Hit flashes"))
 	return
 	if game.live.size() != used_for_size:
 		used_for_size = game.live.size(); used_lanes.clear()

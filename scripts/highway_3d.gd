@@ -435,6 +435,9 @@ func custom_color(key: String) -> Variant:
 	return Color.from_string(value,Color.BLACK) if value != "" else null
 
 func element_color(key: String,fallback: Color) -> Color:
+	# A hit colour picked on the Hit effects page wins over theme and adaptive colours.
+	if key in ["hits","sparks"] and game!=null and str(game.get("hit_color"))!="" and not game.uses_recorder_colors():
+		return Color.from_string(str(game.hit_color),fallback)
 	return SynkGameplayColors.resolve(game,key,fallback) if game!=null else fallback
 
 func trail_color(palette: int) -> Color:
@@ -621,7 +624,7 @@ func spawn_bloom(lane: float, kind: String, sustain_entry: Dictionary, pointer_i
 	b.sparks.set_shader_parameter("seed", randf() * 100.0)
 	b.age = 0.0; b.kind = kind; b.sustain_entry = sustain_entry; b.pointer_id = pointer_id
 	b.node.position = touch_hit_position(lane, pointer_id) + Vector3(0, .06, 0)
-	b.node.scale=Vector3.ONE*(.55*game.note_size if projected_synk_effects() else 1.0)
+	b.node.scale=Vector3.ONE*(.55*game.note_size if projected_synk_effects() else 1.0)*game.hit_size
 	b.node.get_child(1).position.z=-b.node.get_child(1).mesh.size.y*.5 if projected_synk_effects() else 0.0
 	b.node.visible = true; blooms.append(b)
 func animate_blooms(delta: float, running: bool) -> void:
@@ -637,14 +640,14 @@ func animate_blooms(delta: float, running: bool) -> void:
 				b.node.position = touch_hit_position(0, int(b.sustain_entry.get("pointer", b.pointer_id))) + Vector3(0, .06, 0)
 			elif b.kind == "slide": b.node.position.x = note_x(SynkChart.lane_at(b.sustain_entry.note, game.song_time))
 		elif not b.sustain_entry.is_empty(): b.sustain_entry = {}
-		if (not sustained and b.age >= BLOOM_LIFE) or game.mode not in ["play","record","paused"]:
+		if (not sustained and b.age >= BLOOM_LIFE) or (game.mode not in ["play","record","paused"] and not game.highway_preview):
 			b.node.visible = false; blooms.remove_at(i); bloom_pool.append(b); continue
 		var t = b.age / BLOOM_LIFE
 		b.flat.set_shader_parameter("age", t); b.flat.set_shader_parameter("strength", intensity*(.42 if projected_synk_effects() else 1.0))
 		b.sparks.set_shader_parameter("age", t); b.sparks.set_shader_parameter("strength", particles*(.65 if projected_synk_effects() else 1.0))
 
 func layout_classic_hit(burst:Dictionary) -> void:
-	burst.node.scale=Vector3.ONE*(.62*game.note_size if projected_synk_effects() else 1.0)
+	burst.node.scale=Vector3.ONE*(.62*game.note_size if projected_synk_effects() else 1.0)*game.hit_size
 	if projected_synk_effects():
 		# Bright centers are low in the original upright sprites. On the flat
 		# canvas, offset in screen space so they land on the timing line.
@@ -930,7 +933,7 @@ func clear_notes() -> void:
 
 func animate_effects(delta: float) -> void:
 	if synk_hits:synk_hits.advance(delta)
-	var running = game.mode in ["play","record"]
+	var running = game.mode in ["play","record"] or game.highway_preview
 	if running: animation_time += delta
 	# Every highway shader reads this one global clock (project setting shader_globals/synk_time).
 	RenderingServer.global_shader_parameter_set("synk_time",animation_time)
@@ -947,7 +950,7 @@ func animate_effects(delta: float) -> void:
 			burst.sustain_entry={}
 			burst.age=.45
 		if running: burst.age += delta
-		if (not sustained and burst.age>=.65) or game.mode not in ["play","record","paused"]:
+		if (not sustained and burst.age>=.65) or (game.mode not in ["play","record","paused"] and not game.highway_preview):
 			recycle_hit(burst); bursts.remove_at(i); continue
 		var t = minf(float(burst.age)/.65,1.0)
 		# A quick, full flash that holds its body before fading out.
