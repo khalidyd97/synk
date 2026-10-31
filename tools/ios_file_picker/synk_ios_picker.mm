@@ -102,8 +102,8 @@ public:
 	}
 
 	// Keeps a swipe at the screen edges in the game: the home bar and Control Centre need a
-	// second swipe. Godot's suppress_ui_gesture setting did not hold on device, so the root
-	// controller's class answers the system's questions directly.
+	// second swipe. iOS ignores this deferral while the home bar auto-hides, so the bar stays
+	// shown (dimmed). The root controller's class answers the system's questions directly.
 	void defer_system_gestures() {
 		UIViewController *root = nil;
 		for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
@@ -118,7 +118,7 @@ public:
 			return UIRectEdgeAll;
 		}), "Q@:");
 		class_replaceMethod(type, @selector(prefersHomeIndicatorAutoHidden), imp_implementationWithBlock(^BOOL(id self) {
-			return YES;
+			return NO;
 		}), "B@:");
 		class_replaceMethod(type, @selector(childViewControllerForScreenEdgesDeferringSystemGestures), imp_implementationWithBlock(^UIViewController *(id self) {
 			return nil;

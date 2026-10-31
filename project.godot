@@ -43,7 +43,7 @@ window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/handheld/orientation=4
 window/ios/suppress_ui_gesture=true
-window/ios/hide_home_indicator=true
+window/ios/hide_home_indicator=false
 
 [rendering]
 
