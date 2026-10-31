@@ -1077,9 +1077,12 @@ func cycle_recorder_note_speed() -> void:
 func length() -> float: return audio.stream.get_length()
 # Score: fixed points per judgement, not divided by the chart's note count, times a combo
 # multiplier that rises 0.1x for every full 100 combo (x1.1 at 100, x1.2 at 200, ...),
-# capped at x2.0. A miss resets the combo and so the multiplier.
+# capped at x2.0. A miss resets the combo and so the multiplier. SSRG runs have no combo
+# multiplier: every 100 combo earns nothing extra there.
 const NOTE_POINTS = {"PERFECT": 1000, "GREAT": 800, "GOOD": 500}
-func combo_multiplier() -> float: return minf(2.0, 1.0 + .1 * floori(combo / 100.0))
+func combo_multiplier() -> float:
+	if ssrg_playable_run: return 1.0
+	return minf(2.0, 1.0 + .1 * floori(combo / 100.0))
 func add_points(grade: String) -> void:
 	if ssrg_playable_run and ssrg_presentation and ssrg_presentation.active:
 		score=ssrg_presentation.score_rules.add(grade,ssrg_presentation.state)
@@ -1892,7 +1895,7 @@ var combo_view: Control
 var multiplier_step=0
 func update_combo_art() -> void:
 	# Each new score multiplier step (every 100 combo, up to x2.0) also lights up the highway.
-	var step=mini(10,floori(combo/100.0))
+	var step=0 if ssrg_playable_run else mini(10,floori(combo/100.0))
 	if step>multiplier_step and mode=="play":
 		field.world.multiplier_wave(); UiSound.play(self,"bonus")
 	multiplier_step=step
@@ -1901,6 +1904,7 @@ func update_combo_art() -> void:
 		for child in combo_hud.get_children(): child.queue_free()
 		combo_view=preload("res://scripts/combo_view.gd").new(); combo_view.name="ComboView"
 		combo_hud.add_child(combo_view); combo_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	combo_view.multiplier_enabled=not ssrg_playable_run
 	combo_view.set_combo(combo)
 
 func build_combo_digit_textures() -> void:

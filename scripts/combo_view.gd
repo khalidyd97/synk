@@ -20,7 +20,9 @@ var badge_age = -1.0     # seconds since the badge appeared; < 0 when hidden
 var badge_text = ""
 var sparks: Array = []   # {pos, vel, life}
 
-func multiplier() -> float: return minf(2.0, 1.0 + .1 * floori(combo / 100.0))
+# Off in SSRG runs, which have no combo multiplier (set by main.gd).
+var multiplier_enabled = true
+func multiplier() -> float: return minf(2.0, 1.0 + .1 * floori(combo / 100.0)) if multiplier_enabled else 1.0
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -29,7 +31,7 @@ func set_combo(value: int) -> void:
 	if value > combo: punch = 1.0
 	var stepped = value > combo and floori(value / 100.0) > floori(combo / 100.0) and value <= 1000
 	combo = value
-	if stepped: multiplier_up()
+	if stepped and multiplier_enabled: multiplier_up()
 	queue_redraw()
 
 func milestone(value: int) -> void:
@@ -114,7 +116,7 @@ func _draw() -> void:
 	var caption_size = roundi(h * (.15 if caption == "COMBO" else .17))
 	var spaced = " ".join(caption.split("")) if caption == "COMBO" else caption
 	# Score multiplier earned every 100 combo (see main.gd combo_multiplier).
-	var mult = minf(2.0, 1.0 + .1 * floori(combo / 100.0))
+	var mult = multiplier()
 	if caption == "COMBO" and mult > 1.0: spaced += "   ×%.1f" % mult
 	var caption_width = BOLD.get_string_size(spaced, HORIZONTAL_ALIGNMENT_LEFT, -1, caption_size).x
 	var caption_y = h * .80
