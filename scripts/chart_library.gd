@@ -131,9 +131,7 @@ func _ready() -> void:
     record_button=button(panel,"●  RECORD",24,504,254,82,func(): open_selected("record"),p,true)
     edit_button=button(panel,"✎  EDIT CHART",294,504,258,82,func(): open_selected("editor"),p,true)
     record_button.caption_size=28; edit_button.caption_size=28
-    record_button.material.set_shader_parameter("end_color",Vector3(.35,.1,.95))
-    edit_button.material.set_shader_parameter("start_color",Vector3(.50,.22,.96))
-    edit_button.material.set_shader_parameter("middle_color",Vector3(.65,.10,.94))
+    record_button.soft_role="record"
     message_label=label(panel,"Continue your draft or record a new take",24,584,528,20,11,Color("aaa8c1"),p)
     message_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     recent=game.prefs.get_value("chart_library","recent",{})

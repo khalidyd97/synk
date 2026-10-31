@@ -12,6 +12,7 @@ var result_counts:Label
 var result_cover:TextureRect
 var result_context:Label
 var speed_label:Label
+var speed_controls:Array=[]
 var result_info:Dictionary={}
 var details_open=false
 var age=0.0
@@ -30,9 +31,11 @@ func _ready() -> void:
 	make_button(card,"SONG LIST",.05,.43,.27,.36,leave_pause)
 	make_button(card,"RETRY",.365,.43,.27,.36,game.restart_from_pause)
 	make_button(card,"RESUME",.68,.43,.27,.36,game.toggle_pause)
-	game.ssrg_playables.hold_speed(make_button(card,"−",.28,.83,.08,.14,func():pass),-.1)
+	speed_controls=[make_button(card,"−",.28,.83,.08,.14,func():pass)]
+	game.ssrg_playables.hold_speed(speed_controls[0],-.1)
 	speed_label=label(card,"",.37,.83,.26,.14,18)
-	game.ssrg_playables.hold_speed(make_button(card,"+",.64,.83,.08,.14,func():pass),.1)
+	speed_controls.append_array([speed_label,make_button(card,"+",.64,.83,.08,.14,func():pass)])
+	game.ssrg_playables.hold_speed(speed_controls[2],.1)
 	result_root=make_root();result_root.hide()
 	var banner=TextureRect.new();result_root.add_child(banner);place(banner,.33,.055,.34,.10)
 	banner.texture=preload("res://assets/ssrg/imported/presentation/stage_cleared.png")
@@ -79,6 +82,8 @@ func _process(delta:float) -> void:
 		game.pause_button.hide()
 		if pausing:game.modal.hide();game.pause_backdrop.hide()
 	speed_label.text="SPEED %.1f" % game.ssrg_speed_setting()
+	# The SSRG speed only drives SSRG rules; a SYNK song on the SSRG look keeps SYNK's speed.
+	for control in speed_controls: control.visible=game.ssrg_playable_run
 	result_root.visible=game.mode=="results" and result_info.get("ssrg",false) and not details_open
 	if game.mode!=old_mode:age=0;old_mode=game.mode
 	if pausing or result_root.visible:

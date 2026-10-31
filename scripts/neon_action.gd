@@ -2,6 +2,7 @@ extends Button
 
 const UiMotion = preload("res://scripts/ui_motion.gd")
 const ART_SHADER = preload("res://scripts/neon_action.gdshader")
+const Soft = preload("res://scripts/soft_button.gd")
 
 # SYNK button design system. Each role has one look so a button's job reads at a glance:
 # primary   - filled violet-to-pink plate: the main next step on a screen (Play, Save).
@@ -84,8 +85,11 @@ func _ready() -> void:
 	caption_color=style.get("text",Color("f8eeff"))
 	caption.add_theme_color_override("font_color",caption_color)
 	caption.add_theme_color_override("font_outline_color",style.get("outline",Color(accent_color,.67)))
-	caption.add_theme_constant_override("outline_size",4)
+	caption.add_theme_constant_override("outline_size",0)
+	caption.add_theme_font_override("font",Soft.BOLD)
 	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# The plate is drawn by soft_button.gd; the shader backdrop only keeps the animated state.
+	backdrop.visible = false
 	resized.connect(update_aspect)
 	update_aspect()
 	mouse_entered.connect(func(): animate_hover(1.0))
@@ -101,8 +105,17 @@ func _process(_delta: float) -> void:
 		disabled_tween=create_tween()
 		disabled_tween.tween_method(func(amount: float): art_material.set_shader_parameter("disabled_amount",amount),float(art_material.get_shader_parameter("disabled_amount")),1.0 if disabled else 0.0,.18)
 		previous_disabled=disabled
+		refresh_caption_color()
 	if not text.is_empty() and caption.text!=text: caption.text=text
 	if caption.text+str(size)+str(caption_size)!=fitted_for: fit_caption()
+	queue_redraw()
+
+func soft_role() -> String: return Soft.role_for(variant)
+
+func state(key: String) -> float: return float(art_material.get_shader_parameter(key)) if art_material else 0.0
+
+func _draw() -> void:
+	Soft.draw_plate(self,size,soft_role(),state("hover_amount"),state("press_amount"),state("selected_amount"),disabled)
 
 func keeps_caption_size() -> bool:
 	var node: Node = self
@@ -166,8 +179,7 @@ func set_selected(value: bool) -> void:
 func refresh_caption_color() -> void:
 	# Filled-when-selected chips need brighter text to stay readable on the fill.
 	if caption==null: return
-	var filled=selected and float(VARIANTS.get(variant,{}).get("selected_fill",0.0))>0
-	caption.add_theme_color_override("font_color",Color.WHITE if filled else caption_color)
+	caption.add_theme_color_override("font_color",Soft.text_color(soft_role(),1.0 if selected else 0.0,disabled))
 
 func animate_hover(value: float) -> void:
 	if hover_tween and hover_tween.is_running(): hover_tween.kill()

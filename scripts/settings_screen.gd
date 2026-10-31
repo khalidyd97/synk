@@ -19,6 +19,8 @@ var render_scale_buttons: Dictionary = {}
 var hit_style_buttons: Dictionary = {}
 var style_tiles: Dictionary = {}
 var ssrg_mode_row: PanelContainer
+# The SSRG highway is a fixed flat view: its style hides the angle row.
+var angle_row: PanelContainer
 var ssrg_mode_switch: Switch
 var color_pickers: Dictionary = {}
 var color_reset_buttons: Dictionary = {}
@@ -104,16 +106,15 @@ class Switch extends Button:
         engagement=lerpf(engagement,1.0 if is_hovered() or has_focus() else 0.0,1-exp(-delta*16))
         queue_redraw()
     func _draw() -> void:
-        var style=StyleBoxFlat.new(); style.set_corner_radius_all(18); style.set_border_width_all(1)
-        style.bg_color=Color("141414").lerp(Color("12313d"),knob*.65)
-        style.border_color=Color("34364f").lerp(Color("50daec"),maxf(knob*.7,engagement))
-        draw_style_box(style,Rect2(Vector2.ONE,size-Vector2.ONE*2))
-        var font=ThemeDB.fallback_font; var caption="ON" if button_pressed else "OFF"
-        draw_string(font,Vector2(16,size.y*.5+6),caption,HORIZONTAL_ALIGNMENT_LEFT,-1,16,Color("c7cee4").lerp(Color("7ae7f4"),knob))
+        # Same soft plate as the buttons; the track fills cream when on.
+        var Soft=preload("res://scripts/soft_button.gd")
+        Soft.draw_plate(self,size,"quiet",engagement,0.0,0.0,disabled,18.0)
+        var caption="ON" if button_pressed else "OFF"
+        draw_string(Soft.BOLD,Vector2(18,size.y*.5+6),caption,HORIZONTAL_ALIGNMENT_LEFT,-1,16,Color("8f8b94").lerp(Soft.TEXT,knob))
         var track=Rect2(size.x-79,(size.y-32)*.5,64,32)
-        var pill=StyleBoxFlat.new(); pill.set_corner_radius_all(16); pill.bg_color=Color("34364f").lerp(Color("2b9aaf"),knob)
+        var pill=StyleBoxFlat.new(); pill.set_corner_radius_all(16); pill.bg_color=Color("3a3840").lerp(Soft.CREAM,knob)
         draw_style_box(pill,track)
-        draw_circle(Vector2(track.position.x+16+knob*32,track.get_center().y),11,Color("b1aec6").lerp(Color("ebfdff"),knob))
+        draw_circle(Vector2(track.position.x+16+knob*32,track.get_center().y),11,Color("cfcbd2").lerp(Soft.INK,knob))
 
 # A selectable tile previewing a note shape.
 # One color choice; an empty color is the "auto" swatch that follows the style.
@@ -129,7 +130,7 @@ class Swatch extends Button:
         for state in ["normal","hover","pressed","disabled","focus","hover_pressed"]: add_theme_stylebox_override(state,StyleBoxEmpty.new())
     func _draw() -> void:
         var center = size*.5; var r = minf(size.x,size.y)*.36
-        if selected: draw_arc(center,r+6,0,TAU,40,Color("50daec"),3,true)
+        if selected: draw_arc(center,r+6,0,TAU,40,Color("f3ece1"),3,true)
         elif is_hovered() or has_focus(): draw_arc(center,r+6,0,TAU,40,Color("a499e8"),2,true)
         if color_code=="":
             draw_circle(center,r,Color("1e1e1e"))
@@ -152,8 +153,8 @@ class StyleTile extends Button:
         for state in ["normal","hover","pressed","disabled","focus","hover_pressed"]: add_theme_stylebox_override(state,StyleBoxEmpty.new())
     func _draw() -> void:
         var box = StyleBoxFlat.new(); box.set_corner_radius_all(18)
-        box.bg_color = Color("10313f") if selected else Color("121212")
-        box.border_color = Color("50daec") if selected else Color("30364e")
+        box.bg_color = Color("2a2830") if selected else Color("121212")
+        box.border_color = Color("f3ece1") if selected else Color("30364e")
         if is_hovered() or has_focus(): box.border_color=Color("a499e8")
         box.set_border_width_all(2 if selected else 1)
         draw_style_box(box,Rect2(Vector2.ZERO,size))
@@ -196,8 +197,8 @@ class ModeTile extends Button:
         for state in ["normal","hover","pressed","disabled","focus","hover_pressed"]: add_theme_stylebox_override(state,StyleBoxEmpty.new())
     func _draw() -> void:
         var box = StyleBoxFlat.new(); box.set_corner_radius_all(18)
-        box.bg_color = Color("10313f") if selected else Color("121212")
-        box.border_color = Color("50daec") if selected else Color("30364e")
+        box.bg_color = Color("2a2830") if selected else Color("121212")
+        box.border_color = Color("f3ece1") if selected else Color("30364e")
         if is_hovered() or has_focus(): box.border_color=Color("a499e8")
         box.set_border_width_all(2 if selected else 1)
         draw_style_box(box,Rect2(Vector2.ZERO,size))
@@ -230,8 +231,8 @@ class ShapeTile extends Button:
         for state in ["normal","hover","pressed","disabled","focus","hover_pressed"]: add_theme_stylebox_override(state,StyleBoxEmpty.new())
     func _draw() -> void:
         var style = StyleBoxFlat.new(); style.set_corner_radius_all(18)
-        style.bg_color = Color("121212").lerp(Color("10313f"),selected_amount)
-        style.border_color = Color("30364e").lerp(Color("50daec"),selected_amount)
+        style.bg_color = Color("121212").lerp(Color("2a2830"),selected_amount)
+        style.border_color = Color("30364e").lerp(Color("f3ece1"),selected_amount)
         if is_hovered() or has_focus(): style.border_color=Color("a499e8")
         style.set_border_width_all(2 if selected else 1)
         draw_style_box(style,Rect2(Vector2.ZERO,size))
@@ -474,7 +475,8 @@ func section(items: VBoxContainer,title: String) -> void:
     var heading=label(items,title,13,ACCENT); heading.custom_minimum_size.y=26
 func build_highway(items: VBoxContainer) -> void:
     highway_angle_input=Stepper.new(18,44,2,game.highway_angle,"°",0)
-    add_control(row(items,"Highway angle","Choose how flat or steep the SYNK highway looks."),highway_angle_input)
+    angle_row=row(items,"Highway angle","Choose how flat or steep the SYNK highway looks.")
+    add_control(angle_row,highway_angle_input)
     highway_angle_input.value_changed.connect(game.change_highway_angle)
     var preview=preload("res://scripts/highway_look_preview.gd").new(); preview.game=game; items.add_child(preview)
     var styles=row(items,"Highway style","Gold or Neon rails and judgment band, or the SSRG highway.",166)
@@ -597,6 +599,7 @@ func refresh() -> void:
     for kind in style_tiles: style_tiles[kind].selected=kind==game.highway_style
     if ssrg_mode_row:
         ssrg_mode_row.visible=game.highway_style=="ssrg"
+        angle_row.visible=game.highway_style!="ssrg"
         ssrg_mode_switch.set_pressed_no_signal(bool(game.prefs.get_value("highway","ssrg_mode",false)))
     for kind in color_mode_tiles: color_mode_tiles[kind].selected=kind==game.highway_colors
     for swatch in rail_swatches: swatch.selected=swatch.color_code==game.rail_color and (game.highway_colors=="adaptive" or not game.gameplay_colors.has("rail"))

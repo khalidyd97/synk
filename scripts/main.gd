@@ -131,7 +131,14 @@ func change_ssrg_mode(on: bool) -> void:
 # The SSRG look: imported SSRG runs, and SYNK songs played with the "ssrg" highway style.
 # SSRG judging and scoring rules stay with ssrg_playable_run.
 func uses_ssrg_gameplay() -> bool:
-	return (ssrg_playable_run or (highway_style=="ssrg" and mode in ["play","paused"])) and not uses_recorder_colors()
+	return (ssrg_playable_run or (highway_style=="ssrg" and (mode in ["play","paused"] or highway_preview))) and not uses_recorder_colors()
+# True while the settings preview shows the live highway outside gameplay.
+var highway_preview = false
+func set_highway_preview(on: bool) -> void:
+	if highway_preview==on: return
+	var was_ssrg_look=uses_ssrg_gameplay()
+	highway_preview=on
+	if uses_ssrg_gameplay()!=was_ssrg_look and field and field.world: field.world.refresh_highway_look()
 func gameplay_lane_count() -> int:
 	return ssrg_lane_count if ssrg_playable_run else 10
 # SSRG Playables keeps its own note speed (set on that screen), separate from SYNK's.

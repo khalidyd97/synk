@@ -68,10 +68,10 @@ func lay_out(ssrg: bool) -> void:
 func update() -> void:
 	var game = world.game
 	var lasers = game.features.effect("Lasers")
-	var stage = game.mode=="play" or (game.mode=="paused" and game.paused_mode=="play")
+	var stage = game.mode=="play" or (game.mode=="paused" and game.paused_mode=="play") or game.highway_preview
 	var show = stage and lasers>0 and not game.uses_recorder_colors()
 	if show and ssrg_layout != (1 if game.uses_ssrg_gameplay() else 0): lay_out(game.uses_ssrg_gameplay())
-	var running = game.mode=="play"
+	var running = game.mode=="play" or game.highway_preview
 	var speed = game.ssrg_note_speed() if game.ssrg_playable_run else game.note_speed
 	for emitter in streaks:
 		emitter.visible = show

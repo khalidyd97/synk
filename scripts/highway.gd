@@ -101,7 +101,7 @@ func sync_projection_style() -> void:
 func _process(_delta: float) -> void:
 	sync_projection_style()
 	if viewport:
-		viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED if game.mode in ["menu","guide","library","editor"] else SubViewport.UPDATE_ALWAYS
+		viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED if game.mode in ["menu","guide","library","editor"] and not game.highway_preview else SubViewport.UPDATE_ALWAYS
 	if screen: screen.visible = game.mode not in ["guide","menu","library"]
 	if guide_art: guide_art.visible = game.mode == "guide"
 	if has_meta("overlay"): get_meta("overlay").queue_redraw()
