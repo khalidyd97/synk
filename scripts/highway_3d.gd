@@ -1162,13 +1162,13 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 	var sides = trail_sides(centers)
 	var ordered_segments:Array=[]
 	var split_source=game.uses_ssrg_gameplay() and not recording and note.has("ssrg_orders")
-	if game.uses_ssrg_gameplay() and not recording and note.kind=="slide" and note.path.size()>1:
+	if game.ssrg_playable_run and not recording and note.kind=="slide" and note.path.size()>1:
 		centers=[]
 		for point in note.path:
 			centers.append(Vector3(note_x(float(point.lane)),trail_height(),-float(point.offset)*travel_speed()))
 		count=centers.size()-1
 		sides=connector_sides(centers)
-	elif game.uses_ssrg_gameplay() and not recording:
+	elif game.uses_ssrg_gameplay() and not recording and note.kind!="slide":
 		centers=[]
 		for offset in [0.0]+solid_trail_offsets(note):
 			centers.append(Vector3(note_x(float(note.lane)),trail_height(),-float(offset)*travel_speed()))
@@ -1254,7 +1254,7 @@ func solid_trail_offsets(note: Dictionary) -> Array:
 	var offsets: Array=[duration] if duration>0 else []
 	var checkpoints: Array=note.get("checkpoints",[]).duplicate()
 	# Earlier SSRG imports kept the original connector records in the path.
-	if game.uses_ssrg_gameplay():
+	if game.ssrg_playable_run:
 		for point in note.get("path",[]): checkpoints.append(point.offset)
 	for value in checkpoints:
 		var offset=float(value)

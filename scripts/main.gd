@@ -121,8 +121,10 @@ var ssrg_presentation:Node
 var ssrg_screens:Control
 var ssrg_playable_run = false
 var ssrg_lane_count = 13
+# The SSRG look: imported SSRG runs, and SYNK songs played with the "ssrg" highway style.
+# SSRG judging and scoring rules stay with ssrg_playable_run.
 func uses_ssrg_gameplay() -> bool:
-	return ssrg_playable_run and not uses_recorder_colors()
+	return (ssrg_playable_run or (highway_style=="ssrg" and mode in ["play","paused"])) and not uses_recorder_colors()
 func gameplay_lane_count() -> int:
 	return ssrg_lane_count if ssrg_playable_run else 10
 # SSRG Playables keeps its own note speed (set on that screen), separate from SYNK's.
@@ -313,6 +315,7 @@ func _ready() -> void:
 	mouse_filter=Control.MOUSE_FILTER_IGNORE
 	process_priority=-10
 	apply_frame_rate()
+	if OS.get_name()=="iOS": NativeFilePicker.defer_system_gestures.call_deferred()
 	# Start-up intro (scripts/app_intro.gd) on its own top layer, over the lobby; tap skips it.
 	var intro_layer=CanvasLayer.new(); intro_layer.layer=100; add_child.call_deferred(intro_layer)
 	var intro=preload("res://scripts/app_intro.gd").new(); intro_layer.add_child(intro)
@@ -339,7 +342,7 @@ func _ready() -> void:
 	if note_shape not in ["rectangle","circle","puck"]: note_shape="rectangle"
 	highway_angle = clampf(float(prefs.get_value("gameplay","highway_angle",35.0)),18.0,44.0)
 	highway_style = str(prefs.get_value("highway","style","gold"))
-	if highway_style not in ["gold","neon"]: highway_style="gold"
+	if highway_style not in ["gold","neon","ssrg"]: highway_style="gold"
 	rail_color = str(prefs.get_value("highway","rail_color",""))
 	band_color = str(prefs.get_value("highway","band_color",""))
 	highway_opacity = clampf(float(prefs.get_value("highway","opacity",1.0)),.3,1.6)
@@ -716,9 +719,10 @@ func recorder_plate(bounds: Rect2) -> Panel:
 	panel.add_theme_stylebox_override("panel",plate); return panel
 
 func set_mode(value: String,animate_transition:bool=true) -> void:
+	var was_ssrg_look=uses_ssrg_gameplay()
 	if ssrg_playable_run and value not in ["play","paused"]:
 		ssrg_playable_run=false
-		highway_style=ssrg_playable_previous_style if ssrg_playable_previous_style in ["gold","neon"] else "gold"
+		highway_style=ssrg_playable_previous_style if ssrg_playable_previous_style in ["gold","neon","ssrg"] else "gold"
 		if field and field.world: field.world.refresh_highway_look()
 	if value!=mode and animate_transition:
 		# Menus slide forward and back by depth; entering or leaving the stage dissolves.
@@ -731,6 +735,8 @@ func set_mode(value: String,animate_transition:bool=true) -> void:
 	if value!=mode and value in ["menu","library","editor","guide"]: UiSound.play(self,"transition")
 	if value!="record" and arrange_preview: arrange_preview.stop()
 	mode=value; menu_settings_open=false
+	# The "ssrg" highway style only applies in gameplay, so entering or leaving it swaps the stage.
+	if uses_ssrg_gameplay()!=was_ssrg_look and field and field.world: field.world.refresh_highway_look()
 	if field and field.world:
 		field.world.apply_camera()
 		field.world.refresh_highway_look()
@@ -888,7 +894,7 @@ func change_highway_angle(value: float) -> void:
 
 func change_highway_look(key: String,value: Variant) -> void:
 	match key:
-		"style": highway_style = str(value) if str(value) in ["gold","neon"] else "gold"; value = highway_style
+		"style": highway_style = str(value) if str(value) in ["gold","neon","ssrg"] else "gold"; value = highway_style
 		"rail_color": rail_color = str(value); value = rail_color
 		"band_color": band_color = str(value); value = band_color
 		"opacity": highway_opacity = clampf(float(value),.3,1.6); value = highway_opacity
@@ -1065,7 +1071,8 @@ func space_authored_notes(incoming: Array,fixed: Array) -> bool:
 
 func note_travel_seconds() -> float:
 	# APK default basicTime=3.5; normalized 1x corresponds to original UI speed 3.
-	if uses_ssrg_gameplay(): return 3.5/ssrg_note_speed()
+	if ssrg_playable_run: return 3.5/ssrg_note_speed()
+	if uses_ssrg_gameplay(): return 3.5/note_speed
 	return 2.6 / (recorder_note_speed if uses_recorder_colors() else note_speed)
 
 func cycle_recorder_note_speed() -> void:
@@ -1122,11 +1129,11 @@ func process_checkpoints(entry: Dictionary, finger_lane: float, automated: bool)
 				entry.checks_done=index+1;pass_checkpoint(entry,lane,absf(song_time-at));continue
 			if song_time<at+SsrgRules.good_window(true): break
 			judge(entry,-1);return false
-		var tolerance=SSRG_CHECKPOINT_LANES if uses_ssrg_gameplay() else CHECKPOINT_LANE_TOLERANCE
+		var tolerance=SSRG_CHECKPOINT_LANES if ssrg_playable_run else CHECKPOINT_LANE_TOLERANCE
 		if automated or absf(finger_lane-lane)<=tolerance:
 			entry.checks_done=index+1; pass_checkpoint(entry,lane)
 		# SSRG Playables: a finger still on its way gets a moment to reach the connector.
-		elif uses_ssrg_gameplay() and song_time<at+SSRG_CHECKPOINT_GRACE: break
+		elif ssrg_playable_run and song_time<at+SSRG_CHECKPOINT_GRACE: break
 		else: entry.checks_done=index+1; judge(entry,-1); return false
 	return true
 
@@ -1719,6 +1726,7 @@ func arrange_pointer_event(id: int, p: Vector2, began: bool, ended: bool, cancel
 		if touch.changed: refresh_arrange_controls()
 
 func _notification(what: int) -> void:
+	if what==NOTIFICATION_APPLICATION_RESUMED and OS.get_name()=="iOS": NativeFilePicker.defer_system_gestures()
 	if what in [NOTIFICATION_APPLICATION_FOCUS_OUT,NOTIFICATION_APPLICATION_PAUSED]:
 		if features and mode=="editor": features.autosave()
 		if mode in ["play","record"]: toggle_pause(false)
@@ -2068,7 +2076,7 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 			if entry.done or entry.pointer!=id or entry.note.kind!="slide": continue
 			var end_time=float(entry.note.time)+float(entry.note.duration)
 			var lane_error=absf(SynkCapture.lane(p.x)-SynkChart.lane_at(entry.note,end_time))
-			var end_lanes=SSRG_SLIDE_END_LANES if uses_ssrg_gameplay() else SLIDE_END_LANES
+			var end_lanes=SSRG_SLIDE_END_LANES if ssrg_playable_run else SLIDE_END_LANES
 			var end_touch=ssrg_touch_lane(touch_world,SynkChart.lane_at(entry.note,end_time)) if ssrg_playable_run else lane_error<=end_lanes and p.y>=(.25 if uses_ssrg_gameplay() else .4)
 			if not canceled and end_touch and song_time>=end_time-tail_grace(entry) and song_time<=end_time+.30:
 				judge(entry,absf(song_time-end_time) if ssrg_playable_run else float(entry.error))
@@ -2316,7 +2324,7 @@ func update_game() -> void:
 			var end_time=float(n.time)+float(n.duration)
 			if song_time>=end_time-(0.0 if ssrg_playable_run else .045):
 				var lane_error=absf(SynkCapture.lane(p.position.x)-SynkChart.lane_at(n,end_time))
-				var end_lanes=SSRG_SLIDE_END_LANES if uses_ssrg_gameplay() else SLIDE_END_LANES
+				var end_lanes=SSRG_SLIDE_END_LANES if ssrg_playable_run else SLIDE_END_LANES
 				var end_touch=ssrg_touch_lane(p.world,SynkChart.lane_at(n,end_time)) if ssrg_playable_run else lane_error<=end_lanes and p.position.y>=(.25 if uses_ssrg_gameplay() else .4)
 				if end_touch: judge(entry,tail_error(entry))
 				elif song_time>end_time+.30: judge(entry,-1)

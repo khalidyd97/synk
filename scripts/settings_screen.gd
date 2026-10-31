@@ -475,10 +475,10 @@ func build_highway(items: VBoxContainer) -> void:
     add_control(row(items,"Highway angle","Choose how flat or steep the SYNK highway looks."),highway_angle_input)
     highway_angle_input.value_changed.connect(game.change_highway_angle)
     var preview=preload("res://scripts/highway_look_preview.gd").new(); preview.game=game; items.add_child(preview)
-    var styles=row(items,"Highway style","Gold or Neon rails and judgment band.",166)
+    var styles=row(items,"Highway style","Gold or Neon rails and judgment band, or the SSRG highway.",166)
     var tile_row=HBoxContainer.new(); tile_row.add_theme_constant_override("separation",12)
     add_control(styles,tile_row,440)
-    for kind in ["gold","neon"]:
+    for kind in ["gold","neon","ssrg"]:
         var tile=StyleTile.new(kind); tile_row.add_child(tile); tile.custom_minimum_size=Vector2(138,136)
         tile.pressed.connect(func(): if not Action.was_dragged(tile): game.change_highway_look("style",kind))
         style_tiles[kind]=tile

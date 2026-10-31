@@ -49,6 +49,17 @@ func run() -> void:
 	check(is_equal_approx(game.note_travel_seconds(),2.6),"Recorder travel remains unchanged")
 	game.set_mode("menu")
 	check(not game.uses_ssrg_gameplay(),"Menu does not inherit gameplay presentation")
+	# The "ssrg" highway style: SYNK songs draw on the SSRG stage with SYNK's own rules.
+	game.ssrg_playable_run=false; game.highway_style="ssrg"
+	check(not game.uses_ssrg_gameplay(),"SSRG style stays out of the menus")
+	game.start_game(notes,true)
+	game.countdown=0; game.song_time=2.0
+	check(game.uses_ssrg_gameplay() and world.ssrg_theme.active,"SSRG style plays SYNK songs on the SSRG stage")
+	check(not game.ssrg_playable_run and not game.live[1].note.get("ssrg_path",false),"SSRG style keeps SYNK rules and curved slides")
+	check(is_equal_approx(game.note_travel_seconds(),3.5/game.note_speed),"SSRG style follows SYNK's note speed")
+	game.set_mode("menu")
+	check(game.highway_style=="ssrg" and not world.ssrg_theme.active,"Leaving play keeps the style and drops the stage")
+	game.highway_style="gold"
 	game.queue_free(); await process_frame
 	print("Shared SSRG gameplay failures: ",failures)
 	quit(failures)

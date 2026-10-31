@@ -8,6 +8,7 @@
 
 #import <PhotosUI/PhotosUI.h>
 #import <UIKit/UIKit.h>
+#import <objc/runtime.h>
 
 using namespace godot;
 
@@ -38,6 +39,7 @@ protected:
 	static void _bind_methods() {
 		ClassDB::bind_method(D_METHOD("open", "multiple"), &IOSFilePicker::open);
 		ClassDB::bind_method(D_METHOD("open_image"), &IOSFilePicker::open_image);
+		ClassDB::bind_method(D_METHOD("defer_system_gestures"), &IOSFilePicker::defer_system_gestures);
 		ADD_SIGNAL(MethodInfo("picked", PropertyInfo(Variant::PACKED_STRING_ARRAY, "paths")));
 	}
 
@@ -97,6 +99,35 @@ public:
 		PHPickerViewController *picker = [[PHPickerViewController alloc] initWithConfiguration:config];
 		picker.delegate = ensure_delegate();
 		[top presentViewController:picker animated:YES completion:nil];
+	}
+
+	// Keeps a swipe at the screen edges in the game: the home bar and Control Centre need a
+	// second swipe. Godot's suppress_ui_gesture setting did not hold on device, so the root
+	// controller's class answers the system's questions directly.
+	void defer_system_gestures() {
+		UIViewController *root = nil;
+		for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+			if (![scene isKindOfClass:UIWindowScene.class]) continue;
+			for (UIWindow *candidate in ((UIWindowScene *)scene).windows) {
+				if (candidate.rootViewController && (candidate.isKeyWindow || root == nil)) root = candidate.rootViewController;
+			}
+		}
+		if (root == nil) return;
+		Class type = object_getClass(root);
+		class_replaceMethod(type, @selector(preferredScreenEdgesDeferringSystemGestures), imp_implementationWithBlock(^UIRectEdge(id self) {
+			return UIRectEdgeAll;
+		}), "Q@:");
+		class_replaceMethod(type, @selector(prefersHomeIndicatorAutoHidden), imp_implementationWithBlock(^BOOL(id self) {
+			return YES;
+		}), "B@:");
+		class_replaceMethod(type, @selector(childViewControllerForScreenEdgesDeferringSystemGestures), imp_implementationWithBlock(^UIViewController *(id self) {
+			return nil;
+		}), "@@:");
+		class_replaceMethod(type, @selector(childViewControllerForHomeIndicatorAutoHidden), imp_implementationWithBlock(^UIViewController *(id self) {
+			return nil;
+		}), "@@:");
+		[root setNeedsUpdateOfScreenEdgesDeferringSystemGestures];
+		[root setNeedsUpdateOfHomeIndicatorAutoHidden];
 	}
 
 	void finish_paths(PackedStringArray paths) {

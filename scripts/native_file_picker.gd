@@ -16,6 +16,12 @@ static func available() -> bool:
 		GDExtensionManager.load_extension(EXTENSION)
 	return ClassDB.class_exists("IOSFilePicker")
 
+# iPhone: a swipe at the screen edge stays in the game; the home bar needs a second swipe.
+static func defer_system_gestures() -> void:
+	if not available(): return
+	if picker==null: picker=ClassDB.instantiate("IOSFilePicker")
+	if picker.has_method("defer_system_gestures"): picker.call("defer_system_gestures")
+
 # Calls on_picked with a PackedStringArray of local copies of the chosen files.
 static func open(multiple: bool, on_picked: Callable) -> bool:
 	return start("open",[multiple],on_picked)
