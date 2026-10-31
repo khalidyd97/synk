@@ -76,9 +76,24 @@ class Stepper extends Control:
         readout.add_theme_stylebox_override("normal",value_style)
         for node in [minus,readout,plus]: add_child(node)
         anchor(minus,0,.24); anchor(readout,.26,.74); anchor(plus,.76,1)
-        minus.pressed.connect(func(): if editable and not Action.was_dragged(self): value -= step)
-        plus.pressed.connect(func(): if editable and not Action.was_dragged(self): value += step)
+        minus.pressed.connect(func(): tap(-1))
+        plus.pressed.connect(func(): tap(1))
+        # Held − or +: after a short wait, keep stepping until released.
+        repeat_timer = Timer.new(); add_child(repeat_timer)
+        repeat_timer.timeout.connect(func():
+            var held = minus if minus.is_pressed() else (plus if plus.is_pressed() else null)
+            if held == null or not editable: repeat_timer.stop(); return
+            repeated = true; value = snappedf(value + (step if held == plus else -step), step); repeat_timer.start(.07))
+        for button in [minus,plus]: button.button_down.connect(func(): repeated = false; repeat_timer.start(.42))
         refresh()
+
+    var repeat_timer: Timer
+    var repeated = false
+    func tap(direction: int) -> void:
+        repeat_timer.stop()
+        # A hold already stepped; its release is not one more step.
+        if repeated: repeated = false; return
+        if editable and not Action.was_dragged(self): value = snappedf(value + step*direction, step)
 
     func anchor(node: Control, left: float, right: float) -> void:
         node.anchor_left = left; node.anchor_right = right; node.anchor_top = 0; node.anchor_bottom = 1
@@ -410,9 +425,9 @@ func animate_page() -> void:
     page_tween.tween_property(root,"position:x",0,.25).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
     page_tween.tween_property(root,"modulate:a",1,.22)
 func build_gameplay(items: VBoxContainer,browsing: VBoxContainer) -> void:
-    note_speed_input=Stepper.new(.5,3,.25,game.note_speed,"×",2)
-    add_control(row(items,"Note speed","Same feel on every song: notes take 2.6 s ÷ speed to reach the line."),note_speed_input)
-    note_speed_input.value_changed.connect(game.change_note_speed)
+    note_speed_input=Stepper.new(1,10,.1,game.synk_speed_setting(),"",1)
+    add_control(row(items,"Note speed","1.0 to 10.0, like SSRG Playables. 3.0 is the standard speed; hold − or + to move quickly."),note_speed_input)
+    note_speed_input.value_changed.connect(game.change_synk_speed)
     var match_display=Switch.new(); add_control(row(items,"Match display refresh rate","Run at your screen's own rate (%d Hz) for the smoothest motion." % game.display_refresh_rate()),match_display,152)
     var fps=Stepper.new(30,120,30,float(game.frame_rate_setting() if game.frame_rate_setting()>0 else 60),"fps",0)
     add_control(row(items,"Frame rate limit","Used when matching the display is off."),fps)
@@ -577,11 +592,11 @@ func effect_row(items: VBoxContainer,key: String,hint: String) -> void:
 func build_hit_effects(items: VBoxContainer) -> void:
     # The live highway keeps firing hits here, so every change shows at once.
     var preview=preload("res://scripts/hit_effect_preview.gd").new(); preview.game=game; items.add_child(preview)
-    var style=row(items,"Hit effect style","Classic bursts or Bloom rings. SSRG uses its own art.")
-    var choices=HBoxContainer.new(); choices.add_theme_constant_override("separation",10); add_control(style,choices,330)
+    var style=row(items,"Hit effect style","Classic bursts, Bloom rings, or SSRG's hit art. The SSRG highway always uses SSRG art.")
+    var choices=HBoxContainer.new(); choices.add_theme_constant_override("separation",10); add_control(style,choices,480)
     for value in game.HIT_STYLES:
         var key: String=value
-        var b=action(choices,key.capitalize(),func(): game.change_hit_style(key))
+        var b=action(choices,"SSRG" if key=="ssrg" else key.capitalize(),func(): game.change_hit_style(key))
         b.custom_minimum_size=Vector2(150,72); b.caption_size=21; hit_style_buttons[key]=b
     hit_size_input=Stepper.new(60,160,10,game.hit_size*100,"%",0)
     add_control(row(items,"Hit size","How big each hit flash and burst is, on every highway style."),hit_size_input)
@@ -651,7 +666,7 @@ func refresh() -> void:
     song_preview_toggle.set_pressed_no_signal(game.lobby.preview_enabled)
     metronome_toggle.set_pressed_no_signal(game.beat_clock.enabled)
     bluetooth_toggle.set_pressed_no_signal(game.bluetooth_mode); bluetooth_latency_input.editable=game.bluetooth_mode
-    note_speed_input.sync_value(game.note_speed); highway_angle_input.sync_value(game.highway_angle)
+    note_speed_input.sync_value(game.synk_speed_setting()); highway_angle_input.sync_value(game.highway_angle)
     timing_input.sync_value(game.timing_ms); bluetooth_latency_input.sync_value(game.bluetooth_latency_ms)
     for key in sizing_inputs: sizing_inputs[key].sync_value((game.note_size if key=="note_size" else game.hold_trail_width)*100)
     for key in effect_inputs: effect_inputs[key].sync_value(game.features.effect(key)*100)

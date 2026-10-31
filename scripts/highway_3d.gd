@@ -657,7 +657,7 @@ func layout_classic_hit(burst:Dictionary) -> void:
 		burst.flash.position.z=0.0;burst.fill.position.z=0.0
 
 func spawn_hit(lane: float, kind: String, direction: int = 0, sustain_entry: Dictionary = {},pointer_id: int=-999) -> void:
-	if ssrg_theme and ssrg_theme.active and not prewarming_hits:
+	if ssrg_theme and (ssrg_theme.active or game.hit_style=="ssrg") and not prewarming_hits:
 		ssrg_theme.spawn(lane, kind, sustain_entry, pointer_id); return
 	if projected_synk_effects() and not prewarming_hits:
 		synk_hits.spawn(lane,kind,sustain_entry,pointer_id,direction);return
@@ -679,6 +679,7 @@ func spawn_hit(lane: float, kind: String, direction: int = 0, sustain_entry: Dic
 		reused.flash.material_override.set_shader_parameter("opacity",0.0)
 		reused.fill.material_override.set_shader_parameter("opacity",0.0)
 		reused.ring.material_override.albedo_color.a=0.0
+		tint_classic_hit(reused,palette,kind)
 		for particle_index in reused.particles.size():
 			var particle=reused.particles[particle_index]
 			particle.node.hide()
@@ -697,7 +698,7 @@ func spawn_hit(lane: float, kind: String, direction: int = 0, sustain_entry: Dic
 	own_material(flash)  # each hit fades on its own
 	flash.material_override.set_shader_parameter("mirror_extra",HIT_MIRROR)
 	flash.material_override.set_shader_parameter("tint",hit_color)
-	flash.material_override.set_shader_parameter("recolor",palette!=0 or cover_palette_active or (game.highway_colors=="theme" and game.gameplay_colors.has("hits")))
+	flash.material_override.set_shader_parameter("recolor",classic_recolor(palette))
 	var fill_mesh = QuadMesh.new(); fill_mesh.size = Vector2(5.9,4.2)*FIT
 	var fill_material = ShaderMaterial.new(); fill_material.shader = preload("res://scripts/hit_fill.gdshader")
 	fill_material.set_shader_parameter("tint",hit_color)
@@ -724,6 +725,20 @@ func spawn_hit(lane: float, kind: String, direction: int = 0, sustain_entry: Dic
 	bursts.append({"node":node,"age":0.0,"flash":flash,"fill":fill,"ring":ring,"particles":particles,"kind":kind,"flick_axis":flick_axis,"sustain_entry":sustain_entry,"pointer_id":pointer_id,"pool_key":pool_key})
 	layout_classic_hit(bursts[-1])
 
+# The blue tap art keeps its own gradient unless a hit colour was chosen.
+func classic_recolor(palette: int) -> bool:
+	return palette!=0 or cover_palette_active or (game.highway_colors=="theme" and game.gameplay_colors.has("hits")) or str(game.hit_color)!=""
+func tint_classic_hit(burst: Dictionary,palette: int,kind: String) -> void:
+	var hit_color=element_color("hits",colors[palette])
+	burst.flash.material_override.set_shader_parameter("tint",hit_color)
+	burst.flash.material_override.set_shader_parameter("recolor",classic_recolor(palette))
+	burst.fill.material_override.set_shader_parameter("tint",hit_color)
+	var ring: StandardMaterial3D=burst.ring.material_override
+	ring.albedo_color=Color(hit_color,ring.albedo_color.a); ring.emission=hit_color
+	var spark=element_color("sparks",colors[palette].lightened(.65) if kind=="flick" else colors[palette])
+	for particle in burst.particles:
+		var mat: StandardMaterial3D=particle.node.material_override
+		if mat: mat.albedo_color=Color(spark,mat.albedo_color.a); mat.emission=spark
 func recycle_hit(burst: Dictionary) -> void:
 	burst.node.hide(); burst.sustain_entry={}
 	if hit_pool.size()<HIT_POOL_LIMIT: hit_pool.append(burst)

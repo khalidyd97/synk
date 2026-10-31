@@ -96,7 +96,8 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 	h.node.rotation = world.camera.rotation
 	h.material.set_shader_parameter("opacity", world.game.features.effect("Hit flashes"))
 	# Hit effects page: size, and an optional colour over the source art.
-	h.node.scale = Vector3.ONE * world.game.hit_size
+	h.node.scale = Vector3.ONE * world.game.hit_size * (1.0 if world.game.uses_ssrg_gameplay() else SYNK_HIGHWAY_SCALE)
+	h.node.rotation = world.camera.rotation
 	h.material.set_shader_parameter("tint", Color.from_string(world.game.hit_color, Color.WHITE) if world.game.hit_color != "" else Color.WHITE)
 	h.material.set_shader_parameter("recolor", world.game.hit_color != "")
 	h.node.visible = true; hits.append(h)
@@ -111,11 +112,17 @@ func flash_point(x: float) -> Vector3:
 
 # Slightly smaller than the source sprite: full size reads too large on big phones (iPhone 16 Pro Max).
 const HIT_SCALE = 0.85
+var hit_layer: Node3D
+# On SYNK's wider perspective lanes the source art is drawn a little larger.
+const SYNK_HIGHWAY_SCALE = 1.25
 func make_hit() -> Dictionary:
 	# Source centered 310x186 sprite under def_c_trans scale (2,2,1).
 	var mesh = QuadMesh.new(); mesh.size = Vector2(620,372)*world.SSRG_UNIT*HIT_SCALE
 	var mat = ShaderMaterial.new(); mat.shader = preload("res://scripts/ssrg_hit.gdshader"); mat.render_priority = 6
-	var node = world.mesh_node(mesh, self, mat); node.rotation = world.camera.rotation; node.visible = false
+	# Hits live on their own layer, so they also show when the SSRG stage itself is hidden.
+	if hit_layer == null:
+		hit_layer = Node3D.new(); hit_layer.name = "SSRGHitLayer"; world.add_child.call_deferred(hit_layer)
+	var node = world.mesh_node(mesh, hit_layer, mat); node.rotation = world.camera.rotation; node.visible = false
 	return {"node": node, "material": mat, "age": 0.0, "sustain_entry": {}, "pointer_id": -999, "kind": "tap"}
 
 func release(h: Dictionary) -> void:
@@ -158,7 +165,11 @@ static func sustain_finger_x(entry:Dictionary,contacts:Dictionary,fallback:float
 	return float(entry.get("ssrg_effect_x",fallback))
 
 func _process(delta: float) -> void:
-	if not active: return
+	if not active:
+		# The "SSRG" hit style on SYNK's Gold and Neon highways: only the hit art runs.
+		var game = world.game
+		advance_hits(delta,(game.mode == "play" and game.countdown<=0 and game.resume_countdown<=0) or game.highway_preview)
+		return
 	original_stage.update(world)
 	var game = world.game
 	var playing = (game.mode == "play" and game.countdown<=0 and game.resume_countdown<=0) or game.highway_preview
@@ -180,8 +191,12 @@ func _process(delta: float) -> void:
 		world.cover_material.set_shader_parameter("ssrg_fever_dark",dark)
 	if using_state:
 		world.ssrg_finger_beam_material.set_shader_parameter("tint",world.element_color("beams",presentation.beam_color))
-	# Source RenderLongCoolbombTouch rewinds after normalized time > .3.
-	# Independent tap instances intentionally preserve SYNK's uninterrupted dense-hit flow.
+	advance_hits(delta,playing)
+
+# Source RenderLongCoolbombTouch rewinds after normalized time > .3.
+# Independent tap instances intentionally preserve SYNK's uninterrupted dense-hit flow.
+func advance_hits(delta: float, playing: bool) -> void:
+	var game = world.game
 	for i in range(hits.size() - 1, -1, -1):
 		var h: Dictionary = hits[i]
 		var held = sustain_effect_active(h.sustain_entry,world.render_time(),game.ssrg_playable_run)

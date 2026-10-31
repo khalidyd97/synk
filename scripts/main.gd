@@ -224,6 +224,11 @@ var pause_backdrop: ColorRect
 var pause_tween: Tween
 var modal_title: Label
 var modal_body: Label
+# Gameplay pause: song line, progress and a note speed control under the tiles.
+var pause_info: Label
+var pause_progress: Control
+var pause_speed: Control
+var pause_speed_label: Label
 var settings_panel: Control
 # The finish animation that carries the combo from the stage into the results screen.
 var finish_overlay: Control
@@ -309,7 +314,7 @@ func apply_frame_rate() -> void:
 	Engine.max_fps=display_refresh_rate() if chosen<=0 else chosen
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
 # Hit effect style (Settings > Visual effects > Hit effects): "classic" bursts or "bloom".
-const HIT_STYLES = ["classic","bloom"]
+const HIT_STYLES = ["classic","bloom","ssrg"]
 var hit_style = "classic"
 # Hit effect size (0.6-1.6) and an optional colour ("" follows the note colours).
 var hit_size = 1.0
@@ -364,7 +369,8 @@ func _ready() -> void:
 	recorder_note_speed=clampf(float(prefs.get_value("editor","note_speed",1.0)),.5,3.0)
 	record_speed=float(prefs.get_value("editor","record_speed",1.0))
 	if record_speed not in RECORD_SPEEDS: record_speed=1.0
-	note_speed = clampf(float(prefs.get_value("gameplay","note_speed",1.0)), .5, 3.0)
+	var legacy_speed = clampf(float(prefs.get_value("gameplay","note_speed",1.0)), .5, 3.0)
+	note_speed = clampf(snappedf(float(prefs.get_value("gameplay","speed_value",legacy_speed*3.0)),.1),1.0,10.0)/3.0
 	hit_style = str(prefs.get_value("effects","hit_style","classic"))
 	if hit_style not in HIT_STYLES: hit_style="classic"
 	hit_size = clampf(float(prefs.get_value("effects","hit_size",1.0)),.6,1.6)
@@ -666,6 +672,14 @@ func build_ui() -> void:
 	primary=pause_action(modal,"PLAY",.23,.88,.77,.97,primary_action,"primary")
 	pause_restart=pause_action(modal,"RESTART",.36,.88,.64,.97,restart_from_pause,"secondary")
 	pause_home=pause_action(modal,"HOME",.66,.88,.94,.97,return_home,"nav")
+	pause_info=label(modal,"",.06,.20,.94,.30,22); pause_info.add_theme_color_override("font_color",Color("a29ea6"))
+	pause_info.clip_text=true
+	pause_progress=Control.new(); rect(pause_progress,modal,.06,.31,.94,.335); pause_progress.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	pause_progress.draw.connect(draw_pause_progress)
+	pause_speed_label=label(modal,"NOTE SPEED",.06,.78,.40,.92,20); pause_speed_label.add_theme_color_override("font_color",Color("ff7a59"))
+	pause_speed_label.add_theme_font_override("font",preload("res://assets/fonts/FiraSans-Bold.ttf"))
+	pause_speed=preload("res://scripts/settings_screen.gd").Stepper.new(1,10,.1,3,"",1); rect(pause_speed,modal,.50,.78,.94,.92)
+	pause_speed.value_changed.connect(change_pause_speed)
 	actions=Control.new(); rect(actions,safe_parent("SafeActions"),0,0,1,1); actions.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	button(actions,"●  RECORD NEW",.02,.91,.20,.98,start_new_recording,"record")
 	button(actions,"PLAY SAVED",.22,.91,.39,.98,func(): start_game(saved_notes),"primary")
@@ -807,12 +821,18 @@ func set_mode(value: String,animate_transition:bool=true) -> void:
 	pause_button.anchor_right=.095 if mode=="play" or large_pause else .08
 	pause_button.anchor_bottom=.125 if mode=="play" or large_pause else .105
 	pause_button.caption_size=22 if mode=="play" or large_pause else 17
-	modal.anchor_top=(.25 if large_pause else .36) if mode=="paused" else .11
-	modal.anchor_bottom=(.75 if large_pause else .64) if mode=="paused" else .89
-	modal_title.anchor_top=(.06 if large_pause else .10) if mode=="paused" else .025
-	modal_title.anchor_bottom=(.30 if large_pause else .40) if mode=="paused" else .17
-	var button_top=(.38 if large_pause else .58) if mode=="paused" else .88
-	var button_bottom=(.90 if large_pause else .88) if mode=="paused" else .97
+	modal.anchor_top=(.14 if large_pause else .36) if mode=="paused" else .11
+	modal.anchor_bottom=(.86 if large_pause else .64) if mode=="paused" else .89
+	modal_title.anchor_top=(.05 if large_pause else .10) if mode=="paused" else .025
+	modal_title.anchor_bottom=(.20 if large_pause else .40) if mode=="paused" else .17
+	modal_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_LEFT if large_pause else HORIZONTAL_ALIGNMENT_CENTER
+	modal_title.anchor_left=.06 if large_pause else .04
+	for part in [pause_info,pause_progress,pause_speed,pause_speed_label]: part.visible=large_pause
+	if large_pause:
+		pause_info.text=str(song.get("title",""))+"   ·   "+preload("res://scripts/chart_levels.gd").label(features.current_variant)
+		pause_speed.sync_value(pause_speed_setting())
+	var button_top=(.40 if large_pause else .58) if mode=="paused" else .88
+	var button_bottom=(.72 if large_pause else .88) if mode=="paused" else .97
 	for action_button in [primary,pause_restart,pause_home]:
 		action_button.anchor_top=button_top; action_button.anchor_bottom=button_bottom
 		action_button.caption_size=23 if large_pause else (19 if action_button==primary else 17)
@@ -920,6 +940,20 @@ func change_note_speed(value: float) -> void:
 	note_speed=value
 	prefs.set_value("gameplay","note_speed",value); prefs.save("user://preferences.cfg")
 
+# SYNK note speed on SSRG Playables' scale: 1.0-10.0 in 0.1 steps, where 3.0 is the
+# standard speed (note_speed 1x). note_speed stays the multiplier the highway reads.
+func synk_speed_setting() -> float: return clampf(snappedf(note_speed*3.0,.1),1.0,10.0)
+func change_synk_speed(value: float) -> void:
+	var speed=clampf(snappedf(value,.1),1.0,10.0)
+	note_speed=speed/3.0
+	prefs.set_value("gameplay","speed_value",speed); prefs.set_value("gameplay","note_speed",note_speed)
+	prefs.save("user://preferences.cfg")
+# The speed the pause menu changes: SSRG rules use SSRG Playables' speed, everything else SYNK's.
+func pause_speed_setting() -> float: return ssrg_speed_setting() if ssrg_playable_run else synk_speed_setting()
+func change_pause_speed(value: float) -> void:
+	if ssrg_playable_run: ssrg_playables.change_speed(snappedf(value,.1)-ssrg_speed_setting())
+	else: change_synk_speed(value)
+
 func change_highway_angle(value: float) -> void:
 	highway_angle=value
 	prefs.set_value("gameplay","highway_angle",value); prefs.save("user://preferences.cfg")
@@ -1002,6 +1036,8 @@ func return_home() -> void:
 	if paused_mode=="record":
 		stop_take(); return
 	var return_to_editor=practice.active
+	# SSRG Playables go back to their own song list.
+	var imported_ssrg=ssrg_playable_run and not ssrg_forced_run
 	if pause_tween and pause_tween.is_running(): pause_tween.kill()
 	if paused_mode=="record" and not capture.notes.is_empty():
 		document.checkpoint(); document.notes.append_array(capture.notes.duplicate(true))
@@ -1012,6 +1048,16 @@ func return_home() -> void:
 	countdown=0; resume_countdown=0; song_time=0; flash=0
 	set_mode("editor" if return_to_editor else "menu")
 	modal.scale=Vector2.ONE; modal.modulate.a=1
+	if imported_ssrg and not return_to_editor: open_ssrg_playables()
+
+# Thin song progress bar with elapsed and total time.
+func draw_pause_progress() -> void:
+	var total=maxf(1.0,length()); var at=clampf(song_time/total,0.0,1.0)
+	var track=StyleBoxFlat.new(); track.bg_color=Color(1,1,1,.1); track.set_corner_radius_all(3)
+	pause_progress.draw_style_box(track,Rect2(0,0,pause_progress.size.x,pause_progress.size.y))
+	if at>0:
+		var fill=StyleBoxFlat.new(); fill.bg_color=Color("f3ece1"); fill.set_corner_radius_all(3)
+		pause_progress.draw_style_box(fill,Rect2(0,0,maxf(pause_progress.size.y,pause_progress.size.x*at),pause_progress.size.y))
 
 func restart_from_pause() -> void:
 	if mode!="paused": return
@@ -1497,7 +1543,7 @@ func toggle_pause(animate_transition:bool=true) -> void:
 		ssrg_contact_ids.clear()
 		for entry in live:
 			if entry.started and not entry.done: entry.pointer=-999
-		set_mode("paused",animate_transition); modal_title.text="PAUSED"; modal_body.text=""; primary.text="RESUME"
+		set_mode("paused",animate_transition); modal_title.text="Paused"; modal_body.text=""; primary.text="RESUME"
 		if paused_mode=="record": primary.text="RESUME REC"; pause_restart.text="RETRY TAKE"; pause_home.text="REVIEW TAKE"
 		if pause_tween and pause_tween.is_running(): pause_tween.kill()
 		modal.pivot_offset=modal.size*.5; modal.scale=Vector2(.86,.86); modal.modulate.a=0

@@ -77,10 +77,10 @@ func _process(delta:float) -> void:
 	var safe=game.safe_rect_for(self)
 	var side=clampf(safe.size.y*.105,42,80)
 	pause_icon.position=safe.position+Vector2(10,10);pause_icon.size=Vector2.ONE*side
-	pause_root.visible=pausing
+	# Pausing uses the shared SYNK pause card (with its speed control) for every song.
+	pause_root.visible=false
 	if source:
 		game.pause_button.hide()
-		if pausing:game.modal.hide();game.pause_backdrop.hide()
 	speed_label.text="SPEED %.1f" % game.ssrg_speed_setting()
 	# The SSRG speed only drives SSRG rules; a SYNK song on the SSRG look keeps SYNK's speed.
 	for control in speed_controls: control.visible=game.ssrg_playable_run
