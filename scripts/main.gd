@@ -339,7 +339,7 @@ func _ready() -> void:
 	if note_shape not in ["rectangle","circle","puck"]: note_shape="rectangle"
 	highway_angle = clampf(float(prefs.get_value("gameplay","highway_angle",35.0)),18.0,44.0)
 	highway_style = str(prefs.get_value("highway","style","gold"))
-	if highway_style not in ["gold","neon","prism"]: highway_style="gold"
+	if highway_style not in ["gold","neon"]: highway_style="gold"
 	rail_color = str(prefs.get_value("highway","rail_color",""))
 	band_color = str(prefs.get_value("highway","band_color",""))
 	highway_opacity = clampf(float(prefs.get_value("highway","opacity",1.0)),.3,1.6)
@@ -718,7 +718,7 @@ func recorder_plate(bounds: Rect2) -> Panel:
 func set_mode(value: String,animate_transition:bool=true) -> void:
 	if ssrg_playable_run and value not in ["play","paused"]:
 		ssrg_playable_run=false
-		highway_style=ssrg_playable_previous_style if ssrg_playable_previous_style in ["gold","neon","prism"] else "gold"
+		highway_style=ssrg_playable_previous_style if ssrg_playable_previous_style in ["gold","neon"] else "gold"
 		if field and field.world: field.world.refresh_highway_look()
 	if value!=mode and animate_transition:
 		# Menus slide forward and back by depth; entering or leaving the stage dissolves.
@@ -888,7 +888,7 @@ func change_highway_angle(value: float) -> void:
 
 func change_highway_look(key: String,value: Variant) -> void:
 	match key:
-		"style": highway_style = str(value) if str(value) in ["gold","neon","prism"] else "gold"; value = highway_style
+		"style": highway_style = str(value) if str(value) in ["gold","neon"] else "gold"; value = highway_style
 		"rail_color": rail_color = str(value); value = rail_color
 		"band_color": band_color = str(value); value = band_color
 		"opacity": highway_opacity = clampf(float(value),.3,1.6); value = highway_opacity
@@ -1065,7 +1065,7 @@ func space_authored_notes(incoming: Array,fixed: Array) -> bool:
 
 func note_travel_seconds() -> float:
 	# APK default basicTime=3.5; normalized 1x corresponds to original UI speed 3.
-	if uses_ssrg_gameplay() and not uses_recorder_colors(): return 3.5/(ssrg_note_speed() if ssrg_playable_run else note_speed)
+	if not uses_recorder_colors(): return 3.5/(ssrg_note_speed() if ssrg_playable_run else note_speed)
 	return 2.6 / (recorder_note_speed if uses_recorder_colors() else note_speed)
 
 func cycle_recorder_note_speed() -> void:

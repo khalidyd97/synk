@@ -17,7 +17,7 @@ func run() -> void:
 	check(not game.uses_ssrg_gameplay() and not world.ssrg_theme.active,"Normal play uses SYNK OG stage")
 	check(not game.live[1].note.get("ssrg_path",false),"Normal slides retain OG curves")
 	check(not slide.has("ssrg_path"),"Source chart remains intact")
-	check(is_equal_approx(game.note_travel_seconds(),2.6),"Normal play uses OG timing")
+	check(is_equal_approx(game.note_travel_seconds(),3.5),"Normal play uses shared highway travel with SYNK judging")
 	game.paused_mode="play"; game.set_mode("paused")
 	check(not game.uses_ssrg_gameplay(),"Normal pause retains OG stage")
 	game.set_mode("menu")

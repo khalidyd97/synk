@@ -8,8 +8,11 @@ uniform float strength = 0.55;
 
 varying float world_z;
 
+#include "res://scripts/ssrg_warp.gdshaderinc"
 void vertex() {
-	world_z = (MODEL_MATRIX * vec4(VERTEX, 1.0)).z;
+	vec3 raw_vertex=VERTEX;
+	VERTEX=ssrg_warp_canvas(VERTEX,MODEL_MATRIX);
+	world_z = (MODEL_MATRIX * vec4(raw_vertex, 1.0)).z;
 }
 
 void fragment() {

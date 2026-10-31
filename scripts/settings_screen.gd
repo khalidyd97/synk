@@ -168,12 +168,6 @@ class StyleTile extends Button:
             var font=ThemeDB.fallback_font; var w=font.get_string_size("SSRG",HORIZONTAL_ALIGNMENT_LEFT,-1,18).x
             draw_string(font,Vector2((size.x-w)*.5,size.y*.88),"SSRG",HORIZONTAL_ALIGNMENT_LEFT,-1,18,Color.WHITE)
             return
-        if style_name=="prism":
-            draw_texture_rect(preload("res://assets/neon/Prism_Stage.png"),Rect2(Vector2(8,10),Vector2(size.x-16,size.y*.62)),false)
-            var font=ThemeDB.fallback_font
-            var width=font.get_string_size("PRISM",HORIZONTAL_ALIGNMENT_LEFT,-1,18).x
-            draw_string(font,Vector2((size.x-width)*.5,size.y*.88),"PRISM",HORIZONTAL_ALIGNMENT_LEFT,-1,18,Color.WHITE)
-            return
         var top = size.y*.14; var bottom = size.y*.66
         var a = Vector2(size.x*.40,top); var b = Vector2(size.x*.60,top)
         var c = Vector2(size.x*.86,bottom); var d = Vector2(size.x*.14,bottom)
@@ -185,13 +179,6 @@ class StyleTile extends Button:
             else:
                 draw_line(rail[0],rail[1],Color(rail[2],.3),8,true)
                 draw_line(rail[0],rail[1],rail[2],2,true)
-        if style_name=="prism":
-            for lane in range(1,10):
-                var t=float(lane)/10.0
-                draw_line(a.lerp(b,t),d.lerp(c,t),Color("50cfff").lerp(Color("f02bff"),t),1,true)
-            for rail in [[a,d],[b,c]]:
-                draw_line(rail[0],rail[1],Color("35306e"),9,true)
-                draw_line(rail[0],rail[1],Color("e464ff"),3,true)
         var font = ThemeDB.fallback_font; var caption = style_name.to_upper()
         var width = font.get_string_size(caption,HORIZONTAL_ALIGNMENT_LEFT,-1,18).x
         draw_string(font,Vector2((size.x-width)*.5,size.y*.88),caption,HORIZONTAL_ALIGNMENT_LEFT,-1,18,Color.WHITE if selected else Color(1,1,1,.65))
@@ -485,13 +472,13 @@ func section(items: VBoxContainer,title: String) -> void:
     var heading=label(items,title,13,ACCENT); heading.custom_minimum_size.y=26
 func build_highway(items: VBoxContainer) -> void:
     highway_angle_input=Stepper.new(18,44,2,game.highway_angle,"°",0)
-    add_control(row(items,"Highway angle","Choose how flat or steep the highway looks."),highway_angle_input)
+    add_control(row(items,"Recorder angle","Adjust the recorder view. Gameplay uses the fixed projected highway."),highway_angle_input)
     highway_angle_input.value_changed.connect(game.change_highway_angle)
     var preview=preload("res://scripts/highway_look_preview.gd").new(); preview.game=game; items.add_child(preview)
-    var styles=row(items,"Highway style","Gold, Neon, or Prism: faceted rails with flowing colors.",166)
+    var styles=row(items,"Highway style","Gold or Neon rails and judgment band.",166)
     var tile_row=HBoxContainer.new(); tile_row.add_theme_constant_override("separation",12)
     add_control(styles,tile_row,440)
-    for kind in ["gold","neon","prism"]:
+    for kind in ["gold","neon"]:
         var tile=StyleTile.new(kind); tile_row.add_child(tile); tile.custom_minimum_size=Vector2(138,136)
         tile.pressed.connect(func(): if not Action.was_dragged(tile): game.change_highway_look("style",kind))
         style_tiles[kind]=tile

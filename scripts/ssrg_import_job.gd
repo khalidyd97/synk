@@ -160,7 +160,8 @@ func inspect_item(original:Dictionary,songs:Array) -> Dictionary:
 		if hint==0 and not chart.is_empty():summary.warnings.append("Key count inferred from used lanes; verify it.")
 		for note in chart.get("notes",[]):summary.end=maxf(float(summary.end),float(note.time)+float(note.duration))
 		if not chart.is_empty() and keys in [4,7,13]:
-			if item.charts.has(keys):item.errors.append("Multiple files resolve to %d keys. Correct the key counts." % keys)
+			# Only the extra file is left out, so the song still imports the levels it has.
+			if item.charts.has(keys):summary.errors.append("Another file is already the %d-key level; change its key count to include it." % keys)
 			else:item.charts[keys]=path;item.chart_hashes[str(keys)]=FileAccess.get_sha256(path)
 		item.chart_reports.append(summary)
 	var names=PARSER.artist_and_title(audio_name) if not audio_name.is_empty() else ["",str(item.song_id)]
@@ -262,7 +263,7 @@ func advance(songs:Array) -> void:
 		publish("done","Import canceled; completed songs are kept." if is_canceled() else "Import finished. Review the results below.")
 		return
 	current=int(queue.pop_front());var item=plan[current].duplicate(true);var snapshot=songs.duplicate(true)
-	update({"phase":"importing","message":"Preparing "+str(item.title),"done":reports.size(),"total":selection_count})
+	update({"phase":"importing","message":"Preparing "+str(item.title),"done":reports.size(),"total":selection_count,"bytes_done":0,"bytes_total":0})
 	task=WorkerThreadPool.add_task(func():
 		prepared=TX.prepare(root,item,snapshot,is_canceled,func(done,total):update({"message":"Copying "+str(item.title),"bytes_done":done,"bytes_total":total}))
 		update({"phase":"prepared","message":"Saving "+str(item.title)}))

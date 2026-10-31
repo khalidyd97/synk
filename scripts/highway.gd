@@ -90,12 +90,12 @@ func resize_viewport() -> void:
 
 func sync_projection_style() -> void:
 	if not screen: return
-	var ssrg=game.uses_ssrg_gameplay()
+	var ssrg=world.uses_projected_highway()
 	if screen.has_meta("ssrg_canvas") and screen.get_meta("ssrg_canvas")==ssrg: return
 	screen.set_meta("ssrg_canvas",ssrg)
 	screen.material.set_shader_parameter("ssrg_canvas",ssrg)
-	# Original sprites already include glow and antialiasing. Avoid applying the
-	# old 3D bloom/shadow and multisample resolve to the flat canvas a second time.
+	# Both SYNK and SSRG sprites already include glow. The legacy bloom samples
+	# the bright judgment band into note faces and changes their silhouettes.
 	viewport.msaa_3d=Viewport.MSAA_DISABLED if ssrg else (Viewport.MSAA_2X if OS.has_feature("mobile") else Viewport.MSAA_4X)
 
 func _process(_delta: float) -> void:
@@ -109,7 +109,7 @@ func _process(_delta: float) -> void:
 
 func depth(time: float) -> float: return (time-game.song_time)/game.note_travel_seconds()
 func project(lane: float, d: float) -> Vector2:
-	if game.uses_ssrg_gameplay():
+	if world.uses_projected_highway():
 		var raw=-d*world.visible_length()
 		return world.camera.unproject_position(Vector3(world.note_x(lane)*world.ssrg_approach(raw),.035,world.ssrg_warped_z(raw)))
 	return world.camera.unproject_position(Vector3(world.lane_x(lane),.035,-d*world.visible_length()))
@@ -129,7 +129,9 @@ func input_position(p: Vector2) -> Vector2:
 	var origin = world.camera.project_ray_origin(screen_point)
 	var direction = world.camera.project_ray_normal(screen_point)
 	var hit=Plane(Vector3.UP,.035).intersects_ray(origin,direction)
-	var on_pad=hit!=null and absf(hit.z)<=world.JUDGMENT_DEPTH*.5+.001
+	var pad_far=world.ssrg_warped_z(-world.JUDGMENT_DEPTH*.5)
+	var pad_near=world.ssrg_warped_z(world.JUDGMENT_DEPTH*.5)
+	var on_pad=hit!=null and hit.z>=pad_far-.001 and hit.z<=pad_near+.001
 	if on_pad:
 		# Preserve the existing normalized input contract for capture and judging.
 		p.y=clampf(p.y,.6001,.9199)
@@ -140,6 +142,10 @@ func input_position(p: Vector2) -> Vector2:
 		direction=world.camera.project_ray_normal(screen_point)
 		hit=Plane(Vector3.UP,0).intersects_ray(origin,direction)
 	if hit!=null and game.uses_ssrg_gameplay():hit.x+=world.ssrg_shake_x
+	# SYNK's band now follows the road taper. Resolve its cross-section back
+	# to the centerline so a lane keeps the same hit area across the full band.
+	if on_pad and world.uses_projected_highway() and not game.uses_ssrg_gameplay():
+		hit.x/=maxf(.001,1.0+hit.z/world.SSRG_STAGE_DISTANCE)
 	if hit != null: p.x = .07 + (world.world_lane(hit.x)+.5)/SynkChart.LANES*.86
 	if on_pad and absf(hit.x)<=world.PAD_HALF_WIDTH+.001:
 		p.x=clampf(p.x,.070001,.929999)

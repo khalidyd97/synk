@@ -30,3 +30,12 @@ vec3 ssrg_warp_section(vec3 vertex, float section_z, mat4 model){
     vec3 target=vec3(point.x*q,point.y,ssrg_warp_z(centre)+(point.z-centre)*q);
     return vertex+inverse(mat3(model))*(target-point);
 }
+
+// Static SYNK road/rail geometry uses the same canvas and cross-section taper.
+vec3 ssrg_warp_canvas(vec3 vertex, mat4 model){
+    if(ssrg_warp.x<0.5) return vertex;
+    vec3 point=(model*vec4(vertex,1.0)).xyz;
+    float q=ssrg_scale(point.z);
+    vec3 target=vec3(point.x*q,point.y,ssrg_warp_z(point.z));
+    return inverse(mat3(model))*(target-model[3].xyz);
+}

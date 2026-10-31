@@ -2,7 +2,7 @@ extends Node3D
 const SsrgNotes = preload("res://scripts/ssrg_note_animation.gd")
 const SsrgCurves = preload("res://scripts/ssrg_runtime_curves.gd")
 
-# All note positions are in world units. Camera perspective supplies the depth.
+# Gameplay uses one flat canvas with a shared projection curve; the recorder uses a perspective camera.
 const CENTER_LANE = (SynkChart.LANES-1)*.5
 # Keep the reference taper and original track width, with larger readable note faces.
 const HIGHWAY_HALF_WIDTH = 9.75
@@ -36,7 +36,7 @@ const TRACK_LENGTH = 60.0
 # Palette indices represent note types: tap, sustained (hold/slide), flick.
 const COLORS = SynkCoverPalette.DEFAULT
 # The live palette; each song swaps in colors taken from its cover art.
-var colors: Array = COLORS.duplicate()
+var colors: Array = COLORS + [COLORS[1]]
 var stage_color = Color("0b1030")
 var cover_palette_active = false
 var game: Control
@@ -46,7 +46,7 @@ var note_meshes: Array = []
 var materials: Array = []
 var effects: Node3D
 var recorder_guides: Node3D
-var guide_material: StandardMaterial3D
+var guide_material: ShaderMaterial
 var active_beams: Array = []
 # Light columns that follow each finger touching the highway.
 var finger_beams: Array = []
@@ -63,7 +63,6 @@ var miss_shake_remaining = 0.0
 var ssrg_shake_x=0.0
 var cover_backdrop: MeshInstance3D
 var rail_atmosphere: Node3D
-var prism_theme: Node3D
 var ssrg_theme: Node3D
 var cover_material: ShaderMaterial
 var rail_edge_materials: Array = []
@@ -111,6 +110,7 @@ func mesh_node(mesh: Mesh, parent: Node3D, mat: Material = null) -> MeshInstance
 	var node = MeshInstance3D.new(); node.mesh = mesh
 	if mat != null: node.material_override = mat
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	node.extra_cull_margin=TRACK_LENGTH+SSRG_STAGE_DISTANCE
 	parent.add_child(node)
 	return node
 
@@ -162,6 +162,8 @@ func note_x(lane: float) -> float:
 	if game.uses_ssrg_gameplay(): return ssrg_x(lane)
 	return clampf(lane_x(lane), -limit, limit)
 # Notes travel the whole 60-unit track, from the far end to the judgement bar.
+func uses_projected_highway() -> bool:
+	return game != null and not game.uses_recorder_colors()
 func visible_length() -> float: return TRACK_LENGTH
 func travel_speed() -> float: return TRACK_LENGTH / game.note_travel_seconds()
 # Recovered from Perspective2dSettings.ToAcceleration in the supplied APK:
@@ -177,18 +179,19 @@ func ssrg_canvas_height() -> float:
 	# Keep the reference canvas on phones. Narrow landscape screens/tablets
 	# must still fit the full outer note sprites and their touch rectangles.
 	var playable_width=12.0*62.71392+212.0*game.note_size+32.0
+	if not game.uses_ssrg_gameplay():playable_width=(FRAME_HALF_WIDTH*2.0+NOTE_WIDTH*game.note_size)/SSRG_UNIT+32.0
 	return maxf(SSRG_UI_HEIGHT,playable_width/aspect)
 func ssrg_approach(z: float) -> float:
 	return pow(maxf(1.0+z/TRACK_LENGTH,0.0),SSRG_APPROACH_POWER)
 # Mirrors ssrg_warp_z() in ssrg_warp.gdshaderinc.
 func ssrg_warped_z(z: float) -> float:
-	if not game.uses_ssrg_gameplay(): return z
+	if not uses_projected_highway(): return z
 	return SSRG_STAGE_DISTANCE*(ssrg_approach(z)-1.0)
 func update_ssrg_warp() -> void:
-	var on = 1.0 if game != null and game.uses_ssrg_gameplay() else 0.0
+	var on = 1.0 if uses_projected_highway() else 0.0
 	RenderingServer.global_shader_parameter_set("ssrg_warp",Vector4(on,SSRG_APPROACH_POWER,SSRG_STAGE_DISTANCE,TRACK_LENGTH))
 func render_time() -> float:
-	if game.uses_ssrg_gameplay() and game.mode=="paused" and game.visual_clock_ready: return game.visual_song_time
+	if uses_projected_highway() and game.mode=="paused" and game.visual_clock_ready: return game.visual_song_time
 	return game.visual_song_time if game.audio.playing and game.mode in ["play","record"] and game.countdown<=0 and game.resume_countdown<=0 else game.song_time
 func note_position(lane: float, chart_time: float) -> Vector3:
 	return Vector3(note_x(lane), .13, (render_time()-chart_time)*travel_speed())
@@ -199,7 +202,7 @@ func apply_camera(shake: Vector3 = Vector3.ZERO) -> void:
 	camera.position = camera_rest_position() + shake; camera.rotation_degrees = Vector3(-highway_angle(), 0, 0)
 	# Place the SSRG judgment area near the bottom while preserving the camera's
 	# projection for note rendering and touch raycasts together.
-	if game != null and game.uses_ssrg_gameplay():
+	if uses_projected_highway():
 		# UI y=280 at the top, y=-234 at judgment. X/Z is a flat UI canvas;
 		# camera centre corresponds to original UI (0,0), never a fitted lens.
 		camera.projection = Camera3D.PROJECTION_ORTHOGONAL
@@ -233,7 +236,6 @@ func _ready() -> void:
 		materials.append(material(color))
 		note_meshes.append(make_note_mesh(color))
 	build_track()
-	prism_theme=preload("res://scripts/prism_highway.gd").new(); prism_theme.world=self; add_child(prism_theme)
 	ssrg_theme=preload("res://scripts/ssrg_highway.gd").new(); ssrg_theme.world=self; add_child(ssrg_theme)
 	build_effects()
 	build_play_aids()
@@ -361,12 +363,14 @@ func build_track() -> void:
 	highway_shadow.name="HighwayColorShadow"; highway_shadow.position=Vector3(0,.014,-TRACK_LENGTH*.5)
 	# Recording-only guides make lane targets readable without adding lines to gameplay.
 	recorder_guides = Node3D.new(); recorder_guides.name = "RecorderGuides"; add_child(recorder_guides)
-	guide_material = material(Color("777bd5"),.38)
+	guide_material = ShaderMaterial.new();guide_material.shader=preload("res://scripts/synk_canvas_color.gdshader")
+	guide_material.set_shader_parameter("color",Color("777bd561"))
 	for boundary in range(1,SynkChart.LANES):
 		var guide_mesh = PlaneMesh.new(); guide_mesh.size = Vector2(.035,60+JUDGMENT_DEPTH*.5)
 		var guide = mesh_node(guide_mesh,recorder_guides,guide_material)
 		guide.position = Vector3(lane_x(boundary-.5),.055,(-60+JUDGMENT_DEPTH*.5)*.5)
-	var marker_material = material(Color("8be8ff"),.72)
+	var marker_material = ShaderMaterial.new();marker_material.shader=preload("res://scripts/synk_canvas_color.gdshader")
+	marker_material.set_shader_parameter("color",Color("8be8ffb8"))
 	for lane in SynkChart.LANES:
 		var marker_mesh = PlaneMesh.new(); marker_mesh.size = Vector2(.22,.62)
 		var marker = mesh_node(marker_mesh,recorder_guides,marker_material)
@@ -401,13 +405,19 @@ func build_track() -> void:
 	# A bit deeper than the visible note face so the hit line reads clearly.
 	var judgment_mesh = QuadMesh.new(); judgment_mesh.size = Vector2(PAD_HALF_WIDTH*2.0,JUDGMENT_DEPTH)
 	judgment_material = ShaderMaterial.new(); judgment_material.shader = preload("res://scripts/judgment_bar.gdshader")
+	# Fixed canvas layers: road, band, ribbons, note faces, then hit effects.
+	# Transparent distance sorting must not put the band over approaching notes.
+	judgment_material.render_priority=-6
 	animated_materials.append(weakref(judgment_material))
 	var judgment_bar = mesh_node(judgment_mesh,self,judgment_material)
 	judgment_bar.name = "JudgmentPads"
 	judgment_bar.position = Vector3(0,.035,0); judgment_bar.rotation_degrees.x = -90
 	for edge in [-1,1]:
 		var edge_mesh = QuadMesh.new(); edge_mesh.size = Vector2(PAD_HALF_WIDTH*2.0,.025)
-		var border = mesh_node(edge_mesh,judgment_bar,material(Color("fff1cf"),.85))
+		var border_material=ShaderMaterial.new();border_material.shader=preload("res://scripts/synk_canvas_color.gdshader")
+		border_material.render_priority=-5
+		border_material.set_shader_parameter("color",Color(Color("fff1cf"),.85))
+		var border = mesh_node(edge_mesh,judgment_bar,border_material)
 		border.position = Vector3(0,edge*JUDGMENT_DEPTH*.5,.005)
 		judgment_borders.append(border.material_override)
 	refresh_highway_look()
@@ -437,14 +447,13 @@ func rail_glow_colors() -> Array:
 # Applies the chosen highway style, custom rail/band colors and highway darkness.
 func refresh_highway_look() -> void:
 	if judgment_material == null or track_materials.size() < 2: return
-	var prism = game != null and (game.uses_ssrg_gameplay() or game.highway_style in ["prism","ssrg"]) and not game.uses_recorder_colors()
+	var prism = game != null and game.uses_ssrg_gameplay() and not game.uses_recorder_colors()
 	var gold = game == null or game.uses_recorder_colors() or (game.highway_style=="gold" and not game.uses_ssrg_gameplay())
 	var darkness = clampf(float(game.get("highway_opacity")),.3,1.6) if game != null and game.get("highway_opacity") != null else 1.0
 	if game.uses_recorder_colors(): darkness=1.0
 	for node in gold_nodes: node.visible = gold
 	for node in neon_nodes: node.visible = not gold and not prism
 	get_node("JudgmentPads").visible=not prism
-	if prism_theme: prism_theme.refresh()
 	if ssrg_theme: ssrg_theme.refresh()
 	var rail = custom_color("rail_color")
 	var band = custom_color("band_color")
@@ -474,12 +483,7 @@ func refresh_highway_look() -> void:
 		track_materials[0].set_shader_parameter("opacity",minf(.95,.36*darkness))
 		track_materials[1].set_shader_parameter("opacity",minf(.95,.42*darkness))
 		for m in track_materials: m.set_shader_parameter("near_fraction",1.0)
-	if prism:
-		judgment_material.shader=preload("res://scripts/prism_judgment.gdshader")
-		var adaptive=game.highway_colors=="adaptive" and cover_palette_active
-		judgment_material.set_shader_parameter("base_color",band if band!=null else (colors[0] if adaptive else Color("05cfff")))
-		judgment_material.set_shader_parameter("sweep_color",band.lerp(Color.WHITE,.5) if band!=null else (colors[1] if adaptive else Color("f02bff")))
-	for m in judgment_borders: m.albedo_color = Color(Color("fff1cf") if gold else Color("ead6ff"),.85 if gold else 1.0)
+	for m in judgment_borders: m.set_shader_parameter("color",Color(Color("fff1cf") if gold else Color("ead6ff"),.85 if gold else 1.0))
 	var judgment_color: Color=judgment_material.get_shader_parameter("base_color")
 	highway_shadow_material.set_shader_parameter("tint",judgment_color.darkened(.65))
 	highway_shadow_material.set_shader_parameter("opacity",.2)
@@ -557,6 +561,8 @@ func asset_material(name: String, palette: int, region = Vector4(0,0,1,1), opaci
 	return shared("asset|%s|%d|%s|%s|%s" % [name, palette, region, opacity, colors[palette]], func(): return build_asset_material(name, palette, region, opacity))
 func build_asset_material(name: String, palette: int, region = Vector4(0,0,1,1), opacity = 1.0) -> ShaderMaterial:
 	var mat = ShaderMaterial.new(); mat.shader = load("res://scripts/neon_asset.gdshader")
+	if uses_projected_highway() and not game.uses_ssrg_gameplay() and name.begins_with("Tap_"):
+		mat.shader=preload("res://scripts/synk_canvas_art.gdshader");mat.render_priority=3
 	mat.set_shader_parameter("artwork",load("res://assets/neon/"+name+".png"))
 	mat.set_shader_parameter("region",region); mat.set_shader_parameter("opacity",opacity)
 	# Blue tap artwork keeps its gradient; sustained and flick art takes its type color.
@@ -785,7 +791,8 @@ var gold_bar: MeshInstance3D
 var gold_age = -1.0
 func gold_material(edge_only: bool) -> ShaderMaterial:
 	var m = ShaderMaterial.new(); m.shader = preload("res://scripts/gold_wave.gdshader")
-	m.set_shader_parameter("edge_only", 1.0 if edge_only else 0.0); m.render_priority = 4
+	m.set_shader_parameter("edge_only", 1.0 if edge_only else 0.0)
+	m.render_priority=1 if uses_projected_highway() and not game.uses_ssrg_gameplay() else 4
 	return m
 func multiplier_wave() -> void:
 	if gold_wave == null:
@@ -800,7 +807,7 @@ func update_multiplier_wave(delta: float) -> void:
 	if gold_age < 0.0: return
 	if game.mode != "paused": gold_age += delta
 	var t = clampf(gold_age / 1.5, 0.0, 1.0)
-	if game.uses_ssrg_gameplay():
+	if uses_projected_highway():
 		var q=pow(1.0-t,SSRG_APPROACH_POWER)
 		gold_wave.position=Vector3(0,.07,SSRG_STAGE_DISTANCE*(q-1.0))
 		gold_wave.scale.x=q
@@ -973,6 +980,8 @@ func make_circle_cap(parent: Node3D, position_value: Vector3, palette: int, size
 	var base_hue = .76 if puck else .53
 	var mat = shared("circle|%s|%d|%s|%s|%s" % [game.note_shape, palette, colors[palette], game.highway_colors, game.uses_recorder_colors()], func():
 		var m = ShaderMaterial.new(); m.shader = preload("res://scripts/reference_note.gdshader")
+		if uses_projected_highway():
+			m.shader=preload("res://scripts/synk_canvas_note.gdshader");m.render_priority=3
 		m.set_shader_parameter("artwork",art)
 		m.set_shader_parameter("hue_shift",colors[palette].h-base_hue)
 		if game.highway_colors=="theme" and not game.uses_recorder_colors() and game.gameplay_colors.has(role):
@@ -1045,6 +1054,8 @@ func make_flick(parent: Node3D, note: Dictionary, palette: int) -> void:
 		var arrow_mesh = QuadMesh.new(); arrow_mesh.size=Vector2(3.22,1.6)*FIT*game.note_size
 		var arrow_material = shared("arrow|%d|%s" % [palette, element_color("arrows",colors[palette])], func():
 			var m = ShaderMaterial.new(); m.shader=preload("res://scripts/flick_arrow.gdshader")
+			if uses_projected_highway() and not game.uses_ssrg_gameplay():
+				m.shader=preload("res://scripts/synk_canvas_arrow.gdshader");m.render_priority=4
 			m.set_shader_parameter("tint",element_color("arrows",colors[palette])); return m)
 		var arrow = mesh_node(arrow_mesh,parent,arrow_material)
 		arrow.position=base; arrow.rotation=camera.rotation
@@ -1153,13 +1164,16 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 	if solid:
 		trail_material=shared("solid_trail|%s|%s|%s" % [trail_color(palette),half_width,game.uses_ssrg_gameplay() and not recording], func():
 			var m=ShaderMaterial.new(); m.shader=preload("res://scripts/solid_trail.gdshader")
-			if game.uses_ssrg_gameplay() and not recording: m.render_priority=-4
-			m.set_shader_parameter("ssrg_line_x_scale",game.note_size*1.3)
+			if uses_projected_highway() and not recording: m.render_priority=-4
+			m.set_shader_parameter("source_art",game.uses_ssrg_gameplay())
+			m.set_shader_parameter("ssrg_line_x_scale",game.note_size*1.3 if game.uses_ssrg_gameplay() else 1.0)
 			m.set_shader_parameter("tint",trail_color(palette)); m.set_shader_parameter("ssrg_half_width",half_width); return m)
 	else:
 		var still = note.kind=="hold"
 		trail_material=shared("art_trail|%d|%s|%s" % [palette, trail_color(palette), still], func():
 			var m=build_asset_material("Hold_Note_Pink",palette,TRAIL_REGION,.85)
+			m.set_shader_parameter("projected_ribbon",true)
+			m.render_priority=-4
 			m.set_shader_parameter("tint",trail_color(palette))
 			if still:
 				m.set_shader_parameter("motion",0.0); m.set_shader_parameter("glow_pulse",0.0)
@@ -1176,7 +1190,8 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 	else:
 		var edge_material = shared("ribbon_edge|%s" % trail_color(palette), func():
 			var m = ShaderMaterial.new(); m.shader = preload("res://scripts/ribbon_edge.gdshader")
-			m.set_shader_parameter("color",trail_color(palette).lightened(.4)); return m)
+			m.render_priority=-3
+			m.set_shader_parameter("color",trail_color(palette).lightened(.4));m.set_shader_parameter("projected_ribbon",true); return m)
 		edge.set_material(edge_material); mesh_node(edge.commit(),parent)
 	# Checkpoint dots: glowing beads where the finger must be when they reach the bar.
 	if note.has("checkpoints") and not solid:
@@ -1270,7 +1285,7 @@ func build_note_node(key: String, note: Dictionary, recording = false) -> void:
 	var lines: Array = []
 	if recording: lines = make_alignment_lines(node,note,palette)
 	var signature = (hash(note) if recording or game.mode=="record" else 0)^hash([game.note_speed,game.ssrg_speed_setting() if game.ssrg_playable_run else 0,game.note_shape,game.note_size,game.hold_trail_width,game.trail_style,game.uses_ssrg_gameplay()])
-	if game.uses_ssrg_gameplay() and not recording:
+	if uses_projected_highway() and not recording:
 		for child in node.get_children():
 			if child is GeometryInstance3D:
 				child.extra_cull_margin=TRACK_LENGTH+SSRG_STAGE_DISTANCE
@@ -1376,11 +1391,11 @@ func update_finger_beams(delta: float = 0.0) -> void:
 	for i in finger_beams.size():
 		var beam: MeshInstance3D = finger_beams[i]
 		# Reuse one mesh per view; rebuild only when switching view/lane layout.
-		var signature=hash([game.gameplay_lane_count(),game.note_size]) if ssrg else -1
+		var signature=hash([game.gameplay_lane_count(),game.note_size]) if ssrg else (-2 if uses_projected_highway() else -1)
 		if beam.get_meta("layout",-99)!=signature:
 			var mesh=PlaneMesh.new()
-			var near=SSRG_BEAM_NEAR if ssrg else JUDGMENT_DEPTH*.5
-			var reach=SSRG_BEAM_REACH if ssrg else 58.0
+			var near=SSRG_BEAM_NEAR if uses_projected_highway() else JUDGMENT_DEPTH*.5
+			var reach=SSRG_BEAM_REACH if uses_projected_highway() else 58.0
 			mesh.size=Vector2(ssrg_beam_width() if ssrg else NOTE_WIDTH,reach+near)
 			beam.mesh=mesh; beam.position.z=(near-reach)*.5
 			beam.material_override=ssrg_finger_beam_material.duplicate() if ssrg else finger_beam_material
@@ -1510,12 +1525,12 @@ func _process(delta: float) -> void:
 	if game==null: return
 	step_prebuild()
 	if rail_atmosphere:
-		if ssrg_theme and ssrg_theme.active: rail_atmosphere.visible = false
+		if uses_projected_highway(): rail_atmosphere.visible = false
 		else: rail_atmosphere.update(delta)
 	var in_play = game.mode=="play" or (game.mode=="paused" and game.paused_mode=="play")
 	var recording_now = game.mode=="record" or (game.mode=="paused" and game.paused_mode=="record")
 	recorder_guides.visible = recording_now or (in_play and bool(extras_setting("lane_hints", true)) and not (ssrg_theme and ssrg_theme.active))
-	if guide_material: guide_material.albedo_color.a = .38 if recording_now else .3
+	if guide_material: guide_material.set_shader_parameter("color",Color(Color("777bd5"),.38 if recording_now else .3))
 	update_play_aids(delta)
 	update_multiplier_wave(delta)
 	animate_miss_shake(delta)

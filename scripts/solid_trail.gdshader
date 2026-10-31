@@ -6,6 +6,7 @@ uniform float clip_z=1000.0;
 uniform float ghost_fade=1.0;
 uniform float desaturate=0.0;
 uniform bool joint=false;
+uniform bool source_art=false;
 uniform float ssrg_half_width=0.0;
 uniform float ssrg_line_x_scale=1.3;
 uniform vec4 source_tint : source_color=vec4(1.0);
@@ -41,8 +42,8 @@ void fragment(){
         if(rail_position.z>ssrg_warp_z(clip_z)) discard;
         if(rail_position.z<ssrg_warp.z*(pow(0.5,ssrg_warp.y)-1.0)) discard;
     }else if(world_z>clip_z) discard;
-    vec3 color=ssrg_warp.x>0.5?source_chip:tint*.87;
-    float opacity=ssrg_warp.x>0.5?.2:.8;
+    vec3 color=source_art?source_chip:tint*.87;
+    float opacity=source_art?.2:.8;
     if(!joint){
         float edge=min(UV.x,1.0-UV.x);
         float feather=max(fwidth(UV.x),.001);

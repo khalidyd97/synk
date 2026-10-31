@@ -11,15 +11,19 @@ uniform float ghost_fade = 1.0;
 uniform float desaturate = 0.0;
 
 varying float world_z;
+uniform bool projected_ribbon=false;
+#include "res://scripts/ssrg_warp.gdshaderinc"
 
 void vertex() {
+	world_z=(MODEL_MATRIX*vec4(VERTEX,1.0)).z;
+	VERTEX=projected_ribbon?ssrg_warp_section(VERTEX,VERTEX.z,MODEL_MATRIX):ssrg_warp_rigid(VERTEX,MODEL_MATRIX);
 	rail_position=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz;
-	world_z = (MODEL_MATRIX * vec4(VERTEX, 1.0)).z;
 }
 
 void fragment() {
 	if(outside_rails(INV_VIEW_MATRIX[3].xyz)) discard;
-	if (world_z > clip_z) discard;
+	if(ssrg_warp.x>0.5){if(rail_position.z>ssrg_warp_z(clip_z) || rail_position.z<ssrg_warp_z(-30.0))discard;}
+	else if(world_z>clip_z)discard;
 	float gray = dot(color, vec3(0.299, 0.587, 0.114));
 	ALBEDO = mix(color, vec3(gray * 0.6), desaturate);
 	ALPHA = ghost_fade * smoothstep(-60.0, -55.0, world_z);
