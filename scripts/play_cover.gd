@@ -1,5 +1,5 @@
 extends Control
-# The song's album art on the right side during SSRG gameplay. The loading card glides into
+# The song's album art on the right side with the SSRG look (imports and the "ssrg" style). The loading card glides into
 # this exact rectangle (stage_intro.gd), then this panel takes over with the same look.
 const RADIUS = 22.0
 var game: Control
@@ -28,7 +28,7 @@ func target_rect() -> Rect2:
 	return Rect2(Vector2(size.x-side-size.x*.03,size.y*.15),Vector2(side,side))
 
 func wanted() -> bool:
-	return game.ssrg_playable_run and game.mode in ["play","paused"] and not game.stage_intro.running()
+	return game.uses_ssrg_gameplay() and game.mode in ["play","paused"] and not game.stage_intro.running()
 
 # Called by the loading screen on its last frame, so the panel appears in that same frame.
 func take_over() -> void:
