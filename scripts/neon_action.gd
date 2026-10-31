@@ -23,6 +23,10 @@ const VARIANTS = {
 }
 
 var caption_text = ""
+# Leading/trailing symbols in the caption are drawn as icons (ui_icons.gd) beside the text.
+const Icons = preload("res://scripts/ui_icons.gd")
+var raw_caption = ""
+var caption_icons = ["",""]
 # Button text is drawn this much larger than its caption_size, shrinking only as needed to fit.
 # Chart Studio marks itself with the "keep_caption_size" meta and keeps its compact text.
 const CAPTION_SCALE = 1.4
@@ -78,7 +82,7 @@ func _ready() -> void:
 	caption.anchor_left = 0.30 if left_aligned else 0.08
 	caption.anchor_right = 0.92
 	caption.anchor_top = 0.05; caption.anchor_bottom = 0.95
-	caption.text = caption_text
+	caption.text = shown_caption(caption_text)
 	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT if left_aligned else HORIZONTAL_ALIGNMENT_CENTER
 	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	caption.add_theme_font_size_override("font_size",caption_size)
@@ -106,7 +110,7 @@ func _process(_delta: float) -> void:
 		disabled_tween.tween_method(func(amount: float): art_material.set_shader_parameter("disabled_amount",amount),float(art_material.get_shader_parameter("disabled_amount")),1.0 if disabled else 0.0,.18)
 		previous_disabled=disabled
 		refresh_caption_color()
-	if not text.is_empty() and caption.text!=text: caption.text=text
+	if not text.is_empty() and raw_caption!=text: caption.text=shown_caption(text)
 	if caption.text+str(size)+str(caption_size)!=fitted_for: fit_caption()
 	queue_redraw()
 
@@ -116,6 +120,24 @@ func state(key: String) -> float: return float(art_material.get_shader_parameter
 
 func _draw() -> void:
 	Soft.draw_plate(self,size,soft_role(),state("hover_amount"),state("press_amount"),state("selected_amount"),disabled)
+	draw_caption_icons()
+
+# Icons replace the caption's padding spaces, so the label keeps its own centring and fitting.
+func shown_caption(value: String) -> String:
+	raw_caption=value
+	var parts=Icons.split(value); caption_icons=[parts[0],parts[2]]
+	return ("    " if parts[0]!="" else "")+parts[1]+("    " if parts[2]!="" else "")
+
+func draw_caption_icons() -> void:
+	if caption==null or (caption_icons[0]=="" and caption_icons[1]==""): return
+	var font=caption.get_theme_font("font"); var font_size=caption.get_theme_font_size("font_size")
+	var width=font.get_string_size(caption.text,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x
+	var left=caption.position.x+(caption.size.x-width)*.5 if caption.horizontal_alignment==HORIZONTAL_ALIGNMENT_CENTER else caption.position.x
+	var pad=font.get_string_size("    ",HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x
+	var mid=caption.position.y+caption.size.y*.5; var icon=minf(pad*.8,font_size*1.05)
+	var color=caption.get_theme_color("font_color")
+	if caption_icons[0]!="": Icons.draw(self,caption_icons[0],Vector2(left+pad*.4,mid),icon,color)
+	if caption_icons[1]!="": Icons.draw(self,caption_icons[1],Vector2(left+width-pad*.4,mid),icon,color)
 
 func keeps_caption_size() -> bool:
 	var node: Node = self

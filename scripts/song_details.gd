@@ -4,7 +4,7 @@ extends Control
 const Action = preload("res://scripts/settings_action.gd")
 const TEXT = Color("eef0ff")
 const MUTED = Color("a7aac6")
-const ACCENT = Color("50daec")
+const ACCENT = Color("ff7a59")
 
 var game: Control
 var song_id = ""

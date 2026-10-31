@@ -37,7 +37,7 @@ var accent = Color("a36aff")
 var accent_2 = Color("38baff")
 var info_x = 0.0
 var info_width = 0.0
-# SSRG look (imports and the "ssrg" highway style): the cover glides into the play_cover panel instead of sliding away.
+# Every song: the cover glides into the play_cover panel instead of sliding away.
 var play_cover: Control
 var gliding = false
 
@@ -129,7 +129,7 @@ func begin(cover: Texture2D, tint: Color, song_title: String, details: String, s
 	var rim = StyleBoxFlat.new(); rim.bg_color = Color(0,0,0,0); rim.set_corner_radius_all(22)
 	rim.border_color = Color(accent.lerp(Color.WHITE,.45),.45); rim.set_border_width_all(2)
 	card_rim.add_theme_stylebox_override("panel",rim)
-	gliding = game != null and game.uses_ssrg_gameplay() and play_cover != null
+	gliding = game != null and play_cover != null and not game.uses_recorder_colors()
 	if gliding: play_cover.style_from(cover,tint,frame,rim)
 	load_time = 0.0 if skip_loading else LOAD_TIME
 	elapsed = 0.0; visible = true

@@ -4,7 +4,7 @@ extends Control
 const Action = preload("res://scripts/settings_action.gd")
 const TEXT = Color("eef0ff")
 const MUTED = Color(0.8,0.82,0.95,.78)
-const ACCENT = Color("50daec")
+const ACCENT = Color("ff7a59")
 
 var game: Control
 var note_speed_input: Stepper
@@ -360,7 +360,7 @@ func _ready() -> void:
     for key in PAGE_NAMES:
         var n=action(rail,PAGE_NAMES[key],func(): show_page(key)); n.caption_size=21
         n.position=Vector2(14,y); n.size=Vector2(204,84); nav_buttons[key]=n; y+=94
-    var scope=label(rail,"GLOBAL PREFERENCES",11,Color("7acbda")); scope.position=Vector2(22,572); scope.size=Vector2(194,24)
+    var scope=label(rail,"GLOBAL PREFERENCES",13,Color("ff7a59")); scope.position=Vector2(22,572); scope.size=Vector2(194,24)
     var scope_hint=label(rail,"Applies across all songs\nand chart versions.",14,Color("a7aac6")); scope_hint.position=Vector2(22,601); scope_hint.size=Vector2(194,52)
     page_host=Panel.new(); place(page_host,canvas,308,136,1100,671); page_host.add_theme_stylebox_override("panel",style())
     page_title=label(page_host,"",28); page_title.position=Vector2(28,23); page_title.size=Vector2(1044,39)

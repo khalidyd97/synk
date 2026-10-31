@@ -20,6 +20,7 @@ func soft_role() -> String:
     return "danger" if text=="DELETE" else Soft.role_for(variant)
 func _draw() -> void:
     Soft.draw_plate(self,size,soft_role(),engagement,touch,selection,disabled,12.0)
+    draw_caption_icons()
     if has_focus():
         var focus=StyleBoxFlat.new(); focus.bg_color=Color.TRANSPARENT; focus.set_corner_radius_all(14)
         focus.set_border_width_all(2); focus.border_color=Color(Soft.CREAM,.55)

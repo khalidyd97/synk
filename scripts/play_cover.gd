@@ -1,5 +1,6 @@
 extends Control
-# The song's album art on the right side with the SSRG look (imports and the "ssrg" style). The loading card glides into
+# The song's album art on the right side during play: below the BEST line on the SSRG look,
+# a smaller tile in the top-right corner (above the combo) on SYNK's Gold and Neon highways. The loading card glides into
 # this exact rectangle (stage_intro.gd), then this panel takes over with the same look.
 const RADIUS = 22.0
 var game: Control
@@ -24,11 +25,14 @@ func _ready() -> void:
 
 # Where the art sits during play, in this control's coordinates: right side, below the BEST line.
 func target_rect() -> Rect2:
+	if not game.uses_ssrg_gameplay():
+		var corner = clampf(size.y*.17,72.0,190.0)
+		return Rect2(Vector2(size.x-corner-size.x*.03,size.y*.04),Vector2(corner,corner))
 	var side = clampf(size.y*.24,96.0,260.0)
 	return Rect2(Vector2(size.x-side-size.x*.03,size.y*.15),Vector2(side,side))
 
 func wanted() -> bool:
-	return game.uses_ssrg_gameplay() and game.mode in ["play","paused"] and not game.stage_intro.running()
+	return game.mode in ["play","paused"] and not game.uses_recorder_colors() and not game.stage_intro.running()
 
 # Called by the loading screen on its last frame, so the panel appears in that same frame.
 func take_over() -> void:

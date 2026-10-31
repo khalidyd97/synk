@@ -68,6 +68,9 @@ var song_list: HBoxContainer
 var carousel: ScrollContainer
 var backdrop: TextureRect
 var empty_label: Label
+# Shown when no SSRG songs are imported yet: an illustration and the two ways to add songs.
+var empty_state: Control
+var list_arrows: Array = []
 # Horizontal drag on the carousel: a press that moves is a scroll, not a card tap.
 var carousel_press = false
 var carousel_dragged = false
@@ -163,12 +166,23 @@ func _ready() -> void:
 	song_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	song_list.add_theme_constant_override("separation",18)
 	empty_label = text(self,"",.1,.3,.78,.6,18,MUTED); empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	empty_state = Control.new(); place(empty_state,self,.1,.16,.78,.92); empty_state.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var art = Control.new(); place(art,empty_state,.3,0,.7,.42); art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	art.draw.connect(func(): draw_empty_art(art))
+	var heading = text(empty_state,"No SSRG songs yet",0,.44,1,.56,30,TEXT); heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.add_theme_font_override("font",preload("res://assets/fonts/FiraSans-Bold.ttf"))
+	var hint = text(empty_state,"Add .ssrg files or a folder of charts." + "\n" + "Songs with only some levels import too.",0,.56,1,.72,18,MUTED)
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	action(empty_state,"+  ADD SONGS",.2,.78,.49,.92,open_import,"primary")
+	action(empty_state,"SCAN FOR SONGS",.51,.78,.8,.92,scan_phone,"large")
+	empty_state.visible = false
 	for side in [-1,1]:
 		var arrow = Button.new(); place(arrow,self,.005 if side<0 else .825,.4,.04 if side<0 else .86,.55)
 		arrow.text = "‹" if side<0 else "›"; arrow.focus_mode = Control.FOCUS_NONE
 		arrow.add_theme_font_size_override("font_size",44); arrow.add_theme_color_override("font_color",Color(1,1,1,.7))
 		for state in ["normal","hover","pressed"]: arrow.add_theme_stylebox_override(state,box(Color(0,0,0,.35 if state=="normal" else .55),Color(1,1,1,.1),16))
 		arrow.pressed.connect(func(): step_song(side))
+		list_arrows.append(arrow)
 
 	# Difficulties, song details and START are rebuilt for each selected song.
 	detail = Control.new(); place(detail,self,0,0,1,1); detail.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -352,7 +366,9 @@ func refresh_songs() -> void:
 		if not query.is_empty() and not haystack.contains(query): continue
 		shown += 1
 		row_queue.append(song)
-	empty_label.text = "" if shown > 0 else ("No SSRG songs yet.\nTap SCAN or + FILES to add some." if all_songs.is_empty() else ("No favourites yet. Tap the star on a song." if game_filter == STAR else "No songs match your search."))
+	empty_state.visible = all_songs.is_empty()
+	for arrow in list_arrows: arrow.visible = shown > 0
+	empty_label.text = "" if shown > 0 or all_songs.is_empty() else ("No favourites yet. Tap the star on a song." if game_filter == STAR else "No songs match your search.")
 	carousel.scroll_horizontal = 0
 	refresh_detail(); refresh_stats()
 
@@ -747,3 +763,17 @@ func record_result() -> void:
 	if int(game.score) <= int(previous.get("score",-1)): return
 	game.prefs.set_value("ssrg_best_v2",key,{"score":int(game.score),"rank":game.rank_name(),"combo":int(game.max_combo),"accuracy":snappedf(game.accuracy(),.01)})
 	game.prefs.save("user://preferences.cfg")
+
+# Stacked cover cards with a play mark and a coral "+": the empty library's illustration.
+func draw_empty_art(art: Control) -> void:
+	var side = minf(art.size.x,art.size.y)*.78; var c = art.size*.5
+	for card in [[Vector2(-side*.18,side*.04),-.17,Color("2a2830")],[Vector2(side*.16,-side*.02),.14,Color("34323a")],[Vector2.ZERO,0.0,Color("f3ece1")]]:
+		art.draw_set_transform(c+card[0],card[1],Vector2.ONE)
+		var plate = StyleBoxFlat.new(); plate.bg_color = card[2]; plate.set_corner_radius_all(roundi(side*.14))
+		art.draw_style_box(plate,Rect2(-Vector2.ONE*side*.5,Vector2.ONE*side))
+	art.draw_set_transform(Vector2.ZERO)
+	var r = side*.2
+	art.draw_colored_polygon(PackedVector2Array([c+Vector2(-r*.6,-r*.8),c+Vector2(r*.9,0),c+Vector2(-r*.6,r*.8)]),Color("1a1720"))
+	var badge = c+Vector2(side*.52,-side*.46)
+	art.draw_circle(badge,side*.12,Color("ff7a59"))
+	preload("res://scripts/ui_icons.gd").draw(art,"add",badge,side*.16,Color.WHITE)

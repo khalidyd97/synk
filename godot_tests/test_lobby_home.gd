@@ -11,15 +11,13 @@ func run() -> void:
     var logo=gate.find_child("LobbyWordmark",true,false)
     var play=gate.find_child("PlayCard",true,false); var create=gate.find_child("CreateCard",true,false)
     var settings=gate.find_child("SettingsButton",true,false)
-    check(logo!=null and logo.word=="SYNK","Home shows the type-set SYNK wordmark")
+    check(logo!=null and logo.text=="SYNK","Home shows the SYNK wordmark")
     check(play!=null and create!=null and settings!=null,"Home has Play, Create charts and Settings")
     check(gate.find_children("*","TextureRect",true,false).all(func(t): return t.texture==null or not str(t.texture.resource_path).contains("button")),"Old image buttons are gone")
     var rect=play.get_global_rect(); play.grab_focus(); play._process(.3)
-    check(play.hover_amount>.5 and play.get_global_rect()==rect,"Focus lights the card without moving its hit area")
-    var frame=logo.time; logo._process(.5); check(logo.time>frame,"Wordmark gradient animates while visible")
+    check(play.hover>.5 and play.get_global_rect()==rect,"Focus lights the card without moving its hit area")
     play.pressed.emit()
     check(not gate.visible and g.lobby.browser.visible,"Play opens the song browser")
-    var hidden=logo.time; logo._process(1); check(logo.time==hidden,"Hidden wordmark stops animating")
     g.lobby.show_gateway(); await create_timer(.6).timeout
     settings.pressed.emit(); check(g.menu_settings_open and g.settings_panel.visible,"Gear opens Settings")
     g.close_lobby_settings(); await create_timer(.6).timeout

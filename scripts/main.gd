@@ -2470,6 +2470,8 @@ func advance_finish(delta: float) -> void:
 	if finish_elapsed>=finish_overlay.RESULTS_AT and mode=="play": show_pending_results()
 
 func show_pending_results() -> void:
+	# The album art flies from its gameplay spot onto the results cover (measured before play ends).
+	preload("res://scripts/cover_flight.gd").fly(self,ssrg_screens.result_cover if pending_results.get("ssrg",false) else results_screen.card)
 	set_mode("results")
 	if pending_results.get("ssrg",false):ssrg_screens.show_results(pending_results)
 	else:results_screen.show_results(pending_results)

@@ -34,7 +34,7 @@ static func create() -> Theme:
 	t.set_constant("v_separation","PopupMenu",14); t.set_constant("h_separation","PopupMenu",12)
 	t.set_font_size("font_size","PopupMenu",20)
 	t.set_color("font_disabled_color","PopupMenu",Color(1,1,1,.35))
-	t.set_color("font_separator_color","PopupMenu",Color("50daec"))
+	t.set_color("font_separator_color","PopupMenu",Color("ff7a59"))
 	t.set_stylebox("panel","TabContainer",glass(Color(.04,.04,.04,.6),Color(1,1,1,.08),16))
 	for type in ["TabBar","TabContainer"]:
 		t.set_stylebox("tab_selected",type,glass(Color(cyan,.14),Color(cyan,.75),12))

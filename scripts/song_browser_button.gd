@@ -8,7 +8,7 @@ var soft_role=""
 var tab=false
 var subtitle=""
 var caption_size=16
-var accent=Color("4bdaed")
+var accent=Color("f3ece1")
 var hover_amount=0.0
 var press_amount=0.0
 var menu_motion=false
@@ -50,11 +50,9 @@ func _draw() -> void:
         # Compress only the drawn content; the actual control never moves or scales.
         var compression=1.0-motion.press*.025
         draw_set_transform(size*(1-compression)*.5,0,Vector2.ONE*compression)
-    var caption=text
-    var width=font.get_string_size(caption,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x
-    var y=size.y*.5+font.get_ascent(font_size)*.5-font.get_descent(font_size)*.5
-    if not subtitle.is_empty(): y=size.y*.39+5
-    draw_string(font,Vector2((size.x-width)*.5,y),caption,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,tint)
+    # Leading symbols become drawn icons (ui_icons.gd); with a subtitle the caption sits higher.
+    var line=Rect2(0,0,size.x,size.y) if subtitle.is_empty() else Rect2(0,size.y*.12,size.x,size.y*.5)
+    preload("res://scripts/ui_icons.gd").draw_caption(self,line,text,font,font_size,tint)
     if not subtitle.is_empty():
         var small=font.get_string_size(subtitle,HORIZONTAL_ALIGNMENT_LEFT,-1,15).x
         draw_string(font,Vector2((size.x-small)*.5,size.y*.76),subtitle,HORIZONTAL_ALIGNMENT_LEFT,-1,15,Color(tint,.72))
