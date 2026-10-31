@@ -210,6 +210,7 @@ var finish_elapsed = 0.0
 var pending_results: Dictionary = {}
 var slide_tools: Control
 var sync_helper: Control
+var song_sync: Control
 var bluetooth_toggle: Button
 var bluetooth_latency_input: Control
 var primary: Button
@@ -338,7 +339,7 @@ func _ready() -> void:
 	if note_shape not in ["rectangle","circle","puck"]: note_shape="rectangle"
 	highway_angle = clampf(float(prefs.get_value("gameplay","highway_angle",35.0)),18.0,44.0)
 	highway_style = str(prefs.get_value("highway","style","gold"))
-	if highway_style not in ["gold","neon","prism"]: highway_style="gold"
+	if highway_style not in ["gold","neon"]: highway_style="gold"
 	rail_color = str(prefs.get_value("highway","rail_color",""))
 	band_color = str(prefs.get_value("highway","band_color",""))
 	highway_opacity = clampf(float(prefs.get_value("highway","opacity",1.0)),.3,1.6)
@@ -395,6 +396,8 @@ func _ready() -> void:
 	sync_helper=Control.new(); sync_helper.set_script(load("res://scripts/sync_helper.gd")); sync_helper.game=self
 	ui.add_child(sync_helper); sync_helper.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.move_child(sync_helper,3); sync_helper.visible=false
+	song_sync=Control.new(); song_sync.set_script(load("res://scripts/song_sync.gd")); song_sync.game=self
+	ui.add_child(song_sync); song_sync.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ssrg_playables=Control.new(); ssrg_playables.set_script(load("res://scripts/ssrg_playables.gd")); ssrg_playables.game=self
 	ui.add_child(ssrg_playables); ssrg_playables.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.move_child(ssrg_playables,3); ssrg_playables.visible=false
@@ -605,6 +608,8 @@ func build_ui() -> void:
 	guide_back=button(safe_parent("SafeGuideBack"),"‹  BACK",.40,.85,.60,.96,func(): set_mode("menu"),"nav")
 	# Song intro sits above the HUD and below the pause/results modal.
 	stage_intro=StageIntro.new(); stage_intro.game=self; ui.add_child(stage_intro)
+	var play_cover=preload("res://scripts/play_cover.gd").new(); play_cover.game=self
+	safe_parent("SafePlayCover").add_child(play_cover); stage_intro.play_cover=play_cover
 	results_screen=ResultsScreen.new(); results_screen.game=self; ui.add_child(results_screen)
 	# Pause: the stage behind is blurred and dimmed, with a frosted card on top (same glass as
 	# the lobby cards) holding three icon tiles.
@@ -713,7 +718,7 @@ func recorder_plate(bounds: Rect2) -> Panel:
 func set_mode(value: String,animate_transition:bool=true) -> void:
 	if ssrg_playable_run and value not in ["play","paused"]:
 		ssrg_playable_run=false
-		highway_style=ssrg_playable_previous_style if ssrg_playable_previous_style in ["gold","neon","prism"] else "gold"
+		highway_style=ssrg_playable_previous_style if ssrg_playable_previous_style in ["gold","neon"] else "gold"
 		if field and field.world: field.world.refresh_highway_look()
 	if value!=mode and animate_transition:
 		# Menus slide forward and back by depth; entering or leaving the stage dissolves.
@@ -834,6 +839,24 @@ func open_sync_helper() -> void:
 	sync_helper.open()
 	UiMotion.reveal(sync_helper)
 
+# Song sync: tune the headset delay while Eclipse plays on the real highway (song_sync.gd).
+func open_song_sync() -> void:
+	if mode!="menu": return
+	if document.dirty: tell("Save or RELOAD your chart before syncing."); return
+	sync_helper.player.stop(); sync_helper.visible=false
+	settings_panel.visible=false; menu_settings_open=false
+	ui.move_child(song_sync,ui.get_child_count()-1)
+	song_sync.begin()
+
+func end_song_sync(previous_song: Dictionary,previous_stream: AudioStream) -> void:
+	audio.stop(); audio.stream_paused=false; pointers.clear(); live.clear()
+	countdown=0; resume_countdown=0; song_time=0; flash=0
+	field.world.clear_notes(); field.world.clear_hit_effects()
+	if previous_stream: apply_song(previous_song,previous_stream)
+	else: apply_song(eclipse_song(),demo_stream)
+	set_mode("menu")
+	open_lobby_settings()
+
 func close_sync_helper() -> void:
 	UiMotion.back(self)
 	sync_helper.visible=false
@@ -865,7 +888,7 @@ func change_highway_angle(value: float) -> void:
 
 func change_highway_look(key: String,value: Variant) -> void:
 	match key:
-		"style": highway_style = str(value) if str(value) in ["gold","neon","prism"] else "gold"; value = highway_style
+		"style": highway_style = str(value) if str(value) in ["gold","neon"] else "gold"; value = highway_style
 		"rail_color": rail_color = str(value); value = rail_color
 		"band_color": band_color = str(value); value = band_color
 		"opacity": highway_opacity = clampf(float(value),.3,1.6); value = highway_opacity
@@ -1042,7 +1065,7 @@ func space_authored_notes(incoming: Array,fixed: Array) -> bool:
 
 func note_travel_seconds() -> float:
 	# APK default basicTime=3.5; normalized 1x corresponds to original UI speed 3.
-	if uses_ssrg_gameplay() and not uses_recorder_colors(): return 3.5/(ssrg_note_speed() if ssrg_playable_run else note_speed)
+	if uses_ssrg_gameplay(): return 3.5/ssrg_note_speed()
 	return 2.6 / (recorder_note_speed if uses_recorder_colors() else note_speed)
 
 func cycle_recorder_note_speed() -> void:
@@ -1054,9 +1077,12 @@ func cycle_recorder_note_speed() -> void:
 func length() -> float: return audio.stream.get_length()
 # Score: fixed points per judgement, not divided by the chart's note count, times a combo
 # multiplier that rises 0.1x for every full 100 combo (x1.1 at 100, x1.2 at 200, ...),
-# capped at x2.0. A miss resets the combo and so the multiplier.
+# capped at x2.0. A miss resets the combo and so the multiplier. SSRG runs have no combo
+# multiplier: every 100 combo earns nothing extra there.
 const NOTE_POINTS = {"PERFECT": 1000, "GREAT": 800, "GOOD": 500}
-func combo_multiplier() -> float: return minf(2.0, 1.0 + .1 * floori(combo / 100.0))
+func combo_multiplier() -> float:
+	if ssrg_playable_run: return 1.0
+	return minf(2.0, 1.0 + .1 * floori(combo / 100.0))
 func add_points(grade: String) -> void:
 	if ssrg_playable_run and ssrg_presentation and ssrg_presentation.active:
 		score=ssrg_presentation.score_rules.add(grade,ssrg_presentation.state)
@@ -1410,6 +1436,8 @@ func cycle_record_speed() -> void:
 
 func toggle_pause(animate_transition:bool=true) -> void:
 	if finishing: return
+	# Song sync has no pause menu: BACK leaves it without saving.
+	if song_sync and song_sync.active and mode=="play": song_sync.finish(false); return
 	if mode in ["play","record"]:
 		resume_countdown=0
 		if ssrg_playable_run and mode=="play" and song_time>=0 and countdown<=0 and gameplay_start_lead<=0:
@@ -1867,7 +1895,7 @@ var combo_view: Control
 var multiplier_step=0
 func update_combo_art() -> void:
 	# Each new score multiplier step (every 100 combo, up to x2.0) also lights up the highway.
-	var step=mini(10,floori(combo/100.0))
+	var step=0 if ssrg_playable_run else mini(10,floori(combo/100.0))
 	if step>multiplier_step and mode=="play":
 		field.world.multiplier_wave(); UiSound.play(self,"bonus")
 	multiplier_step=step
@@ -1876,6 +1904,7 @@ func update_combo_art() -> void:
 		for child in combo_hud.get_children(): child.queue_free()
 		combo_view=preload("res://scripts/combo_view.gd").new(); combo_view.name="ComboView"
 		combo_hud.add_child(combo_view); combo_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	combo_view.multiplier_enabled=not ssrg_playable_run
 	combo_view.set_combo(combo)
 
 func build_combo_digit_textures() -> void:
@@ -2360,6 +2389,7 @@ func judge(entry: Dictionary,error: float,complete: bool = true,source_grade: St
 func _audio_finished() -> void:
 	if mode=="record": stop_take()
 	elif mode=="play":
+		if song_sync and song_sync.active: song_sync.restart(); return
 		if practice.finish_round(): return
 		for entry in live:
 			if not entry.done:
@@ -2479,6 +2509,7 @@ func choose_audio() -> void:
 		save_editor()
 		if document.dirty: return
 	stop_audition()
+	if NativeFilePicker.open(false,func(paths): import_audio(paths[0])): return
 	if OS.get_name()=="iOS":
 		picker.access=FileDialog.ACCESS_USERDATA; picker.current_dir="user://"
 		tell("In the Files app, copy music into On My iPhone → SYNK, then choose it here.")
@@ -2629,6 +2660,7 @@ func import_audio(path: String) -> void:
 	var result=library.import_song(path)
 	if result.is_empty(): tell(library.message); return
 	if song_metadata.get(str(result.song.id),{}).has("error"): song_metadata.erase(str(result.song.id))
+	if result.get("cover") is Image and not has_custom_cover(str(result.song.id)): save_cover_image(str(result.song.id),result.cover)
 	apply_song(result.song,result.stream); refresh_library(); set_mode("editor")
 	tell("Audio imported. Add notes or record from the playhead, then SAVE your chart.")
 

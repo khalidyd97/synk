@@ -2,7 +2,7 @@ name: Build unsigned iOS IPA
 on:
   workflow_dispatch:
   push:
-    branches: [codex/ios-release-20261030-234125]
+    branches: [codex/ios-og-synk-20261031-054457]
 permissions:
   contents: read
 jobs:

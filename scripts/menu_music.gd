@@ -16,10 +16,15 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
 # True on screens that should have music.
+func ssrg_preview_active() -> bool:
+	var browser=game.ssrg_playables
+	return browser!=null and browser.is_visible_in_tree() and browser.preview_player!=null and browser.preview_player.playing
+
 func wanted() -> bool:
 	if volume <= 0.0 or stream == null: return false
 	match str(game.mode):
 		"menu":
+			if ssrg_preview_active():return true
 			# The song list plays song previews, so the theme steps aside there.
 			if game.lobby and game.lobby.browser and game.lobby.browser.is_visible_in_tree(): return false
 			return true
@@ -32,7 +37,9 @@ func set_volume(value: float) -> void:
 
 func _process(delta: float) -> void:
 	var target = 1.0 if wanted() else 0.0
-	level = move_toward(level, target, delta / FADE)
+	var duck=ssrg_preview_active() and target>0.0
+	if duck:target=sqrt(minf(volume,.05)/maxf(volume,.0001))
+	level = move_toward(level, target, delta / (.18 if duck else FADE))
 	if level > 0.0 and not playing: play()
 	stream_paused = level <= 0.0 and target == 0.0
 	volume_db = linear_to_db(maxf(.0001, level * level * volume))

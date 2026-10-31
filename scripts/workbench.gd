@@ -451,6 +451,7 @@ func choose_export() -> void:
     chart_exporter.current_file=str(game.song.title).validate_filename()+"_"+current_variant+".synk.json"
     chart_exporter.popup_centered_ratio(.8)
 func choose_import() -> void:
+    if NativeFilePicker.open(false,func(paths): report("Chart imported into your draft." if import_chart(paths[0])==OK else "Invalid chart, wrong song, or notes beyond song length.")): return
     if not chart_picker:
         chart_picker=FileDialog.new(); add_child(chart_picker); chart_picker.file_mode=FileDialog.FILE_MODE_OPEN_FILE; chart_picker.access=FileDialog.ACCESS_FILESYSTEM; chart_picker.use_native_dialog=true
         chart_picker.filters=PackedStringArray(["*.json;SYNK chart"])

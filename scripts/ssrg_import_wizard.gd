@@ -31,6 +31,19 @@ var public_items:Array=[]
 var row_checks:Array[CheckBox]=[]
 var recovery_blocked=false
 var recovery_message=""
+# Live feedback: the step the user is on, a count beside the bar, and a coloured state per song.
+var step_labels:Array[Label]=[]
+var progress_text:Label
+var row_buttons:Array[Button]=[]
+var row_stripes:Array[ColorRect]=[]
+var showing_results=false
+var busy_time=0.0
+const STEPS=["CHOOSE","CHECK","REVIEW","IMPORT","DONE"]
+const GOOD=Color("7ee2a0")
+const WARN=Color("ffd36a")
+const BAD=Color("ff9c9c")
+const WORKING=Color("8fc7ff")
+const QUIET=Color("9aa0b4")
 
 func label(value:String,parent:Node=null,font_size:int=17) -> Label:
 	var node=Label.new();node.text=value;node.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
@@ -59,9 +72,18 @@ func _ready() -> void:
 	var tools=row(content)
 	files_button=button("ADD FILES / ZIP",tools,choose_files)
 	folder_button=button("CHOOSE FOLDER",tools,choose_folder)
+	# The iOS Files picker returns files, not folders; ZIPs and multi-select cover whole songs there.
+	folder_button.visible=OS.get_name()!="iOS"
 	clear_button=button("CLEAR",tools,clear)
-	summary=label("Choose a folder, ZIP, or song files.",content,16)
-	progress=ProgressBar.new();progress.show_percentage=false;progress.custom_minimum_size.y=8;content.add_child(progress)
+	var steps=row(content);steps.add_theme_constant_override("separation",6)
+	for i in STEPS.size():
+		var chip=Label.new();chip.text="%d  %s" % [i+1,STEPS[i]];chip.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+		chip.size_flags_horizontal=Control.SIZE_EXPAND_FILL;chip.add_theme_font_size_override("font_size",14);steps.add_child(chip);step_labels.append(chip)
+	summary=label("Choose a folder, ZIP, or song files.",content,18)
+	var bar_row=row(content)
+	progress=ProgressBar.new();progress.show_percentage=false;progress.custom_minimum_size.y=14;progress.size_flags_horizontal=Control.SIZE_EXPAND_FILL;progress.size_flags_vertical=Control.SIZE_SHRINK_CENTER;bar_row.add_child(progress)
+	bar_style(GOOD)
+	progress_text=label("",bar_row,15);progress_text.size_flags_horizontal=Control.SIZE_SHRINK_END;progress_text.autowrap_mode=TextServer.AUTOWRAP_OFF;progress_text.custom_minimum_size.x=150;progress_text.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
 	var body=HBoxContainer.new();body.size_flags_vertical=Control.SIZE_EXPAND_FILL;body.add_theme_constant_override("separation",18);content.add_child(body)
 	var left=VBoxContainer.new();left.size_flags_horizontal=Control.SIZE_EXPAND_FILL;left.size_flags_stretch_ratio=.8;body.add_child(left)
 	var select_row=row(left);button("SELECT VALID",select_row,func():select_all(true));button("NONE",select_row,func():select_all(false))
@@ -77,14 +99,17 @@ func _ready() -> void:
 	import_button=button("IMPORT SELECTED",footer,start_import);import_button.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	cancel_button=button("CANCEL",footer,func():job.cancel();status.text="Canceling after the current safe step…")
 	retry_button=button("RETRY FAILED",footer,func():job.retry_failed())
-	report_button=button("SAVE REPORT",footer,func():report_picker.popup_centered_ratio(.8))
+	report_button=button("SAVE REPORT",footer,func():
+		# Set the name only when saving: FileDialog focuses its name field (and so opens the
+		# phone keyboard) whenever the name is set while it is in the tree.
+		report_picker.current_file="SYNK-import-report.json";report_picker.popup_centered_ratio(.8))
 	picker=FileDialog.new();add_child(picker);picker.file_mode=FileDialog.FILE_MODE_OPEN_FILES;picker.access=FileDialog.ACCESS_FILESYSTEM;picker.use_native_dialog=true
 	picker.filters=PackedStringArray(["*.zip,*.seq,*.bytes,*.ogg,*.mp3,*.wav,*.png,*.jpg,*.jpeg,*.webp;SSRG song files"])
 	picker.files_selected.connect(picked);picker.file_selected.connect(func(path):picked(PackedStringArray([path])))
 	folder_picker=FileDialog.new();add_child(folder_picker);folder_picker.file_mode=FileDialog.FILE_MODE_OPEN_DIR;folder_picker.access=FileDialog.ACCESS_FILESYSTEM;folder_picker.use_native_dialog=true;folder_picker.dir_selected.connect(func(path):add_sources(PackedStringArray([path])))
-	report_picker=FileDialog.new();add_child(report_picker);report_picker.file_mode=FileDialog.FILE_MODE_SAVE_FILE;report_picker.access=FileDialog.ACCESS_FILESYSTEM;report_picker.use_native_dialog=true;report_picker.current_file="SYNK-import-report.json"
+	report_picker=FileDialog.new();add_child(report_picker);report_picker.file_mode=FileDialog.FILE_MODE_SAVE_FILE;report_picker.access=FileDialog.ACCESS_FILESYSTEM;report_picker.use_native_dialog=true
 	report_picker.file_selected.connect(save_report)
-	visible=false;show_details();update_controls()
+	visible=false;set_step("idle");show_details();update_controls()
 
 func open() -> void:
 	job.root=host.game.library.root_path
@@ -100,7 +125,9 @@ func open() -> void:
 
 func choose_files() -> void:
 	if job.busy():return
-	pick_kind="sources";picker.file_mode=FileDialog.FILE_MODE_OPEN_FILES;picker.popup_centered_ratio(.85)
+	pick_kind="sources"
+	if NativeFilePicker.open(true,picked):return
+	picker.file_mode=FileDialog.FILE_MODE_OPEN_FILES;picker.popup_centered_ratio(.85)
 func choose_folder() -> void:
 	if not job.busy():folder_picker.popup_centered_ratio(.85)
 func add_sources(paths:PackedStringArray) -> void:
@@ -111,16 +138,22 @@ func add_sources(paths:PackedStringArray) -> void:
 	job.scan(sources,host.game.library.songs);show()
 func clear() -> void:
 	if job.busy():return
-	job.clear_cache();job.plan.clear();job.reports.clear();public_items.clear();sources.clear();selected=-1
+	job.clear_cache();job.plan.clear();job.reports.clear();public_items.clear();sources.clear();selected=-1;showing_results=false
 	job.publish("idle","Choose a folder, ZIP, or song files.");render_list();show_details()
 
 func choose_match(kind:String,path:String="") -> void:
 	if job.busy() or selected<0:return
-	pick_kind=kind;pick_chart=path;picker.file_mode=FileDialog.FILE_MODE_OPEN_FILE;picker.popup_centered_ratio(.85)
+	pick_kind=kind;pick_chart=path
+	if kind in ["art","cover"] and NativeFilePicker.open_image(picked):return
+	if kind not in ["art","cover"] and NativeFilePicker.open(false,picked):return
+	picker.file_mode=FileDialog.FILE_MODE_OPEN_FILE;picker.popup_centered_ratio(.85)
 func picked(paths:PackedStringArray) -> void:
 	if paths.is_empty() or job.busy():return
 	if pick_kind=="sources":add_sources(paths);return
 	if selected<0 or selected>=job.plan.size():return
+	if pick_kind=="cover":
+		# Album art needs no recheck; it is saved once the song is imported.
+		job.plan[selected].cover=paths[0];public_items[selected].cover=paths[0];show_details();return
 	var changes={}
 	match pick_kind:
 		"audio":changes={"audio":paths[0],"audio_manual":true}
@@ -133,19 +166,104 @@ func picked(paths:PackedStringArray) -> void:
 	job.recheck(selected,changes,host.game.library.songs)
 
 func render_list() -> void:
-	clear_children(list);row_checks.clear()
+	clear_children(list);row_checks.clear();row_buttons.clear();row_stripes.clear()
 	for i in public_items.size():
 		var item:Dictionary=public_items[i];var line=row(list)
+		var stripe=ColorRect.new();stripe.custom_minimum_size=Vector2(6,0);line.add_child(stripe);row_stripes.append(stripe)
 		var include=CheckBox.new();include.button_pressed=bool(item.get("include",true)) and bool(item.get("ready",false));include.disabled=not bool(item.get("ready",false));line.add_child(include)
 		row_checks.append(include)
 		include.toggled.connect(func(value):
 			if not job.busy():job.plan[i].include=value;job.plan[i].include_edited=true;warning_ack.button_pressed=false;update_controls())
-		var description=str(item.get("title",item.get("song_id","Song")))
-		description+="\n"+("Needs attention" if not item.get("ready",false) else ("Existing song" if item.get("existing",false) else "New song"))
-		if item.get("warnings",[]).size()>0:description+=" · %d review warnings" % item.warnings.size()
-		var select=button(description,line,func():selected=i;show_details());select.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		var select=button("",line,func():selected=i;showing_results=false;show_details());select.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 		select.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS;select.alignment=HORIZONTAL_ALIGNMENT_LEFT;select.custom_minimum_size.y=64
+		row_buttons.append(select)
 	if selected<0 and not public_items.is_empty():selected=0
+	refresh_rows()
+
+func levels_text(keys:Array) -> String:
+	var sorted=keys.duplicate();sorted.sort()
+	return " · ".join(sorted.map(func(key):return "%dK" % int(key)))
+
+# Reasons from the importer, said the way a player would.
+func plain(message:String) -> String:
+	match message:
+		"No missing or safely replaceable difficulties.":return "Already in your library; nothing new to add."
+		"Skipped by selection.":return "Set to skip this song."
+		"Canceled","Not imported after cancellation.":return "Stopped before this song."
+	return message
+
+# [text, colour] for a song's row: where it stands in review, in the import queue, or after.
+func row_state(i:int) -> Array:
+	var item:Dictionary=public_items[i]
+	for report in job.reports:
+		if int(report.index)!=i:continue
+		var keys:Array=report.get("keys",[]);var reason=plain(str(report.get("message","")))
+		match str(report.outcome):
+			"imported":return ["Imported  ·  "+levels_text(keys),GOOD]
+			"updated":return ["Updated  ·  added "+levels_text(keys),GOOD]
+			"skipped":return ["Skipped  ·  "+reason,QUIET]
+			"canceled":return ["Canceled  ·  "+reason,WARN]
+			_:return ["Failed  ·  "+reason,BAD]
+	if job.importing:
+		if i==job.current:return ["Importing now…",WORKING]
+		if i in job.queue:return ["Waiting to import",QUIET]
+	if not item.get("ready",false):
+		var errors:Array=item.get("errors",[])
+		return ["Needs attention  ·  "+(str(errors[0]) if not errors.is_empty() else "Choose at least one level."),BAD]
+	var where="Adds to a song you have" if item.get("existing",false) else "New song"
+	var text="%s  ·  %s" % [where,levels_text(item.get("selected_keys",[]))]
+	if not item.get("include",true):return ["Not selected  ·  "+text,QUIET]
+	var warnings:int=item.get("warnings",[]).size()
+	if warnings>0:return ["Ready, %d %s to check  ·  %s" % [warnings,"note" if warnings==1 else "notes",text],WARN]
+	return ["Ready  ·  "+text,GOOD]
+
+func refresh_rows() -> void:
+	for i in mini(row_buttons.size(),public_items.size()):
+		var state=row_state(i)
+		row_buttons[i].text=str(public_items[i].get("title",public_items[i].get("song_id","Song")))+"\n"+str(state[0])
+		row_stripes[i].color=state[1]
+
+func bar_style(fill_color:Color) -> void:
+	var back=StyleBoxFlat.new();back.bg_color=Color(1,1,1,.07);back.set_corner_radius_all(7)
+	var fill=StyleBoxFlat.new();fill.bg_color=fill_color;fill.set_corner_radius_all(7)
+	progress.add_theme_stylebox_override("background",back);progress.add_theme_stylebox_override("fill",fill)
+
+func set_step(phase_name:String) -> void:
+	var current={"idle":0,"scanning":1,"review":2,"importing":3,"prepared":3,"done":4}.get(phase_name,0)
+	if phase_name=="idle" and not public_items.is_empty():current=2
+	for i in step_labels.size():
+		var chip=step_labels[i];var style=StyleBoxFlat.new();style.set_corner_radius_all(10);style.content_margin_top=4;style.content_margin_bottom=4
+		style.bg_color=Color("2a3350") if i==current else Color(1,1,1,.04)
+		chip.add_theme_stylebox_override("normal",style)
+		chip.add_theme_color_override("font_color",Color.WHITE if i==current else (GOOD if i<current else QUIET))
+
+# The import log: one card per song with its outcome, the levels saved and why.
+func show_results() -> void:
+	clear_children(details);showing_results=true
+	var counts={"imported":0,"updated":0,"skipped":0,"failed":0,"canceled":0}
+	for report in job.reports:counts[report.outcome]=int(counts.get(report.outcome,0))+1
+	var added=int(counts.imported)+int(counts.updated)
+	label("Import finished" if counts.canceled==0 else "Import stopped",details,24)
+	label(("%d %s added to your library." % [added,"song" if added==1 else "songs"]) if added>0 else "No songs were added.",details,17)
+	var chips=row(details)
+	for pair in [["imported","IMPORTED",GOOD],["updated","UPDATED",GOOD],["skipped","SKIPPED",QUIET],["failed","FAILED",BAD],["canceled","CANCELED",WARN]]:
+		if int(counts[pair[0]])==0:continue
+		var chip=label("%d %s" % [int(counts[pair[0]]),pair[1]],chips,15);chip.add_theme_color_override("font_color",pair[2]);chip.size_flags_horizontal=Control.SIZE_SHRINK_BEGIN;chip.autowrap_mode=TextServer.AUTOWRAP_OFF
+	if int(counts.failed)>0:label("Fix the songs marked Failed on the left, then press RETRY FAILED.",details,15).add_theme_color_override("font_color",BAD)
+	for report in job.reports:
+		var card=PanelContainer.new();details.add_child(card)
+		var tone={"imported":GOOD,"updated":GOOD,"skipped":QUIET,"canceled":WARN}.get(str(report.outcome),BAD)
+		var style=StyleBoxFlat.new();style.bg_color=Color(1,1,1,.04);style.set_corner_radius_all(10);style.border_width_left=5;style.border_color=tone
+		style.content_margin_left=14;style.content_margin_right=12;style.content_margin_top=8;style.content_margin_bottom=8;card.add_theme_stylebox_override("panel",style)
+		var lines=VBoxContainer.new();card.add_child(lines)
+		var top=row(lines);label(str(report.title),top,17)
+		var tag=label(str(report.outcome).to_upper(),top,14);tag.size_flags_horizontal=Control.SIZE_SHRINK_END;tag.autowrap_mode=TextServer.AUTOWRAP_OFF;tag.add_theme_color_override("font_color",tone)
+		var keys:Array=report.get("keys",[])
+		if not keys.is_empty():label("Levels saved: "+levels_text(keys),lines,15)
+		var reason=plain(str(report.get("message","")))
+		if not reason.is_empty():label(reason,lines,15).add_theme_color_override("font_color",tone if tone!=GOOD else QUIET)
+		for warning in report.get("warnings",[]):label("•  "+str(warning),lines,14).add_theme_color_override("font_color",WARN)
+	label("Tap a song on the left to see its details.",details,13).add_theme_color_override("font_color",QUIET)
 
 func show_details() -> void:
 	clear_children(details)
@@ -176,6 +294,14 @@ func show_details() -> void:
 		var image=Image.load_from_file(ProjectSettings.globalize_path(str(item.background)))
 		if image:
 			var art=TextureRect.new();art.texture=ImageTexture.create_from_image(image);art.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;art.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;art.custom_minimum_size.y=110;details.add_child(art)
+	var cover_row=row(details);button("CHOOSE COVER",cover_row,func():choose_match("cover"))
+	var cover_path=str(item.get("cover",""))
+	if not cover_path.is_empty():
+		button("NO COVER",cover_row,func():
+			if not job.busy():job.plan[index].erase("cover");public_items[index].erase("cover");show_details())
+		var cover_image=Image.load_from_file(ProjectSettings.globalize_path(cover_path))
+		if cover_image:
+			var cover=TextureRect.new();cover.texture=ImageTexture.create_from_image(cover_image);cover.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;cover.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;cover.custom_minimum_size.y=110;details.add_child(cover)
 	label("Difficulties",details,19)
 	for chart in item.get("chart_reports",[]):
 		var line=row(details);var checked=CheckBox.new();checked.text="%d keys · %d notes · %.2f BPM" % [int(chart.keys),int(chart.notes),float(chart.bpm)];checked.button_pressed=int(chart.keys) in item.get("selected_keys",[]);checked.disabled=not chart.errors.is_empty();line.add_child(checked)
@@ -228,7 +354,13 @@ func update_controls() -> void:
 	files_button.disabled=busy;folder_button.disabled=busy;clear_button.disabled=busy
 	import_button.disabled=recovery_blocked or busy or count==0 or (warnings>0 and not warning_ack.button_pressed)
 	import_button.text="IMPORT %d SELECTED" % count
-	warning_ack.visible=warnings>0 and not busy
+	if job.importing:import_button.text="IMPORTING %d OF %d…" % [mini(job.reports.size()+1,job.selection_count),job.selection_count]
+	elif busy:import_button.text="CHECKING FILES…"
+	warning_ack.visible=warnings>0 and not busy and not showing_results
+	if not busy and not recovery_blocked:
+		if showing_results:import_button.text="IMPORT FINISHED  ·  ADD MORE FILES OR CLOSE";import_button.disabled=true
+		elif count==0 and not job.plan.is_empty():import_button.text="SELECT A READY SONG TO IMPORT"
+		elif count>0 and warnings>0 and not warning_ack.button_pressed:import_button.text="TICK THE WARNINGS BOX TO IMPORT %d" % count
 	cancel_button.visible=busy
 	retry_button.visible=not busy and job.reports.any(func(report):return report.outcome in ["failed","canceled"])
 	report_button.visible=not busy and (not job.reports.is_empty() or not job.scan_messages.is_empty())
@@ -247,28 +379,53 @@ func _process(_delta:float) -> void:
 	var changed=job.poll(revision)
 	if not changed.is_empty():
 		revision=int(changed.revision);last_phase=str(changed.phase);status.text=str(changed.message)
-		var total=int(changed.get("total",0));var done=int(changed.get("done",0));progress.value=100.0*done/total if total>0 else 0
+		var total=int(changed.get("total",0));var done=int(changed.get("done",0))
+		var fraction=float(done)/total if total>0 else 0.0
+		if last_phase in ["importing","prepared"] and total>0 and int(changed.get("bytes_total",0))>0 and done<total:
+			fraction+=clampf(float(changed.bytes_done)/float(changed.bytes_total),0.0,1.0)/total
+		progress.value=100.0*fraction
+		bar_style(GOOD if last_phase in ["done","review"] else WORKING)
+		progress.indeterminate=job.busy() and total<=0
+		if last_phase in ["importing","prepared"]:progress_text.text="Song %d of %d" % [mini(done+1,total),total]
+		elif last_phase=="scanning":progress_text.text="%d of %d" % [mini(done+1,total),total] if total>0 else "Reading files"
+		elif last_phase=="done":progress_text.text="Done";progress.value=100
+		else:progress_text.text=""
+		set_step(last_phase)
+		var tone=QUIET
 		if last_phase in ["review","done","idle"] and job.task<0:
-			public_items=changed.get("items",[]);render_list();show_details()
+			public_items=changed.get("items",[]);render_list()
+			if last_phase=="done":show_results()
+			elif not showing_results or last_phase=="review":showing_results=false;show_details()
 			if last_phase=="review":warning_ack.button_pressed=false
 			if not changed.get("scan_messages",[]).is_empty():status.text+="\n"+" ".join(changed.scan_messages)
 		if last_phase=="done":
 			var counts={"imported":0,"updated":0,"skipped":0,"failed":0,"canceled":0}
 			for report in job.reports:counts[report.outcome]=int(counts.get(report.outcome,0))+1
-			summary.text="%d imported · %d updated · %d skipped · %d failed · %d canceled" % [counts.imported,counts.updated,counts.skipped,counts.failed,counts.canceled]
-			for report in job.reports:
-				label("%s — %s %s" % [str(report.title),str(report.outcome),str(report.message)],details,15)
-				if not report.get("keys",[]).is_empty():label("Saved key counts: "+str(report.keys),details,14)
-				for warning in report.get("warnings",[]):label(str(warning),details,14).modulate=Color("ffd36a")
+			var parts=[]
+			for key in ["imported","updated","skipped","failed","canceled"]:
+				if int(counts[key])>0:parts.append("%d %s" % [int(counts[key]),key])
+			summary.text="Finished: "+(", ".join(parts) if not parts.is_empty() else "nothing imported")+"."
+			tone=BAD if int(counts.failed)>0 else (WARN if int(counts.canceled)>0 else GOOD)
 		elif last_phase=="review":
 			var ready_count=public_items.filter(func(item):return item.get("ready",false)).size()
-			summary.text="%d found · %d ready · %d need attention. Review matches before importing." % [public_items.size(),ready_count,public_items.size()-ready_count]
-		else:summary.text=str(changed.message)
-		update_controls()
+			var attention=public_items.size()-ready_count
+			if public_items.is_empty():summary.text=str(changed.message);tone=WARN
+			else:
+				summary.text="Found %d %s: %d ready%s." % [public_items.size(),"song" if public_items.size()==1 else "songs",ready_count,(", %d %s attention" % [attention,"needs" if attention==1 else "need"]) if attention>0 else ""]
+				tone=WARN if attention>0 else GOOD
+		elif last_phase in ["importing","prepared"]:summary.text="Importing. Songs already finished stay saved if you cancel.";tone=WORKING
+		else:summary.text=str(changed.message);tone=WORKING if job.busy() else QUIET
+		summary.add_theme_color_override("font_color",tone)
+		refresh_rows();update_controls()
+	if job.busy():
+		# A moving ellipsis so a long step never looks frozen.
+		busy_time+=_delta;var dots=".".repeat(1+int(busy_time*2.5)%3)
+		if not progress_text.text.is_empty():progress_text.text=progress_text.text.rstrip(".")+dots
 	if job.task<0 and job.phase()=="prepared":
 		var result=job.commit_prepared(host.game.library.songs)
 		if result.has("songs"):
 			host.game.library.songs=result.songs;host.chart_cache.erase(str(result.id));host.game.song_metadata.erase(str(result.id));host.game.song_background_textures.erase(str(result.id))
+			save_chosen_cover(str(result.id),str(job.plan[job.current].get("cover","")))
 	if job.importing:job.advance(host.game.library.songs)
 	elif refresh_pending and job.phase()=="done":
 		refresh_pending=false;host.game.refresh_library()
@@ -277,3 +434,12 @@ func _process(_delta:float) -> void:
 		if host.game.lobby:host.game.lobby.refresh()
 		host.refresh_songs();host.status_label.text=status.text
 func _exit_tree() -> void:job.shutdown()
+
+# A cover picked during review becomes the song's album art once it has been imported.
+func save_chosen_cover(id:String,path:String) -> void:
+	if path.is_empty() or id.is_empty():return
+	var image:Variant=host.game.load_picked_image(path)
+	if image is Image:
+		var problem=host.game.save_cover_image(id,image)
+		if not problem.is_empty():status.text=problem
+	else:status.text=str(image)

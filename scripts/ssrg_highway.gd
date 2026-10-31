@@ -105,8 +105,8 @@ func flash_point(x: float) -> Vector3:
 	var on_line = Vector3(x, .035, 0)
 	return on_line + Vector3.UP*FLASH_PULL if world.game.uses_ssrg_gameplay() else on_line + (world.camera.global_position - on_line).normalized() * FLASH_PULL
 
-# Match the recovered SSRG sprite dimensions without additional enlargement.
-const HIT_SCALE = 1.0
+# Slightly smaller than the source sprite: full size reads too large on big phones (iPhone 16 Pro Max).
+const HIT_SCALE = 0.85
 func make_hit() -> Dictionary:
 	# Source centered 310x186 sprite under def_c_trans scale (2,2,1).
 	var mesh = QuadMesh.new(); mesh.size = Vector2(620,372)*world.SSRG_UNIT*HIT_SCALE

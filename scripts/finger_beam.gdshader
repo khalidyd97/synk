@@ -25,7 +25,7 @@ void vertex() {
 void fragment() {
 	if(ssrg_warp.x<0.5 && outside_rails(INV_VIEW_MATRIX[3].xyz)) discard;
 	// A flat, sharp-edged column that fades toward the far end of the highway.
-	float reach = ssrg_warp.x>0.5?texture(ssrg_beam_art,UV).a:smoothstep(-58.0,-6.0,world_z);
+	float reach = smoothstep(ssrg_warp.x>0.5?-ssrg_beam_reach:-58.0,-0.3,world_z);
 	ALBEDO = tint;
 	ALPHA = 0.3 * reach * intensity;
 }

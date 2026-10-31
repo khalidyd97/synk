@@ -7,6 +7,9 @@ global uniform float synk_time;
 uniform vec3 base_color : source_color = vec3(0.60, 0.36, 1.0);
 uniform vec3 sweep_color : source_color = vec3(0.68, 0.91, 1.0);
 
+#include "res://scripts/ssrg_warp.gdshaderinc"
+void vertex(){VERTEX=ssrg_warp_canvas(VERTEX,MODEL_MATRIX);}
+
 void fragment() {
 	float position = fract(animation_time * 0.12);
 	float distance_to_sweep = abs(UV.x - position);

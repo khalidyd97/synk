@@ -104,8 +104,8 @@ func restore_run() -> void:
 func retry() -> void:
 	details_open=false;restore_run();game.start_game(game.last_play_notes,game.auto_play,game.last_section)
 func leave_pause() -> void:
-	game.return_home();game.ssrg_playables.open()
+	game.return_home();game.open_ssrg_playables()
 func leave_results() -> void:
-	result_info={};game.set_mode("menu");game.ssrg_playables.open()
+	result_info={};game.set_mode("menu");game.open_ssrg_playables()
 func show_details() -> void:
 	details_open=true;result_root.hide();game.results_screen.show_results(result_info)
