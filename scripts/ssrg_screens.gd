@@ -104,7 +104,10 @@ func restore_run() -> void:
 func retry() -> void:
 	details_open=false;restore_run();game.start_game(game.last_play_notes,game.auto_play,game.last_section)
 func leave_pause() -> void:
-	game.return_home();game.open_ssrg_playables()
+	# SYNK songs on the SSRG look go back to the SYNK song list.
+	var imported=game.ssrg_playable_run and not game.ssrg_forced_run
+	game.return_home()
+	if imported:game.open_ssrg_playables()
 func leave_results() -> void:
 	result_info={};game.set_mode("menu");game.open_ssrg_playables()
 func show_details() -> void:

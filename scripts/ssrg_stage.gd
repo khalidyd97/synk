@@ -135,8 +135,9 @@ func warmup(world: Node3D) -> void :
 func configure(world: Node3D) -> void :
 	var stock_road = true
 	press.visible = stock_road
-	# Fixed source gold tier, independent of combo/rave/card UI or song palette.
-	press.material_override.set_shader_parameter("base_color",Color8(255,220,65,149))
+	# Source gold tier, unless the player picked a judgment band color.
+	var band = world.custom_color("band_color")
+	press.material_override.set_shader_parameter("base_color",Color(band,149/255.0) if band != null else Color8(255,220,65,149))
 	var rail_tint = world.custom_color("rail_color")
 	if rail_tint == null: rail_tint = Color.WHITE
 	for rail in rails:

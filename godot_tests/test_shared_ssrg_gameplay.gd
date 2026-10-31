@@ -59,7 +59,23 @@ func run() -> void:
 	check(is_equal_approx(game.note_travel_seconds(),3.5/game.note_speed),"SSRG style follows SYNK's note speed")
 	game.set_mode("menu")
 	check(game.highway_style=="ssrg" and not world.ssrg_theme.active,"Leaving play keeps the style and drops the stage")
+	# SSRG mode: the switch makes SYNK songs use SSRG rules too, then SYNK's own results.
+	var saved_mode=game.prefs.get_value("highway","ssrg_mode",null)
+	game.prefs.set_value("highway","ssrg_mode",true)
+	game.start_game(notes,true)
+	game.countdown=0; game.song_time=2.0
+	check(game.ssrg_playable_run and game.ssrg_forced_run,"SSRG mode plays the SYNK song with SSRG rules")
+	check(is_equal_approx(game.note_travel_seconds(),3.5/game.ssrg_note_speed()),"SSRG mode uses the SSRG note speed")
+	check(game.live[1].note.get("ssrg_path",false),"SSRG mode uses straight SSRG connectors")
+	var results={}; game.begin_finish(results)
+	check(not results.ssrg,"SSRG mode keeps SYNK's results screen")
+	game.finishing=false; game.set_mode("menu")
+	check(not game.ssrg_playable_run and not game.ssrg_forced_run and game.highway_style=="ssrg","Leaving SSRG mode restores the SSRG style")
 	game.highway_style="gold"
+	game.start_game(notes,true)
+	check(not game.ssrg_playable_run,"SSRG mode needs the SSRG style")
+	game.set_mode("menu")
+	game.prefs.set_value("highway","ssrg_mode",saved_mode); game.prefs.save("user://preferences.cfg")
 	game.queue_free(); await process_frame
 	print("Shared SSRG gameplay failures: ",failures)
 	quit(failures)

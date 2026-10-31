@@ -38,6 +38,7 @@ const COLORS = SynkCoverPalette.DEFAULT
 # The live palette; each song swaps in colors taken from its cover art.
 var colors: Array = COLORS + [COLORS[1]]
 var stage_color = Color("0b1030")
+var laser_streaks: Node3D
 var cover_palette_active = false
 var game: Control
 var camera: Camera3D
@@ -239,6 +240,7 @@ func _ready() -> void:
 	build_track()
 	ssrg_theme=preload("res://scripts/ssrg_highway.gd").new(); ssrg_theme.world=self; add_child(ssrg_theme)
 	build_effects()
+	laser_streaks=preload("res://scripts/laser_streaks.gd").new(); add_child(laser_streaks); laser_streaks.build(self)
 	synk_hits=preload("res://scripts/synk_hit_effects.gd").new();synk_hits.world=self;add_child(synk_hits)
 	build_play_aids()
 	build_cover_backdrop()
@@ -1571,6 +1573,7 @@ func _process(delta: float) -> void:
 	update_multiplier_wave(delta)
 	animate_miss_shake(delta)
 	update_cover_backdrop()
+	laser_streaks.update()
 	animate_effects(delta)
 	var visible_keys = {}
 	for beam in active_beams: beam.visible = false

@@ -121,6 +121,13 @@ var ssrg_presentation:Node
 var ssrg_screens:Control
 var ssrg_playable_run = false
 var ssrg_lane_count = 13
+# A SYNK song played with SSRG rules ("SSRG mode" switch on the SSRG highway style).
+var ssrg_forced_run = false
+func forces_ssrg_mode() -> bool:
+	return highway_style=="ssrg" and bool(prefs.get_value("highway","ssrg_mode",false))
+func change_ssrg_mode(on: bool) -> void:
+	prefs.set_value("highway","ssrg_mode",on); prefs.save("user://preferences.cfg")
+	if settings_panel: settings_panel.refresh()
 # The SSRG look: imported SSRG runs, and SYNK songs played with the "ssrg" highway style.
 # SSRG judging and scoring rules stay with ssrg_playable_run.
 func uses_ssrg_gameplay() -> bool:
@@ -721,7 +728,7 @@ func recorder_plate(bounds: Rect2) -> Panel:
 func set_mode(value: String,animate_transition:bool=true) -> void:
 	var was_ssrg_look=uses_ssrg_gameplay()
 	if ssrg_playable_run and value not in ["play","paused"]:
-		ssrg_playable_run=false
+		ssrg_playable_run=false; ssrg_forced_run=false
 		highway_style=ssrg_playable_previous_style if ssrg_playable_previous_style in ["gold","neon","ssrg"] else "gold"
 		if field and field.world: field.world.refresh_highway_look()
 	if value!=mode and animate_transition:
@@ -1180,6 +1187,9 @@ func warm_hud_text() -> void:
 		item[0].visible = item[2]; item[0].modulate = item[3]
 
 func start_game(notes: Array,automated: bool = false,section: String = "",is_practice: bool=false) -> void:
+	# SSRG mode: the SYNK song is judged, scored and sped like an imported SSRG run.
+	if (not ssrg_playable_run or ssrg_forced_run) and forces_ssrg_mode() and mode!="editor" and not is_practice:
+		ssrg_playable_run=true; ssrg_forced_run=true; ssrg_lane_count=13; ssrg_playable_previous_style="ssrg"
 	# Mirror and other note modifiers apply to real runs; a replay reuses the exact notes it recorded.
 	if extras:
 		if not extras.replay_pending and not automated: notes=extras.apply_mods(notes)
@@ -2432,7 +2442,8 @@ func _audio_finished() -> void:
 # carries the combo counter to the middle; the results screen then takes over beneath it.
 func begin_finish(results: Dictionary) -> void:
 	if finishing: return
-	results["ssrg"]=ssrg_playable_run
+	# SSRG mode keeps SYNK's own results screen; its retry starts the SYNK song again.
+	results["ssrg"]=ssrg_playable_run and not ssrg_forced_run
 	results["ssrg_lane_count"]=ssrg_lane_count
 	results["ssrg_style"]=ssrg_playable_previous_style
 	pending_results=results

@@ -57,7 +57,7 @@ void fragment() {
 	vec3 wash_color = mix(rail_glow_left,rail_glow_right,smoothstep(0.15,0.85,UV.x));
 	vec3 wash = wash_color*haze*rail_glow_opacity*(1.25+glow_beat*0.45);
 	if (photo) { art = texture(cover, uv).rgb; wash = vec3(0.0); }
-	vec3 base=plain ? vec3(0.0) : photo ? art : (art+wash) * brightness;
+	vec3 base=plain ? vec3(0.0) : photo ? art * brightness : (art+wash) * brightness;
 	if(photo){
 		// Source quarter texture is opaque at its outer corner (0,0),
 		// transparent toward (1,1). Mirror edges inward, leaving the photo clear.

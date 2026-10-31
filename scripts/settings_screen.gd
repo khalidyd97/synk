@@ -18,6 +18,8 @@ var shape_tiles: Dictionary = {}
 var render_scale_buttons: Dictionary = {}
 var hit_style_buttons: Dictionary = {}
 var style_tiles: Dictionary = {}
+var ssrg_mode_row: PanelContainer
+var ssrg_mode_switch: Switch
 var color_pickers: Dictionary = {}
 var color_reset_buttons: Dictionary = {}
 var rail_glow_input: Stepper
@@ -482,6 +484,9 @@ func build_highway(items: VBoxContainer) -> void:
         var tile=StyleTile.new(kind); tile_row.add_child(tile); tile.custom_minimum_size=Vector2(138,136)
         tile.pressed.connect(func(): if not Action.was_dragged(tile): game.change_highway_look("style",kind))
         style_tiles[kind]=tile
+    ssrg_mode_row=row(items,"SSRG mode","SYNK songs use SSRG judging, scoring, fever and note speed, not just its look.",112)
+    ssrg_mode_switch=Switch.new(); add_control(ssrg_mode_row,ssrg_mode_switch,152)
+    connect_switch(ssrg_mode_switch,game.change_ssrg_mode)
     var modes=row(items,"Colors","Theme keeps the style's colors. Adaptive takes them from the song's artwork.",148)
     var mode_row=HBoxContainer.new(); mode_row.add_theme_constant_override("separation",12)
     add_control(modes,mode_row,440)
@@ -557,9 +562,10 @@ func build_stage_effects(items: VBoxContainer) -> void:
         add_control(row(items,key,hint,96),control,152)
         control.set_pressed_no_signal(game.features.effect(key)>0)
         connect_switch(control,func(on): game.features.set_effect(key,1.0 if on else 0.0))
+    effect_row(items,"Lasers","Light streaks that shoot along both sides of the highway. 0% turns them off.")
     effect_row(items,"Background brightness","Adjust artwork brightness behind the highway.")
     action(items,"RESET STAGE EFFECTS",func():
-        for key in ["Background brightness"]: effect_inputs[key].value=100
+        for key in ["Lasers","Background brightness"]: effect_inputs[key].value=100
         for key in stage_effect_switches:
             game.features.set_effect(key,game.features.effect_default(key)); stage_effect_switches[key].set_pressed_no_signal(false))
 func editor_switch(items: VBoxContainer,key: String,title: String,hint: String,value: bool,callback: Callable) -> Switch:
@@ -589,6 +595,9 @@ func refresh() -> void:
     for key in hit_style_buttons: hit_style_buttons[key].set_selected(key==game.hit_style)
     for value in render_scale_buttons: render_scale_buttons[value].set_selected(is_equal_approx(value,game.render_scale()))
     for kind in style_tiles: style_tiles[kind].selected=kind==game.highway_style
+    if ssrg_mode_row:
+        ssrg_mode_row.visible=game.highway_style=="ssrg"
+        ssrg_mode_switch.set_pressed_no_signal(bool(game.prefs.get_value("highway","ssrg_mode",false)))
     for kind in color_mode_tiles: color_mode_tiles[kind].selected=kind==game.highway_colors
     for swatch in rail_swatches: swatch.selected=swatch.color_code==game.rail_color and (game.highway_colors=="adaptive" or not game.gameplay_colors.has("rail"))
     for swatch in band_swatches: swatch.selected=swatch.color_code==game.band_color and (game.highway_colors=="adaptive" or not game.gameplay_colors.has("band"))
