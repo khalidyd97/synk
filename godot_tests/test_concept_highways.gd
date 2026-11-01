@@ -34,6 +34,7 @@ func run():
  for style in ["aurora","solar"]:
   game.change_highway_look("style",style);world.apply_camera();world.update_ssrg_warp();game.field.sync_projection_style()
   check(world.concept_theme.active and world.concept_theme.visible,"Dedicated geometry is active for "+style)
+  check(is_equal_approx(world.get_node("JudgmentPads").scale.y,.8),"New highways use a full judgment bar rather than a line")
   var painted=world.concept_theme.road_sprite
   check(painted.mesh is QuadMesh,"Highway is a flat image sprite")
   check(world.concept_theme.get_child_count()==14,"Only one painted highway and thirteen flat markers are built")
@@ -62,6 +63,9 @@ func run():
    await process_frame;await process_frame;await RenderingServer.frame_post_draw
    root.get_texture().get_image().save_png("res://.tools/new-highway-review/%s-gameplay.png" % style)
    var rendered=game.field.viewport.get_texture().get_image()
+   for depth in [-.3,.3]:
+    var bar_point=Vector2i(world.camera.unproject_position(Vector3(0,.035,world.ssrg_warped_z(depth))))
+    check(rendered.get_pixelv(bar_point).v>.05,"Painted judgment bar is visible above and below the hit centre")
    var clear_point=Vector2i(world.camera.unproject_position(Vector3(0,.008,world.SSRG_STAGE_DISTANCE*(.65-1))))
    check(rendered.get_pixelv(clear_point).v<.01,"Highway interior stays solid black with no baked lane lines or reflections")
    for side in [-1,1]:

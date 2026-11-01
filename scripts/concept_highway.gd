@@ -50,12 +50,12 @@ func refresh() -> void:
 	road_material.set_shader_parameter("recolor_rails",custom!=null)
 	road_material.set_shader_parameter("tint",rail)
 	marker_material.set_shader_parameter("base_color",Color(rail,.6))
-	# Reuse the source's painted judgment sprite as a thin timing ribbon.
-	world.judgment_material.shader=preload("res://scripts/ssrg_press.gdshader")
+	# Reuse the source's painted judgment artwork as a full bar, beneath notes and tails.
+	world.judgment_material.shader=preload("res://scripts/concept_judgment.gdshader")
 	world.judgment_material.set_shader_parameter("artwork",preload("res://assets/ssrg/imported/judgment_Main_black_BG3.png"))
-	world.get_node("JudgmentPads").scale.y=.025
+	world.get_node("JudgmentPads").scale.y=.8
 	var band:Color=Color("ffd3a0") if solar else Color("a2efff")
 	custom=world.custom_color("band_color")
 	if custom!=null:band=custom
-	world.judgment_material.set_shader_parameter("base_color",Color(band,.92))
+	world.judgment_material.set_shader_parameter("base_color",Color(band,.64))
 	for border in world.judgment_borders:border.set_shader_parameter("color",Color.TRANSPARENT)
