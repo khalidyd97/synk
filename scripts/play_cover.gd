@@ -30,7 +30,7 @@ func _ready() -> void:
 
 # Where the loading cover lands; results flights use this same rectangle.
 func target_rect() -> Rect2:
-	if not game.uses_ssrg_gameplay():
+	if not game.uses_ssrg_gameplay() and game.highway_style not in preload("res://scripts/concept_highway.gd").STYLES:
 		var corner = clampf(size.y*.17,72.0,190.0)
 		return Rect2(Vector2(size.x-corner-size.x*.03,size.y*.04),Vector2(corner,corner))
 	var side = clampf(size.y*.20,72.0,170.0)

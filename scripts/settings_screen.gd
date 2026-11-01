@@ -175,6 +175,21 @@ class StyleTile extends Button:
         if is_hovered() or has_focus(): box.border_color=Color("a499e8")
         box.set_border_width_all(2 if selected else 1)
         draw_style_box(box,Rect2(Vector2.ZERO,size))
+        if style_name in ["aurora","solar"]:
+            var solar=style_name=="solar"
+            var texture:Texture2D=preload("res://scripts/concept_highway.gd").STAGES[style_name]
+            draw_texture_rect(texture,Rect2(Vector2(8,8),Vector2(size.x-16,size.y*.59)),false,Color(1,1,1,.7))
+            var rail=Color("f5c482") if solar else Color("a2efff")
+            var a=Vector2(size.x*.48,size.y*.16);var b=Vector2(size.x*.52,size.y*.16)
+            var c=Vector2(size.x*.85,size.y*.64);var d=Vector2(size.x*.15,size.y*.64)
+            draw_colored_polygon(PackedVector2Array([a,b,c,d]),Color("090b12"))
+            draw_line(a,d,rail.darkened(.5),5,true);draw_line(b,c,rail.darkened(.5),5,true)
+            draw_line(a,d,rail,1.5,true);draw_line(b,c,rail,1.5,true)
+            draw_line(a.lerp(d,.87),b.lerp(c,.87),rail,1.5,true)
+            var font=ThemeDB.fallback_font;var title:String=preload("res://scripts/concept_highway.gd").LABELS[style_name]
+            var width=font.get_string_size(title,HORIZONTAL_ALIGNMENT_LEFT,-1,14).x
+            draw_string(font,Vector2((size.x-width)*.5,size.y*.88),title,HORIZONTAL_ALIGNMENT_LEFT,-1,14,Color.WHITE)
+            return
         var gold = style_name=="gold"
         if style_name=="ssrg":
             # Dark glass track, silver rails, glass band and one glossy note.
@@ -292,7 +307,7 @@ var selected_sections: Dictionary={}
 var trail_style_input: OptionButton
 const PAGE_NAMES={"gameplay":"Gameplay","audio":"Audio & sync","visuals":"Visual effects","editor":"Editor preferences"}
 const SUBPAGES={"gameplay":{"play":"Play","browsing":"Browsing"},"audio":{"timing":"Timing","headset":"Headset"},"visuals":{"highway":"Highway","notes":"Notes","hits":"Hit effects","stage":"Stage effects","colors":"Colors"},"editor":{"recording":"Recording","guides":"Guides & audio"}}
-const SUBPAGE_HINTS={"colors":"Choose Theme in Highway to use custom colors. Adaptive keeps your choices saved.","play":"Tune how notes travel while you play.","browsing":"Choose how the song library behaves.","timing":"Match the judgment timing to your music.","headset":"Compensate for wireless audio delay.","highway":"Choose the rail style, colors, and viewing angle.","notes":"Choose note shapes, trail styles, and sizes.","hits":"Tune hit feedback and particle intensity.","stage":"Choose your stage atmosphere. Combine effects freely.","recording":"Personal recording aids and playback preferences.","guides":"Listen for the rhythm while you create charts."}
+const SUBPAGE_HINTS={"colors":"Choose Theme in Highway to use custom colors. Adaptive keeps your choices saved.","play":"Tune how notes travel while you play.","browsing":"Choose how the song library behaves.","timing":"Match the judgment timing to your music.","headset":"Compensate for wireless audio delay.","highway":"Choose your rail style and colors. Gameplay uses the SSRG view.","notes":"Choose note shapes, trail styles, and sizes.","hits":"Tune hit feedback and particle intensity.","stage":"Choose your stage atmosphere. Combine effects freely.","recording":"Personal recording aids and playback preferences.","guides":"Listen for the rhythm while you create charts."}
 const PAGE_HINTS={"gameplay":"Tune your highway and browsing experience.","audio":"Match your taps to the music and your headset.","visuals":"Customize the highway, note sizes and stage effects.","editor":"Personal preferences for every chart you create."}
 
 func style(fill: Color=Color("101010"),edge: Color=Color("2c2d44"),radius: int=22) -> StyleBoxFlat:
@@ -492,14 +507,14 @@ func section(items: VBoxContainer,title: String) -> void:
     var heading=label(items,title,13,ACCENT); heading.custom_minimum_size.y=26
 func build_highway(items: VBoxContainer) -> void:
     highway_angle_input=Stepper.new(18,44,2,game.highway_angle,"°",0)
-    angle_row=row(items,"Highway angle","Choose how flat or steep the SYNK highway looks.")
+    angle_row=row(items,"Recorder angle","Adjust the camera while recording charts. Gameplay uses the fixed SSRG view.")
     add_control(angle_row,highway_angle_input)
     highway_angle_input.value_changed.connect(game.change_highway_angle)
     var preview=preload("res://scripts/highway_look_preview.gd").new(); preview.game=game; items.add_child(preview)
-    var styles=row(items,"Highway style","Gold or Neon rails and judgment band, or the SSRG highway.",166)
-    var tile_row=HBoxContainer.new(); tile_row.add_theme_constant_override("separation",12)
+    var styles=row(items,"Highway style","Five styles. Shared 13-lane SSRG view.",322)
+    var tile_row=GridContainer.new(); tile_row.columns=3; tile_row.add_theme_constant_override("h_separation",12); tile_row.add_theme_constant_override("v_separation",12)
     add_control(styles,tile_row,440)
-    for kind in ["gold","neon","ssrg"]:
+    for kind in game.HIGHWAY_STYLES:
         var tile=StyleTile.new(kind); tile_row.add_child(tile); tile.custom_minimum_size=Vector2(138,136)
         tile.pressed.connect(func(): if not Action.was_dragged(tile): game.change_highway_look("style",kind))
         style_tiles[kind]=tile
@@ -656,7 +671,7 @@ func refresh() -> void:
     for kind in style_tiles: style_tiles[kind].selected=kind==game.highway_style
     if ssrg_mode_row:
         ssrg_mode_row.visible=game.highway_style=="ssrg"
-        angle_row.visible=game.highway_style!="ssrg"
+        angle_row.visible=game.uses_recorder_colors()
         ssrg_mode_switch.set_pressed_no_signal(bool(game.prefs.get_value("highway","ssrg_mode",false)))
     for kind in color_mode_tiles: color_mode_tiles[kind].selected=kind==game.highway_colors
     for swatch in rail_swatches: swatch.selected=swatch.color_code==game.rail_color and (game.highway_colors=="adaptive" or not game.gameplay_colors.has("rail"))

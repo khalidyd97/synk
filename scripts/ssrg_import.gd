@@ -9,7 +9,7 @@ extends RefCounted
 #          ticks count from before the audio (1004_13.seq: tick 896, and onsets in its .ogg
 #          line up with the notes only when 1.721 s is taken off). Position 13 is the end.
 # A long note that stays in place is a hold and one that moves is a slide, however short:
-# SSRG has no flicks. The 13 positions spread across SYNK's 10 lanes. The song audio is plain Ogg Vorbis.
+# SSRG has no flicks. The 13 positions map directly to SYNK's 13 lanes. The song audio is plain Ogg Vorbis.
 const RECORD = 24
 
 static func is_audio(bytes: PackedByteArray) -> bool:

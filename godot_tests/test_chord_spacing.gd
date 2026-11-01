@@ -17,10 +17,10 @@ func run() -> void:
     var right=capture.end(2,1.10,point(5)); var left=capture.end(1,1.14,point(4))
     check(left.time==right.time and separated(capture.notes),"Release order does not break chord alignment or spacing")
     check(left.kind=="tap" and right.kind=="tap","Auto lane movement never turns a tap into a slide")
-    for edge in [0,9]:
+    for edge in [0,SynkChart.MAX_LANE]:
         capture=SynkCapture.new(); capture.begin(1,2,point(edge)); capture.begin(2,2.03,point(edge))
         capture.end(1,2.08,point(edge)); capture.end(2,2.09,point(edge))
-        check(separated(capture.notes) and capture.notes.all(func(n): return int(n.lane)>=0 and int(n.lane)<=9),"Same-lane double touches separate within highway edges")
+        check(separated(capture.notes) and capture.notes.all(func(n): return int(n.lane)>=0 and int(n.lane)<=SynkChart.MAX_LANE),"Same-lane double touches separate within highway edges")
     capture=SynkCapture.new()
     for i in 4: capture.begin(i,3+i*.01,point(4))
     for i in 4: capture.end(i,3.15+i*.01,point(4))
@@ -37,7 +37,7 @@ func run() -> void:
     capture.begin(1,6,point(4),"hold"); capture.begin(2,6.03,point(5))
     capture.move(1,7,point(4)); var hold=capture.end(1,8,point(4)); capture.end(2,6.12,point(5))
     check(hold.kind=="hold" and hold.end_lane==hold.lane and hold.path.is_empty(),"Shifted stationary hold stays stationary")
-    var slide=SynkChart.note(9,0,"slide"); slide.duration=1; slide.end_lane=9; slide.path=[{"offset":0.0,"lane":0.0},{"offset":1.0,"lane":9.0}]; slide.checkpoints=[.5]
+    var slide=SynkChart.note(9,0,"slide"); slide.duration=1; slide.end_lane=SynkChart.MAX_LANE; slide.path=[{"offset":0.0,"lane":0.0},{"offset":1.0,"lane":float(SynkChart.MAX_LANE)}]; slide.checkpoints=[.5]
     var original=slide.duplicate(true); var tap=SynkChart.note(9,0)
     var result=SynkNoteSpacing.place(slide,[tap,slide],[],2.4)
     check(result.resolved and slide==original and int(tap.lane)>=3,"A full-width slide stays intact while the free tap moves to its other side")
@@ -45,7 +45,7 @@ func run() -> void:
     capture=SynkCapture.new(); capture.begin(1,10.04,point(5),"tap",[fixed]); var overdub=capture.end(1,10.12,point(5))
     check(fixed==original and overdub.time==fixed.time and abs(int(overdub.lane)-int(fixed.lane))>=3,"Overdub aligns and moves only the new note, preserving saved notes")
     var crowded: Array=[]
-    for i in 5: crowded.append(SynkChart.note(11,4))
+    for i in 6: crowded.append(SynkChart.note(11,4))
     original={"notes":crowded.duplicate(true)}; result=SynkNoteSpacing.place(crowded[0],crowded,[],2.4)
     check(not result.resolved and crowded==original.notes,"Impossible chords never drop or corrupt notes")
     print("Chord timing and automatic spacing: "+("PASS" if failures==0 else "FAIL"))

@@ -39,7 +39,7 @@ func _initialize() -> void:
 	capture.begin(1,3.5,Vector2(.5,.765),"flick")
 	check(capture.end(1,3.6,Vector2(.5,.845)).is_empty(),"Manual downward flick remains disallowed")
 	capture.begin(1,4,Vector2(.5,.765)); capture.move(1,4.3,Vector2(.7,.765)); capture.move(1,4.6,Vector2(.3,.765)); n=capture.end(1,4.9,Vector2(.5,.765))
-	check(n.kind=="slide" and SynkChart.lane_at(n,4.3)>6 and SynkChart.lane_at(n,4.6)<3,"Slide preserves turns")
+	check(n.kind=="slide" and SynkChart.lane_at(n,4.3)>6 and SynkChart.lane_at(n,4.6)<4,"Slide preserves turns")
 	capture.begin(1,5,Vector2(.5,.765),"slide"); n=capture.end(1,5.1,Vector2(.7,.765)); check(n.kind=="slide","Explicit slide tool")
 	var all_on_lanes=is_equal_approx(float(n.path[0].lane),roundf(float(n.path[0].lane))) and is_equal_approx(float(n.path[-1].lane),roundf(float(n.path[-1].lane)))
 	var offsets_rise=true
@@ -78,10 +78,10 @@ func _initialize() -> void:
 	chart.selection().path=[{"offset":0.0,"lane":6.0},{"offset":.5,"lane":9.0}]
 	chart.resize(1,10); check(chart.selection().path[1].offset==1,"Resize scales path")
 	chart.checkpoint(); chart.move_note(20,20,10); check(chart.selection().time==9 and chart.selection().lane==SynkChart.MAX_LANE,"Dragging bounded to song")
-	check(SynkChart.LANES==10 and is_equal_approx(SynkCapture.lane(.07+.86*.05),0.0) and is_equal_approx(SynkCapture.lane(.93-.86*.05),SynkChart.MAX_LANE),"The highway has 10 lanes edge to edge")
+	check(SynkChart.LANES==13 and is_equal_approx(SynkCapture.lane(.07+.86*.5/13),0.0) and is_equal_approx(SynkCapture.lane(.93-.86*.5/13),SynkChart.MAX_LANE),"The highway has 13 lanes edge to edge")
 	var legacy_slide=SynkChart.note(1,0,"slide"); legacy_slide.lane=12; legacy_slide.end_lane=4; legacy_slide.duration=1.0; legacy_slide.path=[{"offset":0.0,"lane":12.0},{"offset":1.0,"lane":2.0}]
 	var legacy=SynkChart.notes_from_file({"version":1,"song_id":"x","notes":[legacy_slide,SynkChart.note(2,6)]})
-	check(legacy!=null and legacy[0].lane==9 and legacy[0].end_lane==3 and is_equal_approx(legacy[0].path[1].lane,1.5) and legacy[1].lane==roundi(6*.75),"Old 13-lane charts are spread across the 10 lanes")
+	check(legacy!=null and legacy[0].lane==12 and legacy[0].end_lane==4 and legacy[0].path[1].lane==2 and legacy[1].lane==6,"Original 13-lane charts retain their coordinates")
 	check(SynkChart.notes_from_file({"version":2,"notes":[legacy_slide]})==null,"New charts reject lanes past the last lane")
 	chart.undo(); check(chart.notes[0].path[1].lane==9 and chart.notes[0].time==2,"Deep path undo")
 	check(is_equal_approx(SynkChart.snap(1.13,120,4),1.125),"Beat snapping")

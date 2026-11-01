@@ -116,6 +116,7 @@ var note_shape = "circle"
 var highway_angle = 35.0
 # Highway look: "gold" or "neon", optional custom rail/band colors ("" follows the style),
 # and how dark the see-through highway surface is (1 = the style's default).
+const HIGHWAY_STYLES=["gold","neon","ssrg","aurora","solar"]
 var highway_style = "gold"
 var ssrg_presentation:Node
 var ssrg_screens:Control
@@ -146,7 +147,7 @@ func set_highway_preview(on: bool, user: Object = null) -> void:
 	highway_preview=on
 	if uses_ssrg_gameplay()!=was_ssrg_look and field and field.world: field.world.refresh_highway_look()
 func gameplay_lane_count() -> int:
-	return ssrg_lane_count if ssrg_playable_run else 10
+	return ssrg_lane_count if ssrg_playable_run else SynkChart.LANES
 # SSRG Playables keeps its own note speed (set on that screen), separate from SYNK's.
 func ssrg_speed_setting() -> float:
 	return clampf(float(prefs.get_value("ssrg","speed_value",float(prefs.get_value("ssrg","speed",1.0))*3.0)),1.0,10.0)
@@ -154,7 +155,7 @@ func ssrg_note_speed() -> float: return ssrg_speed_setting()/3.0
 
 func ssrg_touch_lane(point: Vector3, lane: float) -> bool:
 	var ui_point=Vector2(point.x/field.world.SSRG_UNIT,-point.z/field.world.SSRG_UNIT-234.0)
-	var channel=lane*12.0/9.0
+	var channel=lane*12.0/float(SynkChart.MAX_LANE)
 	return SsrgRules.contains_lane(ui_point,channel,ssrg_lane_count) or (roundi(channel) in [0,12] and SsrgRules.side_channel(ui_point,ssrg_lane_count)==roundi(channel))
 
 func hit_good_window(kind: String = "tap") -> float:
@@ -185,7 +186,7 @@ var countdown_shown = -1
 # How far (in lanes) the finger may be from the trail when a checkpoint dot is judged.
 const CHECKPOINT_LANE_TOLERANCE = 2.0
 # SSRG Playables judge hold and slide connectors more loosely: a wider reach (in lanes; one
-# SSRG position is 0.75 lanes) and a short grace after the connector passes the line.
+# SSRG position is one lane) and a short grace after the connector passes the line.
 const SSRG_CHECKPOINT_LANES = 3.2
 const SSRG_CHECKPOINT_GRACE = .15
 const SSRG_SLIDE_END_LANES = 4.5
@@ -381,7 +382,7 @@ func _ready() -> void:
 	if note_shape not in ["rectangle","circle","puck"]: note_shape="rectangle"
 	highway_angle = clampf(float(prefs.get_value("gameplay","highway_angle",35.0)),18.0,44.0)
 	highway_style = str(prefs.get_value("highway","style","gold"))
-	if highway_style not in ["gold","neon","ssrg"]: highway_style="gold"
+	if highway_style not in HIGHWAY_STYLES: highway_style="gold"
 	rail_color = str(prefs.get_value("highway","rail_color",""))
 	band_color = str(prefs.get_value("highway","band_color",""))
 	highway_opacity = clampf(float(prefs.get_value("highway","opacity",1.0)),.3,1.6)
@@ -764,7 +765,7 @@ func set_mode(value: String,animate_transition:bool=true) -> void:
 	var was_ssrg_look=uses_ssrg_gameplay()
 	if ssrg_playable_run and value not in ["play","paused"]:
 		ssrg_playable_run=false; ssrg_forced_run=false
-		highway_style=ssrg_playable_previous_style if ssrg_playable_previous_style in ["gold","neon","ssrg"] else "gold"
+		highway_style=ssrg_playable_previous_style if ssrg_playable_previous_style in HIGHWAY_STYLES else "gold"
 		if field and field.world: field.world.refresh_highway_look()
 	if value!=mode and animate_transition:
 		# Menus slide forward and back by depth; entering or leaving the stage dissolves.
@@ -957,7 +958,7 @@ func change_highway_angle(value: float) -> void:
 
 func change_highway_look(key: String,value: Variant) -> void:
 	match key:
-		"style": highway_style = str(value) if str(value) in ["gold","neon","ssrg"] else "gold"; value = highway_style
+		"style": highway_style = str(value) if str(value) in HIGHWAY_STYLES else "gold"; value = highway_style
 		"rail_color": rail_color = str(value); value = rail_color
 		"band_color": band_color = str(value); value = band_color
 		"opacity": highway_opacity = clampf(float(value),.3,1.6); value = highway_opacity
@@ -968,7 +969,7 @@ func change_highway_look(key: String,value: Variant) -> void:
 		gameplay_colors.erase("rail" if key=="rail_color" else "band")
 		prefs.set_value("highway","element_colors",gameplay_colors)
 	prefs.set_value("highway",key,value); prefs.save("user://preferences.cfg")
-	if key == "colors": apply_stage_cover()
+	if key in ["colors","style"]: apply_stage_cover()
 	field.world.refresh_highway_look()
 	if settings_panel: settings_panel.refresh()
 
@@ -1154,8 +1155,8 @@ func space_authored_notes(incoming: Array,fixed: Array) -> bool:
 func note_travel_seconds() -> float:
 	# APK default basicTime=3.5; normalized 1x corresponds to original UI speed 3.
 	if ssrg_playable_run: return 3.5/ssrg_note_speed()
-	if uses_ssrg_gameplay(): return 3.5/note_speed
-	return 2.6 / (recorder_note_speed if uses_recorder_colors() else note_speed)
+	if uses_recorder_colors(): return 2.6/recorder_note_speed
+	return 3.5/note_speed
 
 func cycle_recorder_note_speed() -> void:
 	recorder_note_speed=snappedf(recorder_note_speed+.25,.25)
@@ -1360,6 +1361,8 @@ func apply_stage_cover() -> void:
 	# The song's cover glows behind the highway during play and recording.
 	field.world.set_cover(stage_backdrop_for_id(str(song.id)),Color.WHITE)
 	var palette=cover_palette_for_id(str(song.id)) if highway_colors=="adaptive" and not uses_recorder_colors() else SynkCoverPalette.fallback()
+	if highway_style in preload("res://scripts/concept_highway.gd").STYLES and not uses_recorder_colors() and not ssrg_playable_run and not palette.from_cover:
+		palette=preload("res://scripts/concept_highway.gd").palette(highway_style)
 	palette=palette.duplicate(true)
 	palette.notes=palette.notes.duplicate()
 	palette.notes.append(palette.notes[1])
@@ -2224,7 +2227,7 @@ func prepare_ssrg_input() -> void:
 			for touch in pointers.values():
 				if touch.get("ssrg_pending_begin",false) and absf(float(touch.ssrg_press_time)-float(next.time))<=SsrgRules.HEAD_WINDOW:pending_press=true;break
 			if not pending_press:continue
-		var channel=roundi(SynkChart.lane_at(entry.note,float(next.time))*12.0/9.0)
+		var channel=roundi(SynkChart.lane_at(entry.note,float(next.time))*12.0/float(SynkChart.MAX_LANE))
 		var geometry=ssrg_touch_router.node_geometry(channel,float(next.time),song_time,travel,sustain)
 		geometry.merge({"channel":channel,"at":float(next.time),"travel":travel,"token":str(entry.key)+":"+(str(entry.get("checks_done",0)) if sustain else "head"),"sustain":sustain,"owner":contact_owner,"eligible":absf(song_time-float(next.time))<SsrgRules.MIDDLE_WINDOW})
 		candidates.append(geometry)
@@ -2251,7 +2254,7 @@ func update_ssrg_sustain(entry: Dictionary) -> void:
 	# winner judges nodes, at most once per channel per gameplay frame.
 	var next=SsrgSustain.next_node(entry.note,int(entry.get("checks_done",0)))
 	var lane=SynkChart.lane_at(entry.note,float(next.time))
-	var channel=roundi(lane*12.0/9.0)
+	var channel=roundi(lane*12.0/float(SynkChart.MAX_LANE))
 	var track=ssrg_touch_router.track(channel)
 	var chosen=int(track.pointer)
 	var state=int(track.state)
@@ -2339,7 +2342,7 @@ func process_ssrg_press_events() -> void:
 		for i in range(first_live_index(),live.size()):
 			var entry:Dictionary=live[i]
 			if float(entry.note.time)>float(press.at)+SsrgRules.HEAD_WINDOW:break
-			if entry.done or entry.started or roundi(float(entry.note.lane)*12.0/9.0)!=channel:continue
+			if entry.done or entry.started or roundi(float(entry.note.lane)*12.0/float(SynkChart.MAX_LANE))!=channel:continue
 			var error=absf(float(press.at)-float(entry.note.time))
 			if error<=SsrgRules.good_window() and error<best_error:best_error=error;best=entry
 		if best.is_empty():continue
@@ -2359,7 +2362,7 @@ func update_game() -> void:
 			var candidate:Dictionary=live[i]
 			if float(candidate.note.time)>song_time+SsrgRules.HEAD_WINDOW:break
 			if candidate.done or candidate.started:continue
-			var channel=roundi(float(candidate.note.lane)*12.0/9.0)
+			var channel=roundi(float(candidate.note.lane)*12.0/float(SynkChart.MAX_LANE))
 			var track=ssrg_touch_router.track(channel)
 			var eligible=candidate.note.kind in ["hold","slide"] and track.state==SsrgSustain.TrackState.MOVED
 			if not eligible:continue
@@ -2379,7 +2382,7 @@ func update_game() -> void:
 		var n: Dictionary=entry.note
 		if not entry.started:
 			if ssrg_playable_run:
-				var channel=roundi(float(n.lane)*12.0/9.0)
+				var channel=roundi(float(n.lane)*12.0/float(SynkChart.MAX_LANE))
 				var track=ssrg_touch_router.track(channel)
 				var eligible=n.kind in ["hold","slide"] and track.state==SsrgSustain.TrackState.MOVED
 				var judged_at=float(track.get("event_time",song_time)) if track.state==SsrgSustain.TrackState.BEGAN else song_time

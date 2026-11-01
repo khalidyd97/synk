@@ -7,11 +7,11 @@ const CENTER_LANE = (SynkChart.LANES-1)*.5
 # Keep the reference taper and original track width, with larger readable note faces.
 const HIGHWAY_HALF_WIDTH = 9.75
 const EDGE_MARGIN = .2
-const NOTE_SCALE = 1.65
+const NOTE_SCALE = 1.3
 const NOTE_WIDTH = 3.1*NOTE_SCALE
 const FIT = NOTE_SCALE/1.3
 # Every lane, the outer two included, gets the same share of the highway.
-const LANE_WIDTH = HIGHWAY_HALF_WIDTH*2.0/SynkChart.LANES
+const LANE_WIDTH = 62.71392*(9.75/512.0)
 const PAD_HALF_WIDTH = HIGHWAY_HALF_WIDTH
 const FRAME_HALF_WIDTH = HIGHWAY_HALF_WIDTH
 const TRAIL_HALF = .8*NOTE_SCALE
@@ -65,6 +65,7 @@ var ssrg_shake_x=0.0
 var cover_backdrop: MeshInstance3D
 var rail_atmosphere: Node3D
 var synk_hits:Node3D
+var concept_theme:Node3D
 var ssrg_theme: Node3D
 var cover_material: ShaderMaterial
 var rail_edge_materials: Array = []
@@ -151,21 +152,21 @@ const SSRG_TILT = 20.0
 const SSRG_LENS = 45.0
 const SSRG_STEP = 62.71392*SSRG_UNIT
 const SSRG_NOTE_SIZE = Vector2(212.0,116.0)*SSRG_UNIT
-# SYNK lanes 0..9 hold SSRG positions 0..12 (lane = position * 0.75).
-func ssrg_x(lane: float) -> float: return (lane/.75-6.0)*SSRG_STEP
+# SYNK and SSRG share thirteen positions, numbered 0..12.
+func ssrg_x(lane: float) -> float: return (lane*12.0/SynkChart.MAX_LANE-6.0)*SSRG_STEP
 # Lane <-> world x for touches. SSRG Playables use the SSRG spacing above, so a finger is
 # measured in the same lane units as the notes it is judged against.
 func lane_world_x(lane: float) -> float: return ssrg_x(lane) if game.uses_ssrg_gameplay() else lane_x(lane)
 func world_lane(x: float) -> float:
-	if game.uses_ssrg_gameplay(): return clampf((x/SSRG_STEP+6.0)*.75,0.0,float(SynkChart.MAX_LANE))
+	if game.uses_ssrg_gameplay(): return clampf((x/SSRG_STEP+6.0)*SynkChart.MAX_LANE/12.0,0.0,float(SynkChart.MAX_LANE))
 	return x/LANE_WIDTH+CENTER_LANE
 func note_x(lane: float) -> float:
-	var limit = HIGHWAY_HALF_WIDTH - EDGE_MARGIN - NOTE_WIDTH*.5*game.note_size
-	if game.uses_ssrg_gameplay(): return ssrg_x(lane)
-	return clampf(lane_x(lane), -limit, limit)
+	# Thirteen distinct centres, with the same spacing as SSRG. Never clamp adjacent
+	# outer lanes onto one another to fit a wide note face.
+	return lane_world_x(lane)
 # Notes travel the whole 60-unit track, from the far end to the judgement bar.
 func uses_projected_highway() -> bool:
-	return game != null and game.uses_ssrg_gameplay()
+	return game != null and not game.uses_recorder_colors() and (game.mode in ["play","paused"] or game.highway_preview)
 func visible_length() -> float: return TRACK_LENGTH
 func travel_speed() -> float: return TRACK_LENGTH / game.note_travel_seconds()
 # Recovered from Perspective2dSettings.ToAcceleration in the supplied APK:
@@ -249,6 +250,7 @@ func _ready() -> void:
 	synk_hits=preload("res://scripts/synk_hit_effects.gd").new();synk_hits.world=self;add_child(synk_hits)
 	build_play_aids()
 	build_cover_backdrop()
+	concept_theme=preload("res://scripts/concept_highway.gd").new();concept_theme.world=self;add_child(concept_theme)
 	rail_atmosphere=preload("res://scripts/stage_rail_effects.gd").new(); rail_atmosphere.world=self; add_child(rail_atmosphere)
 
 func build_cover_backdrop() -> void:
@@ -305,6 +307,8 @@ func update_cover_backdrop() -> void:
 		if game.uses_ssrg_gameplay():
 			far_world=Vector3(side*27.0*SSRG_UNIT,0,-492.0*SSRG_UNIT)
 			near_world=Vector3(side*607.5*SSRG_UNIT,0,86.0*SSRG_UNIT)
+		elif uses_projected_highway():
+			far_world=Vector3(side*FRAME_HALF_WIDTH*ssrg_approach(-50),0,ssrg_warped_z(-50))
 		var far_point=camera.unproject_position(far_world)/viewport_size
 		var near_point=camera.unproject_position(near_world)/viewport_size
 		var slope=(near_point.x-far_point.x)/maxf(.001,near_point.y-far_point.y)
@@ -459,13 +463,15 @@ func rail_glow_colors() -> Array:
 # Applies the chosen highway style, custom rail/band colors and highway darkness.
 func refresh_highway_look() -> void:
 	if judgment_material == null or track_materials.size() < 2: return
+	var concept=game.highway_style in preload("res://scripts/concept_highway.gd").STYLES and not game.uses_recorder_colors() and not game.uses_ssrg_gameplay()
 	var prism = game != null and game.uses_ssrg_gameplay() and not game.uses_recorder_colors()
 	var gold = game == null or game.uses_recorder_colors() or (game.highway_style=="gold" and not game.uses_ssrg_gameplay())
 	var darkness = clampf(float(game.get("highway_opacity")),.3,1.6) if game != null and game.get("highway_opacity") != null else 1.0
 	judgment_material.render_priority=-6 if uses_projected_highway() else 0
 	if game.uses_recorder_colors(): darkness=1.0
 	for node in gold_nodes: node.visible = gold
-	for node in neon_nodes: node.visible = not gold and not prism
+	for node in neon_nodes: node.visible = not gold and not prism and not concept
+	get_node("JudgmentPads").scale=Vector3.ONE
 	get_node("JudgmentPads").visible=not prism
 	if ssrg_theme: ssrg_theme.refresh()
 	var rail = custom_color("rail_color")
@@ -507,16 +513,18 @@ func refresh_highway_look() -> void:
 	# The source rail sprites already contain the translucent black road. Old
 	# rectangular 3D floor passes otherwise tint the whole orthographic canvas blue.
 	var original_stage=game.uses_ssrg_gameplay() and not game.uses_recorder_colors()
-	for node in track_nodes: node.visible=not original_stage
+	for node in track_nodes: node.visible=not original_stage and not concept
 	if original_stage:
 		for m in track_materials: m.set_shader_parameter("opacity",0.0)
-	if highway_shadow: highway_shadow.visible=not original_stage
+	if highway_shadow: highway_shadow.visible=not original_stage and not concept
 	if cover_material:
 		var glow=rail_glow_colors()
 		cover_material.set_shader_parameter("rail_glow_left",glow[0])
 		cover_material.set_shader_parameter("rail_glow_right",glow[1])
 		# The soft glow that spread outside the rails is removed.
 		cover_material.set_shader_parameter("rail_glow_opacity",0.0)
+
+	if concept_theme:concept_theme.refresh()
 
 func build_effects() -> void:
 	spark_mesh = SphereMesh.new(); spark_mesh.radius = .065; spark_mesh.height = .13
@@ -582,7 +590,7 @@ func build_asset_material(name: String, palette: int, region = Vector4(0,0,1,1),
 	mat.set_shader_parameter("region",region); mat.set_shader_parameter("opacity",opacity)
 	if name.begins_with("Hit_"):mat.set_shader_parameter("project_geometry",false)
 	# Blue tap artwork keeps its gradient; sustained and flick art takes its type color.
-	mat.set_shader_parameter("recolor",palette!=0 or cover_palette_active or (game.highway_colors=="theme" and game.gameplay_colors.has("tap"))); mat.set_shader_parameter("tint",colors[palette])
+	mat.set_shader_parameter("recolor",palette!=0 or cover_palette_active or game.highway_style in preload("res://scripts/concept_highway.gd").STYLES or (game.highway_colors=="theme" and game.gameplay_colors.has("tap"))); mat.set_shader_parameter("tint",colors[palette])
 	mat.set_shader_parameter("motion",.7 if name.begins_with("Hold_") else (.35 if name.begins_with("Flick_") else .12))
 	if name.begins_with("Tap_") or name.begins_with("Hold_") or name.begins_with("Flick_") or name.begins_with("Slide_"):
 		mat.set_shader_parameter("glow_pulse",.18)
@@ -1045,7 +1053,7 @@ func make_circle_cap(parent: Node3D, position_value: Vector3, palette: int, size
 			m.shader=preload("res://scripts/synk_canvas_note.gdshader");m.render_priority=3
 		m.set_shader_parameter("artwork",art)
 		m.set_shader_parameter("hue_shift",colors[palette].h-base_hue)
-		if game.highway_colors=="theme" and not game.uses_recorder_colors() and game.gameplay_colors.has(role):
+		if game.highway_colors=="theme" and not game.uses_recorder_colors() and (game.gameplay_colors.has(role) or game.highway_style in preload("res://scripts/concept_highway.gd").STYLES):
 			m.set_shader_parameter("saturation_scale",colors[palette].s/.78)
 			m.set_shader_parameter("value_scale",colors[palette].v)
 		return m)
@@ -1432,7 +1440,7 @@ func ssrg_beam_lane(lane: float) -> float:
 const SSRG_BEAM_REACH = 520.0*SSRG_UNIT
 const SSRG_BEAM_NEAR = 86.0*SSRG_UNIT
 func ssrg_beam_center(lane: float) -> float:
-	return (lane/.75-6.0)*73.75*(520.0/606.0)*SSRG_UNIT
+	return (lane*12.0/SynkChart.MAX_LANE-6.0)*73.75*(520.0/606.0)*SSRG_UNIT
 func ssrg_beam_width() -> float:
 	return 295.0*(520.0/606.0)*SSRG_UNIT
 var ssrg_beam_release: Dictionary={}
@@ -1446,9 +1454,9 @@ func update_finger_beams(delta: float = 0.0) -> void:
 			var lane=ssrg_beam_lane(SynkCapture.lane(touch.position.x))
 			if game.ssrg_playable_run and touch.has("ssrg_channel"):
 				if int(touch.ssrg_channel)<0 or touch.get("ssrg_ended",false):continue
-				lane=float(touch.ssrg_channel)*.75
+				lane=float(touch.ssrg_channel)*SynkChart.MAX_LANE/12.0
 			elif game.ssrg_playable_run and touch.has("world") and not game.ssrg_touch_lane(touch.world,lane): continue
-			pressed[clampi(roundi(lane/.75),0,12)]=lane
+			pressed[clampi(roundi(lane*12.0/SynkChart.MAX_LANE),0,12)]=lane
 	for i in finger_beams.size():
 		var beam: MeshInstance3D = finger_beams[i]
 		# Reuse one mesh per view; rebuild only when switching view/lane layout.
@@ -1590,7 +1598,7 @@ func _process(delta: float) -> void:
 		else: rail_atmosphere.update(delta)
 	var in_play = game.mode=="play" or (game.mode=="paused" and game.paused_mode=="play")
 	var recording_now = game.mode=="record" or (game.mode=="paused" and game.paused_mode=="record")
-	recorder_guides.visible = recording_now or (in_play and bool(extras_setting("lane_hints", true)) and not (ssrg_theme and ssrg_theme.active))
+	recorder_guides.visible = recording_now or (in_play and bool(extras_setting("lane_hints", true)) and not (ssrg_theme and ssrg_theme.active) and not (concept_theme and concept_theme.active))
 	if guide_material: guide_material.set_shader_parameter("color",Color(Color("777bd5"),.38 if recording_now else .3))
 	update_play_aids(delta)
 	update_multiplier_wave(delta)

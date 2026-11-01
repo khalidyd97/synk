@@ -20,10 +20,13 @@ static func resolve(game: Control,key: String,fallback: Color) -> Color:
     return Color.from_string(code,fallback) if Color.html_is_valid(code) else fallback
 
 static func preview_default(game: Control,key: String) -> Color:
-    var notes=SynkCoverPalette.DEFAULT
+    var concept=game.highway_style in preload("res://scripts/concept_highway.gd").STYLES and not game.uses_recorder_colors()
+    var notes=preload("res://scripts/concept_highway.gd").palette(game.highway_style).notes if concept else SynkCoverPalette.DEFAULT
     var defaults={"tap":notes[0],"hold":notes[1],"slide":notes[1],"flick":notes[2],"hold_trail":notes[1],"slide_trail":notes[1],"arrows":notes[2],"hits":notes[0],"sparks":notes[0],"beams":notes[0],"particles":notes[1],"lasers":notes[0],"track":Color("050409"),"combo":notes[1],"judgment":Color("eee9ff"),"score":Color("f4f6ff"),"energy":Color("4ff07c"),"hud":Color("eee9ff"),"countdown":notes[0]}
     if key=="rail" or key=="glow":
         var rail=str(game.gameplay_colors.get("rail",game.rail_color)) if key=="glow" else str(game.rail_color)
-        return Color.from_string(rail,Color("fff3dc")) if rail!="" else Color("fff3dc")
+        var default_rail=Color("f5c482") if game.highway_style=="solar" else (Color("b2f4ff") if concept else Color("fff3dc"))
+        return Color.from_string(rail,default_rail) if rail!="" else default_rail
+    if key=="band" and concept and game.band_color=="": return Color("ffd3a0") if game.highway_style=="solar" else Color("a2efff")
     if key=="band": return Color.from_string(game.band_color,Color("ffd257")) if game.band_color!="" else (Color("ffd257") if game.highway_style=="gold" else Color("995cff"))
     return defaults.get(key,Color.WHITE)
