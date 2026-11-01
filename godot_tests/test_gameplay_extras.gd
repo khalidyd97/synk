@@ -77,7 +77,7 @@ func run() -> void:
 			var clip=child.material_override.get_shader_parameter("clip_z")
 			if clip!=null and float(clip)<1.0:other_clean=false
 	check(clipped_any and other_clean,"Holding one note clips only that note's trail")
-	check(Engine.max_fps==g.display_refresh_rate() or g.frame_rate_setting()>0,"Frame rate follows the display refresh rate")
+	check(Engine.max_fps==0 or g.frame_rate_setting()>0,"Auto frame pacing leaves synchronization to VSync")
 	# Stats
 	var key="test_stats_"+str(Time.get_ticks_usec())
 	var stats=x.record_result(key,{"PERFECT":4,"GREAT":0,"GOOD":0,"MISS":0},4)

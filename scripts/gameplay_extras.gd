@@ -99,6 +99,8 @@ func build_intro_card() -> void:
 	intro_card.modulate.a = 0
 
 func on_song_start() -> void:
+	# The SSRG look introduces the song with its cover glide instead.
+	if game.uses_ssrg_gameplay(): return
 	var song: Dictionary = game.song
 	intro_title.text = preload("res://scripts/lobby.gd").display_title(str(song.get("title", "")))
 	var artist = str(song.get("artist", "")).strip_edges()

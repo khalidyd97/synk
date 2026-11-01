@@ -4,7 +4,7 @@ extends Control
 const Action = preload("res://scripts/settings_action.gd")
 const TEXT = Color("eef0ff")
 const MUTED = Color(0.8,0.82,0.95,.78)
-const ACCENT = Color("50daec")
+const ACCENT = Color("ff7a59")
 
 var game: Control
 var note_speed_input: Stepper
@@ -17,7 +17,13 @@ var metronome_toggle: Switch
 var shape_tiles: Dictionary = {}
 var render_scale_buttons: Dictionary = {}
 var hit_style_buttons: Dictionary = {}
+var hit_swatches: Array = []
+var hit_size_input: Stepper
 var style_tiles: Dictionary = {}
+var ssrg_mode_row: PanelContainer
+# The SSRG highway is a fixed flat view: its style hides the angle row.
+var angle_row: PanelContainer
+var ssrg_mode_switch: Switch
 var color_pickers: Dictionary = {}
 var color_reset_buttons: Dictionary = {}
 var rail_glow_input: Stepper
@@ -70,9 +76,24 @@ class Stepper extends Control:
         readout.add_theme_stylebox_override("normal",value_style)
         for node in [minus,readout,plus]: add_child(node)
         anchor(minus,0,.24); anchor(readout,.26,.74); anchor(plus,.76,1)
-        minus.pressed.connect(func(): if editable and not Action.was_dragged(self): value -= step)
-        plus.pressed.connect(func(): if editable and not Action.was_dragged(self): value += step)
+        minus.pressed.connect(func(): tap(-1))
+        plus.pressed.connect(func(): tap(1))
+        # Held − or +: after a short wait, keep stepping until released.
+        repeat_timer = Timer.new(); add_child(repeat_timer)
+        repeat_timer.timeout.connect(func():
+            var held = minus if minus.is_pressed() else (plus if plus.is_pressed() else null)
+            if held == null or not editable: repeat_timer.stop(); return
+            repeated = true; value = snappedf(value + (step if held == plus else -step), step); repeat_timer.start(.07))
+        for button in [minus,plus]: button.button_down.connect(func(): repeated = false; repeat_timer.start(.42))
         refresh()
+
+    var repeat_timer: Timer
+    var repeated = false
+    func tap(direction: int) -> void:
+        repeat_timer.stop()
+        # A hold already stepped; its release is not one more step.
+        if repeated: repeated = false; return
+        if editable and not Action.was_dragged(self): value = snappedf(value + step*direction, step)
 
     func anchor(node: Control, left: float, right: float) -> void:
         node.anchor_left = left; node.anchor_right = right; node.anchor_top = 0; node.anchor_bottom = 1
@@ -102,16 +123,15 @@ class Switch extends Button:
         engagement=lerpf(engagement,1.0 if is_hovered() or has_focus() else 0.0,1-exp(-delta*16))
         queue_redraw()
     func _draw() -> void:
-        var style=StyleBoxFlat.new(); style.set_corner_radius_all(18); style.set_border_width_all(1)
-        style.bg_color=Color("141414").lerp(Color("12313d"),knob*.65)
-        style.border_color=Color("34364f").lerp(Color("50daec"),maxf(knob*.7,engagement))
-        draw_style_box(style,Rect2(Vector2.ONE,size-Vector2.ONE*2))
-        var font=ThemeDB.fallback_font; var caption="ON" if button_pressed else "OFF"
-        draw_string(font,Vector2(16,size.y*.5+6),caption,HORIZONTAL_ALIGNMENT_LEFT,-1,16,Color("c7cee4").lerp(Color("7ae7f4"),knob))
+        # Same soft plate as the buttons; the track fills cream when on.
+        var Soft=preload("res://scripts/soft_button.gd")
+        Soft.draw_plate(self,size,"quiet",engagement,0.0,0.0,disabled,18.0)
+        var caption="ON" if button_pressed else "OFF"
+        draw_string(Soft.BOLD,Vector2(18,size.y*.5+6),caption,HORIZONTAL_ALIGNMENT_LEFT,-1,16,Color("8f8b94").lerp(Soft.TEXT,knob))
         var track=Rect2(size.x-79,(size.y-32)*.5,64,32)
-        var pill=StyleBoxFlat.new(); pill.set_corner_radius_all(16); pill.bg_color=Color("34364f").lerp(Color("2b9aaf"),knob)
+        var pill=StyleBoxFlat.new(); pill.set_corner_radius_all(16); pill.bg_color=Color("3a3840").lerp(Soft.CREAM,knob)
         draw_style_box(pill,track)
-        draw_circle(Vector2(track.position.x+16+knob*32,track.get_center().y),11,Color("b1aec6").lerp(Color("ebfdff"),knob))
+        draw_circle(Vector2(track.position.x+16+knob*32,track.get_center().y),11,Color("cfcbd2").lerp(Soft.INK,knob))
 
 # A selectable tile previewing a note shape.
 # One color choice; an empty color is the "auto" swatch that follows the style.
@@ -127,7 +147,7 @@ class Swatch extends Button:
         for state in ["normal","hover","pressed","disabled","focus","hover_pressed"]: add_theme_stylebox_override(state,StyleBoxEmpty.new())
     func _draw() -> void:
         var center = size*.5; var r = minf(size.x,size.y)*.36
-        if selected: draw_arc(center,r+6,0,TAU,40,Color("50daec"),3,true)
+        if selected: draw_arc(center,r+6,0,TAU,40,Color("f3ece1"),3,true)
         elif is_hovered() or has_focus(): draw_arc(center,r+6,0,TAU,40,Color("a499e8"),2,true)
         if color_code=="":
             draw_circle(center,r,Color("1e1e1e"))
@@ -150,8 +170,8 @@ class StyleTile extends Button:
         for state in ["normal","hover","pressed","disabled","focus","hover_pressed"]: add_theme_stylebox_override(state,StyleBoxEmpty.new())
     func _draw() -> void:
         var box = StyleBoxFlat.new(); box.set_corner_radius_all(18)
-        box.bg_color = Color("10313f") if selected else Color("121212")
-        box.border_color = Color("50daec") if selected else Color("30364e")
+        box.bg_color = Color("2a2830") if selected else Color("121212")
+        box.border_color = Color("f3ece1") if selected else Color("30364e")
         if is_hovered() or has_focus(): box.border_color=Color("a499e8")
         box.set_border_width_all(2 if selected else 1)
         draw_style_box(box,Rect2(Vector2.ZERO,size))
@@ -168,12 +188,6 @@ class StyleTile extends Button:
             var font=ThemeDB.fallback_font; var w=font.get_string_size("SSRG",HORIZONTAL_ALIGNMENT_LEFT,-1,18).x
             draw_string(font,Vector2((size.x-w)*.5,size.y*.88),"SSRG",HORIZONTAL_ALIGNMENT_LEFT,-1,18,Color.WHITE)
             return
-        if style_name=="prism":
-            draw_texture_rect(preload("res://assets/neon/Prism_Stage.png"),Rect2(Vector2(8,10),Vector2(size.x-16,size.y*.62)),false)
-            var font=ThemeDB.fallback_font
-            var width=font.get_string_size("PRISM",HORIZONTAL_ALIGNMENT_LEFT,-1,18).x
-            draw_string(font,Vector2((size.x-width)*.5,size.y*.88),"PRISM",HORIZONTAL_ALIGNMENT_LEFT,-1,18,Color.WHITE)
-            return
         var top = size.y*.14; var bottom = size.y*.66
         var a = Vector2(size.x*.40,top); var b = Vector2(size.x*.60,top)
         var c = Vector2(size.x*.86,bottom); var d = Vector2(size.x*.14,bottom)
@@ -185,13 +199,6 @@ class StyleTile extends Button:
             else:
                 draw_line(rail[0],rail[1],Color(rail[2],.3),8,true)
                 draw_line(rail[0],rail[1],rail[2],2,true)
-        if style_name=="prism":
-            for lane in range(1,10):
-                var t=float(lane)/10.0
-                draw_line(a.lerp(b,t),d.lerp(c,t),Color("50cfff").lerp(Color("f02bff"),t),1,true)
-            for rail in [[a,d],[b,c]]:
-                draw_line(rail[0],rail[1],Color("35306e"),9,true)
-                draw_line(rail[0],rail[1],Color("e464ff"),3,true)
         var font = ThemeDB.fallback_font; var caption = style_name.to_upper()
         var width = font.get_string_size(caption,HORIZONTAL_ALIGNMENT_LEFT,-1,18).x
         draw_string(font,Vector2((size.x-width)*.5,size.y*.88),caption,HORIZONTAL_ALIGNMENT_LEFT,-1,18,Color.WHITE if selected else Color(1,1,1,.65))
@@ -207,8 +214,8 @@ class ModeTile extends Button:
         for state in ["normal","hover","pressed","disabled","focus","hover_pressed"]: add_theme_stylebox_override(state,StyleBoxEmpty.new())
     func _draw() -> void:
         var box = StyleBoxFlat.new(); box.set_corner_radius_all(18)
-        box.bg_color = Color("10313f") if selected else Color("121212")
-        box.border_color = Color("50daec") if selected else Color("30364e")
+        box.bg_color = Color("2a2830") if selected else Color("121212")
+        box.border_color = Color("f3ece1") if selected else Color("30364e")
         if is_hovered() or has_focus(): box.border_color=Color("a499e8")
         box.set_border_width_all(2 if selected else 1)
         draw_style_box(box,Rect2(Vector2.ZERO,size))
@@ -241,8 +248,8 @@ class ShapeTile extends Button:
         for state in ["normal","hover","pressed","disabled","focus","hover_pressed"]: add_theme_stylebox_override(state,StyleBoxEmpty.new())
     func _draw() -> void:
         var style = StyleBoxFlat.new(); style.set_corner_radius_all(18)
-        style.bg_color = Color("121212").lerp(Color("10313f"),selected_amount)
-        style.border_color = Color("30364e").lerp(Color("50daec"),selected_amount)
+        style.bg_color = Color("121212").lerp(Color("2a2830"),selected_amount)
+        style.border_color = Color("30364e").lerp(Color("f3ece1"),selected_amount)
         if is_hovered() or has_focus(): style.border_color=Color("a499e8")
         style.set_border_width_all(2 if selected else 1)
         draw_style_box(style,Rect2(Vector2.ZERO,size))
@@ -370,7 +377,7 @@ func _ready() -> void:
     for key in PAGE_NAMES:
         var n=action(rail,PAGE_NAMES[key],func(): show_page(key)); n.caption_size=21
         n.position=Vector2(14,y); n.size=Vector2(204,84); nav_buttons[key]=n; y+=94
-    var scope=label(rail,"GLOBAL PREFERENCES",11,Color("7acbda")); scope.position=Vector2(22,572); scope.size=Vector2(194,24)
+    var scope=label(rail,"GLOBAL PREFERENCES",13,Color("ff7a59")); scope.position=Vector2(22,572); scope.size=Vector2(194,24)
     var scope_hint=label(rail,"Applies across all songs\nand chart versions.",14,Color("a7aac6")); scope_hint.position=Vector2(22,601); scope_hint.size=Vector2(194,52)
     page_host=Panel.new(); place(page_host,canvas,308,136,1100,671); page_host.add_theme_stylebox_override("panel",style())
     page_title=label(page_host,"",28); page_title.position=Vector2(28,23); page_title.size=Vector2(1044,39)
@@ -418,9 +425,9 @@ func animate_page() -> void:
     page_tween.tween_property(root,"position:x",0,.25).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
     page_tween.tween_property(root,"modulate:a",1,.22)
 func build_gameplay(items: VBoxContainer,browsing: VBoxContainer) -> void:
-    note_speed_input=Stepper.new(.5,3,.25,game.note_speed,"×",2)
-    add_control(row(items,"Note speed","Same feel on every song: notes take 2.6 s ÷ speed to reach the line."),note_speed_input)
-    note_speed_input.value_changed.connect(game.change_note_speed)
+    note_speed_input=Stepper.new(1,10,.1,game.synk_speed_setting(),"",1)
+    add_control(row(items,"Note speed","1.0 to 10.0, like SSRG Playables. 3.0 is the standard speed; hold − or + to move quickly."),note_speed_input)
+    note_speed_input.value_changed.connect(game.change_synk_speed)
     var match_display=Switch.new(); add_control(row(items,"Match display refresh rate","Run at your screen's own rate (%d Hz) for the smoothest motion." % game.display_refresh_rate()),match_display,152)
     var fps=Stepper.new(30,120,30,float(game.frame_rate_setting() if game.frame_rate_setting()>0 else 60),"fps",0)
     add_control(row(items,"Frame rate limit","Used when matching the display is off."),fps)
@@ -466,7 +473,8 @@ func build_audio(items: VBoxContainer,headset: VBoxContainer) -> void:
     bluetooth_latency_input=Stepper.new(0,600,5,game.bluetooth_latency_ms," ms",0)
     add_control(row(headset,"Extra headset delay","Enable headset mode to adjust its additional delay."),bluetooth_latency_input)
     bluetooth_latency_input.editable=game.bluetooth_mode; bluetooth_latency_input.value_changed.connect(game.change_bluetooth_latency)
-    action(items,"OPEN AUDIO SYNC HELPER  →",game.open_sync_helper,true)
+    action(items,"SYNC WITH A SONG  →",game.open_song_sync,true)
+    action(items,"METRONOME SYNC HELPER  →",game.open_sync_helper)
 func sizing_row(items: VBoxContainer,key: String,title: String,hint: String,low: float,high: float,current: float) -> void:
     var control=Stepper.new(low,high,5,current*100,"%",0); sizing_inputs[key]=control
     add_control(row(items,title,hint),control)
@@ -484,16 +492,20 @@ func section(items: VBoxContainer,title: String) -> void:
     var heading=label(items,title,13,ACCENT); heading.custom_minimum_size.y=26
 func build_highway(items: VBoxContainer) -> void:
     highway_angle_input=Stepper.new(18,44,2,game.highway_angle,"°",0)
-    add_control(row(items,"Highway angle","Choose how flat or steep the highway looks."),highway_angle_input)
+    angle_row=row(items,"Highway angle","Choose how flat or steep the SYNK highway looks.")
+    add_control(angle_row,highway_angle_input)
     highway_angle_input.value_changed.connect(game.change_highway_angle)
     var preview=preload("res://scripts/highway_look_preview.gd").new(); preview.game=game; items.add_child(preview)
-    var styles=row(items,"Highway style","Gold, Neon, or Prism: faceted rails with flowing colors.",166)
+    var styles=row(items,"Highway style","Gold or Neon rails and judgment band, or the SSRG highway.",166)
     var tile_row=HBoxContainer.new(); tile_row.add_theme_constant_override("separation",12)
     add_control(styles,tile_row,440)
-    for kind in ["gold","neon","prism"]:
+    for kind in ["gold","neon","ssrg"]:
         var tile=StyleTile.new(kind); tile_row.add_child(tile); tile.custom_minimum_size=Vector2(138,136)
         tile.pressed.connect(func(): if not Action.was_dragged(tile): game.change_highway_look("style",kind))
         style_tiles[kind]=tile
+    ssrg_mode_row=row(items,"SSRG mode","SYNK songs use SSRG judging, scoring, fever and note speed, not just its look.",112)
+    ssrg_mode_switch=Switch.new(); add_control(ssrg_mode_row,ssrg_mode_switch,152)
+    connect_switch(ssrg_mode_switch,game.change_ssrg_mode)
     var modes=row(items,"Colors","Theme keeps the style's colors. Adaptive takes them from the song's artwork.",148)
     var mode_row=HBoxContainer.new(); mode_row.add_theme_constant_override("separation",12)
     add_control(modes,mode_row,440)
@@ -516,12 +528,38 @@ func build_colors(items: VBoxContainer) -> void:
         for key in SynkGameplayColors.GROUPS[group]:
             var panel=row(items,SynkGameplayColors.GROUPS[group][key],"Follows the rail color." if key=="glow" else "Choose a color, or restore the theme default.",104)
             var controls=HBoxContainer.new(); controls.add_theme_constant_override("separation",12); add_control(panel,controls,316)
-            var picker=ColorPickerButton.new(); picker.custom_minimum_size=Vector2(132,72); picker.edit_alpha=false
+            var picker=ColorChip.new(); picker.custom_minimum_size=Vector2(132,72)
             controls.add_child(picker); color_pickers[key]=picker
-            picker.color_changed.connect(func(color): game.change_gameplay_color(key,color.to_html(false)))
+            var heading: String=SynkGameplayColors.GROUPS[group][key]
+            picker.pressed.connect(func(): if not Action.was_dragged(picker): open_color_picker(key,heading,picker.color))
             var reset=action(controls,"FOLLOW RAIL" if key=="glow" else "DEFAULT",func(): game.change_gameplay_color(key,""))
             reset.custom_minimum_size=Vector2(172,72); reset.caption_size=17; color_reset_buttons[key]=reset
     action(items,"RESET CUSTOM COLORS",game.reset_gameplay_colors)
+
+# Opens the centred picker; the colour shows live and is saved on Done, restored on Cancel.
+func open_color_picker(key: String,heading: String,start: Color) -> void:
+    var had=game.gameplay_colors.has(key); var before=str(game.gameplay_colors.get(key,""))
+    preload("res://scripts/color_picker_sheet.gd").open(self,heading,start,
+        func(color): game.preview_gameplay_color(key,color.to_html(false)),
+        func(color): game.change_gameplay_color(key,color.to_html(false)),
+        func(): game.change_gameplay_color(key,before if had else ""),game)
+
+# The colour setting's button: a rounded swatch with its hex code.
+class ColorChip extends Button:
+    var color=Color.WHITE:
+        set(v): color=v; queue_redraw()
+    func _ready() -> void:
+        focus_mode=Control.FOCUS_ALL; mouse_default_cursor_shape=Control.CURSOR_POINTING_HAND
+        for state in ["normal","hover","pressed","disabled","focus","hover_pressed"]: add_theme_stylebox_override(state,StyleBoxEmpty.new())
+    func _draw() -> void:
+        var Soft=preload("res://scripts/soft_button.gd")
+        Soft.draw_plate(self,size,"quiet",1.0 if is_hovered() else 0.0,1.0 if is_pressed() else 0.0,0.0,disabled,16.0)
+        var dot=Rect2(Vector2(12,(size.y-40)*.5),Vector2(40,40))
+        var face=StyleBoxFlat.new(); face.bg_color=color if not disabled else color.darkened(.5); face.set_corner_radius_all(12)
+        face.set_border_width_all(1); face.border_color=Color(1,1,1,.2)
+        draw_style_box(face,dot)
+        var code="#"+color.to_html(false).to_upper()
+        draw_string(Soft.BOLD,Vector2(62,size.y*.5+6),code,HORIZONTAL_ALIGNMENT_LEFT,size.x-68,16,Soft.text_color("quiet",0.0,disabled))
 
 func build_notes(items: VBoxContainer) -> void:
     var shapes=row(items,"Note shape","Choose the note style you see on the highway.",166)
@@ -552,16 +590,28 @@ func effect_row(items: VBoxContainer,key: String,hint: String) -> void:
     add_control(row(items,key,hint,96),control)
     control.value_changed.connect(func(v): game.features.set_effect(key,v/100))
 func build_hit_effects(items: VBoxContainer) -> void:
-    var style=row(items,"Hit effect style","Classic bursts, or Bloom: a bright flash with rings on the line.")
-    var choices=HBoxContainer.new(); choices.add_theme_constant_override("separation",10); add_control(style,choices,330)
+    # The live highway keeps firing hits here, so every change shows at once.
+    var preview=preload("res://scripts/hit_effect_preview.gd").new(); preview.game=game; items.add_child(preview)
+    var style=row(items,"Hit effect style","Classic bursts, Bloom rings, or SSRG's hit art. The SSRG highway always uses SSRG art.")
+    var choices=HBoxContainer.new(); choices.add_theme_constant_override("separation",10); add_control(style,choices,480)
     for value in game.HIT_STYLES:
         var key: String=value
-        var b=action(choices,key.capitalize(),func(): game.change_hit_style(key))
+        var b=action(choices,"SSRG" if key=="ssrg" else key.capitalize(),func(): game.change_hit_style(key))
         b.custom_minimum_size=Vector2(150,72); b.caption_size=21; hit_style_buttons[key]=b
+    hit_size_input=Stepper.new(60,160,10,game.hit_size*100,"%",0)
+    add_control(row(items,"Hit size","How big each hit flash and burst is, on every highway style."),hit_size_input)
+    hit_size_input.value_changed.connect(func(v): game.change_hit_look("size",v/100))
+    var colors=row(items,"Hit color","A follows each note's own color.",128)
+    var line=HBoxContainer.new(); line.add_theme_constant_override("separation",4)
+    add_control(colors,line,LOOK_COLORS.size()*56)
+    for code in LOOK_COLORS:
+        var swatch=Swatch.new(code); line.add_child(swatch); hit_swatches.append(swatch)
+        swatch.pressed.connect(func(): if not Action.was_dragged(swatch): game.change_hit_look("color",code))
     effect_row(items,"Hit flashes","Set the brightness of hit flashes and impact rings.")
     effect_row(items,"Particles","Set particle density for note-hit sparks.")
     action(items,"RESET HIT EFFECTS",func():
-        for key in ["Hit flashes","Particles"]: effect_inputs[key].value=100)
+        for key in ["Hit flashes","Particles"]: effect_inputs[key].value=100
+        hit_size_input.value=100; game.change_hit_look("color",""))
 func build_stage_effects(items: VBoxContainer) -> void:
     for key in game.features.OPTIONAL_STAGE_EFFECTS:
         var control=Switch.new(); stage_effect_switches[key]=control
@@ -569,9 +619,10 @@ func build_stage_effects(items: VBoxContainer) -> void:
         add_control(row(items,key,hint,96),control,152)
         control.set_pressed_no_signal(game.features.effect(key)>0)
         connect_switch(control,func(on): game.features.set_effect(key,1.0 if on else 0.0))
+    effect_row(items,"Lasers","Light streaks that shoot along both sides of the highway. 0% turns them off.")
     effect_row(items,"Background brightness","Adjust artwork brightness behind the highway.")
     action(items,"RESET STAGE EFFECTS",func():
-        for key in ["Background brightness"]: effect_inputs[key].value=100
+        for key in ["Lasers","Background brightness"]: effect_inputs[key].value=100
         for key in stage_effect_switches:
             game.features.set_effect(key,game.features.effect_default(key)); stage_effect_switches[key].set_pressed_no_signal(false))
 func editor_switch(items: VBoxContainer,key: String,title: String,hint: String,value: bool,callback: Callable) -> Switch:
@@ -591,7 +642,7 @@ func build_editor(items: VBoxContainer,guides: VBoxContainer) -> void:
     action(items,"RECORDER PREFERENCES  →",func(): game.recorder.show_setup(true))
 func refresh() -> void:
     for key in color_pickers:
-        var picker: ColorPickerButton=color_pickers[key]
+        var picker=color_pickers[key]
         picker.disabled=game.highway_colors=="adaptive"
         picker.color=Color.from_string(str(game.gameplay_colors[key]),Color.WHITE) if game.gameplay_colors.has(key) else SynkGameplayColors.preview_default(game,key)
         color_reset_buttons[key].disabled=picker.disabled
@@ -599,8 +650,14 @@ func refresh() -> void:
     if trail_style_input: trail_style_input.select(1 if game.trail_style=="solid" else 0)
     for kind in shape_tiles: shape_tiles[kind].selected=kind==game.note_shape
     for key in hit_style_buttons: hit_style_buttons[key].set_selected(key==game.hit_style)
+    for swatch in hit_swatches: swatch.selected=swatch.color_code==game.hit_color
+    if hit_size_input: hit_size_input.sync_value(game.hit_size*100)
     for value in render_scale_buttons: render_scale_buttons[value].set_selected(is_equal_approx(value,game.render_scale()))
     for kind in style_tiles: style_tiles[kind].selected=kind==game.highway_style
+    if ssrg_mode_row:
+        ssrg_mode_row.visible=game.highway_style=="ssrg"
+        angle_row.visible=game.highway_style!="ssrg"
+        ssrg_mode_switch.set_pressed_no_signal(bool(game.prefs.get_value("highway","ssrg_mode",false)))
     for kind in color_mode_tiles: color_mode_tiles[kind].selected=kind==game.highway_colors
     for swatch in rail_swatches: swatch.selected=swatch.color_code==game.rail_color and (game.highway_colors=="adaptive" or not game.gameplay_colors.has("rail"))
     for swatch in band_swatches: swatch.selected=swatch.color_code==game.band_color and (game.highway_colors=="adaptive" or not game.gameplay_colors.has("band"))
@@ -609,7 +666,7 @@ func refresh() -> void:
     song_preview_toggle.set_pressed_no_signal(game.lobby.preview_enabled)
     metronome_toggle.set_pressed_no_signal(game.beat_clock.enabled)
     bluetooth_toggle.set_pressed_no_signal(game.bluetooth_mode); bluetooth_latency_input.editable=game.bluetooth_mode
-    note_speed_input.sync_value(game.note_speed); highway_angle_input.sync_value(game.highway_angle)
+    note_speed_input.sync_value(game.synk_speed_setting()); highway_angle_input.sync_value(game.highway_angle)
     timing_input.sync_value(game.timing_ms); bluetooth_latency_input.sync_value(game.bluetooth_latency_ms)
     for key in sizing_inputs: sizing_inputs[key].sync_value((game.note_size if key=="note_size" else game.hold_trail_width)*100)
     for key in effect_inputs: effect_inputs[key].sync_value(game.features.effect(key)*100)

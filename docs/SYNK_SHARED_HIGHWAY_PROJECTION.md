@@ -1,0 +1,13 @@
+# SYNK highway projection
+
+**Retired:** Regular SYNK has been restored to its original perspective highway, 2.6-second approach and original postprocessing/effects. Shared canvas projection is now restricted to imported SSRG runs. The experimental regression scripts are retained under `.tools/retired-synk-projection-tests`; current behavior is covered by `test_synk_og_restored.gd` and `test_shared_ssrg_gameplay.gd`.
+
+Gold and Neon gameplay use SSRG's orthographic canvas, original canvas fitting and progress-to-the-sixth approach curve. Notes share the same scaling and position transform; hold and slide sections use the same projected cross-sections. Rendering travel is 3.5 seconds at 1x. Imported SSRG runs retain their own speed mapping, artwork and stage.
+
+`highway_3d.gd::uses_projected_highway` selects the visual mechanism independently from `main.gd::uses_ssrg_gameplay`. SYNK retains its note textures, solid/neon trail choices, rail and band styles, colors, lane mapping and judgment rules. Static SYNK track/rail shaders project their geometry onto the shared canvas. The recorder disables this projection and retains its perspective camera and 2.6-second travel.
+
+The judgment band remains centered at world Z=0, which is the zero-depth note and input timing plane. The source canvas fitting keeps this plane near the bottom of the display and fits wide note artwork on narrower screens. Held ribbons clip against the projected timing plane. Changing the recorder angle cannot move the gameplay judgment bar.
+
+Prism is removed from the style picker and no longer instantiated. Old saved Prism selections resolve to Gold. Archived artwork is retained on disk.
+
+`test_synk_projected_highway.gd` renders Gold and Neon with all three SYNK note shapes and both trail families. It checks far-note raster positions, source projection without source judging, screen fitting at 2400×1080, 1280×720 and 1024×768, bar-to-note alignment, actual on-time input at outer/center lanes, held-trail clipping and recorder isolation.

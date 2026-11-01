@@ -1,5 +1,73 @@
 # Original SSRG background reconstruction
 
+## Rail-edge coverage and album card (2026-11-01 follow-up)
+
+Supersedes the earlier triangular entrance mask below. The veil now samples
+the same mirrored rail sprite at its exact UI placement and uses its opaque
+dark road pixels as the mask. This reaches the inner rail bevel without a
+geometric gap; bright rail pixels and transparent exterior pixels are excluded.
+The veil retains priority 3 so it still covers distant notes and hold tails.
+Desktop shadow-on/off checks preserved the sampled white rails and confirmed
+darkening immediately inside the upper rail edges.
+
+The SSRG album tile now occupies the top-center card slot (20% of safe-area
+height, capped at 170 UI pixels), aligned through the highway's projected
+entrance into the cover's safe-area coordinates. Loading-to-play and
+play-to-results transitions use the shared target rectangle. Other highway
+styles retain their corner album tile. Layout/glide tests passed at 1564x720,
+2400x1080 and 1024x768; artwork-loading and screen-fitting suites also passed.
+
+Pause now uses a fully opaque dark backdrop and rounded opaque panel rather
+than screen-reading blur shaders. The backdrop is opaque immediately on entry;
+the menu itself retains its entrance animation. Targeted pause and edge-to-edge
+checks passed and the layout was rendered on desktop. The broader `test_game`
+suite encountered old countdown/section expectations and stopped at its obsolete
+`lobby.DragScroll` property access, before reaching its pause checks; it is not
+reported as passing.
+
+## Entrance shadow rail mask (2026-11-01)
+
+The entrance veil still draws over distant notes, as requested. Its horizontal
+mask now stays inside the original rail sprite's inner edges: on the 1440x600
+veil plane, normalized half-width is `max(0, depth*.8-.008)` with an inward
+.008 feather. The previous `depth+.025` mask extended across the rails.
+Draw order is retained. Desktop renders with the shadow enabled/hidden had
+identical RGB at 12 sampled rail-center points (six heights on each side).
+
+## SMTOWN-style laser presentation (2026-11-01)
+
+At the user's request, the background shader now presents the retained source
+trajectories as thin light streaks. Near/far half-widths are multiplied by .6
+and capped at 1.6 logical units, preventing the depth-derived trailing end from
+becoming a large wedge. Additive blending and feathered edges/ends replace the
+previous hard alpha-blended strip. Source textures retain rave-profile colours;
+custom tint and intensity controls still apply. Emission, density, batching,
+pause handling and gameplay are unchanged.
+
+This is a visual adaptation inspired by SMTOWN, not a recovered SMTOWN shader
+or a claim of exact runtime parity. All four profiles were rendered and
+inspected on the desktop Compatibility renderer. The existing background
+profile/geometry/capacity/pause suite passed. Phone gameplay is left to the user.
+
+## Reference-photo correction (2026-10-29)
+
+The retained `ssrg-reference-video.jpg` and `ssrg-motion-3.png` show the Ultra
+Rave magenta wash concentrated around the screen perimeter, with the song photo
+clearer in the middle. The cropped `Fever_bg_1..4` quarter textures have their
+strong alpha at (0,0) and weak alpha at (1,1). The cover shader previously mapped
+the strong corner into the screen center. It now maps each outer screen corner
+to (0,0) and the center to (1,1). All four rave levels were rendered and visually
+checked on desktop. This fixes the reversed color gradient; it does not establish
+complete runtime parity with SSRG or constitute a phone play test.
+
+Follow-up: clamp all four quarter-texture samplers at their borders. Wrapping
+at the mirrored center sampled the opposite, opaque border and drew a cross.
+The user-requested rave pulse now modulates overlay alpha from 65% to 100%
+using the existing cosine song-beat clock, which freezes during pause. The
+one-second state entrance uses smoothstep easing and alpha-weighted color
+mixing, avoiding a second multiplication of fade weight into the color. This
+pulse is a requested presentation adjustment, not a recovered native timing rule.
+
 ## Confirmed static evidence
 
 The four `Perspective2dParticle` components in APK `level10` have their complete serialized profiles in `scripts/ssrg_background_particle_data.gd` (396/436/476/396 bytes consumed). Source artwork is cropped in `assets/ssrg/imported/background/`. The code is ARM64 reconstruction from supplied `libil2cpp.so`, not execution of the original game. Relevant retained disassembly is under `.tools/ssrg-apk-analysis/`.

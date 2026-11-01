@@ -86,7 +86,45 @@ static func duration_text(seconds: float) -> String:
 func cover_for(id: String) -> Texture2D:
     if id=="eclipse" or game.has_custom_cover(id): return game.cover_texture_for_id(id)
     return SongBrowser.PLACEHOLDER
+# Background for a song's screens: its cover, or a soft gradient in its placeholder colours.
+var backdrop_cache: Dictionary={}
+func backdrop_for(id: String) -> Texture2D:
+    if id=="eclipse" or game.has_custom_cover(id): return game.cover_texture_for_id(id)
+    if not backdrop_cache.has(id):
+        var hue=float(posmod(id.hash(),360))/360.0
+        var ramp=Gradient.new(); ramp.set_color(0,Color.from_hsv(hue,.65,.75)); ramp.set_color(1,Color.from_hsv(fmod(hue+.22,1),.8,.55))
+        var texture=GradientTexture2D.new(); texture.gradient=ramp; texture.width=64; texture.height=64
+        texture.fill_from=Vector2(0,0); texture.fill_to=Vector2(1,1); backdrop_cache[id]=texture
+    return backdrop_cache[id]
+# Two-letter initials for a generated cover: "Starfall Runner" -> "SR".
+func initials_for(id: String) -> String:
+    var title=id
+    for song in game.library.songs:
+        if str(song.id)==id: title=display_title(str(song.get("title",id))); break
+    var letters=""
+    for word in title.split(" ",false):
+        if letters.length()<2 and word.length()>0 and word[0].to_upper()!=word[0].to_lower(): letters+=word[0].to_upper()
+    return letters if letters!="" else title.left(1).to_upper()
+func cover_initials(rect: TextureRect,id: String,shown: bool) -> void:
+    var label: Label=rect.get_node_or_null("CoverInitials")
+    if not shown:
+        if label: label.visible=false
+        return
+    if label==null:
+        label=Label.new(); label.name="CoverInitials"; rect.add_child(label); label.mouse_filter=Control.MOUSE_FILTER_IGNORE
+        label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+        label.vertical_alignment=VERTICAL_ALIGNMENT_BOTTOM
+        label.add_theme_font_override("font",preload("res://assets/fonts/FiraSans-Bold.ttf"))
+        label.add_theme_color_override("font_color",Color(1,1,1,.92))
+        label.add_theme_color_override("font_shadow_color",Color(0,0,0,.25)); label.add_theme_constant_override("shadow_offset_y",1)
+        rect.resized.connect(func(): fit_initials(label,rect))
+    label.visible=true; label.text=initials_for(id); fit_initials(label,rect)
+func fit_initials(label: Label,rect: TextureRect) -> void:
+    var side=minf(rect.size.x,rect.size.y)
+    label.add_theme_font_size_override("font_size",maxi(10,roundi(side*.3)))
+    label.offset_left=side*.12; label.offset_bottom=-side*.06
 func style_cover(rect: TextureRect,id: String,radius: float) -> void:
+    cover_initials(rect,id,not (id=="eclipse" or game.has_custom_cover(id)))
     if id=="eclipse" or game.has_custom_cover(id):
         if rect.material and rect.material.shader==preload("res://scripts/song_placeholder.gdshader"):
             preload("res://scripts/screen_style.gd").round_cover(rect,radius)
@@ -201,6 +239,9 @@ func press_play() -> void:
     if game.loading_song_index>0 or filtered_entries.is_empty(): return
     var notes: Array=game.baseline_notes()
     if notes.is_empty(): return
+    # The selected cover flies from the song list into the loading card.
+    if browser and browser.cover and browser.cover.is_visible_in_tree() and game.stage_intro:
+        game.stage_intro.arrive(browser.cover.get_global_rect())
     stop_preview(); game.start_game(notes,auto_enabled)
 func set_preview_enabled(enabled: bool) -> void:
     preview_enabled=enabled; game.prefs.set_value("audio","song_preview",enabled); game.prefs.save("user://preferences.cfg")
@@ -237,6 +278,30 @@ func lobby_card(parent: Control,x: float,y: float,w: float,h: float,icon: String
     design_rect(card,parent,x,y,w,h)
     return card
 
+var resume_label: Label
+var play_home_card: Button
+func home_label(parent: Control,value: String,x: float,y: float,w: float,h: float,font_size: int,color: Color,bold: bool) -> Label:
+    var result=Label.new(); design_rect(result,parent,x,y,w,h); result.text=value
+    result.add_theme_font_size_override("font_size",font_size); result.add_theme_color_override("font_color",color)
+    if bold: result.add_theme_font_override("font",preload("res://assets/fonts/FiraSans-Bold.ttf"))
+    result.vertical_alignment=VERTICAL_ALIGNMENT_CENTER; result.mouse_filter=Control.MOUSE_FILTER_IGNORE
+    return result
+
+# Home card details: recent covers, song and chart counts, and where you left off.
+func refresh_home() -> void:
+    if play_home_card==null: return
+    var songs: Array=game.library.songs.filter(func(song): return not song.has("ssrg"))
+    var order: Array=songs.duplicate()
+    order.sort_custom(func(a,b): return float(recent.get(str(a.id),0))>float(recent.get(str(b.id),0)))
+    var covers: Array=[]
+    for song in order:
+        if covers.size()>=3: break
+        covers.append(backdrop_for(str(song.id)) if not (str(song.id)=="eclipse" or game.has_custom_cover(str(song.id))) else game.cover_texture_for_id(str(song.id)))
+    play_home_card.covers=covers
+    play_home_card.subtitle="%d song%s to play" % [songs.size(),"" if songs.size()==1 else "s"]
+    var last: Dictionary=order[0] if not order.is_empty() and recent.has(str(order[0].id)) else {}
+    resume_label.text=("Pick up where you left off: "+display_title(str(last.get("title","")))) if not last.is_empty() else "Pick a song and play, or record your own chart."
+
 func build_gateway() -> void:
     gateway=Control.new(); place(gateway,self,0,0,1,1)
     var backdrop=TextureRect.new(); place(backdrop,gateway,0,0,1,1)
@@ -254,36 +319,36 @@ func build_gateway() -> void:
     var atmosphere_material=preload("res://scripts/background_motion.gd").attach(atmosphere,preload("res://scripts/image_atmosphere.gdshader"))
     atmosphere_material.set_shader_parameter("overlay_only",true)
     var dim=ColorRect.new(); place(dim,gateway,0,0,1,1)
-    dim.name="LobbyBackgroundDim"; dim.color=Color(0,0,0,.42)
+    dim.name="LobbyBackgroundDim"; dim.color=Color(.06,.055,.07,.66)
     dim.mouse_filter=Control.MOUSE_FILTER_IGNORE
-    # The reference plate already supplies the concert lights; extra procedural beams
-    # would replace its appearance with the old flat geometric wash.
-    # Same visual language as the song list, settings and Chart Studio: a type-set wordmark,
-    # dark rounded cards with gradient icon tiles, and a plain rounded settings button.
-    var logo=LobbyWordmark.new(); design_rect(logo,gateway,460,40,1000,250)
-    logo.name="LobbyWordmark"
+    # Home: a cream SYNK wordmark and resume line on the left, two large cards on the right.
     var safe_buttons=game.safe_parent("SafeLobbyButtons",gateway)
-    # Two round neon portals drawn in code (hex_portal_button.gd).
-    var Portal=preload("res://scripts/hex_portal_button.gd")
-    var play=Portal.new(); play.kind="play"; play.caption="PLAY"; design_rect(play,safe_buttons,370,300,380,380)
-    play.name="PlayCard"; play.tooltip_text="Choose a song and play"
-    play.activated.connect(func(): show_play_browser(false))  # the portal warp is the transition
-    var create=Portal.new(); create.kind="create"; create.caption="CREATE CHARTS"; design_rect(create,safe_buttons,1170,300,380,380)
-    create.name="CreateCard"; create.tooltip_text="Edit charts, import music, and record notes"
-    create.activated.connect(func(): game.open_editor())
-    var ssrg=preload("res://scripts/settings_action.gd").new(); ssrg.text="SSRG PLAYABLES"; ssrg.caption_size=24
-    design_rect(ssrg,safe_buttons,790,700,340,92); ssrg.name="SsrgPlayablesButton"
+    var eyebrow=home_label(safe_buttons,"PLAY YOUR CHARTS  ·  CREATE YOUR SOUND",110,138,720,34,21,Color("ff7a59"),true)
+    var logo=home_label(safe_buttons,"SYNK",96,168,760,210,200,Color("f3ece1"),true)
+    logo.name="LobbyWordmark"
+    resume_label=home_label(safe_buttons,"",110,392,700,90,27,Color("a29ea6"),false)
+    resume_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART; resume_label.vertical_alignment=VERTICAL_ALIGNMENT_TOP
+    var ssrg=preload("res://scripts/settings_action.gd").new(); ssrg.text="▶  SSRG PLAYABLES"; ssrg.caption_size=23
+    design_rect(ssrg,safe_buttons,110,500,350,88); ssrg.name="SsrgPlayablesButton"
     ssrg.tooltip_text="Import and play SSRG songs from your own game files"
     ssrg.pressed.connect(func(): game.open_ssrg_playables())
-    var settings=preload("res://scripts/gear_button.gd").new(); design_rect(settings,safe_buttons,1756,32,120,120)
-    settings.name="SettingsButton"; settings.accent=Color("bcb2d4")
+    var settings=preload("res://scripts/settings_action.gd").new(); settings.text="⚙  SETTINGS"; settings.caption_size=23
+    design_rect(settings,safe_buttons,478,500,282,88); settings.name="SettingsButton"
     settings.pressed.connect(func(): game.open_lobby_settings())
-    var footer=text(gateway,"Play your charts. Create your sound.",.2,.885,.8,.94,22,Color("b4b6d2"))
-    footer.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    var HomeCard=preload("res://scripts/lobby_home_card.gd")
+    var play=HomeCard.new(); play.kind="play"; play.title="Play"; design_rect(play,safe_buttons,880,96,480,660)
+    play.name="PlayCard"; play.tooltip_text="Choose a song and play"
+    play.pressed.connect(func(): show_play_browser(true))
+    var create=HomeCard.new(); create.kind="create"; create.title="Create charts"; create.subtitle="Record a take or edit a draft"
+    design_rect(create,safe_buttons,1400,96,440,660)
+    create.name="CreateCard"; create.tooltip_text="Edit charts, import music, and record notes"
+    create.pressed.connect(func(): game.open_editor())
+    play_home_card=play
     # Launch entrance (after the start-up intro): node, offset it arrives from, delay, bounce.
-    launch_items=[[logo,Vector2(0,-140),0.0,true],[play,Vector2(-520,0),.14,false],[create,Vector2(520,0),.22,false],
-        [ssrg,Vector2(0,60),.4,false],[settings,Vector2(60,0),.6,false],[footer,Vector2(0,24),.66,false]]
-    gateway_entrance_items=[{"node":logo,"delay":.02},{"node":play,"delay":.10},{"node":create,"delay":.16},{"node":ssrg,"delay":.2},{"node":footer,"delay":.24}]
+    launch_items=[[eyebrow,Vector2(0,-30),0.0,false],[logo,Vector2(0,-60),.04,true],[resume_label,Vector2(0,24),.18,false],
+        [play,Vector2(0,80),.12,false],[create,Vector2(0,80),.2,false],[ssrg,Vector2(0,40),.3,false],[settings,Vector2(0,40),.36,false]]
+    gateway_entrance_items=[{"node":logo,"delay":.02},{"node":play,"delay":.08},{"node":create,"delay":.14},{"node":ssrg,"delay":.2},{"node":settings,"delay":.24}]
+    refresh_home()
     gateway.visible=false
 
 # Plays every time the app launches, as the start-up intro clears: the wordmark drops in with
@@ -314,6 +379,7 @@ func show_gateway() -> void:
             browser_visibility.append({"node":node,"visible":node.visible})
             node.visible=false
     gateway.visible=true
+    refresh_home()
     if background_video: background_video.paused=true
     if home_video:
         if home_video.is_playing(): home_video.paused=false

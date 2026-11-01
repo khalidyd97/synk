@@ -104,6 +104,7 @@ var countdown = 0.0
 var gameplay_start_lead = 0.0
 var resume_countdown = 0.0
 var resume_start_audio = false
+var ssrg_resume_position=-1.0
 var start_position = 0.0
 var timing_ms = 0.0
 var bluetooth_mode = false
@@ -116,10 +117,34 @@ var highway_angle = 35.0
 # Highway look: "gold" or "neon", optional custom rail/band colors ("" follows the style),
 # and how dark the see-through highway surface is (1 = the style's default).
 var highway_style = "gold"
+var ssrg_presentation:Node
+var ssrg_screens:Control
 var ssrg_playable_run = false
 var ssrg_lane_count = 13
+# A SYNK song played with SSRG rules ("SSRG mode" switch on the SSRG highway style).
+var ssrg_forced_run = false
+func forces_ssrg_mode() -> bool:
+	return highway_style=="ssrg" and bool(prefs.get_value("highway","ssrg_mode",false))
+func change_ssrg_mode(on: bool) -> void:
+	prefs.set_value("highway","ssrg_mode",on); prefs.save("user://preferences.cfg")
+	if settings_panel: settings_panel.refresh()
+# The SSRG look: imported SSRG runs, and SYNK songs played with the "ssrg" highway style.
+# SSRG judging and scoring rules stay with ssrg_playable_run.
 func uses_ssrg_gameplay() -> bool:
-	return mode=="play" or (mode=="paused" and paused_mode=="play") or (ssrg_playable_run and not uses_recorder_colors())
+	return (ssrg_playable_run or (highway_style=="ssrg" and (mode in ["play","paused"] or highway_preview))) and not uses_recorder_colors()
+# True while a settings preview shows the live highway outside gameplay. Each visible
+# preview registers itself, so switching pages never turns the stage off under another one.
+var highway_preview = false
+var highway_preview_users: Dictionary = {}
+func set_highway_preview(on: bool, user: Object = null) -> void:
+	if user:
+		if on: highway_preview_users[user.get_instance_id()]=true
+		else: highway_preview_users.erase(user.get_instance_id())
+		on=not highway_preview_users.is_empty()
+	if highway_preview==on: return
+	var was_ssrg_look=uses_ssrg_gameplay()
+	highway_preview=on
+	if uses_ssrg_gameplay()!=was_ssrg_look and field and field.world: field.world.refresh_highway_look()
 func gameplay_lane_count() -> int:
 	return ssrg_lane_count if ssrg_playable_run else 10
 # SSRG Playables keeps its own note speed (set on that screen), separate from SYNK's.
@@ -196,9 +221,15 @@ var chart_library: Control
 var menu_settings_open = false
 var modal: Panel
 var pause_backdrop: ColorRect
+var pause_layer: CanvasLayer
 var pause_tween: Tween
 var modal_title: Label
 var modal_body: Label
+# Gameplay pause: song line, progress and a note speed control under the tiles.
+var pause_info: Label
+var pause_progress: Control
+var pause_speed: Control
+var pause_speed_label: Label
 var settings_panel: Control
 # The finish animation that carries the combo from the stage into the results screen.
 var finish_overlay: Control
@@ -207,6 +238,7 @@ var finish_elapsed = 0.0
 var pending_results: Dictionary = {}
 var slide_tools: Control
 var sync_helper: Control
+var song_sync: Control
 var bluetooth_toggle: Button
 var bluetooth_latency_input: Control
 var primary: Button
@@ -271,8 +303,8 @@ const GAME_FONT = preload("res://assets/fonts/FiraSans-Regular.ttf")
 func _enter_tree() -> void:
 	ThemeDB.fallback_font=GAME_FONT
 
-# Frame pacing: by default the game runs at exactly the display's refresh rate (60/90/120 Hz),
-# so every frame lines up with the screen. A fixed limit can be chosen in Settings instead.
+# Auto pacing lets VSync follow display refresh without a second software timer.
+# A fixed software limit can still be chosen in Settings.
 func display_refresh_rate() -> int:
 	var rate=DisplayServer.screen_get_refresh_rate()
 	return clampi(roundi(rate),30,144) if rate>0 else 60
@@ -280,11 +312,20 @@ func frame_rate_setting() -> int:
 	return int(prefs.get_value("gameplay","frame_rate",0))  # 0 = match display
 func apply_frame_rate() -> void:
 	var chosen=frame_rate_setting()
-	Engine.max_fps=display_refresh_rate() if chosen<=0 else chosen
+	Engine.max_fps=0 if chosen<=0 else chosen
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
 # Hit effect style (Settings > Visual effects > Hit effects): "classic" bursts or "bloom".
-const HIT_STYLES = ["classic","bloom"]
+const HIT_STYLES = ["classic","bloom","ssrg"]
 var hit_style = "classic"
+# Hit effect size (0.6-1.6) and an optional colour ("" follows the note colours).
+var hit_size = 1.0
+var hit_color = ""
+func change_hit_look(key: String,value: Variant) -> void:
+	if key=="size": hit_size=clampf(float(value),.6,1.6); prefs.set_value("effects","hit_size",hit_size)
+	elif key=="color": hit_color=str(value); prefs.set_value("effects","hit_color",hit_color)
+	else: return
+	prefs.save("user://preferences.cfg")
+	if settings_panel: settings_panel.refresh()
 func change_hit_style(value: String) -> void:
 	hit_style=value if value in HIT_STYLES else "classic"
 	prefs.set_value("effects","hit_style",hit_style); prefs.save("user://preferences.cfg")
@@ -309,6 +350,7 @@ func _ready() -> void:
 	mouse_filter=Control.MOUSE_FILTER_IGNORE
 	process_priority=-10
 	apply_frame_rate()
+	if OS.get_name()=="iOS": NativeFilePicker.defer_system_gestures.call_deferred()
 	# Start-up intro (scripts/app_intro.gd) on its own top layer, over the lobby; tap skips it.
 	var intro_layer=CanvasLayer.new(); intro_layer.layer=100; add_child.call_deferred(intro_layer)
 	var intro=preload("res://scripts/app_intro.gd").new(); intro_layer.add_child(intro)
@@ -328,14 +370,18 @@ func _ready() -> void:
 	recorder_note_speed=clampf(float(prefs.get_value("editor","note_speed",1.0)),.5,3.0)
 	record_speed=float(prefs.get_value("editor","record_speed",1.0))
 	if record_speed not in RECORD_SPEEDS: record_speed=1.0
-	note_speed = clampf(float(prefs.get_value("gameplay","note_speed",1.0)), .5, 3.0)
+	var legacy_speed = clampf(float(prefs.get_value("gameplay","note_speed",1.0)), .5, 3.0)
+	note_speed = clampf(snappedf(float(prefs.get_value("gameplay","speed_value",legacy_speed*3.0)),.1),1.0,10.0)/3.0
 	hit_style = str(prefs.get_value("effects","hit_style","classic"))
 	if hit_style not in HIT_STYLES: hit_style="classic"
+	hit_size = clampf(float(prefs.get_value("effects","hit_size",1.0)),.6,1.6)
+	hit_color = str(prefs.get_value("effects","hit_color",""))
+	if hit_color!="" and not Color.html_is_valid(hit_color): hit_color=""
 	note_shape = str(prefs.get_value("gameplay","note_shape","circle"))
 	if note_shape not in ["rectangle","circle","puck"]: note_shape="rectangle"
 	highway_angle = clampf(float(prefs.get_value("gameplay","highway_angle",35.0)),18.0,44.0)
 	highway_style = str(prefs.get_value("highway","style","gold"))
-	if highway_style not in ["gold","neon","prism"]: highway_style="gold"
+	if highway_style not in ["gold","neon","ssrg"]: highway_style="gold"
 	rail_color = str(prefs.get_value("highway","rail_color",""))
 	band_color = str(prefs.get_value("highway","band_color",""))
 	highway_opacity = clampf(float(prefs.get_value("highway","opacity",1.0)),.3,1.6)
@@ -392,6 +438,8 @@ func _ready() -> void:
 	sync_helper=Control.new(); sync_helper.set_script(load("res://scripts/sync_helper.gd")); sync_helper.game=self
 	ui.add_child(sync_helper); sync_helper.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.move_child(sync_helper,3); sync_helper.visible=false
+	song_sync=Control.new(); song_sync.set_script(load("res://scripts/song_sync.gd")); song_sync.game=self
+	ui.add_child(song_sync); song_sync.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ssrg_playables=Control.new(); ssrg_playables.set_script(load("res://scripts/ssrg_playables.gd")); ssrg_playables.game=self
 	ui.add_child(ssrg_playables); ssrg_playables.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.move_child(ssrg_playables,3); ssrg_playables.visible=false
@@ -404,6 +452,13 @@ func _ready() -> void:
 	ui.add_child(finish_overlay)
 	var ssrg_judgement=Control.new(); ssrg_judgement.set_script(load("res://scripts/ssrg_judgement.gd")); ssrg_judgement.game=self
 	ui.add_child(ssrg_judgement)
+	ssrg_presentation=preload("res://scripts/ssrg_presentation.gd").new(); ssrg_presentation.game=self
+	add_child(ssrg_presentation)
+	ssrg_screens=preload("res://scripts/ssrg_screens.gd").new(); ssrg_screens.game=self
+	ui.add_child(ssrg_screens)
+	var ssrg_score=preload("res://scripts/ssrg_score_hud.gd").new(); ssrg_score.game=self
+	safe_parent("SafeSSRGScoreHud").add_child(ssrg_score)
+	ui.move_child(ssrg_screens,-1)
 	app_login=preload("res://scripts/app_login.gd").new(); app_login.game=self; add_child(app_login)
 	set_mode("menu")
 	build_waveform()
@@ -595,27 +650,32 @@ func build_ui() -> void:
 	guide_back=button(safe_parent("SafeGuideBack"),"‹  BACK",.40,.85,.60,.96,func(): set_mode("menu"),"nav")
 	# Song intro sits above the HUD and below the pause/results modal.
 	stage_intro=StageIntro.new(); stage_intro.game=self; ui.add_child(stage_intro)
+	var play_cover=preload("res://scripts/play_cover.gd").new(); play_cover.game=self
+	safe_parent("SafePlayCover").add_child(play_cover); stage_intro.play_cover=play_cover
 	results_screen=ResultsScreen.new(); results_screen.game=self; ui.add_child(results_screen)
-	# Pause: the stage behind is blurred and dimmed, with a frosted card on top (same glass as
-	# the lobby cards) holding three icon tiles.
-	pause_backdrop=ColorRect.new(); rect(pause_backdrop,ui,0,0,1,1); pause_backdrop.color=Color.WHITE
+	# Pause uses a solid full-screen background and an opaque card.
+	pause_layer=CanvasLayer.new();pause_layer.name="PauseOverlay";pause_layer.layer=1000;add_child(pause_layer)
+	var pause_root=Control.new();pause_root.name="PauseRoot";pause_layer.add_child(pause_root)
+	pause_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);pause_root.theme=ui.theme
+	pause_backdrop=ColorRect.new(); rect(pause_backdrop,pause_root,0,0,1,1); pause_backdrop.color=Color("101010")
 	pause_backdrop.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	var blur=ShaderMaterial.new(); blur.shader=preload("res://scripts/frosted_glass.gdshader"); pause_backdrop.material=blur
-	blur.set_shader_parameter("radius",0.0); blur.set_shader_parameter("blur",3.0); blur.set_shader_parameter("tint",Color(0.009,0.009,0.009,.55))
-	pause_backdrop.resized.connect(func(): blur.set_shader_parameter("rect_size",pause_backdrop.size))
-	modal=Panel.new(); rect(modal,safe_parent("SafeModal"),.19,.11,.81,.89)
-	modal.add_theme_stylebox_override("panel",StyleBoxEmpty.new())
-	var glass=ColorRect.new(); glass.name="FrostedGlass"; modal.add_child(glass); glass.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	glass.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	var glass_material=ShaderMaterial.new(); glass_material.shader=preload("res://scripts/frosted_glass.gdshader"); glass.material=glass_material
-	glass_material.set_shader_parameter("blur",4.0); glass_material.set_shader_parameter("tint",Color(0.041,0.041,0.041,.62))
-	glass.resized.connect(func(): glass_material.set_shader_parameter("rect_size",glass.size); glass_material.set_shader_parameter("radius",28.0))
+	modal=Panel.new(); rect(modal,safe_parent("SafeModal",pause_root),.19,.11,.81,.89)
+	var pause_panel=StyleBoxFlat.new();pause_panel.bg_color=Color("1b1b1b");pause_panel.set_corner_radius_all(28)
+	modal.add_theme_stylebox_override("panel",pause_panel)
 	modal_title=label(modal,"S Y N K",.04,.025,.96,.17,48); modal_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	modal_title.add_theme_font_override("font",preload("res://assets/fonts/FiraSans-Bold.ttf"))
 	modal_body=label(modal,"",.06,.17,.94,.43,22); modal_body.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; modal_body.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	primary=pause_action(modal,"PLAY",.23,.88,.77,.97,primary_action,"primary")
 	pause_restart=pause_action(modal,"RESTART",.36,.88,.64,.97,restart_from_pause,"secondary")
 	pause_home=pause_action(modal,"HOME",.66,.88,.94,.97,return_home,"nav")
+	pause_info=label(modal,"",.06,.20,.94,.30,22); pause_info.add_theme_color_override("font_color",Color("a29ea6"))
+	pause_info.clip_text=true
+	pause_progress=Control.new(); rect(pause_progress,modal,.06,.31,.94,.335); pause_progress.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	pause_progress.draw.connect(draw_pause_progress)
+	pause_speed_label=label(modal,"NOTE SPEED",.06,.78,.40,.92,20); pause_speed_label.add_theme_color_override("font_color",Color("ff7a59"))
+	pause_speed_label.add_theme_font_override("font",preload("res://assets/fonts/FiraSans-Bold.ttf"))
+	pause_speed=preload("res://scripts/settings_screen.gd").Stepper.new(1,10,.1,3,"",1); rect(pause_speed,modal,.50,.78,.94,.92)
+	pause_speed.value_changed.connect(change_pause_speed)
 	actions=Control.new(); rect(actions,safe_parent("SafeActions"),0,0,1,1); actions.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	button(actions,"●  RECORD NEW",.02,.91,.20,.98,start_new_recording,"record")
 	button(actions,"PLAY SAVED",.22,.91,.39,.98,func(): start_game(saved_notes),"primary")
@@ -700,12 +760,13 @@ func recorder_plate(bounds: Rect2) -> Panel:
 	plate.border_color=Color("303349"); plate.set_border_width_all(1); plate.set_corner_radius_all(16)
 	panel.add_theme_stylebox_override("panel",plate); return panel
 
-func set_mode(value: String) -> void:
+func set_mode(value: String,animate_transition:bool=true) -> void:
+	var was_ssrg_look=uses_ssrg_gameplay()
 	if ssrg_playable_run and value not in ["play","paused"]:
-		ssrg_playable_run=false
-		highway_style=ssrg_playable_previous_style if ssrg_playable_previous_style in ["gold","neon","prism"] else "gold"
+		ssrg_playable_run=false; ssrg_forced_run=false
+		highway_style=ssrg_playable_previous_style if ssrg_playable_previous_style in ["gold","neon","ssrg"] else "gold"
 		if field and field.world: field.world.refresh_highway_look()
-	if value!=mode:
+	if value!=mode and animate_transition:
 		# Menus slide forward and back by depth; entering or leaving the stage dissolves.
 		var depth={"menu":0,"guide":1,"library":1,"editor":2,"results":3}
 		if value in ["play","record","paused"] or mode in ["play","record","paused"]: UiMotion.transition(self,.24,0)
@@ -716,6 +777,8 @@ func set_mode(value: String) -> void:
 	if value!=mode and value in ["menu","library","editor","guide"]: UiSound.play(self,"transition")
 	if value!="record" and arrange_preview: arrange_preview.stop()
 	mode=value; menu_settings_open=false
+	# The "ssrg" highway style only applies in gameplay, so entering or leaving it swaps the stage.
+	if uses_ssrg_gameplay()!=was_ssrg_look and field and field.world: field.world.refresh_highway_look()
 	if field and field.world:
 		field.world.apply_camera()
 		field.world.refresh_highway_look()
@@ -735,8 +798,9 @@ func set_mode(value: String) -> void:
 	chart_library.visible=mode=="library"
 	if song_details: song_details.visible=false
 	pause_backdrop.visible=mode=="paused"
+	pause_layer.visible=mode=="paused"
 	actions.visible=false; record_tools.visible=mode=="record"
-	hud.visible=mode in ["play","paused"]; score_panel.visible=hud.visible; hud_shadow.visible=hud.visible; hit_label.visible=mode in ["play","record"]; pause_button.visible=mode in ["play","record","paused"]
+	hud.visible=mode in ["play","paused"]; score_panel.visible=hud.visible and not uses_ssrg_gameplay(); hud_shadow.visible=score_panel.visible; hit_label.visible=mode in ["play","record"]; pause_button.visible=mode in ["play","record","paused"]
 	hit_art.visible=false
 	combo_hud.visible=mode in ["play","paused"] and combo>0
 	# The right side of the gameplay screen stays clear of text.
@@ -754,12 +818,18 @@ func set_mode(value: String) -> void:
 	pause_button.anchor_right=.095 if mode=="play" or large_pause else .08
 	pause_button.anchor_bottom=.125 if mode=="play" or large_pause else .105
 	pause_button.caption_size=22 if mode=="play" or large_pause else 17
-	modal.anchor_top=(.25 if large_pause else .36) if mode=="paused" else .11
-	modal.anchor_bottom=(.75 if large_pause else .64) if mode=="paused" else .89
-	modal_title.anchor_top=(.06 if large_pause else .10) if mode=="paused" else .025
-	modal_title.anchor_bottom=(.30 if large_pause else .40) if mode=="paused" else .17
-	var button_top=(.38 if large_pause else .58) if mode=="paused" else .88
-	var button_bottom=(.90 if large_pause else .88) if mode=="paused" else .97
+	modal.anchor_top=(.14 if large_pause else .36) if mode=="paused" else .11
+	modal.anchor_bottom=(.86 if large_pause else .64) if mode=="paused" else .89
+	modal_title.anchor_top=(.05 if large_pause else .10) if mode=="paused" else .025
+	modal_title.anchor_bottom=(.20 if large_pause else .40) if mode=="paused" else .17
+	modal_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_LEFT if large_pause else HORIZONTAL_ALIGNMENT_CENTER
+	modal_title.anchor_left=.06 if large_pause else .04
+	for part in [pause_info,pause_progress,pause_speed,pause_speed_label]: part.visible=large_pause
+	if large_pause:
+		pause_info.text=str(song.get("title",""))+"   ·   "+preload("res://scripts/chart_levels.gd").label(features.current_variant)
+		pause_speed.sync_value(pause_speed_setting())
+	var button_top=(.40 if large_pause else .58) if mode=="paused" else .88
+	var button_bottom=(.72 if large_pause else .88) if mode=="paused" else .97
 	for action_button in [primary,pause_restart,pause_home]:
 		action_button.anchor_top=button_top; action_button.anchor_bottom=button_bottom
 		action_button.caption_size=23 if large_pause else (19 if action_button==primary else 17)
@@ -824,6 +894,24 @@ func open_sync_helper() -> void:
 	sync_helper.open()
 	UiMotion.reveal(sync_helper)
 
+# Song sync: tune the headset delay while Eclipse plays on the real highway (song_sync.gd).
+func open_song_sync() -> void:
+	if mode!="menu": return
+	if document.dirty: tell("Save or RELOAD your chart before syncing."); return
+	sync_helper.player.stop(); sync_helper.visible=false
+	settings_panel.visible=false; menu_settings_open=false
+	ui.move_child(song_sync,ui.get_child_count()-1)
+	song_sync.begin()
+
+func end_song_sync(previous_song: Dictionary,previous_stream: AudioStream) -> void:
+	audio.stop(); audio.stream_paused=false; pointers.clear(); live.clear()
+	countdown=0; resume_countdown=0; song_time=0; flash=0
+	field.world.clear_notes(); field.world.clear_hit_effects()
+	if previous_stream: apply_song(previous_song,previous_stream)
+	else: apply_song(eclipse_song(),demo_stream)
+	set_mode("menu")
+	open_lobby_settings()
+
 func close_sync_helper() -> void:
 	UiMotion.back(self)
 	sync_helper.visible=false
@@ -849,13 +937,27 @@ func change_note_speed(value: float) -> void:
 	note_speed=value
 	prefs.set_value("gameplay","note_speed",value); prefs.save("user://preferences.cfg")
 
+# SYNK note speed on SSRG Playables' scale: 1.0-10.0 in 0.1 steps, where 3.0 is the
+# standard speed (note_speed 1x). note_speed stays the multiplier the highway reads.
+func synk_speed_setting() -> float: return clampf(snappedf(note_speed*3.0,.1),1.0,10.0)
+func change_synk_speed(value: float) -> void:
+	var speed=clampf(snappedf(value,.1),1.0,10.0)
+	note_speed=speed/3.0
+	prefs.set_value("gameplay","speed_value",speed); prefs.set_value("gameplay","note_speed",note_speed)
+	prefs.save("user://preferences.cfg")
+# The speed the pause menu changes: SSRG rules use SSRG Playables' speed, everything else SYNK's.
+func pause_speed_setting() -> float: return ssrg_speed_setting() if ssrg_playable_run else synk_speed_setting()
+func change_pause_speed(value: float) -> void:
+	if ssrg_playable_run: ssrg_playables.change_speed(snappedf(value,.1)-ssrg_speed_setting())
+	else: change_synk_speed(value)
+
 func change_highway_angle(value: float) -> void:
 	highway_angle=value
 	prefs.set_value("gameplay","highway_angle",value); prefs.save("user://preferences.cfg")
 
 func change_highway_look(key: String,value: Variant) -> void:
 	match key:
-		"style": highway_style = str(value) if str(value) in ["gold","neon","prism"] else "gold"; value = highway_style
+		"style": highway_style = str(value) if str(value) in ["gold","neon","ssrg"] else "gold"; value = highway_style
 		"rail_color": rail_color = str(value); value = rail_color
 		"band_color": band_color = str(value); value = band_color
 		"opacity": highway_opacity = clampf(float(value),.3,1.6); value = highway_opacity
@@ -870,6 +972,13 @@ func change_highway_look(key: String,value: Variant) -> void:
 	field.world.refresh_highway_look()
 	if settings_panel: settings_panel.refresh()
 
+# While the colour picker is open: show a colour without saving it.
+func preview_gameplay_color(key: String,code: String) -> void:
+	if not SynkGameplayColors.valid_key(key) or (code!="" and not Color.html_is_valid(code)): return
+	if code=="": gameplay_colors.erase(key)
+	else: gameplay_colors[key]=code
+	apply_stage_cover()
+	if field and field.world: field.world.refresh_highway_look()
 func change_gameplay_color(key: String,code: String) -> void:
 	if not SynkGameplayColors.valid_key(key) or (code!="" and not Color.html_is_valid(code)): return
 	if code=="": gameplay_colors.erase(key)
@@ -924,6 +1033,8 @@ func return_home() -> void:
 	if paused_mode=="record":
 		stop_take(); return
 	var return_to_editor=practice.active
+	# SSRG Playables go back to their own song list.
+	var imported_ssrg=ssrg_playable_run and not ssrg_forced_run
 	if pause_tween and pause_tween.is_running(): pause_tween.kill()
 	if paused_mode=="record" and not capture.notes.is_empty():
 		document.checkpoint(); document.notes.append_array(capture.notes.duplicate(true))
@@ -934,12 +1045,23 @@ func return_home() -> void:
 	countdown=0; resume_countdown=0; song_time=0; flash=0
 	set_mode("editor" if return_to_editor else "menu")
 	modal.scale=Vector2.ONE; modal.modulate.a=1
+	if imported_ssrg and not return_to_editor: open_ssrg_playables()
+
+# Thin song progress bar with elapsed and total time.
+func draw_pause_progress() -> void:
+	var total=maxf(1.0,length()); var at=clampf(song_time/total,0.0,1.0)
+	var track=StyleBoxFlat.new(); track.bg_color=Color(1,1,1,.1); track.set_corner_radius_all(3)
+	pause_progress.draw_style_box(track,Rect2(0,0,pause_progress.size.x,pause_progress.size.y))
+	if at>0:
+		var fill=StyleBoxFlat.new(); fill.bg_color=Color("f3ece1"); fill.set_corner_radius_all(3)
+		pause_progress.draw_style_box(fill,Rect2(0,0,maxf(pause_progress.size.y,pause_progress.size.x*at),pause_progress.size.y))
 
 func restart_from_pause() -> void:
 	if mode!="paused": return
 	if pause_tween and pause_tween.is_running(): pause_tween.kill()
 	modal.scale=Vector2.ONE; modal.modulate.a=1
 	resume_countdown=0
+	ssrg_resume_position=-1.0
 	if practice.active: practice.restart()
 	elif paused_mode=="record":
 		cursor=start_position
@@ -1031,7 +1153,8 @@ func space_authored_notes(incoming: Array,fixed: Array) -> bool:
 
 func note_travel_seconds() -> float:
 	# APK default basicTime=3.5; normalized 1x corresponds to original UI speed 3.
-	if uses_ssrg_gameplay() and not uses_recorder_colors(): return 3.5/(ssrg_note_speed() if ssrg_playable_run else note_speed)
+	if ssrg_playable_run: return 3.5/ssrg_note_speed()
+	if uses_ssrg_gameplay(): return 3.5/note_speed
 	return 2.6 / (recorder_note_speed if uses_recorder_colors() else note_speed)
 
 func cycle_recorder_note_speed() -> void:
@@ -1043,10 +1166,16 @@ func cycle_recorder_note_speed() -> void:
 func length() -> float: return audio.stream.get_length()
 # Score: fixed points per judgement, not divided by the chart's note count, times a combo
 # multiplier that rises 0.1x for every full 100 combo (x1.1 at 100, x1.2 at 200, ...),
-# capped at x2.0. A miss resets the combo and so the multiplier.
+# capped at x2.0. A miss resets the combo and so the multiplier. SSRG runs have no combo
+# multiplier: every 100 combo earns nothing extra there.
 const NOTE_POINTS = {"PERFECT": 1000, "GREAT": 800, "GOOD": 500}
-func combo_multiplier() -> float: return minf(2.0, 1.0 + .1 * floori(combo / 100.0))
+func combo_multiplier() -> float:
+	if ssrg_playable_run: return 1.0
+	return minf(2.0, 1.0 + .1 * floori(combo / 100.0))
 func add_points(grade: String) -> void:
+	if ssrg_playable_run and ssrg_presentation and ssrg_presentation.active:
+		score=ssrg_presentation.score_rules.add(grade,ssrg_presentation.state)
+		return
 	score += roundi(NOTE_POINTS.get(grade, 0) * combo_multiplier())
 func accuracy() -> float: return 100.0 if judged==0 else float(earned)/judged*100
 # Retire completed notes once; keep long sustains active until their tails finish.
@@ -1082,11 +1211,11 @@ func process_checkpoints(entry: Dictionary, finger_lane: float, automated: bool)
 				entry.checks_done=index+1;pass_checkpoint(entry,lane,absf(song_time-at));continue
 			if song_time<at+SsrgRules.good_window(true): break
 			judge(entry,-1);return false
-		var tolerance=SSRG_CHECKPOINT_LANES if uses_ssrg_gameplay() else CHECKPOINT_LANE_TOLERANCE
+		var tolerance=SSRG_CHECKPOINT_LANES if ssrg_playable_run else CHECKPOINT_LANE_TOLERANCE
 		if automated or absf(finger_lane-lane)<=tolerance:
 			entry.checks_done=index+1; pass_checkpoint(entry,lane)
 		# SSRG Playables: a finger still on its way gets a moment to reach the connector.
-		elif uses_ssrg_gameplay() and song_time<at+SSRG_CHECKPOINT_GRACE: break
+		elif ssrg_playable_run and song_time<at+SSRG_CHECKPOINT_GRACE: break
 		else: entry.checks_done=index+1; judge(entry,-1); return false
 	return true
 
@@ -1095,11 +1224,13 @@ func pass_checkpoint(entry: Dictionary, lane: float, error: float = 0.0, source_
 	if ssrg_playable_run:entry.sustain_grade=grade
 	var weight=1.0 if grade=="PERFECT" else (.8 if grade=="GREAT" else .5)
 	performance_samples.append({"time":song_time,"weight":weight,"amount":1})
-	field.world.spawn_hit(lane,str(entry.note.kind))
+	if ssrg_playable_run:field.world.ssrg_theme.resume_sustain(entry)
+	else:field.world.spawn_hit(lane,str(entry.note.kind))
 	judged+=1; earned+=weight; judgment_counts[grade]+=1
 	combo+=1; combo_pulse=1.0; max_combo=maxi(combo,max_combo)
 	judgement=grade; flash=1; flash_lane=roundi(lane)
 	add_points(grade)
+	if ssrg_playable_run and ssrg_presentation:ssrg_presentation.judged(grade,entry.note)
 
 func forfeit_checkpoints(entry: Dictionary) -> void:
 	# A missed or broken note also misses any dots it had not reached.
@@ -1131,6 +1262,9 @@ func warm_hud_text() -> void:
 		item[0].visible = item[2]; item[0].modulate = item[3]
 
 func start_game(notes: Array,automated: bool = false,section: String = "",is_practice: bool=false) -> void:
+	# SSRG mode: the SYNK song is judged, scored and sped like an imported SSRG run.
+	if (not ssrg_playable_run or ssrg_forced_run) and forces_ssrg_mode() and mode!="editor" and not is_practice:
+		ssrg_playable_run=true; ssrg_forced_run=true; ssrg_lane_count=13; ssrg_playable_previous_style="ssrg"
 	# Mirror and other note modifiers apply to real runs; a replay reuses the exact notes it recorded.
 	if extras:
 		if not extras.replay_pending and not automated: notes=extras.apply_mods(notes)
@@ -1150,6 +1284,7 @@ func start_game(notes: Array,automated: bool = false,section: String = "",is_pra
 	auto_play=automated
 	visual_clock_ready=false
 	resume_countdown=0
+	ssrg_resume_position=-1.0
 	arranging=false; arrange_touches.clear(); arrange_selection.clear(); arrange_button.text="CORRECT"
 	last_section=section if not section.is_empty() else play_mode
 	if not section_available(last_section): last_section="full"
@@ -1157,9 +1292,11 @@ func start_game(notes: Array,automated: bool = false,section: String = "",is_pra
 	pending_end_hits.clear()
 	var sorted=notes.duplicate(true); sorted.sort_custom(func(a,b): return a.time<b.time)
 	sorted=sorted.filter(func(n): return float(n.time)>=play_range.x-.001 and float(n.time)<play_range.y)
-	for n in sorted:
-		if n.kind=="slide": n.ssrg_path=true
-		if n.kind=="flick" and int(n.direction)==2: n.direction=0
+	if ssrg_playable_run:
+		preload("res://scripts/ssrg_presentation.gd").apply_events(sorted,song.get("ssrg_presentation",{}))
+		for n in sorted:
+			if n.kind=="slide": n.ssrg_path=true
+			if n.kind=="flick" and int(n.direction)==2: n.direction=0
 	last_play_notes=sorted.duplicate(true)
 	# A section ends at its boundary, or once its last note (and hold tail) has passed.
 	play_finish_time=INF
@@ -1189,6 +1326,7 @@ func start_game(notes: Array,automated: bool = false,section: String = "",is_pra
 	# A restart only replays the stage entrance; coming from a menu shows the loading card first.
 	var restarting=mode in ["play","paused"]
 	set_mode("play")
+	if ssrg_playable_run and ssrg_presentation:ssrg_presentation.reset(total_judgements(),song.get("ssrg_presentation",{}))
 	gameplay_start_lead=maxf(2.0,note_travel_seconds()-(first_note_time-start_position))
 	song_time=start_position-gameplay_start_lead-countdown
 	apply_stage_cover()
@@ -1388,25 +1526,28 @@ func cycle_record_speed() -> void:
 	record_speed_button.caption.text=record_speed_button.caption_text
 	prefs.set_value("editor","record_speed",record_speed); prefs.save("user://preferences.cfg")
 
-func toggle_pause() -> void:
+func toggle_pause(animate_transition:bool=true) -> void:
 	if finishing: return
+	# Song sync has no pause menu: BACK leaves it without saving.
+	if song_sync and song_sync.active and mode=="play": song_sync.finish(false); return
 	if mode in ["play","record"]:
 		resume_countdown=0
+		if ssrg_playable_run and mode=="play" and song_time>=0 and countdown<=0 and gameplay_start_lead<=0:
+			ssrg_resume_position=clampf(song_time-effective_timing_ms()/1000.0,0,maxf(0,length()-.02))
 		if mode=="record": recorder.seal_gestures(); commit_take_history()
 		paused_mode=mode; pause_had_audio=audio.playing; audio.stream_paused=true; pointers.clear(); capture.gestures.clear()
 		ssrg_touch_router.reset()
 		ssrg_contact_ids.clear()
 		for entry in live:
 			if entry.started and not entry.done: entry.pointer=-999
-		set_mode("paused"); modal_title.text="PAUSED"; modal_body.text=""; primary.text="RESUME"
+		set_mode("paused",animate_transition); modal_title.text="Paused"; modal_body.text=""; primary.text="RESUME"
 		if paused_mode=="record": primary.text="RESUME REC"; pause_restart.text="RETRY TAKE"; pause_home.text="REVIEW TAKE"
 		if pause_tween and pause_tween.is_running(): pause_tween.kill()
 		modal.pivot_offset=modal.size*.5; modal.scale=Vector2(.86,.86); modal.modulate.a=0
-		pause_backdrop.modulate.a=0
+		pause_backdrop.modulate.a=1
 		pause_tween=create_tween().set_parallel(true)
 		pause_tween.tween_property(modal,"scale",Vector2.ONE,.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		pause_tween.tween_property(modal,"modulate:a",1.0,.18)
-		pause_tween.tween_property(pause_backdrop,"modulate:a",1.0,.22)
 	elif mode=="paused":
 		refresh_output_latency()
 		if pause_tween and pause_tween.is_running(): pause_tween.kill()
@@ -1669,9 +1810,10 @@ func arrange_pointer_event(id: int, p: Vector2, began: bool, ended: bool, cancel
 		if touch.changed: refresh_arrange_controls()
 
 func _notification(what: int) -> void:
+	if what==NOTIFICATION_APPLICATION_RESUMED and OS.get_name()=="iOS": NativeFilePicker.defer_system_gestures()
 	if what in [NOTIFICATION_APPLICATION_FOCUS_OUT,NOTIFICATION_APPLICATION_PAUSED]:
 		if features and mode=="editor": features.autosave()
-		if mode in ["play","record"]: toggle_pause()
+		if mode in ["play","record"]: toggle_pause(false)
 		elif mode=="editor" and audio!=null: stop_audition()
 	if what==NOTIFICATION_WM_CLOSE_REQUEST:
 		if document.dirty: set_mode("editor"); tell("Save your draft or RELOAD to discard edits before closing.")
@@ -1696,7 +1838,10 @@ func _process(delta: float) -> void:
 		elif resume_countdown>0:
 			resume_countdown=maxf(0,resume_countdown-delta)
 			if resume_countdown==0:
-				if resume_start_audio and not (mode=="play" and gameplay_start_lead>0): audio.play(start_position)
+				if ssrg_playable_run and ssrg_resume_position>=0:
+					audio.play(ssrg_resume_position);ssrg_resume_position=-1.0
+					visual_clock_ready=false
+				elif resume_start_audio and not (mode=="play" and gameplay_start_lead>0): audio.play(start_position)
 				UiSound.play(self,"go")
 				audio.stream_paused=false; resume_grace=.35
 		elif countdown>0:
@@ -1842,7 +1987,7 @@ var combo_view: Control
 var multiplier_step=0
 func update_combo_art() -> void:
 	# Each new score multiplier step (every 100 combo, up to x2.0) also lights up the highway.
-	var step=mini(10,floori(combo/100.0))
+	var step=0 if ssrg_playable_run else mini(10,floori(combo/100.0))
 	if step>multiplier_step and mode=="play":
 		field.world.multiplier_wave(); UiSound.play(self,"bonus")
 	multiplier_step=step
@@ -1851,6 +1996,7 @@ func update_combo_art() -> void:
 		for child in combo_hud.get_children(): child.queue_free()
 		combo_view=preload("res://scripts/combo_view.gd").new(); combo_view.name="ComboView"
 		combo_hud.add_child(combo_view); combo_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	combo_view.multiplier_enabled=not ssrg_playable_run
 	combo_view.set_combo(combo)
 
 func build_combo_digit_textures() -> void:
@@ -1945,7 +2091,9 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 				while pointers.has(id):ssrg_contact_serial+=1;id=ssrg_contact_serial
 			ssrg_contact_ids[physical_id]=id
 		else:id=int(ssrg_contact_ids.get(physical_id,physical_id))
-		if began:pointers[id]={"start":p,"position":p,"world":touch_world,"ssrg_pending_begin":true,"ssrg_press_time":input_time,"ssrg_begin_world":touch_world}
+		if began:
+			ssrg_contact_serial+=1
+			pointers[id]={"start":p,"position":p,"world":touch_world,"ssrg_pending_begin":true,"ssrg_press_time":input_time,"ssrg_begin_world":touch_world,"ssrg_identity":ssrg_contact_serial}
 		if pointers.has(id):
 			pointers[id].position=p;pointers[id].world=touch_world
 			pointers[id].ssrg_event_time=input_time
@@ -2012,7 +2160,7 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 			if entry.done or entry.pointer!=id or entry.note.kind!="slide": continue
 			var end_time=float(entry.note.time)+float(entry.note.duration)
 			var lane_error=absf(SynkCapture.lane(p.x)-SynkChart.lane_at(entry.note,end_time))
-			var end_lanes=SSRG_SLIDE_END_LANES if uses_ssrg_gameplay() else SLIDE_END_LANES
+			var end_lanes=SSRG_SLIDE_END_LANES if ssrg_playable_run else SLIDE_END_LANES
 			var end_touch=ssrg_touch_lane(touch_world,SynkChart.lane_at(entry.note,end_time)) if ssrg_playable_run else lane_error<=end_lanes and p.y>=(.25 if uses_ssrg_gameplay() else .4)
 			if not canceled and end_touch and song_time>=end_time-tail_grace(entry) and song_time<=end_time+.30:
 				judge(entry,absf(song_time-end_time) if ssrg_playable_run else float(entry.error))
@@ -2035,7 +2183,9 @@ func update_autoplay() -> void:
 				if ssrg_playable_run: judge(entry,0.0,false)
 				else: field.world.spawn_hit(SynkChart.lane_at(n,song_time),"slide",0,entry)
 			elif n.kind in ["tap","flick"]: judge(entry,0.0)
-		if entry.started and not entry.done: process_checkpoints(entry,0.0,true)
+		if entry.started and not entry.done:
+			if ssrg_playable_run and n.kind in ["hold","slide"]:update_ssrg_held_ticks(entry)
+			process_checkpoints(entry,0.0,true)
 		if entry.started and not entry.done and song_time>=float(n.time)+float(n.duration):
 			judge(entry,0.0)
 
@@ -2066,7 +2216,8 @@ func prepare_ssrg_input() -> void:
 		if float(entry.note.time)>song_time+SsrgRules.HEAD_WINDOW:break
 		if entry.done:continue
 		var sustain=bool(entry.started) and entry.note.kind in ["hold","slide"]
-		if sustain and pointers.has(int(entry.pointer)):pointers[int(entry.pointer)].ssrg_sustain_active=true
+		var contact_owner=ssrg_sustain_owner(entry) if sustain else int(entry.pointer)
+		if sustain and pointers.has(contact_owner):pointers[contact_owner].ssrg_sustain_active=true
 		var next=SsrgSustain.next_node(entry.note,int(entry.get("checks_done",0))) if sustain else {"time":float(entry.note.time),"is_end":false}
 		if not sustain and absf(song_time-float(next.time))>SsrgRules.HEAD_WINDOW:
 			var pending_press=false
@@ -2075,12 +2226,25 @@ func prepare_ssrg_input() -> void:
 			if not pending_press:continue
 		var channel=roundi(SynkChart.lane_at(entry.note,float(next.time))*12.0/9.0)
 		var geometry=ssrg_touch_router.node_geometry(channel,float(next.time),song_time,travel,sustain)
-		geometry.merge({"channel":channel,"at":float(next.time),"travel":travel,"token":str(entry.key)+":"+(str(entry.get("checks_done",0)) if sustain else "head"),"sustain":sustain,"owner":int(entry.pointer),"eligible":absf(song_time-float(next.time))<SsrgRules.MIDDLE_WINDOW})
+		geometry.merge({"channel":channel,"at":float(next.time),"travel":travel,"token":str(entry.key)+":"+(str(entry.get("checks_done",0)) if sustain else "head"),"sustain":sustain,"owner":contact_owner,"eligible":absf(song_time-float(next.time))<SsrgRules.MIDDLE_WINDOW})
 		candidates.append(geometry)
 	for touch in pointers.values():
 		var point:Vector3=touch.ssrg_begin_world if touch.get("ssrg_pending_begin",false) and not touch.get("ssrg_canceled",false) else touch.world
 		touch.ssrg_ui=Vector2(point.x/field.world.SSRG_UNIT,-point.z/field.world.SSRG_UNIT-234.0)
 	ssrg_touch_router.route(pointers,candidates,ssrg_lane_count,Vector2i(Engine.get_process_frames(),roundi(song_time*1000000)))
+
+func ssrg_sustain_owner(entry:Dictionary) -> int:
+	var owner=int(entry.get("pointer",-999))
+	if pointers.has(owner):return owner
+	owner=int(entry.get("sustain_last_pointer",-999))
+	if pointers.has(owner) and int(pointers[owner].get("ssrg_identity",0))==int(entry.get("sustain_last_identity",-1)) and not pointers[owner].get("ssrg_ended",false):return owner
+	return -999
+
+func remember_ssrg_contact(entry:Dictionary,id:int) -> void:
+	if not pointers.has(id):return
+	entry.sustain_last_pointer=id
+	entry.sustain_last_identity=int(pointers[id].get("ssrg_identity",0))
+	entry.ssrg_effect_x=float(pointers[id].world.x)
 
 func update_ssrg_sustain(entry: Dictionary) -> void:
 	# The last successful finger controls moving autoaim. The shared channel
@@ -2092,18 +2256,31 @@ func update_ssrg_sustain(entry: Dictionary) -> void:
 	var chosen=int(track.pointer)
 	var state=int(track.state)
 	var owner=int(entry.pointer)
+	# Lost deliberately clears the shared track's current owner, as in SSRG.
+	# Retain contact identity separately for our existing owned-tail-release path.
+	if pointers.has(owner):remember_ssrg_contact(entry,owner)
+	var release_owner=owner if pointers.has(owner) else int(entry.get("sustain_last_pointer",-999))
+	if pointers.has(release_owner) and int(pointers[release_owner].get("ssrg_identity",0))!=int(entry.get("sustain_last_identity",0)):release_owner=-999
 	var own_release=false
-	if next.is_end and pointers.has(owner):
-		var contact:Dictionary=pointers[owner]
-		own_release=contact.get("ssrg_ended",false) and not contact.get("ssrg_canceled",false) and ssrg_touch_lane(contact.world,lane)
-		if own_release:state=SsrgSustain.TrackState.ENDED;chosen=owner
+	if next.is_end and pointers.has(release_owner):
+		var contact:Dictionary=pointers[release_owner]
+		if contact.get("ssrg_ended",false):
+			entry.ssrg_release_at=float(contact.get("ssrg_event_time",song_time))
+			entry.ssrg_release_lane=SynkCapture.lane(contact.position.x)
+			entry.ssrg_release_canceled=bool(contact.get("ssrg_canceled",false))
+		var aim:Dictionary=contact.get("ssrg_aim",{})
+		var aimed_here=int(contact.get("ssrg_channel",-1))==channel and bool(aim.get("sustain",false)) and int(aim.get("owner",-999))==release_owner and str(aim.get("token","")).begins_with(str(entry.key)+":")
+		# ContainsTrack already resolved this owned finger through the long-note
+		# rectangle. Do not reject that same aim with a narrower raw lane recheck.
+		own_release=contact.get("ssrg_ended",false) and not contact.get("ssrg_canceled",false) and (ssrg_touch_lane(contact.world,lane) or aimed_here)
+		if own_release:state=SsrgSustain.TrackState.ENDED;chosen=release_owner
 	var was_contact=bool(entry.get("ssrg_contact",true))
 	entry.ssrg_contact=pointers.has(owner) and not pointers[owner].get("ssrg_ended",false) and (int(pointers[owner].get("ssrg_channel",-1))==channel or ssrg_touch_lane(pointers[owner].world,SynkChart.lane_at(entry.note,song_time)))
 	if entry.ssrg_contact and not was_contact:field.world.ssrg_theme.resume_sustain(entry)
-	var judged_at=float(pointers[owner].ssrg_event_time) if own_release else (float(track.get("event_time",song_time)) if state==SsrgSustain.TrackState.ENDED else song_time)
+	var judged_at=float(pointers[release_owner].ssrg_event_time) if own_release else (float(track.get("event_time",song_time)) if state==SsrgSustain.TrackState.ENDED else song_time)
 	var action=SsrgSustain.action(judged_at,float(next.time),bool(next.is_end),state,false,note_travel_seconds(),bool(entry.get("sustain_released",false)),own_release)
 	if action=="miss":judge(entry,-1);return
-	var gate=str(channel)+":release:"+str(owner) if own_release else channel
+	var gate=str(channel)+":release:"+str(release_owner) if own_release else channel
 	if action!="hit" or not ssrg_touch_router.consume(gate):return
 	var released=state==SsrgSustain.TrackState.ENDED
 	var history=bool(entry.get("sustain_penalty",false))
@@ -2111,11 +2288,40 @@ func update_ssrg_sustain(entry: Dictionary) -> void:
 	entry.sustain_rate=SsrgSustain.node_rate(float(entry.get("sustain_rate",.1)),released,history)
 	if released:entry.sustain_released=true
 	entry.pointer=chosen
+	if pointers.has(chosen):remember_ssrg_contact(entry,chosen)
 	if next.is_end:
 		judge(entry,absf(judged_at-float(next.time)),true,grade)
 		return
 	entry.checks_done=int(entry.get("checks_done",0))+1
 	pass_checkpoint(entry,lane,absf(song_time-float(next.time)),grade)
+
+func advance_ssrg_sustain(entry:Dictionary) -> void:
+	update_ssrg_held_ticks(entry)
+	# Source UpdateViewNotes sweeps linked Note objects. A newly eligible next
+	# channel can judge in this update; a consumed channel still stops the sweep.
+	var remaining=entry.note.get("checkpoints",[]).size()-int(entry.get("checks_done",0))+1
+	for step in maxi(1,remaining):
+		var previous=int(entry.get("checks_done",0))
+		update_ssrg_sustain(entry)
+		if entry.done or int(entry.get("checks_done",0))==previous:break
+
+func update_ssrg_held_ticks(entry:Dictionary) -> void:
+	if entry.note.has("ssrg_special"):return
+	var previous=float(entry.get("ssrg_tick_at",song_time))
+	entry.ssrg_tick_at=song_time
+	var owner=ssrg_sustain_owner(entry)
+	if not auto_play:
+		if not pointers.has(owner) or pointers[owner].get("ssrg_ended",false):return
+		var channel=int(pointers[owner].get("ssrg_channel",-1))
+		if channel<0 or ssrg_touch_router.track(channel).state not in [SsrgSustain.TrackState.BEGAN,SsrgSustain.TrackState.MOVED,SsrgSustain.TrackState.HELD]:return
+	# Native ComboDivision is seconds-per-beat / 6. Keep fractional credit
+	# per chain; these sustain ticks add combo/score, not new judgment grades.
+	var division=60.0/maxf(1,chart_bpm())/6.0
+	var credit=float(entry.get("ssrg_tick_credit",0.0))+maxf(0,song_time-previous)/division
+	if credit<=1.0:entry.ssrg_tick_credit=credit;return
+	var count=floori(credit);entry.ssrg_tick_credit=credit-count
+	combo+=count;max_combo=maxi(combo,max_combo);combo_pulse=1.0
+	for i in count:add_points(str(entry.get("sustain_grade","GOOD")))
 
 func process_ssrg_press_events() -> void:
 	var presses:Array=[]
@@ -2188,7 +2394,7 @@ func update_game() -> void:
 			continue
 		if entry.pointer==-999 and resume_grace>0: continue
 		if ssrg_playable_run and n.kind in ["hold","slide"]:
-			update_ssrg_sustain(entry);continue
+			advance_ssrg_sustain(entry);continue
 		if not pointers.has(entry.pointer): judge(entry,-1); continue
 		var p: Dictionary=pointers[entry.pointer]
 		if n.kind=="flick":
@@ -2202,7 +2408,7 @@ func update_game() -> void:
 			var end_time=float(n.time)+float(n.duration)
 			if song_time>=end_time-(0.0 if ssrg_playable_run else .045):
 				var lane_error=absf(SynkCapture.lane(p.position.x)-SynkChart.lane_at(n,end_time))
-				var end_lanes=SSRG_SLIDE_END_LANES if uses_ssrg_gameplay() else SLIDE_END_LANES
+				var end_lanes=SSRG_SLIDE_END_LANES if ssrg_playable_run else SLIDE_END_LANES
 				var end_touch=ssrg_touch_lane(p.world,SynkChart.lane_at(n,end_time)) if ssrg_playable_run else lane_error<=end_lanes and p.position.y>=(.25 if uses_ssrg_gameplay() else .4)
 				if end_touch: judge(entry,tail_error(entry))
 				elif song_time>end_time+.30: judge(entry,-1)
@@ -2227,12 +2433,13 @@ func judge(entry: Dictionary,error: float,complete: bool = true,source_grade: St
 	if grade=="MISS": error=-1
 	if OS.is_debug_build() and ssrg_playable_run and error<0 and entry.note.kind=="slide":
 		var next=SsrgSustain.next_node(entry.note,int(entry.get("checks_done",0)))
-		print("SSRG_SLIDE_MISS ",JSON.stringify({"time":song_time,"head":entry.note.time,"started":entry.started,"next":next.time,"end":next.is_end,"checks_done":entry.get("checks_done",0),"owner":entry.pointer,"contacts":pointers.size()}))
+		print("SSRG_SLIDE_MISS ",JSON.stringify({"time":song_time,"head":entry.note.time,"started":entry.started,"next":next.time,"end":next.is_end,"checks_done":entry.get("checks_done",0),"owner":entry.pointer,"last_owner":entry.get("sustain_last_pointer",-999),"release_at":entry.get("ssrg_release_at",-1),"release_lane":entry.get("ssrg_release_lane",-1),"release_canceled":entry.get("ssrg_release_canceled",false),"contacts":pointers.size()}))
 	var at=float(entry.note.time)
 	if (entry.note.kind=="hold" or (ssrg_playable_run and entry.note.kind=="slide")) and entry.get("note_hit",false): at=minf(song_time,float(entry.note.time)+float(entry.note.duration))
 	performance_samples.append({"time":at,"weight":0.0 if error<0 else (1.0 if grade=="PERFECT" else (.8 if grade=="GREAT" else .5)),"amount":1})
 	if error>=0:
 		entry.note_hit=true
+		if ssrg_playable_run and entry.note.kind in ["hold","slide"]:remember_ssrg_contact(entry,int(entry.pointer))
 		if not complete and field.world.notes.has(str(entry.key)): field.world.notes[str(entry.key)].head_hit=true
 	if error<0: timing_label.text=""
 	if error>=0 and not auto_play and not entry.get("timing_logged",false):
@@ -2242,10 +2449,14 @@ func judge(entry: Dictionary,error: float,complete: bool = true,source_grade: St
 		timing_label.text="ON TIME" if absf(ms)<=10 else ("EARLY %d ms" if ms<0 else "LATE %d ms") % roundi(absf(ms))
 		timing_label.add_theme_color_override("font_color",Color("65dcff") if ms<0 else Color("ff82d2"))
 	var end_at=float(entry.note.time)+float(entry.note.duration)
+	if ssrg_playable_run and error>=0 and complete and entry.note.kind in ["hold","slide"]:
+		entry.ssrg_effect_until=end_at
 	# An early lift completes a slide before its end reaches the line; flashing then would land
 	# on the head's flash, so the end flashes on its own puck when it gets there.
-	if error>=0 and complete and entry.note.kind=="slide" and song_time<end_at: pending_end_hits.append({"at":end_at,"note":entry.note})
-	elif error>=0: field.world.spawn_hit(SynkChart.lane_at(entry.note,song_time),str(entry.note.kind),int(entry.note.direction),entry if entry.note.kind in ["hold","slide"] and not complete else {},int(entry.get("pointer",-999)))
+	if ssrg_playable_run and error>=0 and complete and entry.note.kind in ["hold","slide"] and not entry.note.has("ssrg_special"):
+		field.world.ssrg_theme.resume_sustain(entry)
+	elif error>=0 and complete and entry.note.kind=="slide" and song_time<end_at: pending_end_hits.append({"at":end_at,"note":entry.note})
+	elif error>=0: field.world.spawn_hit(SynkChart.lane_at(entry.note,song_time),("special" if ssrg_playable_run and entry.note.has("ssrg_special") else str(entry.note.kind)),int(entry.note.direction),entry if entry.note.kind in ["hold","slide"] and not complete else {},int(entry.get("pointer",-999)))
 	else: field.world.shake_on_miss()
 	if error<0 and entry.note.kind in ["slide","hold"]:
 		entry.missed_at=song_time
@@ -2261,19 +2472,26 @@ func judge(entry: Dictionary,error: float,complete: bool = true,source_grade: St
 		elif grade=="GREAT": judgement="GREAT"; earned+=.8
 		else: judgement="GOOD"; earned+=.5
 	judgment_counts[judgement]+=1
-	if ssrg_playable_run and error>=0 and not complete:entry.sustain_grade=judgement;entry.sustain_rate=SsrgRules.rate(error);entry.ssrg_contact=true
-	if error>=0: add_points(judgement)
+	if ssrg_playable_run and error>=0 and not complete:
+		entry.sustain_grade=judgement;entry.sustain_rate=SsrgRules.rate(error);entry.ssrg_contact=true;entry.ssrg_tick_at=song_time
+	if error>=0:
+		add_points(judgement)
+		if stage_intro and stage_intro.play_cover:stage_intro.play_cover.on_note_hit(judgement)
+	if ssrg_playable_run and ssrg_presentation:ssrg_presentation.judged(judgement,entry.note)
 	if extras: extras.on_judged(entry,judgement,combo)
 
 func _audio_finished() -> void:
 	if mode=="record": stop_take()
 	elif mode=="play":
+		if song_sync and song_sync.active: song_sync.restart(); return
 		if practice.finish_round(): return
 		for entry in live:
 			if not entry.done:
 				judge(entry,-1)
 				if not entry.started: count_unstarted_tail(entry)
+		if ssrg_playable_run and ssrg_presentation:score=ssrg_presentation.score_rules.settle()
 		var chart_key=(str(song.id)+JSON.stringify(live.map(func(e):return e.note))).sha256_text()
+		if ssrg_playable_run:chart_key+="|ssrg-score-v2"
 		var previous_best=int(prefs.get_value("scores",chart_key,0))
 		var best=previous_best
 		if not auto_play and not practice.active:
@@ -2300,6 +2518,10 @@ func _audio_finished() -> void:
 # carries the combo counter to the middle; the results screen then takes over beneath it.
 func begin_finish(results: Dictionary) -> void:
 	if finishing: return
+	# SSRG mode keeps SYNK's own results screen; its retry starts the SYNK song again.
+	results["ssrg"]=ssrg_playable_run and not ssrg_forced_run
+	results["ssrg_lane_count"]=ssrg_lane_count
+	results["ssrg_style"]=ssrg_playable_previous_style
 	pending_results=results
 	finishing=true; finish_elapsed=0.0
 	audio.stop(); pointers.clear()
@@ -2317,8 +2539,11 @@ func advance_finish(delta: float) -> void:
 	if finish_elapsed>=finish_overlay.RESULTS_AT and mode=="play": show_pending_results()
 
 func show_pending_results() -> void:
+	# The album art flies from its gameplay spot onto the results cover (measured before play ends).
+	preload("res://scripts/cover_flight.gd").fly(self,ssrg_screens.result_cover if pending_results.get("ssrg",false) else results_screen.card)
 	set_mode("results")
-	results_screen.show_results(pending_results)
+	if pending_results.get("ssrg",false):ssrg_screens.show_results(pending_results)
+	else:results_screen.show_results(pending_results)
 	# The new results card owns its typography after the finish transition.
 	finish_overlay.stop()
 
@@ -2381,6 +2606,7 @@ func choose_audio() -> void:
 		save_editor()
 		if document.dirty: return
 	stop_audition()
+	if NativeFilePicker.open(false,func(paths): import_audio(paths[0])): return
 	if OS.get_name()=="iOS":
 		picker.access=FileDialog.ACCESS_USERDATA; picker.current_dir="user://"
 		tell("In the Files app, copy music into On My iPhone → SYNK, then choose it here.")
@@ -2531,6 +2757,7 @@ func import_audio(path: String) -> void:
 	var result=library.import_song(path)
 	if result.is_empty(): tell(library.message); return
 	if song_metadata.get(str(result.song.id),{}).has("error"): song_metadata.erase(str(result.song.id))
+	if result.get("cover") is Image and not has_custom_cover(str(result.song.id)): save_cover_image(str(result.song.id),result.cover)
 	apply_song(result.song,result.stream); refresh_library(); set_mode("editor")
 	tell("Audio imported. Add notes or record from the playhead, then SAVE your chart.")
 
@@ -2620,6 +2847,7 @@ func test_editor_here() -> void:
 	var notes=document.notes.filter(func(n): return float(n.time)>=from)
 	start_game(notes,false,"full")
 	start_position=from
+	if ssrg_playable_run and ssrg_presentation:ssrg_presentation.reset(total_judgements(),song.get("ssrg_presentation",{}))
 	gameplay_start_lead=maxf(2.0,note_travel_seconds()-(float(notes[0].time)-from)) if not notes.is_empty() else 2.0
 	song_time=from-gameplay_start_lead-countdown
 	visual_song_time=song_time; visual_clock_ready=false

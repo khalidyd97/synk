@@ -33,26 +33,15 @@ func icon_kind() -> String:
 	if "EDITOR" in label: return "editor"
 	return "home"
 
+# Resume is the cream primary tile; the others are raised graphite tiles.
+func soft_role() -> String: return "primary" if variant == "primary" else "surface"
+
 func _draw() -> void:
-	var primary_action = variant == "primary"
-	var rect = Rect2(Vector2.ZERO, size).grow(-2)
-	var radius = roundi(minf(size.x, size.y) * .2)
-	var box = StyleBoxFlat.new(); box.set_corner_radius_all(radius)
-	box.bg_color = Color(1, 1, 1, .06 + .06 * hover_amount + .05 * press_amount)
-	if primary_action:
-		box.bg_color = Color(0, 0, 0, 0); box.shadow_color = Color(Color("8a5cff"), .22 + .2 * hover_amount)
-		draw_style_box(box, rect)
-		draw_rounded_gradient(rect, radius, Color("38baff").lerp(Color.WHITE, .08 * hover_amount), Color("8a4dff").lerp(Color.WHITE, .08 * hover_amount))
-	else: draw_style_box(box, rect)
-	# Outline: a crisp light edge on every tile, brighter and cyan-tinted when highlighted.
-	var outline = StyleBoxFlat.new(); outline.set_corner_radius_all(radius); outline.bg_color = Color(0, 0, 0, 0)
-	outline.set_border_width_all(maxi(2, roundi(minf(size.x, size.y) * .018)))
-	var edge = Color(1, 1, 1, .55) if primary_action else Color(1, 1, 1, .26)
-	outline.border_color = edge.lerp(Color("8ff0ff"), hover_amount * .8).lerp(Color.WHITE, press_amount * .5)
-	draw_style_box(outline, rect)
-	var center = Vector2(size.x * .5, size.y * .36)
-	var r = minf(size.x * .14, size.y * .17) * (1.0 + .06 * hover_amount - .06 * press_amount)
-	draw_icon(icon_kind(), center, r, Color.WHITE)
+	var role = soft_role()
+	Soft.draw_plate(self, size, role, hover_amount, press_amount, 0.0, disabled, minf(26.0, minf(size.x, size.y) * .2))
+	var center = Vector2(size.x * .5, size.y * .36 + 2.0 * press_amount)
+	var r = minf(size.x * .14, size.y * .17) * (1.0 + .04 * hover_amount)
+	draw_icon(icon_kind(), center, r, Soft.text_color(role, 0.0, disabled))
 
 # Rounded rectangle with a smooth left-to-right gradient (each outline point coloured by x).
 func draw_rounded_gradient(rect: Rect2, radius: float, left: Color, right: Color) -> void:

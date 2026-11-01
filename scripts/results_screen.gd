@@ -1,8 +1,9 @@
 extends Control
 const ButtonArt=preload("res://scripts/song_browser_button.gd")
-const JUDGMENT_COLORS={"PERFECT":Color("2ed9ed"),"GREAT":Color("9061ff"),"GOOD":Color("f532c8"),"MISS":Color("77708f")}
+const JUDGMENT_COLORS={"PERFECT":Color("f3ece1"),"GREAT":Color("d9cdbb"),"GOOD":Color("ff7a59"),"MISS":Color("6d6a73")}
 var game: Control
 var canvas: Control
+var cover_backdrop: Control
 var elapsed=0.0
 var final_score=0
 var final_accuracy=0.0
@@ -66,7 +67,7 @@ func _ready() -> void:
     var background=ColorRect.new(); add_child(background); background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     background.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var mat=preload("res://scripts/background_motion.gd").attach(background,preload("res://scripts/song_browser_background.gdshader"))
-    preload("res://scripts/screen_backdrop.gd").video(self,-0.11,.55)  # gold stage
+    cover_backdrop=preload("res://scripts/screen_backdrop.gd").album_art(self,.72)  # the song's own cover, blurred
     canvas=Control.new(); add_child(canvas); canvas.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var theme_local=Theme.new(); theme_local.default_font=ThemeDB.fallback_font; theme_local.default_font_size=20
     for type in ["Label","Button"]: theme_local.set_font("font",type,ThemeDB.fallback_font)
@@ -76,17 +77,17 @@ func _ready() -> void:
     card_art=TextureRect.new(); card.add_child(card_art); card_art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     card_art.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; card_art.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED
     card_art.mouse_filter=Control.MOUSE_FILTER_IGNORE; preload("res://scripts/screen_style.gd").round_cover(card_art,27)
-    completion_label=label(canvas,"S O N G   C O M P L E T E",236,51,1050,31,18,Color("27dcef"))
+    completion_label=label(canvas,"S O N G   C O M P L E T E",236,51,1050,31,18,Color("ff7a59"))
     song_title=label(canvas,"",236,80,1500,68,52,Color("f3f0ff"),Vector2(2048,1152),true)
     song_meta=label(canvas,"",236,149,390,36,23,Color("bcb4d2"))
     difficulty_label=label(canvas,"",644,149,110,42,20,Color("e8f8ff"))
-    var pill=style(Color("1d1d1d"),Color("2bd8ef"),18); pill.content_margin_left=13; pill.content_margin_right=13
+    var pill=style(Color("2a2830"),Color(1,1,1,.08),18); pill.content_margin_left=13; pill.content_margin_right=13
     difficulty_label.add_theme_stylebox_override("normal",pill); difficulty_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     bpm_label=label(canvas,"",768,149,132,42,20,Color("c1b9d6"))
     var bpm_style=style(Color("171717"),Color(0,0,0,0),18); bpm_style.content_margin_left=12; bpm_style.content_margin_right=12
     bpm_label.add_theme_stylebox_override("normal",bpm_style); bpm_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     ring=Control.new(); place(ring,canvas,265,295,400,400); ring.mouse_filter=Control.MOUSE_FILTER_IGNORE; ring.draw.connect(draw_ring)
-    rank_label=label(ring,"A",40,52,320,250,202,Color.WHITE,Vector2(400,400),true)
+    rank_label=label(ring,"A",40,52,320,250,202,Color("1a1720"),Vector2(400,400),true)
     rank_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     rank_label.add_theme_color_override("font_shadow_color",Color(0,0,0,0))
     rank_label.add_theme_constant_override("shadow_outline_size",0)
@@ -95,15 +96,15 @@ func _ready() -> void:
     rank_glow=GradientTexture2D.new(); rank_glow.width=256; rank_glow.height=256; rank_glow.gradient=glow_gradient
     rank_glow.fill=GradientTexture2D.FILL_RADIAL; rank_glow.fill_from=Vector2(.5,.5); rank_glow.fill_to=Vector2(1,.5)
     rank_art=Control.new(); rank_art.visible=false; canvas.add_child(rank_art)
-    ring_accuracy=label(ring,"",70,276,260,55,30,Color("d4cced"),Vector2(400,400),true)
+    ring_accuracy=label(ring,"",70,276,260,55,30,Color("6b6258"),Vector2(400,400),true)
     ring_accuracy.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     best_badge=label(canvas,"NEW BEST!",552,280,168,48,20,Color.WHITE)
-    var badge=style(Color("d73ad4"),Color(0,0,0,0),24)
+    var badge=style(Color("ff7a59"),Color(0,0,0,0),24)
     best_badge.add_theme_stylebox_override("normal",badge); best_badge.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; best_badge.rotation=.12
     label(canvas,"S C O R E",275,733,380,36,20,Color("a8a0c2")).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     score_label=label(canvas,"0",170,776,590,98,86,Color("fbfaff"),Vector2(2048,1152),true)
     score_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-    note_label=label(canvas,"",150,891,630,47,22,Color("1ce1b3")); note_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    note_label=label(canvas,"",150,891,630,47,22,Color("ff7a59")); note_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     detail_panel=panel(canvas,922,225,1058,753)
     var p=Vector2(1058,753)
     var combo=panel(detail_panel,44,41,311,150,p)
@@ -126,11 +127,13 @@ func _ready() -> void:
     place(timing_button,detail_panel,650,547,156,80,p); timing_button.pressed.connect(toggle_graph)
     accuracy_graph=preload("res://scripts/result_accuracy_graph.gd").new(); place(accuracy_graph,detail_panel,44,635,970,102,p)
     timing_graph=preload("res://scripts/timing_graph.gd").new(); place(timing_graph,detail_panel,44,635,970,102,p); timing_graph.visible=false
-    buttons.append(button("☷  S O N G  L I S T",68,994,350,128,open_song_list))
-    buttons.append(button("↶  R E T R Y",440,994,290,128,retry))
-    next_button=button("N E X T   S O N G   →",1460,994,520,128,next_song,true); buttons.append(next_button)
-    replay_button=button("▶  R E P L A Y",752,994,300,128,func(): game.extras.start_replay()); buttons.append(replay_button)
-    practice_button=button("⟲  P R A C T I C E  M I S S",1074,994,364,128,practice_first_miss); buttons.append(practice_button)
+    buttons.append(button("☷  SONG LIST",68,994,350,128,open_song_list))
+    buttons.append(button("↶  RETRY",440,994,290,128,retry))
+    next_button=button("NEXT SONG  →",1460,994,520,128,next_song,true); buttons.append(next_button)
+    replay_button=button("▶  REPLAY",752,994,300,128,func():
+        if info.get("ssrg",false): game.ssrg_screens.restore_run()
+        game.extras.start_replay()); buttons.append(replay_button)
+    practice_button=button("⟲  PRACTICE MISS",1074,994,364,128,practice_first_miss); buttons.append(practice_button)
     visible=false
 func layout() -> void:
     if not canvas: return
@@ -149,6 +152,7 @@ func show_results(data: Dictionary) -> void:
     if info.has("song_id"):
         card_art.texture=game.lobby.cover_for(str(info.song_id)); card_art.self_modulate=Color.WHITE
         game.lobby.style_cover(card_art,str(info.song_id),27)
+    cover_backdrop.set_art(game.lobby.backdrop_for(str(info.get("song_id",game.song.id))))
     song_title.text=str(info.get("title",game.song.title))
     song_meta.text=str(info.get("artist",game.song.get("artist",game.album_name(game.song))))
     var variant=str(info.get("difficulty",preload("res://scripts/chart_levels.gd").label(game.features.current_variant)))
@@ -185,7 +189,7 @@ func show_results(data: Dictionary) -> void:
     timing_graph.samples=info.get("timing",[]).duplicate(true); timing_graph.samples.sort_custom(func(a,b): return float(a.time)<float(b.time))
     timing_graph.queue_redraw(); accuracy_graph.visible=true; timing_graph.visible=false; timing_button.text="TIMING"
     graph_title.text="ACCURACY OVER THE SONG"; breakdown.visible=true
-    next_button.disabled=practice or next_candidate().is_empty()
+    next_button.disabled=practice or bool(info.get("ssrg",false)) or next_candidate().is_empty()
     replay_button.disabled=not bool(info.get("replay",false))
     replay_button.tooltip_text="Watch your last run" if not replay_button.disabled else "No replay for this run"
     practice_button.disabled=automated or not info.get("performance",[]).any(func(s): return float(s.get("weight",1.0))<=0.0)
@@ -209,14 +213,19 @@ func practice_first_miss() -> void:
     for sample in info.get("performance",[]):
         if float(sample.get("weight",1.0))<=0.0: first=float(sample.time); break
     if first<0: return
+    if info.get("ssrg",false): game.ssrg_screens.restore_run()
     var a=maxf(0.0,first-3.0); var b=minf(game.length(),first+6.0)
     pending_next_id=""
     game.practice.active=true
     if not game.practice.launch(game.last_play_notes,a,b,.75,true): game.practice.active=false
 func open_song_list() -> void:
+    if info.get("ssrg",false):
+        game.ssrg_screens.leave_results(); return
     pending_next_id=""; game.set_mode("menu"); game.lobby.show_play_browser()
 func retry() -> void:
     pending_next_id=""
+    if info.get("ssrg",false):
+        game.ssrg_screens.retry(); return
     if game.practice.active: game.practice.restart()
     else: game.start_game(game.last_play_notes,game.auto_play,game.last_section)
 func next_candidate() -> Dictionary:
@@ -264,19 +273,16 @@ func animate() -> void:
     for i in buttons.size(): buttons[i].modulate.a=ease_out((elapsed-.5-i*.06)/.35)
     breakdown.queue_redraw()
 func draw_ring() -> void:
-    var center=ring.size*.5; var radius=minf(ring.size.x,ring.size.y)*.42
-    ring.draw_texture_rect(rank_glow,Rect2(center-Vector2.ONE*radius,Vector2.ONE*radius*2),false)
-    ring.draw_arc(center,radius,-PI*.5,TAU-PI*.5,128,Color("232323"),19,true)
+    # A solid cream grade badge, with accuracy as a thin coral ring around it.
+    var center=ring.size*.5; var radius=minf(ring.size.x,ring.size.y)*.40
+    var shadow=StyleBoxFlat.new(); shadow.bg_color=Color(0,0,0,0); shadow.set_corner_radius_all(roundi(radius))
+    shadow.shadow_color=Color(0,0,0,.45); shadow.shadow_size=24; shadow.shadow_offset=Vector2(0,10)
+    ring.draw_style_box(shadow,Rect2(center-Vector2.ONE*radius,Vector2.ONE*radius*2))
+    ring.draw_arc(center,radius+22,0,TAU,128,Color(1,1,1,.07),10,true)
     var progress=final_accuracy/100*ease_out((elapsed-.15)/1.1)
-    for i in 120:
-        var part=float(i)/120
-        if part>=progress: break
-        var end=minf(progress,float(i+1)/120)
-        var tint=Color("30d8eb").lerp(Color("ae5dff"),part).lerp(Color("ee2ccb"),smoothstep(.55,1,part))
-        var a=-PI*.5+TAU*part; var b=-PI*.5+TAU*end
-        for layer in [[38.0,.025],[28.0,.07],[19.0,1.0]]: ring.draw_arc(center,radius,a,b,3,Color(tint,layer[1]),layer[0],true)
-    var top=center+Vector2(cos(-PI*.5+TAU*progress),sin(-PI*.5+TAU*progress))*radius
-    if progress>0: ring.draw_circle(top,9.5,Color("b66afd"))
+    if progress>0: ring.draw_arc(center,radius+22,-PI*.5,-PI*.5+TAU*progress,128,Color("ff7a59"),10,true)
+    ring.draw_circle(center,radius,Color("f3ece1"))
+    ring.draw_arc(center,radius-1,PI*1.1,PI*1.9,48,Color(1,1,1,.7),2,true)
 func draw_breakdown() -> void:
     var font=breakdown.get_theme_font("font"); var row=breakdown.size.y/4.0
     var names=["PERFECT","GREAT","GOOD","MISS"]

@@ -33,7 +33,7 @@ func run():
 	effect.spawn(4.5,"hold",entry,-999);hit=effect.hits[0]
 	check(hit.frames==effect.imported_frames,"Ordinary sustains use source effect A")
 	effect._process(.101)
-	check(is_zero_approx(hit.age),"Held effect restarts its opening burst after 30 percent")
+	check(is_equal_approx(hit.age,.101-effect.HOLD_RETRIGGER),"Held effect preserves excess frame time when restarting")
 	entry.done=true;effect._process(.32)
 	check(effect.hits.size()==1,"Released effect completes its remaining animation")
 	effect._process(.02);check(effect.hits.is_empty(),"Released effect returns to pool")

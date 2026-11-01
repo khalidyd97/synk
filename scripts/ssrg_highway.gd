@@ -25,6 +25,7 @@ var hits: Array = []
 var active = false
 var original_stage: Node3D
 var source_background: Node3D
+var background_bank:Array=[]
 var imported_frames: Array[Texture2D] = []
 var special_frames: Array[Texture2D] = []
 
@@ -36,6 +37,9 @@ func _ready() -> void:
 		if ResourceLoader.exists(special_path): special_frames.append(load(special_path))
 	original_stage=preload("res://scripts/ssrg_stage.gd").new(); add_child(original_stage)
 	source_background=preload("res://scripts/ssrg_background.gd").new();add_child(source_background);source_background.configure(0)
+	background_bank.append(source_background)
+	for profile in range(1,4):
+		var background=preload("res://scripts/ssrg_background.gd").new();add_child(background);background.configure(profile);background.hide();background_bank.append(background)
 	var w = world
 	var half = w.FRAME_HALF_WIDTH
 	floor_node = shaded_plane(Vector2(half * 2.0, 62.0), preload("res://scripts/ssrg_floor.gdshader"), Vector3(0, .026, -30.5), -7)
@@ -81,15 +85,21 @@ func refresh() -> void:
 func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int) -> void:
 	var h: Dictionary = hit_pool.pop_back() if not hit_pool.is_empty() else make_hit()
 	# B belongs to source special event/item notes. Ordinary taps and sustains use A.
-	var frames=imported_frames
+	var frames=special_frames if kind=="special" else imported_frames
 	h.frames=frames
 	if not frames.is_empty(): h.material.set_shader_parameter("atlas", frames[0])
 	h.age = 0.0; h.sustain_entry = sustain_entry; h.pointer_id = pointer_id; h.kind = kind
-	# SSRG flashes sit on the note itself (not where the finger landed) and face the
-	# current camera, which may have moved since the pool was made.
-	h.node.position = flash_point(world.note_x(lane))
+	# Sustains follow their owned physical contact across the judgment line.
+	var x=world.note_x(lane)
+	if world.game.ssrg_playable_run and not sustain_entry.is_empty():x=sustain_finger_x(sustain_entry,world.game.pointers,x)
+	h.node.position = flash_point(x)
 	h.node.rotation = world.camera.rotation
-	h.material.set_shader_parameter("opacity", 1.0)
+	h.material.set_shader_parameter("opacity", world.game.features.effect("Hit flashes"))
+	# Hit effects page: size, and an optional colour over the source art.
+	h.node.scale = Vector3.ONE * world.game.hit_size * (1.0 if world.game.uses_ssrg_gameplay() else SYNK_HIGHWAY_SCALE)
+	h.node.rotation = world.camera.rotation
+	h.material.set_shader_parameter("tint", Color.from_string(world.game.hit_color, Color.WHITE) if world.game.hit_color != "" else Color.WHITE)
+	h.material.set_shader_parameter("recolor", world.game.hit_color != "")
 	h.node.visible = true; hits.append(h)
 
 # Where a flash goes: the note's point on the judgement line, pulled toward the camera along
@@ -100,13 +110,19 @@ func flash_point(x: float) -> Vector3:
 	var on_line = Vector3(x, .035, 0)
 	return on_line + Vector3.UP*FLASH_PULL if world.game.uses_ssrg_gameplay() else on_line + (world.camera.global_position - on_line).normalized() * FLASH_PULL
 
-# Drawn a little larger than the source sprite so hits read clearly on phone screens.
-const HIT_SCALE = 1.2
+# Slightly smaller than the source sprite: full size reads too large on big phones (iPhone 16 Pro Max).
+const HIT_SCALE = 0.85
+var hit_layer: Node3D
+# On SYNK's wider perspective lanes the source art is drawn a little larger.
+const SYNK_HIGHWAY_SCALE = 1.25
 func make_hit() -> Dictionary:
 	# Source centered 310x186 sprite under def_c_trans scale (2,2,1).
 	var mesh = QuadMesh.new(); mesh.size = Vector2(620,372)*world.SSRG_UNIT*HIT_SCALE
 	var mat = ShaderMaterial.new(); mat.shader = preload("res://scripts/ssrg_hit.gdshader"); mat.render_priority = 6
-	var node = world.mesh_node(mesh, self, mat); node.rotation = world.camera.rotation; node.visible = false
+	# Hits live on their own layer, so they also show when the SSRG stage itself is hidden.
+	if hit_layer == null:
+		hit_layer = Node3D.new(); hit_layer.name = "SSRGHitLayer"; world.add_child.call_deferred(hit_layer)
+	var node = world.mesh_node(mesh, hit_layer, mat); node.rotation = world.camera.rotation; node.visible = false
 	return {"node": node, "material": mat, "age": 0.0, "sustain_entry": {}, "pointer_id": -999, "kind": "tap"}
 
 func release(h: Dictionary) -> void:
@@ -122,34 +138,79 @@ func clear_hits() -> void:
 	for hit in hits+hit_pool:
 		hit.node.hide();hit.node.queue_free()
 	hits.clear();hit_pool.clear()
-	if source_background:
-		source_background.particles.clear();source_background.elapsed=0.0;source_background.frame_credit=0.0;source_background.momentum=0.0
+	for background in background_bank:
+		background.particles.clear();background.elapsed=0.0;background.frame_credit=0.0;background.momentum=0.0; background.hide()
+	if world.cover_material:
+		world.cover_material.set_shader_parameter("ssrg_fever_weights",Vector4.ZERO)
+		world.cover_material.set_shader_parameter("ssrg_fever_dark",0.0)
 
 func prefill(count: int = 16) -> void:
 	while hit_pool.size() + hits.size() < count: hit_pool.append(make_hit())
 
+static func sustain_effect_active(entry:Dictionary,at:float,ssrg:bool) -> bool:
+	if entry.is_empty():return false
+	if not ssrg:return not entry.done
+	# Recoverable contact gaps do not end the linked connector effect. A tail
+	# may score early, but its light must still reach the physical last connector.
+	return not entry.done or at<=float(entry.get("ssrg_effect_until",-INF))
+
+static func sustain_finger_x(entry:Dictionary,contacts:Dictionary,fallback:float) -> float:
+	var owner=int(entry.get("sustain_last_pointer",entry.get("pointer",-999)))
+	if contacts.has(owner):
+		var contact:Dictionary=contacts[owner]
+		# A reused Android finger index belongs to a new contact, not this chain.
+		if int(contact.get("ssrg_identity",0))==int(entry.get("sustain_last_identity",-1)):
+			entry.ssrg_effect_x=float(contact.world.x)
+	# Keep the last finger position during a recoverable gap or early tail lift.
+	return float(entry.get("ssrg_effect_x",fallback))
+
 func _process(delta: float) -> void:
-	if not active: return
+	if not active:
+		# The "SSRG" hit style on SYNK's Gold and Neon highways: only the hit art runs.
+		var game = world.game
+		advance_hits(delta,(game.mode == "play" and game.countdown<=0 and game.resume_countdown<=0) or game.highway_preview)
+		return
 	original_stage.update(world)
 	var game = world.game
-	var playing = game.mode == "play"
-	source_background.intensity=game.features.effect("Lasers")
+	var playing = (game.mode == "play" and game.countdown<=0 and game.resume_countdown<=0) or game.highway_preview
+	var presentation=game.ssrg_presentation
+	var using_state=presentation and presentation.active
+	var weights=presentation.weights if using_state else [1.0,0.0,0.0,0.0]
 	var custom=world.custom_color("lasers")
-	source_background.tint=custom if custom!=null else Color.WHITE
-	source_background.visible=game.mode in ["play","paused"] and game.countdown<=0 and not game.finishing and source_background.intensity>0
-	if source_background.visible:source_background.advance(delta,not playing)
-	# Source RenderLongCoolbombTouch rewinds after normalized time > .3.
-	# Independent tap instances intentionally preserve SYNK's uninterrupted dense-hit flow.
+	for index in background_bank.size():
+		var background=background_bank[index]
+		background.intensity=game.features.effect("Lasers")*float(weights[index])
+		background.tint=custom if custom!=null else Color.WHITE
+		background.visible=game.mode in ["play","paused"] and game.countdown<=0 and not game.finishing and background.intensity>0
+		if background.visible:background.advance(delta,not playing or game.resume_countdown>0)
+	if world.cover_material:
+		var dark=0.0
+		if using_state:
+			for index in 6:dark+=float(presentation.phase_weights[index])*float(presentation.DATA.PROFILES[index].background_alpha)
+		world.cover_material.set_shader_parameter("ssrg_fever_weights",Vector4(weights[0],weights[1],weights[2],weights[3]) if using_state else Vector4.ZERO)
+		world.cover_material.set_shader_parameter("ssrg_fever_dark",dark)
+	if using_state:
+		world.ssrg_finger_beam_material.set_shader_parameter("tint",world.element_color("beams",presentation.beam_color))
+	advance_hits(delta,playing)
+
+# Source RenderLongCoolbombTouch rewinds after normalized time > .3.
+# Independent tap instances intentionally preserve SYNK's uninterrupted dense-hit flow.
+func advance_hits(delta: float, playing: bool) -> void:
+	var game = world.game
 	for i in range(hits.size() - 1, -1, -1):
 		var h: Dictionary = hits[i]
-		var held = not h.sustain_entry.is_empty() and not h.sustain_entry.done and (not game.ssrg_playable_run or h.sustain_entry.get("ssrg_contact",true))
+		var held = sustain_effect_active(h.sustain_entry,world.render_time(),game.ssrg_playable_run)
 		if playing: h.age += delta
-		if playing and held and h.age > HOLD_RETRIGGER: h.age = 0.0
-		if (not held and h.age >= HIT_LIFE) or game.mode not in ["play", "paused"]:
+		if playing and held and h.age > HOLD_RETRIGGER: h.age = fmod(h.age,HOLD_RETRIGGER)
+		if (not held and h.age >= HIT_LIFE) or (game.mode not in ["play", "paused"] and not game.highway_preview):
 			hits.remove_at(i); release(h); continue
-		if held: h.node.position = flash_point(world.note_x(SynkChart.lane_at(h.sustain_entry.note, game.song_time)))
+		if held:
+			var x=world.note_x(SynkChart.lane_at(h.sustain_entry.note, world.render_time()))
+			if game.ssrg_playable_run:x=sustain_finger_x(h.sustain_entry,game.pointers,x)
+			h.node.position = flash_point(x)
 		var frames: Array=h.get("frames",imported_frames)
 		if not frames.is_empty(): h.material.set_shader_parameter("atlas",frames[mini(frames.size()-1,int(h.age*HIT_FPS))])
+		h.material.set_shader_parameter("opacity",game.features.effect("Hit flashes"))
 	return
 	if game.live.size() != used_for_size:
 		used_for_size = game.live.size(); used_lanes.clear()

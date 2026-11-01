@@ -29,6 +29,10 @@ config/icon="res://assets/brand/icon.png"
 
 driver/output_latency=20
 
+[debug]
+
+file_logging/enable_file_logging.ios=true
+
 [display]
 
 window/size/viewport_width=1600
@@ -39,7 +43,7 @@ window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/handheld/orientation=4
 window/ios/suppress_ui_gesture=true
-window/ios/hide_home_indicator=true
+window/ios/hide_home_indicator=false
 
 [rendering]
 

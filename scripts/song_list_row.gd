@@ -59,12 +59,12 @@ func _process(delta: float) -> void:
     motion.advance(delta,selected or hover_amount>.01)
 func _draw() -> void:
     var style=StyleBoxFlat.new(); style.set_corner_radius_all(18)
-    style.bg_color=Color(0.033,0.033,0.033,.9).lerp(Color(.025,.11,.15,.92),selection_amount)
+    style.bg_color=Color("1a191e").lerp(Color("2a2830"),selection_amount)
     style.bg_color=style.bg_color.lightened(hover_amount*.035)
     # The selected song takes its own accent colour for the edge, glow and side stripe.
-    style.border_color=Color(.19,.17,.27,.5).lerp(accent,selection_amount)
+    style.border_color=Color(1,1,1,.06).lerp(Color(Color("f3ece1"),.45),selection_amount)
     style.set_border_width_all(1)
-    if selection_amount>.01: style.shadow_color=Color(accent,.16*selection_amount); style.shadow_size=12
+    if selection_amount>.01: style.shadow_color=Color(0,0,0,.35*selection_amount); style.shadow_size=12; style.shadow_offset=Vector2(0,5)
     draw_style_box(style,Rect2(Vector2.ONE,size-Vector2.ONE*2))
     motion.paint(self,accent,maxf(selection_amount*.65,hover_amount),18)
     if selection_amount>.01:

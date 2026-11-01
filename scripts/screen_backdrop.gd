@@ -47,10 +47,17 @@ func _ready() -> void:
 			player = VideoStreamPlayer.new(); add_child(player); player.stream = stream
 			player.loop = true; player.expand = true; player.volume_db = -80; player.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			var grade = ShaderMaterial.new(); grade.shader = preload("res://scripts/video_grade.gdshader"); player.material = grade
-			grade.set_shader_parameter("hue_shift", hue_shift); grade.set_shader_parameter("saturation", saturation)
+			# Calm menus: the footage stays a muted, dark texture behind the panels.
+			grade.set_shader_parameter("hue_shift", hue_shift); grade.set_shader_parameter("saturation", saturation * .45)
 			grade.set_shader_parameter("brightness", brightness)
 	shade = ColorRect.new(); add_child(shade); shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	shade.color = Color(0, 0, .02, dim); shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	shade.color = Color(.06, .055, .07, maxf(dim, .62)); shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Darker toward the bottom, where buttons and lists sit.
+	var fall = TextureRect.new(); add_child(fall); fall.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	fall.mouse_filter = Control.MOUSE_FILTER_IGNORE; fall.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; fall.stretch_mode = TextureRect.STRETCH_SCALE
+	var ramp = Gradient.new(); ramp.set_color(0, Color(.06, .055, .07, 0)); ramp.set_color(1, Color(.06, .055, .07, .55))
+	var fall_texture = GradientTexture2D.new(); fall_texture.gradient = ramp; fall_texture.fill_from = Vector2(0, 0); fall_texture.fill_to = Vector2(0, 1)
+	fall_texture.width = 4; fall_texture.height = 64; fall.texture = fall_texture
 	resized.connect(fit); fit()
 
 func fit() -> void:

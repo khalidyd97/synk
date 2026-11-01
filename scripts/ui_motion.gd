@@ -56,7 +56,7 @@ static func style_button(target: Button, accent: Color = Color("a765ff"), strong
 static func _flash(target: Control) -> void:
 	var previous: Variant=target.get_meta("flash_tween") if target.has_meta("flash_tween") else null
 	if previous is Tween and previous.is_running(): previous.kill()
-	target.self_modulate=Color("e8d4ff")
+	target.self_modulate=Color("fff4e6")
 	var tween=target.create_tween()
 	tween.tween_property(target,"self_modulate",Color.WHITE,.22)
 	target.set_meta("flash_tween",tween)
@@ -80,11 +80,11 @@ static func reveal(target: CanvasItem, delay: float = 0.0) -> void:
 	target.set_meta("reveal_tween",tween)
 
 # Screen-to-screen motion. The outgoing frame is captured once and animated on top while the
-# live destination slides in underneath (the viewport's canvas is offset, so no screen needs
-# its own animation code). direction 1 = forward: the old screen drifts left and recedes, the
-# new one arrives from the right. -1 = back: the reverse. 0 = a plain dissolve (gameplay).
+# live destination rises in underneath (the viewport's canvas is offset, so no screen needs
+# its own animation code). direction 1 = forward: the old screen recedes and fades while the
+# new one rises a little from below. -1 = back: it settles down from above. 0 = a plain dissolve.
 # Navigation stays synchronous: audio, focus and game clocks are never delayed.
-const SLIDE = .16
+const RISE = .05
 static func transition(source: Node, duration: float = .30, direction: int = 1) -> void:
 	if not source.is_inside_tree() or Engine.get_frames_drawn()<2: return
 	var viewport=source.get_viewport()
@@ -106,23 +106,22 @@ static func transition(source: Node, duration: float = .30, direction: int = 1) 
 	if direction==0:
 		tween.tween_property(picture,"modulate:a",0.0,duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	else:
-		duration=maxf(duration,.38)
-		var width=viewport.get_visible_rect().size.x
+		duration=clampf(duration,.26,.32)
+		var height=viewport.get_visible_rect().size.y
 		picture.pivot_offset=viewport.get_visible_rect().size*.5
-		# Outgoing: slides a little, shrinks slightly and fades; a soft shade sells the depth.
-		tween.tween_property(picture,"position:x",-direction*width*SLIDE*.6,duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-		tween.tween_property(picture,"scale",Vector2.ONE*.94,duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-		tween.tween_property(picture,"modulate",Color(.55,.55,.62,0.0),duration*.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-		# Incoming: the live screen glides in from the side.
+		# Outgoing: recedes slightly and fades, dimming as it goes.
+		tween.tween_property(picture,"scale",Vector2.ONE*(.95 if direction>0 else 1.04),duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tween.tween_property(picture,"modulate",Color(.6,.58,.62,0.0),duration*.7).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		# Incoming: the live screen rises (or settles) a short way into place.
 		var start=viewport.canvas_transform
-		var from=start; from.origin.x+=direction*width*SLIDE
+		var from=start; from.origin.y+=direction*height*RISE
 		viewport.canvas_transform=from
-		tween.tween_method(_shift_canvas.bind(viewport),from.origin.x,start.origin.x,duration).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)
+		tween.tween_method(_shift_canvas.bind(viewport),from.origin.y,start.origin.y,duration).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)
 	tween.chain().tween_callback(layer.queue_free)
 
-static func _shift_canvas(x: float, viewport: Viewport) -> void:
+static func _shift_canvas(y: float, viewport: Viewport) -> void:
 	if not is_instance_valid(viewport): return
-	var t=viewport.canvas_transform; t.origin.x=x; viewport.canvas_transform=t
+	var t=viewport.canvas_transform; t.origin.y=y; viewport.canvas_transform=t
 
 static func forward(source: Node, duration: float = .38) -> void: transition(source,duration,1)
 static func back(source: Node, duration: float = .38) -> void: transition(source,duration,-1)

@@ -7,6 +7,8 @@ func run() -> void:
 	root.size=Vector2i(1280,720)
 	var game=load("res://scenes/main.tscn").instantiate(); root.add_child(game)
 	await process_frame; await process_frame
+	game.recorder_note_speed=1.0
+	game.document.load_notes([])
 	game.record_here(); game.countdown=0; game.song_time=5.2
 	var hold=SynkChart.note(3,4,"hold"); hold.duration=2
 	game.capture.notes=[hold]; game.reset_take_history()

@@ -26,6 +26,12 @@ uniform float glow_beat = 0.0;
 uniform vec2 glow_left_rail = vec2(0.45,-0.05);
 uniform vec2 glow_right_rail = vec2(0.55,1.05);
 
+uniform sampler2D ssrg_fever_0 : source_color, filter_linear, repeat_disable;
+uniform sampler2D ssrg_fever_1 : source_color, filter_linear, repeat_disable;
+uniform sampler2D ssrg_fever_2 : source_color, filter_linear, repeat_disable;
+uniform sampler2D ssrg_fever_3 : source_color, filter_linear, repeat_disable;
+uniform vec4 ssrg_fever_weights=vec4(0.0);
+uniform float ssrg_fever_dark=0.0;
 void fragment() {
 	float zoom = 1.06 + 0.03 * sin(animation_time * 0.11);
 	// Cover the screen without stretching; square art sits slightly high, as before.
@@ -51,6 +57,23 @@ void fragment() {
 	vec3 wash_color = mix(rail_glow_left,rail_glow_right,smoothstep(0.15,0.85,UV.x));
 	vec3 wash = wash_color*haze*rail_glow_opacity*(1.25+glow_beat*0.45);
 	if (photo) { art = texture(cover, uv).rgb; wash = vec3(0.0); }
-	ALBEDO = plain ? vec3(0.0) : photo ? art : (art+wash) * brightness;
+	vec3 base=plain ? vec3(0.0) : photo ? art * brightness : (art+wash) * brightness;
+	if(photo){
+		// Source quarter texture is opaque at its outer corner (0,0),
+		// transparent toward (1,1). Mirror edges inward, leaving the photo clear.
+		vec2 quadrant=vec2(1.0)-abs(UV-vec2(0.5))*2.0;
+		vec4 a=texture(ssrg_fever_0,quadrant);
+		vec4 b=texture(ssrg_fever_1,quadrant);
+		vec4 c=texture(ssrg_fever_2,quadrant);
+		vec4 d=texture(ssrg_fever_3,quadrant);
+		vec4 fade=smoothstep(vec4(0.0),vec4(1.0),ssrg_fever_weights);
+		float alpha=dot(vec4(a.a,b.a,c.a,d.a),fade);
+		vec3 color=(a.rgb*a.a*fade.x+b.rgb*b.a*fade.y+c.rgb*c.a*fade.z+d.rgb*d.a*fade.w)/max(alpha,0.00001);
+		// The existing cosine beat clock freezes on pause. Keep a soft glow
+		// between beats; state weights supply the one-second entrance fade.
+		float rave_pulse=mix(0.65,1.0,clamp(glow_beat,0.0,1.0));
+		base=mix(base*(1.0-clamp(ssrg_fever_dark,0.0,1.0)),color,clamp(alpha*rave_pulse,0.0,1.0));
+	}
+	ALBEDO=base;
 	ALPHA = strength;
 }

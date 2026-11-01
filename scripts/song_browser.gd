@@ -68,7 +68,7 @@ func _ready() -> void:
     for type in ["Label","Button","LineEdit","OptionButton","PopupMenu"]: local_theme.set_font("font",type,ThemeDB.fallback_font)
     resized.connect(layout); game.safe_area_changed.connect(layout); layout()
     button(canvas,"‹",48,23,76,76,lobby.show_gateway).caption_size=32
-    label(canvas,"S E L E C T   A   S O N G",140,28,600,22,12,Color("50daec"))
+    label(canvas,"S E L E C T   A   S O N G",140,28,600,22,14,Color("ff7a59"))
     var heading=label(canvas,"Choose your track",140,52,700,42,34)
     var bold=FontVariation.new(); bold.base_font=ThemeDB.fallback_font; bold.variation_embolden=.5
     heading.add_theme_font_override("font",bold)
@@ -76,7 +76,7 @@ func _ready() -> void:
     search.placeholder_text="⌕   Search songs or artists"; search.add_theme_font_size_override("font_size",19)
     var s=box_style(Color("0d0d0d"),Color("302a42"),15); s.content_margin_left=18; s.content_margin_right=14
     search.add_theme_stylebox_override("normal",s)
-    var focus=s.duplicate(); focus.border_color=Color("50daec"); search.add_theme_stylebox_override("focus",focus)
+    var focus=s.duplicate(); focus.border_color=Color("f3ece1"); search.add_theme_stylebox_override("focus",focus)
     search.text_changed.connect(func(_text): lobby.refresh_tracks())
     var gear=preload("res://scripts/gear_button.gd").new(); gear.accent=Color("bcb2d4")
     place(gear,canvas,996,23,72,76); gear.pressed.connect(func(): game.open_lobby_settings())
@@ -116,7 +116,7 @@ func _ready() -> void:
     cover=TextureRect.new(); art_holder.add_child(cover); cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     cover.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; cover.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED
     cover.mouse_filter=Control.MOUSE_FILTER_IGNORE; preload("res://scripts/screen_style.gd").round_cover(cover,22)
-    label(panel,"N O W   S E L E C T E D",192,35,305,22,11,Color("53d9eb"),p)
+    label(panel,"N O W   S E L E C T E D",192,35,305,22,13,Color("ff7a59"),p)
     title_label=label(panel,"",192,59,305,43,32,Color("f5f3ff"),p); title_label.add_theme_font_override("font",bold)
     artist_label=label(panel,"",192,102,305,28,16,Color("c4bcd6"),p)
     metadata=HBoxContainer.new(); place(metadata,panel,192,135,305,28,p); metadata.add_theme_constant_override("separation",7)
@@ -131,7 +131,7 @@ func _ready() -> void:
     var section_style=box_style(Color("131313"),Color("2b2b2b"),18)
     section_style.content_margin_left=18; section_style.content_margin_right=18
     sections.add_theme_stylebox_override("normal",section_style)
-    var section_focus=section_style.duplicate(); section_focus.border_color=Color("50daec")
+    var section_focus=section_style.duplicate(); section_focus.border_color=Color("f3ece1")
     for state in ["hover","pressed","focus"]: sections.add_theme_stylebox_override(state,section_focus)
     sections.get_popup().about_to_popup.connect(func():
         var r=sections.get_global_rect(); var k=sections.get_global_transform_with_canvas().get_scale()
@@ -151,7 +151,7 @@ func _ready() -> void:
     label(best,"Rank",390,12,60,20,12,Color("aaa2bf"),Vector2(468,76)).horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
     rank_value=label(best,"—",390,34,60,30,24,Color("51d8ec"),Vector2(468,76)); rank_value.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
     details_label=label(panel,"",29,472,468,26,13,Color("a9a0bd"),p)
-    play=button(panel,"▶   P L A Y",16,502,494,104,lobby.press_play,p,true)
+    play=button(panel,"▶  PLAY",16,502,494,104,lobby.press_play,p,true)
     create=button(panel,"CREATE CHART",29,508,468,84,func():
         # Opens Chart Studio on this song and asks for the new chart's level (1-30).
         lobby.stop_preview(); game.open_editor()
@@ -271,7 +271,7 @@ func refresh_difficulties(loading: bool=false) -> void:
         difficulty[key].disabled=loading
         difficulty[key].set_selected(game.features.current_variant==key and not loading)
     # The play button names the level it will start.
-    play.text="▶   P L A Y   ·   "+" ".join(Levels.label(game.features.current_variant).to_upper().split(""))
+    play.text="▶  PLAY  ·  "+Levels.label(game.features.current_variant).to_upper()
     play.caption_size=30
     for i in 4: sections.get_popup().set_item_disabled(i,not game.section_available(["full","verse1","verse2","bridge"][i]) or loading)
     sections.select(["full","verse1","verse2","bridge"].find(game.play_mode))

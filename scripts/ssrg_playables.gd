@@ -14,24 +14,31 @@ const KEY_COLORS = {4: Color("5fd0ff"), 7: Color("ffd36a"), 13: Color("ff7ac8")}
 # of the game: the song audio (.bytes, really Ogg) and its 4, 7 and 13 key charts (.bytes).
 # Importing adds the song to the library with one chart per key count (saved as Lv 4, Lv 7 and
 # Lv 13). Nothing from SSRG ships with SYNK.
-#   left:  searchable song list with cover, key chips and best rank
-#   right: the selected song - banner, one card per chart (notes, density, best score),
-#          PLAY / AUTO PLAY, gameplay background and delete
-#   IMPORT opens the import panel. SCAN PHONE reads the ssrg folder on the phone's storage:
+#   Song select: the selected song's art fills the background; a horizontal carousel of song
+#   cards (cover, title, artist, key counts, best rank) runs across the middle, difficulties
+#   sit in a column on the right and the bottom bar shows the song's details with START.
+#   + FILES opens the import wizard. SCAN PHONE reads the ssrg folder on the phone's storage:
 #   ssrg/<GAME>/seq (charts), ssrg/<GAME>/music and ssrg/<GAME>/background, one game per folder. Songs play on the player's regular SYNK highway.
 
 var game: Control
 var safe_content: Control
 var picker: FileDialog
 var image_picker: FileDialog
+# Which picture the image picker is choosing: "background" or "cover".
+var image_target = "background"
 var staged_audio = ""
 var staged_charts: Dictionary = {}
 var staged_label: Label
 var import_status: Label
 var import_button: Button
 var import_panel: Control
+var import_wizard:Control
 var status_label: Label
 var speed_label: Label
+# Speed goes from 1.0 to 10.0 in steps of 0.1; holding − or + keeps stepping.
+const SPEED_STEP = 0.1
+var speed_held_step = 0.0
+var speed_held_time = 0.0
 var search: LineEdit
 # Category tabs: one per game folder (SSYG, SSFNC, ...) plus ALL; "" shows every game.
 var game_tabs: HBoxContainer
@@ -57,7 +64,20 @@ var rows: Dictionary = {}   # song id -> {"row": Button, "trash": Button}
 # Rows still to add; the list is built a few dozen rows per frame.
 var row_queue: Array = []
 const ROWS_PER_FRAME = 12
-var song_list: VBoxContainer
+var song_list: HBoxContainer
+var carousel: ScrollContainer
+var backdrop_layers:Array[TextureRect]=[]
+var backdrop: TextureRect
+var empty_label: Label
+# Shown when no SSRG songs are imported yet: an illustration and the two ways to add songs.
+var empty_state: Control
+var list_arrows: Array = []
+# Horizontal drag on the carousel: a press that moves is a scroll, not a card tap.
+var carousel_press = false
+var carousel_dragged = false
+var carousel_press_x = 0.0
+var carousel_press_scroll = 0
+var carousel_tween: Tween
 var detail: Control
 var selected_id = ""
 var selected_variant = ""
@@ -66,10 +86,6 @@ var delete_button: Button
 # Song whose row delete button was tapped once (a second tap within a few seconds deletes it).
 var row_armed_id = ""
 var pending: Dictionary = {}
-# Songs found by SCAN PHONE, imported one per frame so the screen keeps drawing.
-var scan_queue: Array = []
-var scan_done = 0
-var scan_added = 0
 # The run started from this screen: its best score is kept when the results appear.
 var running: Dictionary = {}
 
@@ -106,45 +122,72 @@ func panel(parent: Control, left: float, top: float, right: float, bottom: float
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	# A flat backdrop: the old full-screen picture was 86% covered and cost a full extra fill.
-	var shade = ColorRect.new(); place(shade,self,0,0,1,1); shade.color = Color(0.024,0.024,0.034); shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# The selected song's art, dimmed, behind everything (refresh_detail swaps it).
+	var base = ColorRect.new(); place(base,self,0,0,1,1); base.color = Color(0.03,0.03,0.04); base.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	backdrop = TextureRect.new(); place(backdrop,self,0,0,1,1); backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	backdrop.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; backdrop.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	backdrop.modulate = Color(1,1,1,.32)
+	backdrop_layers.append(backdrop)
+	var shade = TextureRect.new(); place(shade,self,0,0,1,1); shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var gradient = Gradient.new(); gradient.colors = PackedColorArray([Color(0.03,0.03,0.04,.55),Color(0.03,0.03,0.04,.25),Color(0.03,0.03,0.04,.92)])
+	gradient.offsets = PackedFloat32Array([0,.45,1])
+	var fill = GradientTexture2D.new(); fill.gradient = gradient; fill.fill_from = Vector2(0,0); fill.fill_to = Vector2(0,1)
+	shade.texture = fill; shade.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; shade.stretch_mode = TextureRect.STRETCH_SCALE
 	safe_content=game.safe_parent("SafeSsrgControls",self)
-	action(self,"‹  BACK",.035,.035,.15,.14,close,"nav")
-	text(self,"SSRG PLAYABLES",.17,.035,.5,.1,40)
-	status_label = text(self,"Play SSRG songs from your own game files.",.17,.095,.6,.15,16,MUTED)
-	action(self,"SCAN PHONE",.8,.045,.965,.135,scan_phone,"primary")
-	action(self,"+ FILES",.455,.045,.555,.135,open_import,"small")
-	logout_button = action(self,"LOG OUT",.37,.045,.445,.135,log_out,"small")
-	# Note speed for SSRG songs only (0.5x to 4x).
-	action(self,"−",.57,.045,.62,.135,func(): change_speed(-1),"small")
-	speed_label = text(self,"",.625,.045,.725,.135,18); speed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	action(self,"+",.73,.045,.78,.135,func(): change_speed(1),"small")
-	ScreenStyle.rule(self,.035,.965,.165)
 
-	# Song list
-	var list_panel = panel(self,.035,.19,.4,.96)
-	search = LineEdit.new(); place(search,list_panel,.04,.025,.5,.11)
-	sort_button = action(list_panel,"",.52,.025,.76,.11,cycle_sort,"small")
-	action(list_panel,"SHUFFLE",.78,.025,.96,.11,shuffle,"small")
+	# Top bar: back, title, search, order, speed and adding songs.
+	action(self,"‹  BACK",.02,.03,.11,.12,close,"nav")
+	text(self,"SSRG PLAYABLES",.125,.025,.33,.085,24)
+	status_label = text(self,"Play SSRG songs from your own game files.",.125,.075,.36,.125,13,MUTED)
+	search = LineEdit.new(); place(search,self,.365,.035,.53,.115)
 	search.placeholder_text = "Search songs"; search.clear_button_enabled = true
-	search.add_theme_font_size_override("font_size",17)
+	search.add_theme_font_size_override("font_size",16)
 	for state in ["normal","focus"]:
-		var field = box(Color(1,1,1,.05 if state=="normal" else .07),Color(1,1,1,.12) if state=="normal" else Color(ACCENT,.5),14)
-		field.content_margin_left = 16; field.content_margin_right = 12
+		var field = box(Color(0,0,0,.35 if state=="normal" else .5),Color(1,1,1,.14) if state=="normal" else Color(ACCENT,.5),14)
+		field.content_margin_left = 14; field.content_margin_right = 10
 		search.add_theme_stylebox_override(state,field)
 	search.text_changed.connect(func(_t): refresh_songs())
-	var tab_scroll = ScrollContainer.new(); place(tab_scroll,list_panel,.04,.125,.96,.205)
+	sort_button = action(self,"",.54,.035,.64,.115,cycle_sort,"small")
+	action(self,"SHUFFLE",.645,.035,.715,.115,shuffle,"small")
+	hold_speed(action(self,"−",.725,.035,.755,.115,func(): pass,"small"),-SPEED_STEP)
+	speed_label = text(self,"",.755,.035,.83,.115,14); speed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hold_speed(action(self,"+",.83,.035,.86,.115,func(): pass,"small"),SPEED_STEP)
+	action(self,"+ FILES",.87,.035,.925,.115,open_import,"small")
+	action(self,"SCAN",.93,.035,.98,.115,scan_phone,"small")
+	# Game tabs (one per game folder, plus favourites) and the sign-out button.
+	var tab_scroll = ScrollContainer.new(); place(tab_scroll,self,.02,.135,.86,.2)
 	tab_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	game_tabs = HBoxContainer.new(); tab_scroll.add_child(game_tabs); game_tabs.add_theme_constant_override("separation",8)
-	var scroll = ScrollContainer.new(); place(scroll,list_panel,.04,.22,.96,.98)
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	preload("res://scripts/drag_scroll.gd").attach(scroll)
-	song_list = VBoxContainer.new(); scroll.add_child(song_list)
-	song_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	song_list.add_theme_constant_override("separation",8)
+	logout_button = action(self,"LOG OUT",.87,.135,.98,.2,log_out,"small")
 
-	# Selected song
-	detail = panel(self,.415,.19,.965,.96)
+	# Carousel of song cards.
+	carousel = ScrollContainer.new(); place(carousel,self,.02,.215,.86,.73)
+	carousel.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	carousel.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	song_list = HBoxContainer.new(); carousel.add_child(song_list)
+	song_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	song_list.add_theme_constant_override("separation",18)
+	empty_label = text(self,"",.1,.3,.78,.6,18,MUTED); empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	empty_state = Control.new(); place(empty_state,self,.1,.16,.78,.92); empty_state.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var art = Control.new(); place(art,empty_state,.3,0,.7,.42); art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	art.draw.connect(func(): draw_empty_art(art))
+	var heading = text(empty_state,"No SSRG songs yet",0,.44,1,.56,30,TEXT); heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.add_theme_font_override("font",preload("res://assets/fonts/FiraSans-Bold.ttf"))
+	var hint = text(empty_state,"Add .ssrg files or a folder of charts." + "\n" + "Songs with only some levels import too.",0,.56,1,.72,18,MUTED)
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	action(empty_state,"+  ADD SONGS",.2,.78,.49,.92,open_import,"primary")
+	action(empty_state,"SCAN FOR SONGS",.51,.78,.8,.92,scan_phone,"large")
+	empty_state.visible = false
+	for side in [-1,1]:
+		var arrow = Button.new(); place(arrow,self,.005 if side<0 else .825,.4,.04 if side<0 else .86,.55)
+		arrow.text = "‹" if side<0 else "›"; arrow.focus_mode = Control.FOCUS_NONE
+		arrow.add_theme_font_size_override("font_size",44); arrow.add_theme_color_override("font_color",Color(1,1,1,.7))
+		for state in ["normal","hover","pressed"]: arrow.add_theme_stylebox_override(state,box(Color(0,0,0,.35 if state=="normal" else .55),Color(1,1,1,.1),16))
+		arrow.pressed.connect(func(): step_song(side))
+		list_arrows.append(arrow)
+
+	# Difficulties, song details and START are rebuilt for each selected song.
+	detail = Control.new(); place(detail,self,0,0,1,1); detail.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	build_import_panel()
 	picker = FileDialog.new(); add_child(picker)
@@ -155,7 +198,7 @@ func _ready() -> void:
 	image_picker = FileDialog.new(); add_child(image_picker)
 	image_picker.file_mode = FileDialog.FILE_MODE_OPEN_FILE; image_picker.access = FileDialog.ACCESS_FILESYSTEM; image_picker.use_native_dialog = true
 	image_picker.filters = PackedStringArray(["*.png,*.jpg,*.jpeg;Images;image/png,image/jpeg"])
-	image_picker.file_selected.connect(set_background)
+	image_picker.file_selected.connect(func(path): set_cover(path) if image_target=="cover" else set_background(path))
 	move_child(safe_content,get_child_count()-1)
 	preview_player = AudioStreamPlayer.new(); add_child(preview_player); preview_player.volume_db = -10
 	var stored = game.prefs.get_value("ssrg","favorites",[])
@@ -165,25 +208,17 @@ func _ready() -> void:
 	refresh_staged(); refresh_speed(); refresh_sort_button()
 
 func build_import_panel() -> void:
-	import_panel = Control.new(); place(import_panel,self,0,0,1,1); import_panel.visible = false
-	import_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	var dim = ColorRect.new(); place(dim,import_panel,0,0,1,1); dim.color = Color(0,0,0,.6)
-	var card = panel(import_panel,.25,.14,.75,.9,Color(ACCENT,.55))
-	text(card,"IMPORT AN SSRG SONG",.07,.03,.8,.12,24,ACCENT)
-	action(card,"✕",.86,.035,.95,.13,func(): import_panel.visible = false,"small")
-	text(card,"Pick the song's .bytes files from your own SSRG game files: the audio (the large file) and its 4, 7 or 13 key charts. Select them together or one at a time.",.07,.13,.93,.29,15,MUTED)
-	action(card,"ADD FILES",.07,.31,.6,.43,choose_files)
-	action(card,"CLEAR",.63,.31,.93,.43,clear_staged)
-	staged_label = text(card,"",.07,.46,.93,.74,18)
-	staged_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-	import_button = action(card,"IMPORT SONG",.07,.76,.93,.88,import_staged,"primary")
-	import_status = text(card,"",.07,.88,.93,.98,14,MUTED)
+	import_wizard=preload("res://scripts/ssrg_import_wizard.gd").new();import_wizard.host=self
+	place(import_wizard,self,0,0,1,1);import_panel=import_wizard
 
 func open() -> void:
 	pending = {}; delete_armed = 0
 	visible = true
 	logout_button.visible = game.app_login != null and game.app_login.required()
 	refresh_songs()
+	for child in safe_content.get_children():
+		if child is Control and child.visible and child!=detail and child!=import_panel:
+			soft_reveal(child,minf(child.get_index()*.012,.10))
 
 func close() -> void:
 	stop_preview()
@@ -312,7 +347,7 @@ func charts_for(id: String) -> Array:
 	return result
 
 func best(id: String, variant: String) -> Dictionary:
-	var value = game.prefs.get_value("ssrg_best",id+"|"+variant,{})
+	var value = game.prefs.get_value("ssrg_best_v2",id+"|"+variant,{})
 	return value if value is Dictionary else {}
 
 func song_length(song: Dictionary) -> float:
@@ -331,23 +366,15 @@ func refresh_songs() -> void:
 	songs.sort_custom(func(a, b): return sort_key(a) < sort_key(b))
 	if not songs.any(func(s): return str(s.id)==selected_id): selected_id = str(songs[0].id) if not songs.is_empty() else ""
 	var shown = 0
-	var heading = null
 	for song in songs:
 		var haystack = " ".join([str(song.title),str(song.get("artist","")),str(song.get("album",""))]).to_lower()
 		if not query.is_empty() and not haystack.contains(query): continue
-		if sort_mode == "GAME" and category(song) != heading:
-			heading = category(song)
-			var count = songs.filter(func(x): return category(x) == heading).size()
-			var label = Label.new(); label.text = "%s  ·  %d" % [heading, count]
-			label.add_theme_font_size_override("font_size",15); label.add_theme_color_override("font_color",ACCENT)
-			row_queue.append(label)
 		shown += 1
 		row_queue.append(song)
-	if shown == 0:
-		var empty = Label.new(); empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		empty.text = "No SSRG songs yet.\nTap SCAN PHONE or + FILES to add some." if all_songs.is_empty() else ("No favourites yet. Tap the star on a song." if game_filter == STAR else "No songs match your search.")
-		empty.add_theme_color_override("font_color",MUTED); empty.add_theme_font_size_override("font_size",17)
-		song_list.add_child(empty)
+	empty_state.visible = all_songs.is_empty()
+	for arrow in list_arrows: arrow.visible = shown > 0
+	empty_label.text = "" if shown > 0 or all_songs.is_empty() else ("No favourites yet. Tap the star on a song." if game_filter == STAR else "No songs match your search.")
+	carousel.scroll_horizontal = 0
 	refresh_detail(); refresh_stats()
 
 func in_filter(song: Dictionary) -> bool:
@@ -382,165 +409,256 @@ func refresh_game_tabs(songs: Array) -> void:
 		tab.pressed.connect(func(): game_filter = name; refresh_songs())
 		game_tabs.add_child(tab)
 
+# One carousel card: cover, title, artist, key counts with best ranks, and a favourite star.
 func song_row(song: Dictionary) -> Control:
 	var id = str(song.id)
-	var row = Button.new(); row.custom_minimum_size = Vector2(0,92); row.focus_mode = Control.FOCUS_NONE
-	var selected = id == selected_id
-	style_row(row,selected)
-	row.pressed.connect(func():
-		if Action.was_dragged(row): return
+	var height = maxf(240.0,carousel.size.y-28.0) if carousel else 300.0
+	# A square cover with the title, artist and key counts underneath.
+	var width = height-88.0
+	var card = Button.new(); card.custom_minimum_size = Vector2(width,height); card.focus_mode = Control.FOCUS_NONE
+	card.size_flags_vertical = Control.SIZE_SHRINK_CENTER; card.pivot_offset = Vector2(width,height)*.5
+	card.clip_contents = true; card.set_meta("song_id",id)
+	style_row(card,id == selected_id)
+	card.pressed.connect(func():
+		if carousel_dragged or id == selected_id: return
 		select_song(id))
-	# Real album art when the song has it, otherwise a flat tile in the song's hue (no shader).
-	if game.has_custom_cover(id):
-		var cover = TextureRect.new(); row.add_child(cover)
-		cover.position = Vector2(12,12); cover.size = Vector2(68,68)
-		cover.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; cover.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-		cover.mouse_filter = Control.MOUSE_FILTER_IGNORE; cover.texture = game.cover_texture_for_id(id)
-	else:
-		var tile = Panel.new(); row.add_child(tile); tile.position = Vector2(12,12); tile.size = Vector2(68,68)
-		tile.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var hue = float(posmod(id.hash(),360))/360.0
-		tile.add_theme_stylebox_override("panel",box(Color.from_hsv(hue,.6,.5),Color.from_hsv(hue,.5,.85),12))
-	var title = Label.new(); row.add_child(title); title.position = Vector2(96,6); title.size = Vector2(260,30)
+	var art_size = width-16
+	var cover = TextureRect.new(); card.add_child(cover); cover.position = Vector2(8,8); cover.size = Vector2(art_size,art_size)
+	cover.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; cover.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	cover.mouse_filter = Control.MOUSE_FILTER_IGNORE; cover.texture = game.cover_texture_for_id(id)
+	if not game.has_custom_cover(id): cover.modulate = game.cover_tint_for_id(id)
+	var title = Label.new(); card.add_child(title); title.position = Vector2(10,art_size+14); title.size = Vector2(width-20,28)
 	title.text = str(song.title); title.clip_text = true; title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	title.add_theme_font_size_override("font_size",20)
-	# Artist · game folder (SSYG, SSFNC, ...) when the song came from a phone scan.
-	var byline = Label.new(); row.add_child(byline); byline.position = Vector2(96,34); byline.size = Vector2(260,22)
-	byline.text = "  ·  ".join([str(song.get("artist","")),str(song.get("album",""))].filter(func(t): return not t.is_empty() and t != "SSRG"))
-	byline.clip_text = true; byline.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; title.add_theme_font_size_override("font_size",18)
+	var byline = Label.new(); card.add_child(byline); byline.position = Vector2(10,art_size+40); byline.size = Vector2(width-20,22)
+	byline.text = str(song.get("artist","")) if not str(song.get("artist","")).is_empty() else category(song)
+	byline.clip_text = true; byline.mouse_filter = Control.MOUSE_FILTER_IGNORE; byline.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	byline.add_theme_font_size_override("font_size",14); byline.add_theme_color_override("font_color",MUTED)
-	var chips = HBoxContainer.new(); row.add_child(chips); chips.position = Vector2(96,60); chips.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Key counts, each with its best rank once played.
+	var chips = HBoxContainer.new(); card.add_child(chips); chips.position = Vector2(8,art_size+66); chips.size = Vector2(width-16,24)
+	chips.alignment = BoxContainer.ALIGNMENT_CENTER; chips.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	chips.add_theme_constant_override("separation",6)
 	for chart in charts_for(id):
-		var chip = Label.new(); chip.text = " %dK " % chart.keys; chip.add_theme_font_size_override("font_size",13)
-		chip.add_theme_color_override("font_color",KEY_COLORS[chart.keys])
-		chip.add_theme_stylebox_override("normal",box(Color(KEY_COLORS[chart.keys],.12),Color(KEY_COLORS[chart.keys],.5),8))
-		chips.add_child(chip)
+		var color: Color = KEY_COLORS.get(int(chart.keys),ACCENT)
 		var record = best(id,chart.variant)
-		if not record.is_empty():
-			var rank = Label.new(); rank.text = str(record.get("rank","")); rank.add_theme_font_size_override("font_size",13)
-			rank.add_theme_color_override("font_color",MUTED); chips.add_child(rank)
-	# Delete right from the list: tap ✕, then tap DELETE? to confirm.
-	# A plain button (no per-frame animation), so hundreds of rows cost nothing while idle.
-	var trash = Button.new(); place(trash,row,.86,.25,.97,.75); trash.text = "✕"; trash.focus_mode = Control.FOCUS_NONE
-	trash.add_theme_font_size_override("font_size",15)
-	for state in ["normal","hover","pressed"]: trash.add_theme_stylebox_override(state,box(Color(1,1,1,.05 if state=="normal" else .12),Color(1,1,1,.14),14))
-	trash.tooltip_text = "Delete this song"
-	trash.pressed.connect(func():
-		if Action.was_dragged(row): return
-		if row_armed_id == id and delete_armed > 0: delete_song(id); return
-		disarm_row()
-		row_armed_id = id; delete_armed = 3.0
-		trash.text = "DELETE?"; trash.anchor_left = .74
-		if rows.has(id): rows[id].star.visible = false)
-	var star = Button.new(); place(star,row,.74,.25,.85,.75); star.focus_mode = Control.FOCUS_NONE
-	star.add_theme_font_size_override("font_size",20)
-	for state in ["normal","hover","pressed"]: star.add_theme_stylebox_override(state,box(Color(1,1,1,0),Color(1,1,1,0),14))
+		var chip = Label.new(); chip.text = " %dK%s " % [int(chart.keys)," "+str(record.rank) if record.has("rank") else ""]
+		chip.add_theme_font_size_override("font_size",12); chip.add_theme_color_override("font_color",color)
+		chip.add_theme_stylebox_override("normal",box(Color(color,.12),Color(color,.45),8))
+		chips.add_child(chip)
+	var star = Button.new(); card.add_child(star); star.position = Vector2(14,14); star.size = Vector2(44,44)
+	star.focus_mode = Control.FOCUS_NONE; star.add_theme_font_size_override("font_size",22)
+	for state in ["normal","hover","pressed"]: star.add_theme_stylebox_override(state,box(Color(0,0,0,.45),Color(1,1,1,.12),22))
 	style_star(star,is_favorite(id)); star.tooltip_text = "Favourite"
 	star.pressed.connect(func():
-		if Action.was_dragged(row): return
+		if carousel_dragged: return
 		toggle_favorite(id))
-	rows[id] = {"row":row,"trash":trash,"star":star}
-	return row
+	rows[id] = {"row":card,"trash":null,"star":star}
+	return card
+
+func soft_reveal(target:Control,delay:float=0.0) -> void:
+	if not target.is_visible_in_tree():return
+	var previous:Tween=target.get_meta("ssrg_reveal") if target.has_meta("ssrg_reveal") else null
+	if previous:previous.kill()
+	target.modulate.a=.18
+	target.pivot_offset=target.size*.5
+	target.scale=Vector2.ONE*.99
+	var tween=target.create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.tween_property(target,"modulate:a",1.0,.24).set_delay(delay)
+	tween.tween_property(target,"scale",Vector2.ONE,.28).set_delay(delay)
+	target.set_meta("ssrg_reveal",tween)
+
+func change_backdrop(texture:Texture2D) -> void:
+	if backdrop.texture==texture:return
+	# Fade from every live layer's current opacity; rapid selection never restarts a fade at full opacity.
+	for layer in backdrop_layers.duplicate():
+		var previous:Tween=layer.get_meta("ssrg_fade") if layer.has_meta("ssrg_fade") else null
+		if previous:previous.kill()
+		var fade=layer.create_tween()
+		fade.tween_property(layer,"modulate:a",0.0,.32)
+		fade.tween_callback(func():backdrop_layers.erase(layer);layer.queue_free())
+		layer.set_meta("ssrg_fade",fade)
+	backdrop=TextureRect.new();add_child(backdrop);move_child(backdrop,1)
+	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	backdrop.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	backdrop.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;backdrop.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	backdrop.texture=texture;backdrop.modulate=Color(1,1,1,0)
+	backdrop_layers.append(backdrop)
+	var fade=backdrop.create_tween()
+	fade.tween_property(backdrop,"modulate:a",.32,.32)
+	backdrop.set_meta("ssrg_fade",fade)
 
 func style_row(row: Button, selected: bool) -> void:
-	var normal = box(Color(1,1,1,.09) if selected else Color(1,1,1,.035),Color(ACCENT,.7) if selected else Color(1,1,1,.06),16)
+	var normal = box(Color(0.07,0.07,0.085,.9) if selected else Color(0.05,0.05,0.06,.76),Color(ACCENT,.85) if selected else Color(1,1,1,.08),18)
+	if selected: normal.set_border_width_all(2)
 	for state in ["normal","hover","pressed","focus"]: row.add_theme_stylebox_override(state,normal)
+	var scale_target=Vector2.ONE*(1.025 if selected else .96)
+	var tint=Color.WHITE if selected else Color(1,1,1,.8)
+	var previous:Tween=row.get_meta("ssrg_selection") if row.has_meta("ssrg_selection") else null
+	if previous:previous.kill()
+	if not row.is_inside_tree():row.scale=scale_target;row.modulate=tint;return
+	var tween=row.create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.tween_property(row,"scale",scale_target,.24)
+	tween.tween_property(row,"modulate",tint,.24)
+	row.set_meta("ssrg_selection",tween)
 
 func select_song(id: String) -> void:
-	if rows.has(selected_id): style_row(rows[selected_id].row,false)
+	if rows.has(selected_id) and is_instance_valid(rows[selected_id].row): style_row(rows[selected_id].row,false)
 	selected_id = id; selected_variant = ""; delete_armed = 0; disarm_row()
 	if rows.has(id): style_row(rows[id].row,true)
+	center_selected(true)
 	refresh_detail()
 	schedule_preview()
 
+# Previous or next song in the carousel.
+func step_song(direction: int) -> void:
+	var ids: Array = []
+	for child in song_list.get_children():
+		if child.has_meta("song_id"): ids.append(str(child.get_meta("song_id")))
+	if ids.is_empty(): return
+	var at = ids.find(selected_id)
+	select_song(ids[clampi(at+direction,0,ids.size()-1)] if at >= 0 else ids[0])
+
+func center_selected(animate: bool) -> void:
+	if not rows.has(selected_id) or not is_instance_valid(rows[selected_id].row): return
+	var card: Control = rows[selected_id].row
+	if not card.is_inside_tree(): return
+	var target = int(maxf(0,card.position.x+card.size.x*.5-carousel.size.x*.5))
+	if carousel_tween: carousel_tween.kill()
+	if not animate: carousel.scroll_horizontal = target; return
+	carousel_tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	carousel_tween.tween_property(carousel,"scroll_horizontal",target,.28)
+
+func _input(event: InputEvent) -> void:
+	if not visible or carousel == null or not carousel.is_visible_in_tree(): return
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed and carousel.get_global_rect().has_point(event.position):
+			carousel_press = true; carousel_dragged = false
+			carousel_press_x = event.position.x; carousel_press_scroll = carousel.scroll_horizontal
+		elif not event.pressed: carousel_press = false
+	elif event is InputEventMouseMotion and carousel_press:
+		var distance = event.position.x-carousel_press_x
+		if not carousel_dragged and absf(distance) > 12.0:
+			carousel_dragged = true
+			if carousel_tween: carousel_tween.kill()
+		if carousel_dragged: carousel.scroll_horizontal = int(carousel_press_scroll-distance)
+
 func disarm_row() -> void:
-	if rows.has(row_armed_id) and is_instance_valid(rows[row_armed_id].trash):
+	if rows.has(row_armed_id) and rows[row_armed_id].trash != null and is_instance_valid(rows[row_armed_id].trash):
 		rows[row_armed_id].trash.text = "✕"; rows[row_armed_id].trash.anchor_left = .86
 		if rows[row_armed_id].has("star") and is_instance_valid(rows[row_armed_id].star): rows[row_armed_id].star.visible = true
 	row_armed_id = ""
 
 func refresh_detail() -> void:
-	for child in detail.get_children(): child.queue_free()
+	for child in detail.get_children():
+		detail.remove_child(child);child.queue_free()
 	delete_button = null
 	var song: Dictionary = {}
 	for s in ssrg_songs():
 		if str(s.id) == selected_id: song = s
 	if song.is_empty():
-		text(detail,"Import an SSRG song to start.\n\nYou need the song's audio .bytes file and at least one chart .bytes file from your own copy of the game.",.08,.2,.92,.7,18,MUTED).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		change_backdrop(null)
 		return
 	var id = str(song.id)
-	# Banner: the gameplay background (or cover) behind the title.
-	var banner = Panel.new(); place(banner,detail,.03,.03,.97,.36); banner.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
-	banner.add_theme_stylebox_override("panel",box(Color(0,0,0,1),Color(1,1,1,.08),18))
-	var art = TextureRect.new(); place(art,banner,0,0,1,1); art.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	var backdrop: Texture2D = game.stage_backdrop_for_id(id)
-	if backdrop: art.texture = backdrop
-	else:
-		# No picture yet: a soft gradient in the song's own hue.
-		var hue = float(posmod(id.hash(),360))/360.0
-		var gradient = Gradient.new(); gradient.colors = PackedColorArray([Color.from_hsv(hue,.7,.55),Color.from_hsv(fmod(hue+.2,1),.75,.3)])
-		var fill = GradientTexture2D.new(); fill.gradient = gradient; fill.fill_to = Vector2(1,1)
-		art.texture = fill
-	var fade = ColorRect.new(); place(fade,banner,0,.45,1,1); fade.color = Color(0,0,0,.55); fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	text(banner,str(song.title),.04,.5,.96,.78,30)
-	var length = song_length(song)
-	var facts: Array = [str(song.get("artist","")),str(song.get("album","SSRG"))].filter(func(t): return not t.is_empty())
-	if float(song.get("bpm",0)) > 0: facts.append("%d BPM" % roundi(float(song.bpm)))
-	if length > 0: facts.append(game.lobby.duration_text(length))
-	text(banner,"  ·  ".join(facts),.04,.76,.96,.95,16,Color(1,1,1,.75))
+	# The song's own background or album art; songs without art keep the plain backdrop.
+	change_backdrop(game.stage_backdrop_for_id(id))
 
-	# One card per chart.
+	# Difficulty column: one button per chart, fewest keys first.
 	var charts = charts_for(id)
-	if charts.is_empty():
-		text(detail,"This song has no playable charts. Import its chart files again.",.05,.4,.95,.6,17,MUTED); return
-	if not charts.any(func(c): return c.variant == selected_variant): selected_variant = charts[-1].variant
-	text(detail,"CHARTS",.04,.38,.5,.44,15,ACCENT)
-	var width = .92/charts.size()
+	if not charts.is_empty() and not charts.any(func(c): return c.variant == selected_variant): selected_variant = charts[-1].variant
+	text(detail,"DIFFICULTY",.87,.215,.98,.26,13,MUTED).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	for i in charts.size():
 		var chart: Dictionary = charts[i]
-		var left = .04+i*width; var right = left+width-.015
 		var chosen = chart.variant == selected_variant
-		var color: Color = KEY_COLORS[chart.keys]
-		var card = Button.new(); place(card,detail,left,.45,right,.72); card.focus_mode = Control.FOCUS_NONE
-		var style = box(Color(color,.16) if chosen else Color(1,1,1,.035),Color(color,.9) if chosen else Color(1,1,1,.08),16)
-		if chosen: style.set_border_width_all(2)
-		for state in ["normal","hover","pressed","focus"]: card.add_theme_stylebox_override(state,style)
-		card.pressed.connect(func(): selected_variant = chart.variant; refresh_detail())
-		var heading = text(card,"%d KEYS" % chart.keys,.08,.05,.92,.3,22,color)
-		heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		var stats = text(card,"%d notes\n%.1f notes / sec" % [chart.notes,chart.density],.08,.3,.92,.66,14,Color(1,1,1,.8))
-		stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		var record = best(id,chart.variant)
-		var best_text = "Best  %s  ·  %s" % [str(record.get("rank","")),str(record.get("score",0))] if not record.is_empty() else "Not played yet"
-		var best_label = text(card,best_text,.05,.68,.95,.94,13,MUTED)
-		best_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var color: Color = KEY_COLORS.get(int(chart.keys),ACCENT)
+		var pick = Button.new(); place(pick,detail,.875,.27+i*.15,.975,.405+i*.15); pick.focus_mode = Control.FOCUS_NONE
+		var style = box(Color(color,.85) if chosen else Color(0,0,0,.45),Color(color,.95) if chosen else Color(color,.45),26)
+		style.set_border_width_all(2)
+		for state in ["normal","hover","pressed","focus"]: pick.add_theme_stylebox_override(state,style)
+		pick.pressed.connect(func(): selected_variant = chart.variant; refresh_detail())
+		var keys = text(pick,"%dK" % int(chart.keys),0,.08,1,.62,24,Color(0.05,0.05,0.06) if chosen else color)
+		keys.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var count = text(pick,"%d notes" % int(chart.notes),0,.56,1,.92,12,Color(0.05,0.05,0.06,.8) if chosen else MUTED)
+		count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
-	action(detail,"▶  PLAY",.04,.76,.5,.88,func(): play(id,selected_variant,false),"primary")
-	action(detail,"AUTO PLAY",.52,.76,.72,.88,func(): play(id,selected_variant,true))
-	action(detail,"BACKGROUND",.74,.76,.96,.88,choose_background)
-	if game.has_background(id): action(detail,"REMOVE BACKGROUND",.04,.895,.36,.97,func(): game.remove_background(id); refresh_detail(),"small")
-	action(detail,"PREVIEW  " + ("ON" if preview_enabled() else "OFF"),.38,.895,.68,.97,toggle_preview,"small")
-	var star = Button.new(); place(star,detail,.88,.045,.955,.14); star.focus_mode = Control.FOCUS_NONE
-	star.add_theme_font_size_override("font_size",30)
-	for state in ["normal","hover","pressed"]: star.add_theme_stylebox_override(state,box(Color(0,0,0,.35),Color(1,1,1,.12),14))
+	# Bottom bar: song details and best score on the left, START on the right.
+	var info = panel(detail,.02,.755,.6,.975,Color(1,1,1,.1))
+	text(info,str(song.title),.03,.04,.72,.3,24)
+	var length = song_length(song)
+	var facts: Array = [str(song.get("artist","")),category(song)].filter(func(t): return not t.is_empty())
+	if float(song.get("bpm",0)) > 0: facts.append("%d BPM" % roundi(float(song.bpm)))
+	if length > 0: facts.append(game.lobby.duration_text(length))
+	text(info,"  ·  ".join(facts),.03,.28,.72,.48,14,MUTED)
+	var record: Dictionary = {}
+	var chosen_chart: Dictionary = {}
+	for chart in charts:
+		if chart.variant == selected_variant: chosen_chart = chart
+	if not chosen_chart.is_empty():
+		record = best(id,selected_variant)
+		var best_text = "BEST  %s   %s   ·   combo %d" % [str(record.get("rank","")),str(record.get("score",0)),int(record.get("combo",0))] if not record.is_empty() else "Not played yet"
+		text(info,best_text,.03,.48,.72,.68,15,ACCENT if not record.is_empty() else MUTED)
+		text(info,"%d notes  ·  %.1f notes / sec" % [int(chosen_chart.notes),float(chosen_chart.get("density",0))],.73,.04,.98,.3,13,MUTED).horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	else:
+		text(info,"This song has no playable charts. Import its chart files again.",.03,.48,.97,.68,14,MUTED)
+	var star = Button.new(); place(star,info,.9,.32,.98,.66); star.focus_mode = Control.FOCUS_NONE
+	star.add_theme_font_size_override("font_size",24)
+	for state in ["normal","hover","pressed"]: star.add_theme_stylebox_override(state,box(Color(0,0,0,.3),Color(1,1,1,.1),14))
 	style_star(star,is_favorite(id)); star.tooltip_text = "Favourite"
 	star.pressed.connect(func(): toggle_favorite(id))
-	delete_button = action(detail,"DELETE SONG",.7,.895,.96,.97,delete_selected,"small")
+	# Song tools along the bottom of the panel.
+	var tools: Array = [["COVER",choose_cover],["BACKGROUND",choose_background],["PREVIEW " + ("ON" if preview_enabled() else "OFF"),toggle_preview]]
+	if game.has_custom_cover(id): tools.append(["NO COVER",func(): game.remove_cover(id); refresh_songs()])
+	if game.has_background(id): tools.append(["NO BACKGROUND",func(): game.remove_background(id); refresh_detail()])
+	tools.append(["DELETE",delete_selected])
+	var tool_width = .94/tools.size()
+	for i in tools.size():
+		var button = action(info,tools[i][0],.03+i*tool_width,.72,.03+(i+1)*tool_width-.01,.95,tools[i][1],"small")
+		if tools[i][0] == "DELETE": delete_button = button
+	if not charts.is_empty():
+		action(detail,"AUTO",.615,.79,.715,.95,func(): play(id,selected_variant,true))
+		var start = action(detail,"START",.725,.77,.98,.97,func(): play(id,selected_variant,false),"primary")
+		start.caption_size = 30
+	for child in detail.get_children():
+		if child is Control:soft_reveal(child,minf(child.get_index()*.018,.08))
 
 func change_speed(step: float) -> void:
-	game.prefs.set_value("ssrg","speed_value",clampf(game.ssrg_speed_setting()+step,1.0,10.0))
+	game.prefs.set_value("ssrg","speed_value",clampf(snappedf(game.ssrg_speed_setting()+step,SPEED_STEP),1.0,10.0))
 	game.prefs.save("user://preferences.cfg")
 	refresh_speed()
 
+# One step on touch, then repeating while held (also used by the pause menu's − and +).
+func hold_speed(button: BaseButton, step: float) -> void:
+	button.button_down.connect(func(): change_speed(step); speed_held_step = step; speed_held_time = 0.0)
+	button.button_up.connect(func(): speed_held_step = 0.0)
+
+func repeat_held_speed(delta: float) -> void:
+	if speed_held_step == 0.0: return
+	var before = speed_held_time; speed_held_time += delta
+	# After 0.4 s, about 12 steps a second.
+	var steps = int(maxf(0.0,speed_held_time-.4)/.08)-int(maxf(0.0,before-.4)/.08)
+	for i in steps: change_speed(speed_held_step)
+
 func refresh_speed() -> void:
-	speed_label.text = "SPEED %s" % str(snappedf(game.ssrg_speed_setting(),.01))
+	speed_label.text = "SPEED %.1f" % game.ssrg_speed_setting()
 
 # --- Actions ---------------------------------------------------------------------------
 func choose_background() -> void:
+	image_target = "background"
+	if NativeFilePicker.open_image(func(paths): set_background(paths[0])): return
 	if OS.get_name()=="iOS": image_picker.access=FileDialog.ACCESS_USERDATA; image_picker.current_dir="user://"
 	image_picker.popup_centered_ratio(.8)
+
+func choose_cover() -> void:
+	image_target = "cover"
+	if NativeFilePicker.open_image(func(paths): set_cover(paths[0])): return
+	if OS.get_name()=="iOS": image_picker.access=FileDialog.ACCESS_USERDATA; image_picker.current_dir="user://"
+	image_picker.popup_centered_ratio(.8)
+
+func set_cover(path: String) -> void:
+	var picked = game.load_picked_image(path)
+	if picked is String: status_label.text = picked; return
+	var problem = game.save_cover_image(selected_id,picked)
+	refresh_songs(); refresh_detail()
+	status_label.text = problem if not problem.is_empty() else "Cover saved."
 
 func set_background(path: String) -> void:
 	var picked = game.load_picked_image(path)
@@ -567,6 +685,7 @@ func delete_song(id: String) -> void:
 	for count in [4,7,13]:
 		var key = id+"|"+Levels.key(count)
 		if game.prefs.has_section_key("ssrg_best",key): game.prefs.erase_section_key("ssrg_best",key)
+		if game.prefs.has_section_key("ssrg_best_v2",key): game.prefs.erase_section_key("ssrg_best_v2",key)
 	game.prefs.save("user://preferences.cfg")
 	game.song_metadata.erase(id)
 	game.refresh_library()
@@ -577,43 +696,20 @@ func delete_song(id: String) -> void:
 
 # --- Import ----------------------------------------------------------------------------
 func open_import() -> void:
-	import_status.text = ""
-	refresh_staged()
-	import_panel.visible = true
+	import_wizard.open()
 
 func choose_files() -> void:
-	if OS.get_name()=="iOS":
-		picker.access=FileDialog.ACCESS_USERDATA; picker.current_dir="user://"
-		import_status.text = "In the Files app, copy the files into On My iPhone → SYNK first."
-	picker.popup_centered_ratio(.8)
+	import_wizard.open();import_wizard.choose_files()
 
-func add_files(paths: PackedStringArray) -> void:
-	var problems: Array = []
-	for path in paths:
-		var bytes = FileAccess.get_file_as_bytes(path)
-		var name = path.uri_decode().get_file()
-		if bytes.is_empty(): problems.append(name+": could not read"); continue
-		if SsrgImport.is_audio(bytes): staged_audio = path; continue
-		var chart = SsrgImport.parse(bytes)
-		if chart.is_empty(): problems.append(name+": not an SSRG chart"); continue
-		staged_charts[int(chart.keys)] = chart
-	import_status.text = "\n".join(problems)
-	refresh_staged()
+func add_files(paths:PackedStringArray) -> void:
+	import_wizard.open();import_wizard.add_sources(paths)
 
 func clear_staged() -> void:
-	staged_audio = ""; staged_charts.clear(); import_status.text = ""
-	refresh_staged()
+	staged_audio="";staged_charts.clear();import_wizard.clear()
 
 func refresh_staged() -> void:
-	var lines: Array = []
-	var title = staged_title()
-	if not title.is_empty(): lines.append(title)
-	lines.append("Audio:  " + ("ready ✓" if not staged_audio.is_empty() else "not added yet"))
-	for keys in [4,7,13]:
-		var chart: Dictionary = staged_charts.get(keys,{})
-		lines.append("%d keys:  %s" % [keys, "%d notes ✓" % chart.notes.size() if not chart.is_empty() else "—"])
-	staged_label.text = "\n".join(lines)
-	import_button.disabled = staged_audio.is_empty() or staged_charts.is_empty()
+	# Kept for older callers; the review wizard owns its current selection.
+	if import_wizard:import_wizard.update_controls()
 
 func staged_title() -> String:
 	for keys in staged_charts:
@@ -621,124 +717,37 @@ func staged_title() -> String:
 	return ""
 
 func import_staged() -> void:
-	if staged_audio.is_empty() or staged_charts.is_empty(): return
-	import_status.text = "Importing…"
-	var stored = store_song(staged_audio,staged_charts,{"title":staged_title()})
-	if stored.has("error"): import_status.text = stored.error; return
-	game.refresh_library()
-	if game.lobby: game.lobby.refresh()
-	staged_audio = ""; staged_charts.clear()
-	refresh_staged()
-	import_panel.visible = false
-	selected_id = stored.id; selected_variant = ""
-	status_label.text = "Imported %s with %d chart%s." % [stored.title, stored.saved, "" if stored.saved==1 else "s"]
-	refresh_songs()
+	import_wizard.start_import()
 
-# Adds one song (audio file + parsed charts by key count) to the library; meta may carry
-# title, artist, album (the game) and background (an image path).
-func store_song(audio_path: String, charts: Dictionary, meta: Dictionary) -> Dictionary:
-	var library: SynkLibrary = game.library
-	var result = library.import_song(audio_path)
-	if result.is_empty(): return {"error": library.message}
-	var song: Dictionary = result.song
-	var id = str(song.id)
-	var any: Dictionary = charts.values()[0]
-	if not str(meta.get("title","")).is_empty(): song.title = str(meta.title)
-	if not str(meta.get("artist","")).is_empty(): song.artist = str(meta.artist)
-	song.bpm = float(any.bpm); song.album = str(meta.get("album","SSRG"))
-	if not song.has("added"): song.added = Time.get_unix_time_from_system()
-	var length = result.stream.get_length()
-	song.length = length
-	var keys: Array = song.get("ssrg",[]).duplicate()
-	var saved = 0
-	for count in charts:
-		var chart: Dictionary = charts[count]
-		var notes = chart.notes.filter(func(n): return float(n.time)+float(n.duration) <= length)
-		if not SynkChart.valid(notes): continue
-		var offset = float(chart.get("beat_offset",0.0))
-		var settings = {"bpm":float(chart.bpm),"beat_offset":offset,"verse2":-1.0,"bridge":-1.0}
-		var variant = Levels.key(int(count))
-		var data = {"version":SynkChart.FORMAT_VERSION,"song_id":id,"chart_name":variant,"title":str(song.title),"bpm":float(chart.bpm),"beat_offset":offset,"chart_settings":settings,"notes":notes}
-		if SynkLibrary.atomic_write(Levels.chart_path(id,variant),data) != OK: continue
-		if int(count) not in keys: keys.append(int(count))
-		saved += 1
-	keys.sort(); song.ssrg = keys
-	chart_cache.erase(id); song.erase("ssrg_charts")
-	song.ssrg_charts = charts_for(id)
-	SynkLibrary.atomic_write(library.root_path.path_join("songs/library.json"),library.songs)
-	game.song_metadata.erase(id)
-	var art = str(meta.get("background",""))
-	if not art.is_empty():
-		var picked = game.load_picked_image(art)
-		if picked is Image: game.save_background_image(id,picked)
-	return {"id":id,"title":str(song.title),"saved":saved}
+func store_song(audio_path:String,charts:Dictionary,meta:Dictionary) -> Dictionary:
+	# Compatibility entry point; interactive imports prepare on the worker instead.
+	var item={"audio":audio_path,"audio_hash":FileAccess.get_sha256(audio_path),"charts":{},"parsed_charts":charts,"selected_keys":charts.keys(),"title":str(meta.get("title","Imported song")),"artist":str(meta.get("artist","")),"game":str(meta.get("album","SSRG")),"background":str(meta.get("background","")),"policy":"add_missing"}
+	if meta.get("presentation") is Dictionary:item.presentation=meta.presentation
+	var transaction=preload("res://scripts/ssrg_import_transaction.gd")
+	var prepared=transaction.prepare(game.library.root_path,item,game.library.songs)
+	var result=transaction.commit(game.library.root_path,prepared,game.library.songs)
+	if result.has("songs"):
+		game.library.songs=result.songs;chart_cache.erase(str(result.id));game.song_metadata.erase(str(result.id));game.song_background_textures.erase(str(result.id))
+	return result
 
-# --- Phone library ---------------------------------------------------------------------
 func phone_root() -> String:
 	if OS.get_name() == "Android": return "/storage/emulated/0/ssrg"
+	if OS.get_name() == "iOS": return "user://ssrg"
 	# Desktop: an "ssrg" folder beside Documents (for testing).
 	return OS.get_system_dir(OS.SYSTEM_DIR_DOCUMENTS).get_base_dir().path_join("ssrg")
 
 func scan_phone() -> void:
-	if not scan_queue.is_empty(): return
-	# Reading another app's files needs Android's "All files access" for SYNK.
-	if OS.get_name() == "Android" and "android.permission.MANAGE_EXTERNAL_STORAGE" not in OS.get_granted_permissions():
+	if import_wizard.job.busy():import_wizard.open();return
+	if OS.get_name()=="Android" and "android.permission.MANAGE_EXTERNAL_STORAGE" not in OS.get_granted_permissions():
 		OS.request_permission("android.permission.MANAGE_EXTERNAL_STORAGE")
-		status_label.text = "Allow \"All files access\" for SYNK, then come back and tap SCAN PHONE again."
+		status_label.text="Allow All files access for SYNK, then tap SCAN PHONE again."
 		return
-	var root = phone_root()
-	if not DirAccess.dir_exists_absolute(root):
-		status_label.text = "No ssrg folder found. Create %s with one folder per game (seq, music, background inside)." % root
-		return
-	var found = SsrgImport.scan(root)
-	var seen: Dictionary = game.prefs.get_value("ssrg","scanned",{})
-	scan_queue = []; scan_done = 0; scan_added = 0
-	var missing = 0
-	var example = ""
-	for entry in found:
-		if str(entry.audio).is_empty():
-			missing += 1
-			# Say what was looked for and where, so a naming mismatch is easy to spot.
-			if example.is_empty():
-				var folder = "no music folder in %s" % entry.game if str(entry.music_dir).is_empty() else "%s/%s has %d audio files" % [entry.game, str(entry.music_dir).get_file(), int(entry.music_files)]
-				example = " Song %s looks for \"%s\" (%s)." % [entry.song_id, entry.name, folder]
-			continue
-		var key = str(entry.game)+"/"+str(entry.song_id)
-		var known = seen.get(key,{})
-		if known is Dictionary and str(known.get("signature","")) == SsrgImport.signature(entry) and game.library.songs.any(func(s): return str(s.id)==str(known.get("id",""))): continue
-		scan_queue.append(entry)
-	if scan_queue.is_empty():
-		status_label.text = "Found %d songs; nothing new to import.%s" % [found.size(), " %d have no music file.%s" % [missing, example] if missing else ""]
-		return
-	status_label.text = "Importing 0 / %d…" % scan_queue.size()
-	set_meta("scan_missing", missing); set_meta("scan_total", scan_queue.size()); set_meta("scan_example", example)
+	import_wizard.open()
+	var folder=phone_root()
+	if DirAccess.dir_exists_absolute(folder):import_wizard.add_sources(PackedStringArray([folder]))
+	else:import_wizard.choose_folder()
 
-func import_next_scanned() -> void:
-	var entry: Dictionary = scan_queue.pop_front()
-	var charts = {}
-	for keys in entry.charts:
-		var chart = SsrgImport.parse(FileAccess.get_file_as_bytes(entry.charts[keys]))
-		if not chart.is_empty(): charts[int(keys) if int(keys) in [4,7,13] else int(chart.keys)] = chart
-	if not charts.is_empty():
-		var names = SsrgImport.artist_and_title(str(entry.name)) if not str(entry.name).is_empty() else ["",str(entry.song_id)]
-		var stored = store_song(entry.audio,charts,{"artist":names[0],"title":names[1],"album":entry.game,"background":entry.background})
-		if not stored.has("error"):
-			scan_added += 1
-			var seen: Dictionary = game.prefs.get_value("ssrg","scanned",{})
-			seen[str(entry.game)+"/"+str(entry.song_id)] = {"id":stored.id,"signature":SsrgImport.signature(entry)}
-			game.prefs.set_value("ssrg","scanned",seen)
-	scan_done += 1
-	var total = int(get_meta("scan_total",0))
-	status_label.text = "Importing %d / %d…" % [scan_done,total]
-	if scan_queue.is_empty():
-		game.prefs.save("user://preferences.cfg")
-		game.refresh_library()
-		if game.lobby: game.lobby.refresh()
-		var missing = int(get_meta("scan_missing",0))
-		status_label.text = "Imported %d of %d songs.%s" % [scan_added,total," %d have no music file.%s" % [missing,str(get_meta("scan_example",""))] if missing else ""]
-		refresh_songs()
 
-# --- Playing ---------------------------------------------------------------------------
 func play(id: String, variant: String, automated: bool) -> void:
 	var index = -1
 	for i in game.library.songs.size():
@@ -750,6 +759,7 @@ func play(id: String, variant: String, automated: bool) -> void:
 	if game.select_song(index): launch()
 
 func _process(delta: float) -> void:
+	repeat_held_speed(delta)
 	finish_preview_load()
 	if preview_delay >= 0:
 		preview_delay -= delta
@@ -757,7 +767,6 @@ func _process(delta: float) -> void:
 	for i in mini(ROWS_PER_FRAME,row_queue.size()):
 		var item = row_queue.pop_front()
 		song_list.add_child(item if item is Control else song_row(item))
-	if not scan_queue.is_empty(): import_next_scanned()
 	if delete_armed > 0:
 		delete_armed -= delta
 		if delete_armed <= 0:
@@ -799,5 +808,19 @@ func record_result() -> void:
 	var key = str(running.id)+"|"+str(running.variant)
 	var previous = best(str(running.id),str(running.variant))
 	if int(game.score) <= int(previous.get("score",-1)): return
-	game.prefs.set_value("ssrg_best",key,{"score":int(game.score),"rank":game.rank_name(),"combo":int(game.max_combo),"accuracy":snappedf(game.accuracy(),.01)})
+	game.prefs.set_value("ssrg_best_v2",key,{"score":int(game.score),"rank":game.rank_name(),"combo":int(game.max_combo),"accuracy":snappedf(game.accuracy(),.01)})
 	game.prefs.save("user://preferences.cfg")
+
+# Stacked cover cards with a play mark and a coral "+": the empty library's illustration.
+func draw_empty_art(art: Control) -> void:
+	var side = minf(art.size.x,art.size.y)*.78; var c = art.size*.5
+	for card in [[Vector2(-side*.18,side*.04),-.17,Color("2a2830")],[Vector2(side*.16,-side*.02),.14,Color("34323a")],[Vector2.ZERO,0.0,Color("f3ece1")]]:
+		art.draw_set_transform(c+card[0],card[1],Vector2.ONE)
+		var plate = StyleBoxFlat.new(); plate.bg_color = card[2]; plate.set_corner_radius_all(roundi(side*.14))
+		art.draw_style_box(plate,Rect2(-Vector2.ONE*side*.5,Vector2.ONE*side))
+	art.draw_set_transform(Vector2.ZERO)
+	var r = side*.2
+	art.draw_colored_polygon(PackedVector2Array([c+Vector2(-r*.6,-r*.8),c+Vector2(r*.9,0),c+Vector2(-r*.6,r*.8)]),Color("1a1720"))
+	var badge = c+Vector2(side*.52,-side*.46)
+	art.draw_circle(badge,side*.12,Color("ff7a59"))
+	preload("res://scripts/ui_icons.gd").draw(art,"add",badge,side*.16,Color.WHITE)

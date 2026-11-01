@@ -4,7 +4,7 @@ extends Control
 const Action = preload("res://scripts/settings_action.gd")
 const UiMotion = preload("res://scripts/ui_motion.gd")
 const BOLD = preload("res://assets/fonts/FiraSans-Bold.ttf")
-const CYAN = Color("50daec")
+const CYAN = Color("ff7a59")
 const MUTED = Color("a7aac6")
 
 var game: Control

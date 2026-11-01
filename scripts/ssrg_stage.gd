@@ -18,6 +18,7 @@ func _init() -> void :
 	entrance_shadow.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var shadow_material=ShaderMaterial.new()
 	shadow_material.shader=preload("res://scripts/ssrg_entrance_shadow.gdshader")
+	shadow_material.set_shader_parameter("rail_art",preload("res://assets/ssrg/imported/rail_original.png"))
 	shadow_material.render_priority=3
 	entrance_shadow.material_override=shadow_material;add_child(entrance_shadow)
 	for side in [-1,1]:
@@ -135,8 +136,9 @@ func warmup(world: Node3D) -> void :
 func configure(world: Node3D) -> void :
 	var stock_road = true
 	press.visible = stock_road
-	# Fixed source gold tier, independent of combo/rave/card UI or song palette.
-	press.material_override.set_shader_parameter("base_color",Color8(255,220,65,149))
+	# Source gold tier, unless the player picked a judgment band color.
+	var band = world.custom_color("band_color")
+	press.material_override.set_shader_parameter("base_color",Color(band,149/255.0) if band != null else Color8(255,220,65,149))
 	var rail_tint = world.custom_color("rail_color")
 	if rail_tint == null: rail_tint = Color.WHITE
 	for rail in rails:

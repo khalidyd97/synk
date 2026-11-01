@@ -7,7 +7,7 @@ const ENTER_TIME = .95
 const NAVY = Color(.006,.008,.025)
 const TIPS = [
 	"Hold notes: keep your finger down until the ring reaches the bar.",
-	"Slides: follow the trail with your finger — the lane under it counts.",
+	"Slides: move your finger through every connector to the final note.",
 	"Flicks: swipe in the arrow's direction as the note hits the bar.",
 	"Notes feel early or late? Tune the timing offset in Audio & sync.",
 	"Customize the rails, band and colors in Settings → Visual effects.",
@@ -37,6 +37,13 @@ var accent = Color("a36aff")
 var accent_2 = Color("38baff")
 var info_x = 0.0
 var info_width = 0.0
+# Every song: the cover glides into the play_cover panel instead of sliding away.
+var play_cover: Control
+var gliding = false
+# Pressing Play: the cover starts where it sat in the song list and grows into the loading card.
+const ARRIVE_TIME = .55
+var arrive_from = Rect2()
+var arriving = false
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -126,9 +133,28 @@ func begin(cover: Texture2D, tint: Color, song_title: String, details: String, s
 	var rim = StyleBoxFlat.new(); rim.bg_color = Color(0,0,0,0); rim.set_corner_radius_all(22)
 	rim.border_color = Color(accent.lerp(Color.WHITE,.45),.45); rim.set_border_width_all(2)
 	card_rim.add_theme_stylebox_override("panel",rim)
+	gliding = game != null and play_cover != null and not game.uses_recorder_colors()
+	if gliding: play_cover.style_from(cover,tint,frame,rim)
 	load_time = 0.0 if skip_loading else LOAD_TIME
 	elapsed = 0.0; visible = true
+	arriving = arrive_from.has_area() and not skip_loading
 	layout(); animate()
+	if not arriving: arrive_from = Rect2()
+
+# Called just before begin(): the on-screen rectangle the cover flies in from.
+func arrive(global_rect: Rect2) -> void:
+	var to_local = get_global_transform_with_canvas().affine_inverse()
+	arrive_from = Rect2(to_local * global_rect.position, to_local.basis_xform(global_rect.size))
+
+# The card's resting rectangle on the loading screen, or on its way there from the song list.
+func home_rect(appear: float) -> Rect2:
+	var side = card_side()
+	if not arriving: return Rect2(card_home()+Vector2(0,(1.0-appear)*25),Vector2(side,side))
+	var k = smoothstep(0.0,ARRIVE_TIME,elapsed)
+	var rect = Rect2(arrive_from.position.lerp(card_home(),k),arrive_from.size.lerp(Vector2(side,side),k))
+	rect.position.y -= sin(k*PI)*size.y*.03
+	if k >= 1.0: arriving = false; arrive_from = Rect2()
+	return rect
 
 func skip() -> void:
 	elapsed = load_time + ENTER_TIME; visible = false
@@ -141,24 +167,30 @@ func entrance() -> float:
 	var e = clampf((elapsed - load_time) / ENTER_TIME, 0.0, 1.0)
 	return e * e * (3.0 - 2.0 * e)
 
-func card_side() -> float: return minf(size.y * .54, size.x * .3)
-func card_home() -> Vector2: return Vector2(size.x * .1, (size.y - card_side()) * .42)
+func card_side() -> float: return minf(size.y*.55,size.x*.28)
+
+func card_home() -> Vector2: return Vector2(size.x*.64,(size.y-card_side())*.42)
 
 func layout() -> void:
-	var side = card_side()
-	card.size = Vector2(side, side); card.pivot_offset = card.size * .5
+	var side=card_side()
+	card.size=Vector2(side,side);card.pivot_offset=card.size*.5
 	card_art.material.set_shader_parameter("rect_size",card.size)
-	reflection.size = Vector2(side, side * .5)
-	info_x = card_home().x + side + size.x * .055
-	info_width = size.x * .9 - info_x
-	var top = card_home().y
-	for label in [eyebrow,title,status,percent]: label.position.x = info_x; label.size = Vector2(info_width, 40)
-	eyebrow.position.y = top + side * .06
-	title.size.y = 84; title.position.y = top + side * .15
-	status.size.x = info_width * .6; status.position.y = top + side * .76
-	percent.position.y = status.position.y
-	bar.size = Vector2(info_width, 18); bar.position = Vector2(info_x, top + side * .86)
-	tip.size = Vector2(size.x * .8, 36); tip.position = Vector2(size.x * .1, size.y * .87)
+	reflection.size=Vector2(side,side*.3)
+	info_x=size.x*.08;info_width=size.x*.49
+	var top=size.y*.20
+	for label in [eyebrow,title,status,percent]:label.position.x=info_x;label.size=Vector2(info_width,40)
+	eyebrow.position.y=top
+	title.position.y=top+size.y*.09;title.size.y=size.y*.23
+	title.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	title.add_theme_font_size_override("font_size",clampi(roundi(size.y*.085),28,66))
+	meta_label.visible=true;meta_label.position=Vector2(info_x,top+size.y*.34);meta_label.size=Vector2(info_width,40)
+	meta_label.add_theme_font_size_override("font_size",clampi(roundi(size.y*.029),14,21))
+	status.position=Vector2(info_x,size.y*.77);status.size=Vector2(size.x*.58,30)
+	percent.position=Vector2(size.x*.80,size.y*.77);percent.size=Vector2(size.x*.12,30)
+	bar.position=Vector2(info_x,size.y*.85);bar.size=Vector2(size.x*.84,4)
+	tip.position=Vector2(info_x,size.y*.90);tip.size=Vector2(size.x*.84,30)
+	tip.horizontal_alignment=HORIZONTAL_ALIGNMENT_LEFT
+	tip.add_theme_font_size_override("font_size",clampi(roundi(size.y*.025),12,18))
 
 func vanishing_point() -> Vector2:
 	# Far end of the highway, converted from the stage's screen space into this control.
@@ -179,103 +211,80 @@ func load_progress() -> float:
 func _process(delta: float) -> void:
 	if not visible: return
 	if game and game.mode == "play":
-		elapsed += delta
+		# The first loading frames can stall while the chart builds; the arrival still plays out.
+		elapsed += minf(delta,.034) if arriving else delta
 		# Hold on the loading card until every note is built.
 		if load_time > 0.0 and build_progress() < 1.0: elapsed = minf(elapsed, load_time * .95)
 	elif game and game.mode != "paused": visible = false; return
 	animate()
-	if elapsed >= load_time + ENTER_TIME: visible = false
+	if elapsed >= load_time + ENTER_TIME:
+		visible = false
+		if gliding: play_cover.take_over()
 
 func animate() -> void:
-	var appear = clampf(elapsed / .45, 0.0, 1.0) if load_time > 0.0 else 1.0
-	appear = 1.0 - pow(1.0 - appear, 3.0)
-	var e = entrance()
-	var float_y = sin(elapsed * 1.8) * 5.0 * (1.0 - e)
-	backdrop.color.a = 1.0 - smoothstep(.12, .8, e)
-	backdrop_art.modulate.a = .12 * appear * (1.0 - smoothstep(0.0, .6, e))
-	backdrop_art.pivot_offset = size * .5
-	backdrop_art.scale = Vector2.ONE * (1.04 + elapsed * .012)
-	# The cover rises in, floats while loading, then sweeps off to the left.
-	var home = card_home() + Vector2(-size.x * .45 * e * e, (1.0 - appear) * 40.0 + float_y)
-	card.position = home
-	card.rotation = (1.0 - appear) * -.06 - e * .08
-	card.scale = Vector2.ONE * lerpf(.92, 1.0, appear)
-	card.modulate = Color(.52, .52, .52, appear * (1.0 - smoothstep(0.2, .8, e)))
-	reflection.position = home + Vector2(0, card.size.y + 10)
-	reflection.modulate = Color(.30,.30,.30,card.modulate.a * .35 * (1.0 - absf(card.rotation) * 8.0))
-	# Details slide in from the right a beat after the cover, and leave to the right.
-	var info_appear = clampf((elapsed - .12) / .45, 0.0, 1.0) if load_time > 0.0 else 1.0
-	info_appear = 1.0 - pow(1.0 - info_appear, 3.0)
-	var info_alpha = info_appear * (1.0 - smoothstep(0.0, .45, e))
-	var shift = (1.0 - info_appear) * 60.0 + e * e * size.x * .25
-	for label in [eyebrow,title,status,percent]:
-		label.modulate.a = info_alpha; label.position.x = info_x + shift
-	bar.modulate = Color(.60,.60,.60,info_alpha); bar.position.x = info_x + shift
-	tip.modulate.a = appear * (1.0 - smoothstep(0.0, .3, e))
-	var dots = ".".repeat(1 + int(elapsed * 3.0) % 3)
-	eyebrow.text = "NOW LOADING" if load_progress() < 1.0 else "READY"
-	var world = game.field.world if game and game.field else null
-	if world and world.prebuilding: status.text = "BUILDING NOTES  ·  %d / %d" % [world.prebuild_total - world.prebuild_queue.size(), world.prebuild_total]
-	else: status.text = ("LOADING STAGE" + dots) if load_progress() < 1.0 else "GET READY"
-	percent.text = "%d%%" % roundi(load_progress() * 100.0)
-	bar.queue_redraw(); fx.queue_redraw()
+	var appear=smoothstep(0.0,.5,elapsed) if load_time>0 else 1.0
+	var e=entrance();var alpha=appear*(1.0-smoothstep(0.0,.8,e))
+	backdrop.color=Color(loading_shadow,1.0-smoothstep(.2,.95,e))
+	backdrop_art.modulate.a=.10*alpha
+	backdrop_art.pivot_offset=size*.5;backdrop_art.scale=Vector2.ONE*1.06
+	if gliding: glide_card(appear)
+	else:
+		var rest=home_rect(appear); card.size=rest.size; card.pivot_offset=card.size*.5
+		card_art.material.set_shader_parameter("rect_size",card.size)
+		card.position=rest.position+Vector2(e*e*size.x*.35,0)
+		card.rotation=-.025*(1.0-e)
+		card.scale=Vector2.ONE*lerpf(.96,1.0,appear)
+		card.modulate=Color(.9,.9,.9,alpha if not arriving else 1.0-smoothstep(0.0,.8,e))
+	reflection.visible=false
+	for label in [eyebrow,title,meta_label]:
+		label.modulate.a=alpha;label.position.x=info_x-(e*e*size.x*.2)+(1.0-appear)*15
+	for label in [status,percent,tip]:label.modulate.a=alpha
+	bar.modulate=Color(1,1,1,alpha)
+	eyebrow.text="SYNK  /  ON STAGE"
+	status.text="PREPARING YOUR STAGE" if load_progress()<1 else "READY TO PLAY"
+	percent.text="%02d%%" % roundi(load_progress()*100)
+	bar.queue_redraw();fx.queue_redraw()
+
+# The cover keeps full opacity and travels on an eased curve from the loading card to the
+# gameplay panel's rectangle, shrinking as it goes, so the hand-off has no visible jump.
+func glide_card(appear: float) -> void:
+	var raw=clampf((elapsed-load_time)/ENTER_TIME,0.0,1.0) if visible else 1.0
+	var t=raw*raw*raw*(raw*(raw*6.0-15.0)+10.0)
+	var flying=arriving
+	var start=home_rect(appear)
+	var target=play_cover.target_rect()
+	var to_local=get_global_transform_with_canvas().affine_inverse()*play_cover.get_global_transform_with_canvas()
+	var end=Rect2(to_local*target.position,to_local.basis_xform(target.size))
+	card.size=start.size.lerp(end.size,t);card.pivot_offset=card.size*.5
+	card.position=start.position.lerp(end.position,t)
+	# A gentle lift along the way instead of a straight line.
+	card.position.y-=sin(t*PI)*size.y*.04
+	card.rotation=-.025*(1.0-t)*(1.0-t)
+	card.scale=Vector2.ONE*lerpf(.96,1.0,appear)
+	var light=lerpf(.9,1.0,t)
+	card.modulate=Color(light,light,light,1.0 if flying else appear)
+	card_art.material.set_shader_parameter("rect_size",card.size)
 
 func draw_fx() -> void:
-	var alpha = .35 * (1.0 - smoothstep(0.0, .6, entrance()))
-	if alpha <= 0.0: return
-	var w = size.x; var h = size.y
-	# Color wash: the song's accent glows from the cover side and fades out across the screen.
-	fx.draw_polygon(PackedVector2Array([Vector2(0,0),Vector2(w,0),Vector2(w,h),Vector2(0,h)]),
-		PackedColorArray([Color(accent,.30*alpha),Color(loading_shadow,.55*alpha),Color(loading_shadow,.75*alpha),Color(accent_2,.22*alpha)]))
-	# Slow diagonal light streaks.
-	for i in 7:
-		var phase = fmod(elapsed * (.08 + i * .013) + i * .37, 1.0)
-		var x = lerpf(-w * .3, w * 1.2, phase)
-		var color = Color(accent if i % 2 == 0 else accent_2, .10 * alpha)
-		fx.draw_line(Vector2(x, -10), Vector2(x - h * .55, h + 10), color, 26.0 + i * 6.0, true)
-		fx.draw_line(Vector2(x, -10), Vector2(x - h * .55, h + 10), Color(Color.WHITE, .05 * alpha), 2.0, true)
-	# Equalizer along the bottom edge, gently pulsing at the song's tempo.
-	var bpm = float(game.chart_bpm()) if game != null else 128.0
-	var beat = exp(-fmod(elapsed * bpm / 60.0, 1.0) * 4.0)
-	var count = 64
-	var bar_w = w / count
-	for i in count:
-		var n = .5 + .5 * sin(i * 1.7 + elapsed * 3.1) * sin(i * .43 + elapsed * 1.3)
-		var height = h * (.02 + .07 * n * (.6 + .4 * beat))
-		var color = accent_2.lerp(accent, float(i) / count)
-		fx.draw_rect(Rect2(i * bar_w + 2, h - height, bar_w - 4, height), Color(color, .55 * alpha))
-		fx.draw_rect(Rect2(i * bar_w + 2, h - height, bar_w - 4, 3), Color(color.lightened(.5), .8 * alpha))
-	# Detail chips under the title: difficulty, section, tempo and play mode.
-	var font = ThemeDB.fallback_font
-	var info_alpha = eyebrow.modulate.a
-	var x = title.position.x; var y = title.position.y + title.size.y + 14
-	for chip in chips:
-		var text_w = font.get_string_size(chip, HORIZONTAL_ALIGNMENT_LEFT, -1, 17).x
-		var rect = Rect2(x, y, text_w + 32, 38)
-		var box = StyleBoxFlat.new(); box.set_corner_radius_all(19)
-		box.bg_color = Color(accent.darkened(.55), .75 * info_alpha); box.border_color = Color(accent.lerp(Color.WHITE,.35), .8 * info_alpha)
-		box.set_border_width_all(1)
-		fx.draw_style_box(box, rect)
-		fx.draw_string(font, Vector2(x + 16, y + 25), chip, HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color(1, 1, 1, info_alpha))
-		x += rect.size.x + 10
+	var alpha=1.0-smoothstep(0.0,.8,entrance())
+	if alpha<=0:return
+	var w=size.x;var h=size.y
+	# A quiet editorial stage card: oversized artwork, cropped orbital lines,
+	# and one luminous horizon instead of the former moving stripes/equalizer.
+	fx.draw_polygon(PackedVector2Array([Vector2(w*.57,0),Vector2(w,0),Vector2(w,h),Vector2(w*.48,h)]),PackedColorArray([Color(accent,.04*alpha),Color(accent,.16*alpha),Color(accent_2,.04*alpha),Color(accent_2,0)]))
+	var center=card_home()+Vector2.ONE*card_side()*.5
+	for i in 3:
+		var radius=card_side()*(.66+i*.09)
+		fx.draw_arc(center,radius,-PI*.95,PI*.65,96,Color(accent_2,(.16-i*.04)*alpha),1.0,true)
+	fx.draw_line(Vector2(w*.08,h*.12),Vector2(w*.92,h*.12),Color(1,1,1,.12*alpha),1,true)
+	fx.draw_string(ThemeDB.fallback_font,Vector2(w*.08,h*.10),"THE NEXT TRACK",HORIZONTAL_ALIGNMENT_LEFT,-1,maxi(12,roundi(h*.022)),Color(1,1,1,.55*alpha))
+	var travel=fposmod(elapsed*.2,1.0)
+	fx.draw_circle(Vector2(w*.08+w*.84*travel,h*.12),2.5,Color(accent_2,alpha))
 
 func draw_bar() -> void:
-	var width = bar.size.x; var height = bar.size.y
-	var fill = load_progress()
-	var segments = 28
-	var gap = 4.0
-	var seg_w = (width - gap * (segments - 1)) / segments
-	var lit = fill * segments
-	for i in segments:
-		var rect = Rect2(i * (seg_w + gap), 0, seg_w, height)
-		var amount = clampf(lit - i, 0.0, 1.0)
-		bar.draw_rect(rect, Color(1, 1, 1, .08))
-		if amount > 0.0:
-			var color = accent_2.lerp(accent, float(i) / segments)
-			bar.draw_rect(Rect2(rect.position - Vector2(0, 3), Vector2(seg_w, height + 6)), Color(color, .18 * amount))
-			bar.draw_rect(Rect2(rect.position, Vector2(seg_w * amount, height)), Color(color.lightened(.15), amount))
-	# A bright glint sweeps along the lit segments.
-	var filled = width * fill
-	if filled > 6.0:
-		var glint_x = fmod(elapsed * 520.0, filled + 80.0) - 40.0
-		bar.draw_rect(Rect2(clampf(glint_x, 0.0, filled - 6.0), 0, 6, height), Color(1, 1, 1, .75))
+	var width=bar.size.x;var height=bar.size.y;var fill=load_progress()
+	bar.draw_rect(Rect2(0,0,width,height),Color(1,1,1,.12))
+	if fill<=0:return
+	bar.draw_rect(Rect2(0,-4,width*fill,height+8),Color(accent_2,.10))
+	bar.draw_rect(Rect2(0,0,width*fill,height),accent_2.lerp(Color.WHITE,.4))
+	bar.draw_circle(Vector2(width*fill,height*.5),4,Color.WHITE)

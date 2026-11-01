@@ -1,5 +1,5 @@
 extends CanvasLayer
-const COLORS={"info":Color("59dcea"),"success":Color("52e6ad"),"warning":Color("ffc96b"),"error":Color("ff728f")}
+const COLORS={"info":Color("f3ece1"),"success":Color("f3ece1"),"warning":Color("ff7a59"),"error":Color("ff6b6b")}
 const HEADINGS={"info":"NOTICE","success":"DONE","warning":"CHECK","error":"ERROR"}
 const MAX_VISIBLE=3
 var game: Control
@@ -11,7 +11,7 @@ class Icon extends Control:
     var kind="info"
     func _draw():
         var c=size*.5
-        draw_circle(c,18,Color(tint,.12)); draw_arc(c,18,0,TAU,40,Color(tint,.6),1.5,true)
+        draw_circle(c,18,Color(tint,.14))
         if kind=="success":
             draw_polyline(PackedVector2Array([c+Vector2(-8,0),c+Vector2(-2,6),c+Vector2(9,-7)]),tint,3,true)
         elif kind=="error":
@@ -51,9 +51,10 @@ func notify(message: String,kind: String="auto",seconds: float=-1.0):
     if items.size()>=MAX_VISIBLE: dismiss(items.back(),false)
     var card=PanelContainer.new(); overlay.add_child(card); card.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var tint: Color=COLORS[kind]
-    var style=StyleBoxFlat.new(); style.bg_color=Color(0.047,0.047,0.047,.97)
-    style.border_color=Color(tint,.75); style.set_border_width_all(1); style.border_width_left=4
-    style.set_corner_radius_all(16); style.shadow_color=Color(0,0,0,.45); style.shadow_size=14
+    # A soft graphite bubble; the icon carries the message's colour.
+    var style=StyleBoxFlat.new(); style.bg_color=Color("2a2830")
+    style.border_color=Color(1,1,1,.07); style.set_border_width_all(1)
+    style.set_corner_radius_all(20); style.shadow_color=Color(0,0,0,.45); style.shadow_size=16; style.shadow_offset=Vector2(0,6)
     style.content_margin_left=16; style.content_margin_right=14; style.content_margin_top=14; style.content_margin_bottom=10
     card.add_theme_stylebox_override("panel",style)
     var column=VBoxContainer.new(); card.add_child(column); column.mouse_filter=Control.MOUSE_FILTER_IGNORE
@@ -64,17 +65,17 @@ func notify(message: String,kind: String="auto",seconds: float=-1.0):
     icon.custom_minimum_size=Vector2(40,40); icon.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var words=VBoxContainer.new(); row.add_child(words); words.size_flags_horizontal=Control.SIZE_EXPAND_FILL
     words.mouse_filter=Control.MOUSE_FILTER_IGNORE; words.add_theme_constant_override("separation",5)
-    var heading=Label.new(); words.add_child(heading); heading.text=HEADINGS[kind]
+    var heading=Label.new(); words.add_child(heading); heading.text=HEADINGS[kind]; heading.visible=false
     heading.add_theme_font_size_override("font_size",13); heading.add_theme_color_override("font_color",tint)
     heading.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var body=Label.new(); words.add_child(body); body.text=message; body.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
-    body.add_theme_font_size_override("font_size",20); body.add_theme_color_override("font_color",Color("f0f3ff"))
+    body.add_theme_font_size_override("font_size",20); body.add_theme_color_override("font_color",Color("f2efe9"))
     body.custom_minimum_size.y=25; body.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var close=preload("res://scripts/settings_action.gd").new(); row.add_child(close)
     close.text="×"; close.caption_size=26; close.custom_minimum_size=Vector2(44,44); close.tooltip_text="Dismiss notification"
     var timer_track=Control.new(); column.add_child(timer_track); timer_track.custom_minimum_size.y=3
     timer_track.mouse_filter=Control.MOUSE_FILTER_IGNORE
-    var progress=ColorRect.new(); timer_track.add_child(progress); progress.color=Color(tint,.65)
+    var progress=ColorRect.new(); timer_track.add_child(progress); progress.color=Color(tint,.35)
     progress.mouse_filter=Control.MOUSE_FILTER_IGNORE; progress.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     var item={"card":card,"message":message,"kind":kind,"duration":duration,"remaining":duration,"progress":progress,"hiding":false,"tween":null,"born":Engine.get_process_frames()}
     items.push_front(item); close.pressed.connect(dismiss.bind(item,true))

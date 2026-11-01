@@ -2,6 +2,7 @@ extends Button
 
 const UiMotion = preload("res://scripts/ui_motion.gd")
 const ART_SHADER = preload("res://scripts/neon_action.gdshader")
+const Soft = preload("res://scripts/soft_button.gd")
 
 # SYNK button design system. Each role has one look so a button's job reads at a glance:
 # primary   - filled violet-to-pink plate: the main next step on a screen (Play, Save).
@@ -22,6 +23,10 @@ const VARIANTS = {
 }
 
 var caption_text = ""
+# Leading/trailing symbols in the caption are drawn as icons (ui_icons.gd) beside the text.
+const Icons = preload("res://scripts/ui_icons.gd")
+var raw_caption = ""
+var caption_icons = ["",""]
 # Button text is drawn this much larger than its caption_size, shrinking only as needed to fit.
 # Chart Studio marks itself with the "keep_caption_size" meta and keeps its compact text.
 const CAPTION_SCALE = 1.4
@@ -77,15 +82,18 @@ func _ready() -> void:
 	caption.anchor_left = 0.30 if left_aligned else 0.08
 	caption.anchor_right = 0.92
 	caption.anchor_top = 0.05; caption.anchor_bottom = 0.95
-	caption.text = caption_text
+	caption.text = shown_caption(caption_text)
 	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT if left_aligned else HORIZONTAL_ALIGNMENT_CENTER
 	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	caption.add_theme_font_size_override("font_size",caption_size)
 	caption_color=style.get("text",Color("f8eeff"))
 	caption.add_theme_color_override("font_color",caption_color)
 	caption.add_theme_color_override("font_outline_color",style.get("outline",Color(accent_color,.67)))
-	caption.add_theme_constant_override("outline_size",4)
+	caption.add_theme_constant_override("outline_size",0)
+	caption.add_theme_font_override("font",Soft.BOLD)
 	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# The plate is drawn by soft_button.gd; the shader backdrop only keeps the animated state.
+	backdrop.visible = false
 	resized.connect(update_aspect)
 	update_aspect()
 	mouse_entered.connect(func(): animate_hover(1.0))
@@ -101,8 +109,35 @@ func _process(_delta: float) -> void:
 		disabled_tween=create_tween()
 		disabled_tween.tween_method(func(amount: float): art_material.set_shader_parameter("disabled_amount",amount),float(art_material.get_shader_parameter("disabled_amount")),1.0 if disabled else 0.0,.18)
 		previous_disabled=disabled
-	if not text.is_empty() and caption.text!=text: caption.text=text
+		refresh_caption_color()
+	if not text.is_empty() and raw_caption!=text: caption.text=shown_caption(text)
 	if caption.text+str(size)+str(caption_size)!=fitted_for: fit_caption()
+	queue_redraw()
+
+func soft_role() -> String: return Soft.role_for(variant)
+
+func state(key: String) -> float: return float(art_material.get_shader_parameter(key)) if art_material else 0.0
+
+func _draw() -> void:
+	Soft.draw_plate(self,size,soft_role(),state("hover_amount"),state("press_amount"),state("selected_amount"),disabled)
+	draw_caption_icons()
+
+# Icons replace the caption's padding spaces, so the label keeps its own centring and fitting.
+func shown_caption(value: String) -> String:
+	raw_caption=value
+	var parts=Icons.split(value); caption_icons=[parts[0],parts[2]]
+	return ("    " if parts[0]!="" else "")+parts[1]+("    " if parts[2]!="" else "")
+
+func draw_caption_icons() -> void:
+	if caption==null or (caption_icons[0]=="" and caption_icons[1]==""): return
+	var font=caption.get_theme_font("font"); var font_size=caption.get_theme_font_size("font_size")
+	var width=font.get_string_size(caption.text,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x
+	var left=caption.position.x+(caption.size.x-width)*.5 if caption.horizontal_alignment==HORIZONTAL_ALIGNMENT_CENTER else caption.position.x
+	var pad=font.get_string_size("    ",HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x
+	var mid=caption.position.y+caption.size.y*.5; var icon=minf(pad*.8,font_size*1.05)
+	var color=caption.get_theme_color("font_color")
+	if caption_icons[0]!="": Icons.draw(self,caption_icons[0],Vector2(left+pad*.4,mid),icon,color)
+	if caption_icons[1]!="": Icons.draw(self,caption_icons[1],Vector2(left+width-pad*.4,mid),icon,color)
 
 func keeps_caption_size() -> bool:
 	var node: Node = self
@@ -166,8 +201,7 @@ func set_selected(value: bool) -> void:
 func refresh_caption_color() -> void:
 	# Filled-when-selected chips need brighter text to stay readable on the fill.
 	if caption==null: return
-	var filled=selected and float(VARIANTS.get(variant,{}).get("selected_fill",0.0))>0
-	caption.add_theme_color_override("font_color",Color.WHITE if filled else caption_color)
+	caption.add_theme_color_override("font_color",Soft.text_color(soft_role(),1.0 if selected else 0.0,disabled))
 
 func animate_hover(value: float) -> void:
 	if hover_tween and hover_tween.is_running(): hover_tween.kill()
