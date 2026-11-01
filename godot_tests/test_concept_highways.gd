@@ -34,7 +34,11 @@ func run():
  for style in ["aurora","solar"]:
   game.change_highway_look("style",style);world.apply_camera();world.update_ssrg_warp();game.field.sync_projection_style()
   check(world.concept_theme.active and world.concept_theme.visible,"Dedicated geometry is active for "+style)
-  check(is_equal_approx(world.get_node("JudgmentPads").scale.y,.8),"New highways use a full judgment bar rather than a line")
+  var bar=world.get_node("JudgmentPads")
+  var top=world.ssrg_warped_z(bar.position.z-world.JUDGMENT_DEPTH*.5*bar.scale.y)
+  var bottom=world.ssrg_warped_z(bar.position.z+world.JUDGMENT_DEPTH*.5*bar.scale.y)
+  check(absf(top+49*world.SSRG_UNIT)<.001 and absf(bottom-81*world.SSRG_UNIT)<.001,"Bar matches the original SSRG lower-screen judgment area")
+  check(top<0 and bottom>0,"The unchanged hit plane lies inside the bar")
   var painted=world.concept_theme.road_sprite
   check(painted.mesh is QuadMesh,"Highway is a flat image sprite")
   check(world.concept_theme.get_child_count()==14,"Only one painted highway and thirteen flat markers are built")
@@ -84,7 +88,7 @@ func run():
  game.set_mode("record");world.refresh_highway_look()
  check(not world.concept_theme.visible and int(world.cover_material.get_shader_parameter("concept_style"))==0,"Recording never inherits the decorative stage")
  check(world.gold_nodes.all(func(n):return n.visible),"Recorder retains its readable rails")
- check(is_equal_approx(world.get_node("JudgmentPads").scale.y,1.0),"Leaving a theme restores the standard judgment sprite size")
+ check(is_equal_approx(world.get_node("JudgmentPads").scale.y,1.0) and is_zero_approx(world.get_node("JudgmentPads").position.z),"Leaving a theme restores the standard judgment sprite size and position")
  game.set_mode("play");game.ssrg_playable_run=true;game.ssrg_playable_previous_style="solar";game.highway_style="ssrg";world.refresh_highway_look()
  check(not world.concept_theme.visible and world.ssrg_theme.active,"Imported SSRG runs retain their source stage")
  game.set_mode("menu")

@@ -6,7 +6,9 @@ uniform sampler2D artwork:source_color,filter_linear,repeat_disable;
 // Flat source-art bar: taper each edge with the same SSRG canvas as the road.
 void vertex(){VERTEX=ssrg_warp_canvas(VERTEX,MODEL_MATRIX);}
 void fragment(){
- vec4 art=texture(artwork,UV);
+ // The original art has inset corners; sample its full-opacity middle so the
+ // already-tapered sprite meets the inner rails continuously.
+ vec4 art=texture(artwork,vec2(mix(.14,.86,UV.x),UV.y));
  ALBEDO=art.rgb*base_color.rgb;
  ALPHA=art.a*base_color.a;
 }

@@ -53,7 +53,15 @@ func refresh() -> void:
 	# Reuse the source's painted judgment artwork as a full bar, beneath notes and tails.
 	world.judgment_material.shader=preload("res://scripts/concept_judgment.gdshader")
 	world.judgment_material.set_shader_parameter("artwork",preload("res://assets/ssrg/imported/judgment_Main_black_BG3.png"))
-	world.get_node("JudgmentPads").scale.y=.8
+	# Source judgment area: UI y=-185..-315, with the hit plane at y=-234.
+	# Invert the shared curve to keep the bar fitted to the rails at both edges.
+	var top_canvas=-49.0*world.SSRG_UNIT
+	var bottom_canvas=81.0*world.SSRG_UNIT
+	var top_raw=world.TRACK_LENGTH*(pow(1.0+top_canvas/world.SSRG_STAGE_DISTANCE,1.0/world.SSRG_APPROACH_POWER)-1.0)
+	var bottom_raw=world.TRACK_LENGTH*(pow(1.0+bottom_canvas/world.SSRG_STAGE_DISTANCE,1.0/world.SSRG_APPROACH_POWER)-1.0)
+	var bar=world.get_node("JudgmentPads")
+	bar.scale.y=(bottom_raw-top_raw)/world.JUDGMENT_DEPTH
+	bar.position.z=(top_raw+bottom_raw)*.5
 	var band:Color=Color("ffd3a0") if solar else Color("a2efff")
 	custom=world.custom_color("band_color")
 	if custom!=null:band=custom

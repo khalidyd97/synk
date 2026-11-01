@@ -471,6 +471,7 @@ func refresh_highway_look() -> void:
 	if game.uses_recorder_colors(): darkness=1.0
 	for node in gold_nodes: node.visible = gold
 	for node in neon_nodes: node.visible = not gold and not prism and not concept
+	get_node("JudgmentPads").position.z=0.0
 	get_node("JudgmentPads").scale=Vector3.ONE
 	get_node("JudgmentPads").visible=not prism
 	if ssrg_theme: ssrg_theme.refresh()
