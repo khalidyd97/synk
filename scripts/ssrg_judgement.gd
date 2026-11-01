@@ -5,6 +5,8 @@ extends Control
 const GRADE_COLORS = {"PERFECT": Color("ff7ad9"), "GREAT": Color("63d8ff"), "GOOD": Color("8cf28a"), "MISS": Color("9a9aaa")}
 const POP_TIME = .14
 const SOURCE_CURVES = preload("res://scripts/ssrg_runtime_curves.gd")
+const SOURCE_HUD = preload("res://scripts/ssrg_hud_source_data.gd")
+var combo_back:Control
 var game: Control
 var word: Label
 var count: Label
@@ -13,7 +15,7 @@ var pop = 0.0
 var since_hit = 99.0
 var displayed_grade = ""
 var seen_combo = -1
-var perfect_art: Texture2D = preload("res://assets/ssrg/imported/Text_perpect_super.png")
+var perfect_art: Texture2D = preload("res://assets/ssrg/imported/hud/Text_perpect_super.png")
 var ordinary_art: Texture2D = preload("res://assets/ssrg/imported/Text_perpect.png")
 var good_art: Texture2D = preload("res://assets/ssrg/imported/Text_good.png")
 var miss_art: Texture2D = preload("res://assets/ssrg/imported/Text_miss.png")
@@ -25,40 +27,54 @@ func _draw() -> void:
 	var source_scale=SOURCE_CURVES.judgement_scale(since_hit,word.text=="MISS")
 	var source_offset=SOURCE_CURVES.judgement_offset(since_hit,word.text=="MISS")*unit
 	var art: Texture2D=grade_art(displayed_grade)
-	if art:
+	if art and displayed_grade=="PERFECT":
+		var rect=super_word_rect()
+		# Keep the complete word readable; never overlay the differently shaped
+		# effects-atlas PERFECT or darken it with the reconstructed colour loop.
+		var shadow=rect;shadow.position.y+=maxf(1.0,rect.size.y/27.0)
+		draw_texture_rect(art,shadow,false,Color(0,0,0,word.modulate.a*.65))
+		draw_texture_rect(art,rect,false,Color(1,1,1,word.modulate.a))
+	elif art:
 		var source_dimensions=Vector2(192,70) if displayed_grade=="MISS" else Vector2(art.get_width(),54)
-		var prefix_font=word.get_theme_font("font")
-		var prefix_width=prefix_font.get_string_size("S.",HORIZONTAL_ALIGNMENT_LEFT,-1,58).x+4.0 if displayed_grade=="PERFECT" else 0.0
-		source_dimensions.x+=prefix_width
 		var dimensions = source_dimensions*(44.0/54.0)*unit*source_scale
 		# Keep the user's accepted central layout; use source relative miss placement.
 		var center=Vector2(size.x*.5,size.y*.40)
 		if displayed_grade=="MISS": center.y+=65.0*(44.0/54.0)*unit
 		var top_left=center+source_offset-dimensions*.5
-		var prefix_size=prefix_width*(44.0/54.0)*unit*source_scale.x
-		if prefix_width>0:
-			# The packaged silver sprite only spells PERFECT. Supply its missing
-			# S. prefix explicitly so the top grade reads like the reference footage.
-			draw_set_transform(top_left,0,source_scale*unit*(44.0/54.0))
-			draw_string_outline(prefix_font,Vector2(0,44),"S.",HORIZONTAL_ALIGNMENT_LEFT,-1,58,2,Color(0,0,0,word.modulate.a*.7))
-			draw_string(prefix_font,Vector2(0,44),"S.",HORIZONTAL_ALIGNMENT_LEFT,-1,58,Color(1,1,1,word.modulate.a))
-			draw_set_transform(Vector2.ZERO)
-		draw_texture_rect(art, Rect2(top_left+Vector2(prefix_size,0), dimensions-Vector2(prefix_size,0)), false, Color(1,1,1,word.modulate.a))
+		draw_texture_rect(art, Rect2(top_left, dimensions), false, Color(1,1,1,word.modulate.a))
 	if not SOURCE_CURVES.combo_visible(since_hit,game.combo): return
-	var digits = str(game.combo)
-	var combo_scale=SOURCE_CURVES.judgement_scale(since_hit)
-	var height = 76.0 * unit
-	var total = 0.0
-	for character in digits:
-		var texture = digit_art[int(character)]
-		total += height * texture.get_width() / float(texture.get_height())*combo_scale.x
-	var x = (size.x - total) * .5
-	for character in digits:
-		var texture = digit_art[int(character)]
-		var width = height * texture.get_width() / float(texture.get_height())*combo_scale.x
-		var draw_height=height*combo_scale.y
-		draw_texture_rect(texture, Rect2(x, size.y * .48+(height-draw_height)*.5, width, draw_height), false)
-		x += width
+	draw_source_combo(self,false)
+
+func super_word_rect() -> Rect2:
+	var unit=game.size.y/game.field.world.ssrg_canvas_height()
+	var sampled:Vector3=SOURCE_CURVES.sample("JudgementGood05","scale","trans","",since_hit,Vector3.ONE)
+	var scale_now=Vector2(sampled.x,sampled.y)
+	var dimensions=Vector2(272,54)*unit*scale_now
+	return Rect2(Vector2(size.x*.5,size.y*.5-60*unit)-dimensions*.5,dimensions)
+
+func combo_rects() -> Array[Rect2]:
+	var result:Array[Rect2]=[]
+	var digits=str(game.combo)
+	var unit=game.size.y/game.field.world.ssrg_canvas_height()
+	var sampled:Vector3=SOURCE_CURVES.sample("JudgementGood05" if displayed_grade=="PERFECT" else "JudgementGood","scale","trans","",since_hit,Vector3.ONE)
+	var scale_now=Vector2(sampled.x,sampled.y)*unit
+	var step=172.0/3.0 if displayed_grade=="GOOD" else 176.0/3.0
+	var center=Vector2(size.x*.5,size.y*.5+SOURCE_HUD.COMBO_Y*unit)
+	for i in digits.length():
+		var dimensions=Vector2(60 if displayed_grade=="GOOD" and i==digits.length()-1 else 56,90)*scale_now
+		var offset=Vector2((i-(digits.length()-1)*.5)*step,0)*scale_now
+		result.append(Rect2(center+offset-dimensions*.5,dimensions))
+	return result
+
+func draw_source_combo(target:CanvasItem,back:bool) -> void:
+	if not visible or not SOURCE_CURVES.combo_visible(since_hit,game.combo):return
+	if back and displayed_grade!="PERFECT":return
+	var fonts=SOURCE_HUD.SUPER_BACK if back else (SOURCE_HUD.SUPER if displayed_grade=="PERFECT" else (SOURCE_HUD.GOOD if displayed_grade=="GOOD" else SOURCE_HUD.PERFECT))
+	var tint=SOURCE_HUD.SUPER_BACK_TINT if back else (SOURCE_HUD.SUPER_TINT if displayed_grade=="PERFECT" else Color.WHITE)
+	if displayed_grade!="PERFECT":tint.a*=SOURCE_CURVES.word_alpha(since_hit)
+	var value=str(game.combo)
+	var rects=combo_rects()
+	for i in value.length():target.draw_texture_rect(fonts[int(value[i])],rects[i],false,tint)
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -66,7 +82,11 @@ func _ready() -> void:
 	word = make_label(.36, .44, 44)
 	count = make_label(.44, .6, 72)
 	visible = false
-	for index in range(10): digit_art.append(load("res://assets/ssrg/imported/s%d.png" % index))
+	for texture in SOURCE_HUD.SUPER:digit_art.append(texture)
+	combo_back=Control.new();add_child(combo_back);combo_back.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	combo_back.show_behind_parent=true
+	var additive=CanvasItemMaterial.new();additive.blend_mode=CanvasItemMaterial.BLEND_MODE_ADD;combo_back.material=additive
+	combo_back.draw.connect(func():draw_source_combo(combo_back,true))
 
 func grade_art(grade: String) -> Texture2D:
 	match grade:
@@ -120,5 +140,6 @@ func _process(delta: float) -> void:
 	word.offset_top=source_offset.y; word.offset_bottom=source_offset.y
 	count.scale = SOURCE_CURVES.judgement_scale(since_hit)
 	# Native EndRender auto-hides the word and its combo after the source clip.
-	word.modulate.a = SOURCE_CURVES.word_alpha(since_hit,displayed_grade=="MISS")
+	word.modulate.a = (1.0 if since_hit<SOURCE_CURVES.SUCCESS_LIFETIME_SECONDS else 0.0) if displayed_grade=="PERFECT" else SOURCE_CURVES.word_alpha(since_hit,displayed_grade=="MISS")
+	combo_back.queue_redraw()
 	queue_redraw()

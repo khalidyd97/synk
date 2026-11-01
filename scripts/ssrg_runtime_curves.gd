@@ -54,3 +54,9 @@ static func judgement_offset(age: float,miss: bool = false) -> Vector2:
 	if not miss: return Vector2.ZERO
 	var result: Vector3=sample("JudgementBreak","position","trans","",age,Vector3.ZERO)
 	return Vector2(result.x,-result.y) # Unity up becomes Canvas down.
+
+static func super_color(age:float) -> Color:
+	# level10 Animation2429 on trans581, bound to UISpriteColor2547:
+	# JudgementSuperPerfect is a looping legacy clip (WrapMode 2).
+	var time=fposmod(maxf(0,age),.1666666716337204)
+	return Color(float(sample("JudgementSuperPerfect","float","","Color.r",time)),float(sample("JudgementSuperPerfect","float","","Color.g",time)),float(sample("JudgementSuperPerfect","float","","Color.b",time)),1.0)

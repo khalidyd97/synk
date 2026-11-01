@@ -14,6 +14,14 @@ func run() -> void:
 	for dimensions in [Vector2i(1440,640),Vector2i(2400,1080),Vector2i(1024,768)]:
 		root.size=dimensions;await process_frame;await process_frame
 		check(score.size.x>0 and score.size.y>0,"Source HUD has a valid canvas at %s" % dimensions)
+		var layout=score.hud_layout()
+		var gauge=score.get_global_transform_with_canvas()*(layout.origin+Vector2(85,42)*layout.unit)
+		var expected=game.get_global_transform_with_canvas()*Vector2(game.size.x*.1125,42*layout.unit)
+		check(gauge.distance_to(expected)<1,"Gauge follows the reference position in the full stage")
+		var pause_rect=game.ssrg_screens.pause_icon_rect()
+		var pause_right=game.ssrg_screens.get_global_transform_with_canvas()*pause_rect.end
+		check(pause_right.x<gauge.x+1,"Pause hit target sits to the left of the gauge")
+		check(pause_rect.size.is_equal_approx(Vector2(80,85)*layout.unit),"Pause icon retains its source aspect and target size")
 	game.paused_mode="play";game.set_mode("paused");score._process(0)
 	check(score.visible,"Pause retains source score HUD")
 	game.set_mode("menu");score._process(0)

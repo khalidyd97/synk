@@ -17,6 +17,7 @@ var result_info:Dictionary={}
 var details_open=false
 var age=0.0
 var old_mode=""
+var score_hud:Control
 func _ready() -> void:
 	name="SSRGPresentationScreens";set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);mouse_filter=Control.MOUSE_FILTER_IGNORE
 	pause_icon=TextureButton.new();add_child(pause_icon)
@@ -69,14 +70,20 @@ func make_button(parent:Control,value:String,x:float,y:float,w:float,h:float,act
 	button.pressed.connect(action);return button
 func change_speed(step:float) -> void:
 	game.ssrg_playables.change_speed(step)
+func pause_icon_rect() -> Rect2:
+	if not is_instance_valid(score_hud):score_hud=game.ui.find_child("SSRGScoreHud",true,false)
+	var layout=score_hud.hud_layout()
+	var origin=get_global_transform_with_canvas().affine_inverse()*(score_hud.get_global_transform_with_canvas()*layout.origin)
+	# Source pause183: centered80x85 sprite at(44,-63), sharing the score anchor.
+	return Rect2(origin+Vector2(4,20.5)*layout.unit,Vector2(80,85)*layout.unit)
 func _process(delta:float) -> void:
 	if game.mode!="results":result_info.clear();details_open=false
 	var source=game.uses_ssrg_gameplay()
 	var pausing=source and game.mode=="paused"
 	pause_icon.visible=source and game.mode=="play" and not game.finishing and not game.stage_intro.running()
 	var safe=game.safe_rect_for(self)
-	var side=clampf(safe.size.y*.105,42,80)
-	pause_icon.position=safe.position+Vector2(10,10);pause_icon.size=Vector2.ONE*side
+	var icon_rect=pause_icon_rect()
+	pause_icon.position=icon_rect.position;pause_icon.size=icon_rect.size
 	# Pausing uses the shared SYNK pause card (with its speed control) for every song.
 	pause_root.visible=false
 	if source:
@@ -103,6 +110,12 @@ func show_results(info:Dictionary) -> void:
 	result_counts.text="S-PERFECT %d     PERFECT %d     GOOD %d     MISS %d" % [int(counts.get("PERFECT",0)),int(counts.get("GREAT",0)),int(counts.get("GOOD",0)),int(counts.get("MISS",0))]
 	result_cover.texture=info.get("cover",null)
 	result_root.show()
+	# Stagger content only. The screen shade and shared top-layer pause remain opaque.
+	var index=0
+	for child in result_root.get_children():
+		if child is Control and not child is ColorRect:
+			game.ssrg_playables.soft_reveal(child,minf(index*.025,.15))
+			index+=1
 func restore_run() -> void:
 	game.ssrg_playable_run=true;game.ssrg_lane_count=int(result_info.get("ssrg_lane_count",13))
 	game.ssrg_playable_previous_style=str(result_info.get("ssrg_style","gold"));game.highway_style="ssrg"

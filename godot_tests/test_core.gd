@@ -106,16 +106,20 @@ func _initialize() -> void:
 	if not imported.is_empty():
 		check(FileAccess.file_exists(folder.path_join("songs/"+imported.song.file)),"Imported audio kept")
 		var restored=SynkLibrary.new(folder); check(restored.songs.size()==1,"Song library survives restart")
-		check(not library.import_song(path).is_empty() and library.songs.size()==1,"Audio imports deduplicate")
+		library.save_chart(str(imported.song.id),chart.notes)
+		var repeated=library.import_song(path)
+		check(not repeated.is_empty() and library.songs.size()==2,"Same audio can be imported repeatedly")
+		check(repeated.song.id!=imported.song.id and repeated.song.file!=imported.song.file,"Repeated imports have independent identities and audio files")
+		check(library.load_chart(str(repeated.song.id)).is_empty() and library.load_chart(str(imported.song.id)).size()==1,"Repeated import starts fresh and preserves the original chart")
 		var unnamed=folder.path_join("selected_document")
 		check(DirAccess.copy_absolute(path,unnamed)==OK,"Extensionless picker file created")
-		check(not library.import_song(unnamed).is_empty() and library.songs.size()==1,"Audio import recognizes content without a filename extension")
+		check(not library.import_song(unnamed).is_empty() and library.songs.size()==3,"Audio import recognizes content without a filename extension")
 		DirAccess.remove_absolute(unnamed)
 		var song_id=str(imported.song.id)
 		library.save_chart(song_id,chart.notes); library.delete_chart(song_id)
 		check(not library.has_chart(song_id),"Deleting a chart removes its file")
 		library.save_chart(song_id,chart.notes)
-		check(library.delete_song(song_id)==OK and library.songs.is_empty() and not library.has_chart(song_id) and not FileAccess.file_exists(folder.path_join("songs/"+imported.song.file)) and SynkLibrary.new(folder).songs.is_empty(),"Deleting a song removes its audio, chart and library entry")
+		check(library.delete_song(song_id)==OK and library.songs.size()==2 and not library.has_chart(song_id) and not FileAccess.file_exists(folder.path_join("songs/"+imported.song.file)) and SynkLibrary.new(folder).songs.size()==2 and FileAccess.file_exists(folder.path_join("songs/"+repeated.song.file)),"Deleting one import preserves the other copies and survives restart")
 	# Test files are isolated from the player's songs and charts.
 	for sub in ["songs","charts"]:
 		for file in DirAccess.get_files_at(folder.path_join(sub)): DirAccess.remove_absolute(folder.path_join(sub).path_join(file))

@@ -175,6 +175,11 @@ func travel_speed() -> float: return TRACK_LENGTH / game.note_travel_seconds()
 const SSRG_APPROACH_POWER = 6.0
 const SSRG_STAGE_DISTANCE = 514.0*SSRG_UNIT
 const SSRG_UI_HEIGHT = 640.0
+# Paired 3.6-speed recordings: source note footprints are about 80% of
+# SYNK's previous maximum. This is an artwork fit, not a timing change.
+const SSRG_REFERENCE_NOTE_SCALE = .8
+func ssrg_art_scale() -> float:
+	return game.note_size*(SSRG_REFERENCE_NOTE_SCALE if game.ssrg_playable_run else 1.0)
 func ssrg_canvas_height() -> float:
 	var view=get_viewport().get_visible_rect().size
 	var aspect=maxf(.1,view.x/maxf(1.0,view.y))
@@ -1069,11 +1074,11 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 		m.set_shader_parameter("artwork",art); m.set_shader_parameter("approach_glow",false)
 		m.set_meta("ssrg_palette",palette);m.set_meta("ssrg_tail",tail)
 		m.set_shader_parameter("core_tint",Color("4fc8ff") if palette==0 else Color("ffc23a")); return m)
-	var mesh_key = "ssrg|%s|%s|%s" % [size, tail, palette]
+	var mesh_key = "ssrg|%s|%s|%s|%s" % [size, tail, palette,ssrg_art_scale()]
 	if not reference_note_meshes.has(mesh_key):
 		# Packaged IngameRenderer maximum sizes, before the shared p^6 scale.
 		var quad = QuadMesh.new()
-		quad.size = (Vector2(132,72) if tail else Vector2(212,116))*SSRG_UNIT*game.note_size
+		quad.size = (Vector2(132,72) if tail else Vector2(212,116))*SSRG_UNIT*ssrg_art_scale()
 		reference_note_meshes[mesh_key]=quad
 	var head = mesh_node(reference_note_meshes[mesh_key],parent,mat)
 	head.position = Vector3(position_value.x,.13,position_value.z)
@@ -1172,7 +1177,7 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 	var half_width = TRAIL_HALF*.65*game.hold_trail_width
 	# SSRG footage: holds and slides are a thin bar, about 23 px times p wide where the
 	# note is 148 px times p (0.12 of the 212-unit sprite); drawn a little thicker, at 0.16.
-	if game.uses_ssrg_gameplay() and not recording: half_width = 116.0*.4*.5*SSRG_UNIT*game.note_size
+	if game.uses_ssrg_gameplay() and not recording: half_width = 116.0*.4*.5*SSRG_UNIT*ssrg_art_scale()
 	var count = clampi(ceili(duration*96),32,1024)
 	var st = SurfaceTool.new(); st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	st.set_custom_format(0,SurfaceTool.CUSTOM_RGBA_FLOAT)
@@ -1222,7 +1227,7 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 			var m=ShaderMaterial.new(); m.shader=preload("res://scripts/solid_trail.gdshader")
 			if uses_projected_highway() and not recording: m.render_priority=-4
 			m.set_shader_parameter("source_art",game.uses_ssrg_gameplay())
-			m.set_shader_parameter("ssrg_line_x_scale",game.note_size*1.3 if game.uses_ssrg_gameplay() else 1.0)
+			m.set_shader_parameter("ssrg_line_x_scale",ssrg_art_scale()*1.3 if game.uses_ssrg_gameplay() else 1.0)
 			m.set_shader_parameter("tint",trail_color(palette)); m.set_shader_parameter("ssrg_half_width",half_width); return m)
 	else:
 		var still = note.kind=="hold"

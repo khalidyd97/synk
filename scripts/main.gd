@@ -221,6 +221,7 @@ var chart_library: Control
 var menu_settings_open = false
 var modal: Panel
 var pause_backdrop: ColorRect
+var pause_layer: CanvasLayer
 var pause_tween: Tween
 var modal_title: Label
 var modal_body: Label
@@ -302,8 +303,8 @@ const GAME_FONT = preload("res://assets/fonts/FiraSans-Regular.ttf")
 func _enter_tree() -> void:
 	ThemeDB.fallback_font=GAME_FONT
 
-# Frame pacing: by default the game runs at exactly the display's refresh rate (60/90/120 Hz),
-# so every frame lines up with the screen. A fixed limit can be chosen in Settings instead.
+# Auto pacing lets VSync follow display refresh without a second software timer.
+# A fixed software limit can still be chosen in Settings.
 func display_refresh_rate() -> int:
 	var rate=DisplayServer.screen_get_refresh_rate()
 	return clampi(roundi(rate),30,144) if rate>0 else 60
@@ -311,7 +312,7 @@ func frame_rate_setting() -> int:
 	return int(prefs.get_value("gameplay","frame_rate",0))  # 0 = match display
 func apply_frame_rate() -> void:
 	var chosen=frame_rate_setting()
-	Engine.max_fps=display_refresh_rate() if chosen<=0 else chosen
+	Engine.max_fps=0 if chosen<=0 else chosen
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
 # Hit effect style (Settings > Visual effects > Hit effects): "classic" bursts or "bloom".
 const HIT_STYLES = ["classic","bloom","ssrg"]
@@ -652,20 +653,15 @@ func build_ui() -> void:
 	var play_cover=preload("res://scripts/play_cover.gd").new(); play_cover.game=self
 	safe_parent("SafePlayCover").add_child(play_cover); stage_intro.play_cover=play_cover
 	results_screen=ResultsScreen.new(); results_screen.game=self; ui.add_child(results_screen)
-	# Pause: the stage behind is blurred and dimmed, with a frosted card on top (same glass as
-	# the lobby cards) holding three icon tiles.
-	pause_backdrop=ColorRect.new(); rect(pause_backdrop,ui,0,0,1,1); pause_backdrop.color=Color.WHITE
+	# Pause uses a solid full-screen background and an opaque card.
+	pause_layer=CanvasLayer.new();pause_layer.name="PauseOverlay";pause_layer.layer=1000;add_child(pause_layer)
+	var pause_root=Control.new();pause_root.name="PauseRoot";pause_layer.add_child(pause_root)
+	pause_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);pause_root.theme=ui.theme
+	pause_backdrop=ColorRect.new(); rect(pause_backdrop,pause_root,0,0,1,1); pause_backdrop.color=Color("101010")
 	pause_backdrop.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	var blur=ShaderMaterial.new(); blur.shader=preload("res://scripts/frosted_glass.gdshader"); pause_backdrop.material=blur
-	blur.set_shader_parameter("radius",0.0); blur.set_shader_parameter("blur",3.0); blur.set_shader_parameter("tint",Color(0.009,0.009,0.009,.55))
-	pause_backdrop.resized.connect(func(): blur.set_shader_parameter("rect_size",pause_backdrop.size))
-	modal=Panel.new(); rect(modal,safe_parent("SafeModal"),.19,.11,.81,.89)
-	modal.add_theme_stylebox_override("panel",StyleBoxEmpty.new())
-	var glass=ColorRect.new(); glass.name="FrostedGlass"; modal.add_child(glass); glass.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	glass.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	var glass_material=ShaderMaterial.new(); glass_material.shader=preload("res://scripts/frosted_glass.gdshader"); glass.material=glass_material
-	glass_material.set_shader_parameter("blur",4.0); glass_material.set_shader_parameter("tint",Color(0.041,0.041,0.041,.62))
-	glass.resized.connect(func(): glass_material.set_shader_parameter("rect_size",glass.size); glass_material.set_shader_parameter("radius",28.0))
+	modal=Panel.new(); rect(modal,safe_parent("SafeModal",pause_root),.19,.11,.81,.89)
+	var pause_panel=StyleBoxFlat.new();pause_panel.bg_color=Color("1b1b1b");pause_panel.set_corner_radius_all(28)
+	modal.add_theme_stylebox_override("panel",pause_panel)
 	modal_title=label(modal,"S Y N K",.04,.025,.96,.17,48); modal_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	modal_title.add_theme_font_override("font",preload("res://assets/fonts/FiraSans-Bold.ttf"))
 	modal_body=label(modal,"",.06,.17,.94,.43,22); modal_body.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; modal_body.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
@@ -802,6 +798,7 @@ func set_mode(value: String,animate_transition:bool=true) -> void:
 	chart_library.visible=mode=="library"
 	if song_details: song_details.visible=false
 	pause_backdrop.visible=mode=="paused"
+	pause_layer.visible=mode=="paused"
 	actions.visible=false; record_tools.visible=mode=="record"
 	hud.visible=mode in ["play","paused"]; score_panel.visible=hud.visible and not uses_ssrg_gameplay(); hud_shadow.visible=score_panel.visible; hit_label.visible=mode in ["play","record"]; pause_button.visible=mode in ["play","record","paused"]
 	hit_art.visible=false
@@ -1547,11 +1544,10 @@ func toggle_pause(animate_transition:bool=true) -> void:
 		if paused_mode=="record": primary.text="RESUME REC"; pause_restart.text="RETRY TAKE"; pause_home.text="REVIEW TAKE"
 		if pause_tween and pause_tween.is_running(): pause_tween.kill()
 		modal.pivot_offset=modal.size*.5; modal.scale=Vector2(.86,.86); modal.modulate.a=0
-		pause_backdrop.modulate.a=0
+		pause_backdrop.modulate.a=1
 		pause_tween=create_tween().set_parallel(true)
 		pause_tween.tween_property(modal,"scale",Vector2.ONE,.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		pause_tween.tween_property(modal,"modulate:a",1.0,.18)
-		pause_tween.tween_property(pause_backdrop,"modulate:a",1.0,.22)
 	elif mode=="paused":
 		refresh_output_latency()
 		if pause_tween and pause_tween.is_running(): pause_tween.kill()
@@ -2478,7 +2474,9 @@ func judge(entry: Dictionary,error: float,complete: bool = true,source_grade: St
 	judgment_counts[judgement]+=1
 	if ssrg_playable_run and error>=0 and not complete:
 		entry.sustain_grade=judgement;entry.sustain_rate=SsrgRules.rate(error);entry.ssrg_contact=true;entry.ssrg_tick_at=song_time
-	if error>=0: add_points(judgement)
+	if error>=0:
+		add_points(judgement)
+		if stage_intro and stage_intro.play_cover:stage_intro.play_cover.on_note_hit(judgement)
 	if ssrg_playable_run and ssrg_presentation:ssrg_presentation.judged(judgement,entry.note)
 	if extras: extras.on_judged(entry,judgement,combo)
 

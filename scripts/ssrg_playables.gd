@@ -66,6 +66,7 @@ var row_queue: Array = []
 const ROWS_PER_FRAME = 12
 var song_list: HBoxContainer
 var carousel: ScrollContainer
+var backdrop_layers:Array[TextureRect]=[]
 var backdrop: TextureRect
 var empty_label: Label
 # Shown when no SSRG songs are imported yet: an illustration and the two ways to add songs.
@@ -126,6 +127,7 @@ func _ready() -> void:
 	backdrop = TextureRect.new(); place(backdrop,self,0,0,1,1); backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	backdrop.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; backdrop.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	backdrop.modulate = Color(1,1,1,.32)
+	backdrop_layers.append(backdrop)
 	var shade = TextureRect.new(); place(shade,self,0,0,1,1); shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var gradient = Gradient.new(); gradient.colors = PackedColorArray([Color(0.03,0.03,0.04,.55),Color(0.03,0.03,0.04,.25),Color(0.03,0.03,0.04,.92)])
 	gradient.offsets = PackedFloat32Array([0,.45,1])
@@ -214,6 +216,9 @@ func open() -> void:
 	visible = true
 	logout_button.visible = game.app_login != null and game.app_login.required()
 	refresh_songs()
+	for child in safe_content.get_children():
+		if child is Control and child.visible and child!=detail and child!=import_panel:
+			soft_reveal(child,minf(child.get_index()*.012,.10))
 
 func close() -> void:
 	stop_preview()
@@ -450,12 +455,51 @@ func song_row(song: Dictionary) -> Control:
 	rows[id] = {"row":card,"trash":null,"star":star}
 	return card
 
+func soft_reveal(target:Control,delay:float=0.0) -> void:
+	if not target.is_visible_in_tree():return
+	var previous:Tween=target.get_meta("ssrg_reveal") if target.has_meta("ssrg_reveal") else null
+	if previous:previous.kill()
+	target.modulate.a=.18
+	target.pivot_offset=target.size*.5
+	target.scale=Vector2.ONE*.99
+	var tween=target.create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.tween_property(target,"modulate:a",1.0,.24).set_delay(delay)
+	tween.tween_property(target,"scale",Vector2.ONE,.28).set_delay(delay)
+	target.set_meta("ssrg_reveal",tween)
+
+func change_backdrop(texture:Texture2D) -> void:
+	if backdrop.texture==texture:return
+	# Fade from every live layer's current opacity; rapid selection never restarts a fade at full opacity.
+	for layer in backdrop_layers.duplicate():
+		var previous:Tween=layer.get_meta("ssrg_fade") if layer.has_meta("ssrg_fade") else null
+		if previous:previous.kill()
+		var fade=layer.create_tween()
+		fade.tween_property(layer,"modulate:a",0.0,.32)
+		fade.tween_callback(func():backdrop_layers.erase(layer);layer.queue_free())
+		layer.set_meta("ssrg_fade",fade)
+	backdrop=TextureRect.new();add_child(backdrop);move_child(backdrop,1)
+	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	backdrop.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	backdrop.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;backdrop.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	backdrop.texture=texture;backdrop.modulate=Color(1,1,1,0)
+	backdrop_layers.append(backdrop)
+	var fade=backdrop.create_tween()
+	fade.tween_property(backdrop,"modulate:a",.32,.32)
+	backdrop.set_meta("ssrg_fade",fade)
+
 func style_row(row: Button, selected: bool) -> void:
-	var normal = box(Color(0.07,0.07,0.085,.95) if selected else Color(0.05,0.05,0.06,.82),Color(ACCENT,.85) if selected else Color(1,1,1,.08),18)
-	if selected: normal.set_border_width_all(3)
+	var normal = box(Color(0.07,0.07,0.085,.9) if selected else Color(0.05,0.05,0.06,.76),Color(ACCENT,.85) if selected else Color(1,1,1,.08),18)
+	if selected: normal.set_border_width_all(2)
 	for state in ["normal","hover","pressed","focus"]: row.add_theme_stylebox_override(state,normal)
-	row.scale = Vector2.ONE*(1.05 if selected else .93)
-	row.modulate = Color.WHITE if selected else Color(1,1,1,.68)
+	var scale_target=Vector2.ONE*(1.025 if selected else .96)
+	var tint=Color.WHITE if selected else Color(1,1,1,.8)
+	var previous:Tween=row.get_meta("ssrg_selection") if row.has_meta("ssrg_selection") else null
+	if previous:previous.kill()
+	if not row.is_inside_tree():row.scale=scale_target;row.modulate=tint;return
+	var tween=row.create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.tween_property(row,"scale",scale_target,.24)
+	tween.tween_property(row,"modulate",tint,.24)
+	row.set_meta("ssrg_selection",tween)
 
 func select_song(id: String) -> void:
 	if rows.has(selected_id) and is_instance_valid(rows[selected_id].row): style_row(rows[selected_id].row,false)
@@ -505,17 +549,18 @@ func disarm_row() -> void:
 	row_armed_id = ""
 
 func refresh_detail() -> void:
-	for child in detail.get_children(): child.queue_free()
+	for child in detail.get_children():
+		detail.remove_child(child);child.queue_free()
 	delete_button = null
 	var song: Dictionary = {}
 	for s in ssrg_songs():
 		if str(s.id) == selected_id: song = s
 	if song.is_empty():
-		backdrop.texture = null
+		change_backdrop(null)
 		return
 	var id = str(song.id)
 	# The song's own background or album art; songs without art keep the plain backdrop.
-	backdrop.texture = game.stage_backdrop_for_id(id)
+	change_backdrop(game.stage_backdrop_for_id(id))
 
 	# Difficulty column: one button per chart, fewest keys first.
 	var charts = charts_for(id)
@@ -571,7 +616,9 @@ func refresh_detail() -> void:
 	if not charts.is_empty():
 		action(detail,"AUTO",.615,.79,.715,.95,func(): play(id,selected_variant,true))
 		var start = action(detail,"START",.725,.77,.98,.97,func(): play(id,selected_variant,false),"primary")
-		start.caption_size = 34
+		start.caption_size = 30
+	for child in detail.get_children():
+		if child is Control:soft_reveal(child,minf(child.get_index()*.018,.08))
 
 func change_speed(step: float) -> void:
 	game.prefs.set_value("ssrg","speed_value",clampf(snappedf(game.ssrg_speed_setting()+step,SPEED_STEP),1.0,10.0))

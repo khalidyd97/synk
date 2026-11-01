@@ -82,7 +82,6 @@ func import_song(path: String) -> Dictionary:
 	var temporary = root_path.path_join("songs/importing_" + str(Time.get_ticks_usec()) + "." + format)
 	var output = FileAccess.open(temporary, FileAccess.WRITE)
 	if output == null: message = "Could not save audio on this device. Check storage."; return {}
-	var hash_context = HashingContext.new(); hash_context.start(HashingContext.HASH_SHA256)
 	var size = 0
 	while not file.eof_reached():
 		var chunk = file.get_buffer(65536)
@@ -91,7 +90,7 @@ func import_song(path: String) -> Dictionary:
 		if size > 150 * 1024 * 1024:
 			output.close(); DirAccess.remove_absolute(temporary)
 			message = "Choose an audio file smaller than 150 MB."; return {}
-		hash_context.update(chunk); output.store_buffer(chunk)
+		output.store_buffer(chunk)
 	output.close(); file.close()
 	if size == 0: DirAccess.remove_absolute(temporary); message = "This audio file is empty."; return {}
 	var stream = decode(temporary)
@@ -99,11 +98,9 @@ func import_song(path: String) -> Dictionary:
 		DirAccess.remove_absolute(temporary); message = "Choose a standard MP3, WAV or OGG file."; return {}
 	if stream.get_length() < .2 or stream.get_length() > 1200:
 		DirAccess.remove_absolute(temporary); message = "Choose a track between 0.2 seconds and 20 minutes."; return {}
-	var id = hash_context.finish().hex_encode()
-	for song in songs:
-		if song.id == id:
-			DirAccess.remove_absolute(temporary)
-			return {"song": song, "stream": stream}
+	# An import owns its audio, charts and drafts independently of the file's contents.
+	# Keep the existing 64-character ID format so older libraries still load unchanged.
+	var id = Crypto.new().generate_random_bytes(32).hex_encode()
 	var source_name = path.uri_decode().get_file()
 	var title = source_name.get_basename()
 	if title.is_empty() or (path.begins_with("content://") and source_name.get_extension().to_lower() not in ["mp3", "wav", "ogg"]):

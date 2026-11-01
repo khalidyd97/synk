@@ -28,5 +28,7 @@ void fragment() {
 	// A flat, sharp-edged column that fades toward the far end of the highway.
 	float reach = ssrg_warp.x>0.5?texture(ssrg_beam_art,UV).a:smoothstep(-58.0,-6.0,world_z);
 	ALBEDO = tint;
-	ALPHA = 0.3 * reach * intensity * release_alpha;
+	// Strong coloured lane light, matching the supplied SMTOWN gameplay.
+	// Keep alpha blending so the light remains coloured beneath bright notes.
+	ALPHA = 0.62 * reach * intensity * release_alpha;
 }

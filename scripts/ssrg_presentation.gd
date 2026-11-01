@@ -8,6 +8,10 @@ var remaining=0
 var note_count=1
 var weights=[0.0,0.0,0.0,0.0]
 var phase_weights=[1.0,0.0,0.0,0.0,0.0,0.0]
+var visual_state=0
+var transition_from=[1.0,0.0,0.0,0.0,0.0,0.0]
+var transition_age=1.0
+var shown_gauge=1.0
 var beam_color=Color.WHITE
 var metadata:Dictionary={}
 var collected=0
@@ -35,6 +39,7 @@ func reset(count:int,config:Dictionary={}) -> void:
 	difficulty_index=0 if game.ssrg_lane_count==4 else (1 if game.ssrg_lane_count==7 else 2)
 	score_rules.reset(note_count,game.ssrg_lane_count,metadata)
 	weights=[0.0,0.0,0.0,0.0];phase_weights=[1.0,0.0,0.0,0.0,0.0,0.0]
+	visual_state=0;transition_from=phase_weights.duplicate();transition_age=1.0;shown_gauge=1.0
 	beam_color=profile_color(0);collected=0;triggered_specials.clear();event_age=99;event_kind=-1;event_item=-1
 	cards=metadata.get("cards",[]).duplicate(true) if metadata.get("cards",[]) is Array else [];card_index=0
 	best_score=0
@@ -83,10 +88,17 @@ func _process(delta:float) -> void:
 		var beats=maxf(1.0,float(metadata.get("card_beats",4.0)))
 		var elapsed_beats=maxf(0.0,game.field.world.render_time()-game.chart_offset())*game.chart_bpm()/60.0
 		card_index=posmod(floori(elapsed_beats/beats),cards.size())
+	if visual_state!=state:
+		transition_from=phase_weights.duplicate();transition_age=0.0;visual_state=state
+	transition_age=minf(DATA.FADE_IN_SECONDS,transition_age+delta)
+	var blend=smoothstep(0.0,DATA.FADE_IN_SECONDS,transition_age)
+	# Ultra is the fully charged tier; its visual bar stays charged until that tier ends.
+	var target_gauge=1.0 if state==5 else gauge_fraction()
+	shown_gauge=lerpf(shown_gauge,target_gauge,1.0-exp(-delta*10.0))
 	beam_color=Color(0,0,0,0)
 	for index in 6:
 		var target=1.0 if index==state else 0.0
-		phase_weights[index]=move_toward(float(phase_weights[index]),target,delta/(DATA.FADE_IN_SECONDS if target>0 else DATA.FADE_OUT_SECONDS))
+		phase_weights[index]=lerpf(float(transition_from[index]),target,blend)
 		beam_color+=profile_color(index)*float(phase_weights[index])
 	weights=[float(phase_weights[2]),float(phase_weights[3]),float(phase_weights[4]),float(phase_weights[5])]
 func special_art(type:int,item:int,beat:float) -> Texture2D:

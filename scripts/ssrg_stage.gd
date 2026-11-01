@@ -18,6 +18,7 @@ func _init() -> void :
 	entrance_shadow.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var shadow_material=ShaderMaterial.new()
 	shadow_material.shader=preload("res://scripts/ssrg_entrance_shadow.gdshader")
+	shadow_material.set_shader_parameter("rail_art",preload("res://assets/ssrg/imported/rail_original.png"))
 	shadow_material.render_priority=3
 	entrance_shadow.material_override=shadow_material;add_child(entrance_shadow)
 	for side in [-1,1]:
