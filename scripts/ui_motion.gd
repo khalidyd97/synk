@@ -3,6 +3,7 @@ extends RefCounted
 const UiSound = preload("res://scripts/ui_sound.gd")
 
 static func bind_button(target: BaseButton) -> void:
+	if not is_instance_valid(target): return
 	if target.has_meta("ui_motion_bound"): return
 	target.set_meta("ui_motion_bound", true)
 	target.mouse_default_cursor_shape=Control.CURSOR_POINTING_HAND
@@ -71,6 +72,7 @@ static func _scale(target: Control, value: float, duration: float) -> void:
 	target.set_meta("motion_tween",tween)
 
 static func reveal(target: CanvasItem, delay: float = 0.0) -> void:
+	if not is_instance_valid(target): return
 	var previous: Variant=target.get_meta("reveal_tween") if target.has_meta("reveal_tween") else null
 	if previous is Tween and previous.is_running(): previous.kill()
 	target.modulate.a=0.0
