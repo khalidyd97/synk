@@ -673,8 +673,6 @@ func layout_classic_hit(burst:Dictionary) -> void:
 func spawn_hit(lane: float, kind: String, direction: int = 0, sustain_entry: Dictionary = {},pointer_id: int=-999) -> void:
 	if ssrg_theme and (ssrg_theme.active or game.hit_style=="ssrg") and not prewarming_hits:
 		ssrg_theme.spawn(lane, kind, sustain_entry, pointer_id); return
-	if projected_synk_effects() and not prewarming_hits:
-		synk_hits.spawn(lane,kind,sustain_entry,pointer_id,direction);return
 	if game.hit_style == "bloom" and not prewarming_hits:
 		spawn_bloom(lane, kind, sustain_entry, pointer_id); return
 	if bursts.size() >= 32:
@@ -776,7 +774,6 @@ func prewarm() -> void:
 	prewarming_hits = true
 	for kind in ["tap", "hold", "flick"]: spawn_hit(5, kind, 1)
 	prewarming_hits = false
-	if projected_synk_effects():synk_hits.spawn(5,"tap",{},-999)
 	if game.hit_style == "bloom": spawn_bloom(5, "tap", {}, -999)
 	for beam in finger_beams.slice(0, 1): beam.visible = true
 	for i in 4: await get_tree().process_frame
@@ -794,7 +791,6 @@ func prewarm() -> void:
 const HIT_POOL_LIMIT = 48
 func prefill_hits() -> void:
 	if ssrg_theme and ssrg_theme.active: ssrg_theme.prefill(); return
-	if projected_synk_effects():synk_hits.prefill();return
 	var counts = {"tap": 0, "hold": 0}
 	var flick_dirs = {}
 	for entry in game.live:
@@ -952,6 +948,8 @@ func clear_hit_effects() -> void:
 	ssrg_beam_release.clear()
 	for burst in bursts+hit_pool: burst.node.queue_free()
 	bursts.clear(); hit_pool.clear()
+	for bloom in blooms+bloom_pool:bloom.node.queue_free()
+	blooms.clear();bloom_pool.clear()
 
 func clear_notes() -> void:
 	clear_shared_materials()
