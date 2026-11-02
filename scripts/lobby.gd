@@ -3,8 +3,7 @@ const UiMotion=preload("res://scripts/ui_motion.gd")
 const LobbyWordmark=preload("res://scripts/lobby_wordmark.gd")
 const LobbyCard=preload("res://scripts/lobby_card.gd")
 const SongBrowser=preload("res://scripts/song_browser.gd")
-const HOME_BACKGROUND=preload("res://assets/lobby/ui/reference_background.png")
-const HOME_VIDEO="res://assets/lobby/ui/lobby_background_v2.ogv"
+const HOME_BACKGROUND=preload("res://assets/lobby/ui/concert_stage_clean.png")
 var game: Control
 var gateway: Control
 var browser: Control
@@ -306,41 +305,41 @@ func build_gateway() -> void:
     gateway=Control.new(); place(gateway,self,0,0,1,1)
     var backdrop=TextureRect.new(); place(backdrop,gateway,0,0,1,1)
     backdrop.texture=HOME_BACKGROUND; backdrop.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
-    # Keep both edge flares visible across landscape aspect ratios.
+    # The lobby has a grounded concert-studio backdrop, intentionally kept still so the
+    # cards and warm stage lighting remain calm rather than becoming a neon light show.
     backdrop.stretch_mode=TextureRect.STRETCH_SCALE; backdrop.mouse_filter=Control.MOUSE_FILTER_IGNORE
-    # The animated plate shares the still's framing; the still stays as the fallback.
-    var home_stream=load(HOME_VIDEO)
-    if home_stream:
-        home_video=VideoStreamPlayer.new(); place(home_video,gateway,0,0,1,1)
-        home_video.stream=home_stream; home_video.loop=true; home_video.expand=true
-        home_video.volume_db=-80; home_video.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var atmosphere=ColorRect.new(); place(atmosphere,gateway,0,0,1,1)
     atmosphere.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var atmosphere_material=preload("res://scripts/background_motion.gd").attach(atmosphere,preload("res://scripts/image_atmosphere.gdshader"))
     atmosphere_material.set_shader_parameter("overlay_only",true)
     var dim=ColorRect.new(); place(dim,gateway,0,0,1,1)
-    dim.name="LobbyBackgroundDim"; dim.color=Color(.06,.055,.07,.66)
+    dim.name="LobbyBackgroundDim"; dim.color=Color(.025,.025,.03,.34)
     dim.mouse_filter=Control.MOUSE_FILTER_IGNORE
-    # Home: a cream SYNK wordmark and resume line on the left, two large cards on the right.
+    var spotlights=preload("res://scripts/lobby_spotlights.gd").new()
+    place(spotlights,gateway,0,0,1,1)
+    # Home: a quiet concert-poster layout with two tactile, equal actions.
     var safe_buttons=game.safe_parent("SafeLobbyButtons",gateway)
-    var eyebrow=home_label(safe_buttons,"PLAY YOUR CHARTS  ·  CREATE YOUR SOUND",110,138,720,34,21,Color("ff7a59"),true)
-    var logo=home_label(safe_buttons,"SYNK",96,168,760,210,200,Color("f3ece1"),true)
+    var eyebrow=home_label(safe_buttons,"CHOOSE YOUR RHYTHM",630,245,660,42,22,Color("e8d9c5"),true)
+    eyebrow.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    var logo=home_label(safe_buttons,"SYNK",530,52,860,190,172,Color("f5ecdf"),true)
+    logo.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     logo.name="LobbyWordmark"
-    resume_label=home_label(safe_buttons,"",110,392,700,90,27,Color("a29ea6"),false)
+    resume_label=home_label(safe_buttons,"",560,786,800,48,19,Color("d7c9b8"),false)
+    resume_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     resume_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART; resume_label.vertical_alignment=VERTICAL_ALIGNMENT_TOP
-    var ssrg=preload("res://scripts/settings_action.gd").new(); ssrg.text="▶  SSRG PLAYABLES"; ssrg.caption_size=23
-    design_rect(ssrg,safe_buttons,110,500,350,88); ssrg.name="SsrgPlayablesButton"
+    var ssrg=preload("res://scripts/lobby_sprite_button.gd").new()
+    design_rect(ssrg,safe_buttons,820,695,280,66); ssrg.name="SsrgPlayablesButton"
     ssrg.tooltip_text="Import and play SSRG songs from your own game files"
     ssrg.pressed.connect(func(): game.open_ssrg_playables())
-    var settings=preload("res://scripts/settings_action.gd").new(); settings.text="⚙  SETTINGS"; settings.caption_size=23
-    design_rect(settings,safe_buttons,478,500,282,88); settings.name="SettingsButton"
+    var settings=preload("res://scripts/settings_action.gd").new(); settings.text="⚙"; settings.caption_size=30
+    design_rect(settings,safe_buttons,1740,44,100,80); settings.name="SettingsButton"
     settings.pressed.connect(func(): game.open_lobby_settings())
     var HomeCard=preload("res://scripts/lobby_home_card.gd")
-    var play=HomeCard.new(); play.kind="play"; play.title="Play"; design_rect(play,safe_buttons,880,96,480,660)
+    var play=HomeCard.new(); play.kind="play"; play.title="PLAY"; design_rect(play,safe_buttons,190,330,740,290)
     play.name="PlayCard"; play.tooltip_text="Choose a song and play"
     play.pressed.connect(func(): show_play_browser(true))
-    var create=HomeCard.new(); create.kind="create"; create.title="Create charts"; create.subtitle="Record a take or edit a draft"
-    design_rect(create,safe_buttons,1400,96,440,660)
+    var create=HomeCard.new(); create.kind="create"; create.title="CREATE CHARTS"; create.subtitle="Build the rhythm. Make it yours."
+    design_rect(create,safe_buttons,990,330,740,290)
     create.name="CreateCard"; create.tooltip_text="Edit charts, import music, and record notes"
     create.pressed.connect(func(): game.open_editor())
     play_home_card=play

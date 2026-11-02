@@ -177,6 +177,8 @@ static func prepare(root:String,item:Dictionary,songs:Array,cancel:Callable=Call
 	if not FileAccess.file_exists(root.path_join(audio_target)):
 		if not add_operation(root,tx,audio_target,staged_audio):return fail(folder,"Could not prepare audio storage.")
 	song.file=id+"."+format;song.title=str(item.get("title",song.get("title","Imported song")));song.artist=str(item.get("artist",song.get("artist","")))
+	if item.has("album") and not str(item.album).is_empty():song.album=str(item.album)
+	if item.has("track"):song.track=int(item.track)
 	song.ssrg_game=preload("res://scripts/ssrg_game_catalog.gd").normalize(str(item.get("target_game",item.get("game","IMPORTED"))))
 	song.album=str(song.get("album",item.get("game","SSRG")));song.length=duration;keys.sort();song.ssrg=keys
 	song.erase("ssrg_charts")

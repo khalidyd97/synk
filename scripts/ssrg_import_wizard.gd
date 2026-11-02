@@ -19,6 +19,13 @@ var retry_button:Button
 var report_button:Button
 var files_button:Button
 var folder_button:Button
+var csv_button:Button
+var csv_picker:FileDialog
+var csv_path=""
+var cover_request:HTTPRequest
+var suggested_cover:Image
+var suggested_index=-1
+var cover_lookup_running=false
 var clear_button:Button
 var blocker:ColorRect
 var picker:FileDialog
@@ -78,6 +85,7 @@ func _ready() -> void:
 	var tools=row(content)
 	files_button=button("ADD FILES / ZIP",tools,choose_files)
 	folder_button=button("CHOOSE FOLDER",tools,choose_folder)
+	csv_button=button("IMPORT DETAILS CSV",tools,choose_csv)
 	# The iOS Files picker returns files, not folders; ZIPs and multi-select cover whole songs there.
 	folder_button.visible=OS.get_name()!="iOS"
 	clear_button=button("CLEAR",tools,clear)
@@ -114,12 +122,14 @@ func _ready() -> void:
 	picker.filters=PackedStringArray(["*.zip,*.seq,*.bytes,*.ogg,*.mp3,*.wav,*.png,*.jpg,*.jpeg,*.webp;SSRG song files"])
 	picker.files_selected.connect(picked);picker.file_selected.connect(func(path):picked(PackedStringArray([path])))
 	folder_picker=FileDialog.new();add_child(folder_picker);folder_picker.file_mode=FileDialog.FILE_MODE_OPEN_DIR;folder_picker.access=FileDialog.ACCESS_FILESYSTEM;folder_picker.use_native_dialog=true;folder_picker.dir_selected.connect(func(path):add_sources(PackedStringArray([path])))
+	csv_picker=FileDialog.new();add_child(csv_picker);csv_picker.file_mode=FileDialog.FILE_MODE_OPEN_FILE;csv_picker.access=FileDialog.ACCESS_FILESYSTEM;csv_picker.use_native_dialog=true;csv_picker.filters=PackedStringArray(["*.csv;Song details CSV"]);csv_picker.file_selected.connect(set_csv)
 	report_picker=FileDialog.new();add_child(report_picker);report_picker.file_mode=FileDialog.FILE_MODE_SAVE_FILE;report_picker.access=FileDialog.ACCESS_FILESYSTEM;report_picker.use_native_dialog=true
 	report_picker.file_selected.connect(save_report)
+	cover_request=HTTPRequest.new();add_child(cover_request);cover_request.timeout=20;cover_request.body_size_limit=6*1024*1024;cover_request.max_redirects=4;cover_request.use_threads=true
 	for target in [list_scroll,detail_scroll]:
 		var helper=preload("res://scripts/drag_scroll.gd").attach(target)
 		helper.friction=6.0;scroll_helpers.append(helper)
-	for dialog in [picker,folder_picker,report_picker]:preload("res://scripts/modal_input.gd").register(dialog)
+	for dialog in [picker,folder_picker,csv_picker,report_picker]:preload("res://scripts/modal_input.gd").register(dialog)
 	visible=false;set_step("idle");show_details();update_controls()
 
 func open() -> void:
@@ -144,15 +154,29 @@ func choose_files() -> void:
 	picker.file_mode=FileDialog.FILE_MODE_OPEN_FILES;picker.popup_centered_ratio(.85)
 func choose_folder() -> void:
 	if not job.busy():folder_picker.popup_centered_ratio(.85)
+func choose_csv() -> void:
+	if job.busy():return
+	if NativeFilePicker.open(false,func(paths):if not paths.is_empty():set_csv(paths[0])):return
+	csv_picker.popup_centered_ratio(.85)
+func set_csv(path:String) -> void:
+	if job.busy():return
+	var preview=preload("res://scripts/ssrg_import_csv.gd").read(path)
+	if not str(preview.error).is_empty():status.text=str(preview.error);return
+	csv_path=path;job.metadata_csv=path
+	status.text="Details CSV loaded: %d song IDs. Match by the audio filename's leading ID." % preview.songs.size()
+	if not sources.is_empty():job.scan(sources,host.game.library.songs)
 func add_sources(paths:PackedStringArray) -> void:
 	if job.busy():return
 	for path in paths:
 		if path not in sources:sources.append(path)
-	job.root=host.game.library.root_path;job.target_game=target_game;warning_ack.button_pressed=false
+	job.root=host.game.library.root_path;job.target_game=target_game;job.metadata_csv=csv_path;warning_ack.button_pressed=false
 	job.scan(sources,host.game.library.songs);show()
 func clear() -> void:
 	if job.busy():return
+	if cover_lookup_running:cover_request.cancel_request();cover_lookup_running=false
+	suggested_cover=null;suggested_index=-1
 	job.clear_cache();job.plan.clear();job.reports.clear();public_items.clear();sources.clear();selected=-1;showing_results=false
+	csv_path="";job.metadata_csv=""
 	job.publish("idle","Choose a folder, ZIP, or song files.");render_list();show_details()
 
 func choose_match(kind:String,path:String="") -> void:
@@ -283,11 +307,12 @@ func show_details() -> void:
 	clear_children(details)
 	if selected<0 or selected>=public_items.size():
 		label("Review before saving",details,24)
-		label("Choose a folder, a ZIP, or chart/audio files. You can correct matches and key counts, then select which difficulties to import.")
+		label("Choose a folder, a ZIP, or chart/audio files. You can also import a CSV with ID, title, artist, album, and track columns.")
 		label("Updates add missing difficulties by default. Replace imported only replaces charts that still match their import baseline and have no draft.")
 		return
 	var item:Dictionary=public_items[selected];var index=selected
 	label(str(item.title),details,24)
+	if not csv_path.is_empty():label("Details CSV: "+csv_path.get_file()+" · matched by song ID",details,14)
 	var fields=row(details)
 	for field in ["title","artist","game"]:
 		var column=VBoxContainer.new();column.size_flags_horizontal=Control.SIZE_EXPAND_FILL;fields.add_child(column)
@@ -309,6 +334,11 @@ func show_details() -> void:
 		if image:
 			var art=TextureRect.new();art.texture=ImageTexture.create_from_image(image);art.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;art.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;art.custom_minimum_size.y=110;details.add_child(art)
 	var cover_row=row(details);button("CHOOSE COVER",cover_row,func():choose_match("cover"))
+	var lookup=button("FIND ALBUM ART",cover_row,func():lookup_cover(index));lookup.disabled=cover_lookup_running or str(item.get("album","")).is_empty() or str(item.get("artist","")).is_empty()
+	if suggested_index==index and suggested_cover!=null:
+		label("Suggested by MusicBrainz / Cover Art Archive — review before using",details,14)
+		var suggested=TextureRect.new();suggested.texture=ImageTexture.create_from_image(suggested_cover);suggested.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;suggested.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;suggested.custom_minimum_size.y=135;details.add_child(suggested)
+		var choice=row(details);button("USE THIS COVER",choice,func():accept_suggested_cover(index));button("DISMISS",choice,func():suggested_cover=null;suggested_index=-1;show_details())
 	var cover_path=str(item.get("cover",""))
 	if not cover_path.is_empty():
 		button("NO COVER",cover_row,func():
@@ -351,6 +381,46 @@ func show_details() -> void:
 	for error in item.get("errors",[]):label("Needs attention: "+str(error),details,15).modulate=Color("ff9c9c")
 	for warning in item.get("warnings",[]):label("Review: "+str(warning),details,14).modulate=Color("ffd36a")
 
+func lookup_cover(index:int) -> void:
+	if cover_lookup_running or job.busy() or index<0 or index>=job.plan.size():return
+	var item:Dictionary=job.plan[index]
+	var album=str(item.get("album","")).strip_edges();var artist=str(item.get("artist","")).strip_edges()
+	if album.is_empty() or artist.is_empty():status.text="Add artist and album details first.";return
+	cover_lookup_running=true;suggested_cover=null;suggested_index=-1;show_details()
+	status.text="Searching album art for "+artist+" — "+album+"…"
+	var query=("releasegroup:\"%s\" AND artist:\"%s\"" % [album.replace("\"",""),artist.replace("\"","")]).uri_encode()
+	var url="https://musicbrainz.org/ws/2/release-group/?query="+query+"&fmt=json&limit=10"
+	var started=cover_request.request(url,PackedStringArray(["User-Agent: SYNK/1.0 (https://github.com/khalidyd97/synk)","Accept: application/json"]))
+	if started!=OK:finish_cover_lookup("Could not start artwork search.");return
+	var response=await cover_request.request_completed
+	if not is_inside_tree():return
+	if response[0]!=HTTPRequest.RESULT_SUCCESS or response[1]!=200:finish_cover_lookup("MusicBrainz artwork search is unavailable.");return
+	var group=preload("res://scripts/ssrg_cover_lookup.gd").unique_group(JSON.parse_string(response[3].get_string_from_utf8()),album,artist)
+	if group.is_empty():finish_cover_lookup("No unique exact album and artist match. Choose a cover manually.");return
+	var art_url="https://coverartarchive.org/release-group/"+group+"/front-500"
+	started=cover_request.request(art_url,PackedStringArray(["User-Agent: SYNK/1.0 (https://github.com/khalidyd97/synk)"]))
+	if started!=OK:finish_cover_lookup("Could not request the suggested cover.");return
+	response=await cover_request.request_completed
+	if not is_inside_tree():return
+	if response[0]!=HTTPRequest.RESULT_SUCCESS or response[1]!=200:finish_cover_lookup("No front cover is available for this album.");return
+	var image=Image.new();var bytes:PackedByteArray=response[3]
+	var error=image.load_jpg_from_buffer(bytes)
+	if error!=OK:error=image.load_png_from_buffer(bytes)
+	if error!=OK or image.get_width()<64 or image.get_height()<64:finish_cover_lookup("The suggested cover could not be decoded.");return
+	suggested_cover=image;suggested_index=index;cover_lookup_running=false;status.text="Artwork found. Review it and choose USE THIS COVER.";show_details()
+
+func finish_cover_lookup(message:String) -> void:
+	cover_lookup_running=false;status.text=message;show_details()
+
+func accept_suggested_cover(index:int) -> void:
+	if suggested_cover==null or suggested_index!=index or index>=job.plan.size():return
+	var folder=host.game.library.root_path.path_join(".ssrg_import/cover_suggestions")
+	DirAccess.make_dir_recursive_absolute(folder)
+	var path=folder.path_join("%s-%d.png" % [str(job.plan[index].get("song_id","song")),Time.get_ticks_usec()])
+	if suggested_cover.save_png(path)!=OK:status.text="Could not save the suggested cover.";return
+	job.plan[index].cover=path;public_items[index].cover=path
+	suggested_cover=null;suggested_index=-1;status.text="Suggested cover selected for this song.";show_details()
+
 func select_all(value:bool) -> void:
 	if job.busy():return
 	warning_ack.button_pressed=false
@@ -365,7 +435,7 @@ func update_controls() -> void:
 			if item.get("include",true) and item.get("ready",false):count+=1;warnings+=item.get("warnings",[]).size()
 			if i<row_checks.size():
 				row_checks[i].disabled=not item.get("ready",false);row_checks[i].set_pressed_no_signal(item.get("include",true) and item.get("ready",false))
-	files_button.disabled=busy;folder_button.disabled=busy;clear_button.disabled=busy
+	files_button.disabled=busy;folder_button.disabled=busy;csv_button.disabled=busy;clear_button.disabled=busy
 	import_button.disabled=recovery_blocked or busy or count==0 or (warnings>0 and not warning_ack.button_pressed)
 	import_button.text="IMPORT %d SELECTED" % count
 	if job.importing:import_button.text="IMPORTING %d OF %d…" % [mini(job.reports.size()+1,job.selection_count),job.selection_count]

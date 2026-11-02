@@ -2,8 +2,10 @@ extends RefCounted
 const PARSER=preload("res://scripts/ssrg_import.gd")
 const TX=preload("res://scripts/ssrg_import_transaction.gd")
 const ARCHIVE=preload("res://scripts/ssrg_import_archive.gd")
+const CSV=preload("res://scripts/ssrg_import_csv.gd")
 var root="user://"
 var target_game=""
+var metadata_csv=""
 var task=-1
 var mutex=Mutex.new()
 var canceled=false
@@ -72,6 +74,9 @@ func file_size(path:String) -> int:
 	var f=FileAccess.open(path,FileAccess.READ);return f.get_length() if f!=null else -1
 
 func _scan(paths:PackedStringArray,songs:Array) -> void:
+	var metadata=CSV.read(metadata_csv) if not metadata_csv.is_empty() else {"songs":{},"warnings":[],"error":""}
+	if not str(metadata.error).is_empty():scan_messages.append(str(metadata.error))
+	scan_messages.append_array(metadata.warnings)
 	var files=PackedStringArray()
 	for path in paths:
 		if DirAccess.dir_exists_absolute(path):collect(path,files)
@@ -109,6 +114,7 @@ func _scan(paths:PackedStringArray,songs:Array) -> void:
 		if is_canceled():break
 		update({"message":"Checking song %d of %d" % [i+1,entries.size()],"done":i,"total":entries.size()})
 		var item:Dictionary=entries[i]
+		item.csv_details=metadata.songs
 		item.audio_files=audio_files;item.image_files=images
 		plan.append(inspect_item(item,songs))
 	var same_audio={}
@@ -164,6 +170,11 @@ func inspect_item(original:Dictionary,songs:Array) -> Dictionary:
 	var matches=candidates(item.audio_files,[audio_name,item.song_id],str(item.base),str(item.song_id));item.audio_matches=matches
 	if not item.get("audio_manual",false):
 		item.audio=str(matches[0].path) if not matches.is_empty() and (matches.size()==1 or matches[0].score>matches[1].score) else ""
+	var audio_id=PARSER.leading_id(str(item.audio))
+	var csv_details:Dictionary=item.get("csv_details",{}).get(audio_id,{}) if not audio_id.is_empty() else {}
+	for key in csv_details:
+		item[key]=csv_details[key]
+		if key in ["title","artist"]:item[key+"_edited"]=true
 	if not item.get("background_manual",false):
 		var art=candidates(item.image_files,[item.song_id,audio_name],str(item.base),str(item.song_id))
 		item.background=str(art[0].path) if not art.is_empty() and (art.size()==1 or art[0].score>art[1].score) else ""
