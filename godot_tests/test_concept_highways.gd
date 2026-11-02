@@ -48,7 +48,7 @@ func run():
   check(not world.gold_nodes.any(func(n):return n.visible) and not world.neon_nodes.any(func(n):return n.visible),"Other rails never overlap the new theme")
   check(not world.ssrg_theme.active and not game.ssrg_playable_run,"Visual theme never changes chart rules")
   check(world.camera.projection==Camera3D.PROJECTION_ORTHOGONAL and game.note_travel_seconds()==expected_time,"SSRG projection and timing are unchanged")
-  check(int(world.cover_material.get_shader_parameter("concept_style"))==(1 if style=="aurora" else 2),"Correct stage artwork is selected")
+  check(int(world.cover_material.get_shader_parameter("concept_style"))==(1 if style=="aurora" else 2),"Correct black backdrop mode is selected")
   check(game.prefs.get_value("highway","style","")==style,"Selection is saved")
   for lane in 13:
    var point=game.field.project(lane,0)

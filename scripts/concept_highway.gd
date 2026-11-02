@@ -2,7 +2,6 @@ extends Node3D
 # Visual skins only: all timing, projection, channels and input remain the shared SSRG mechanism.
 const STYLES=["aurora","solar"]
 const LABELS={"aurora":"Aurora Glass","solar":"Solar Ceramic"}
-const STAGES={"aurora":preload("res://assets/highways/aurora_glass_stage.png"),"solar":preload("res://assets/highways/solar_ceramic_stage.png")}
 var world:Node3D
 var road_material:ShaderMaterial
 const RAIL_FRAME_WIDTH=.80
@@ -38,9 +37,6 @@ func refresh() -> void:
 	world.cover_material.set_shader_parameter("concept_style",(2 if world.game.highway_style=="solar" else 1) if active else 0)
 	if not active:return
 	var solar=world.game.highway_style=="solar"
-	var texture:Texture2D=STAGES[world.game.highway_style]
-	world.cover_material.set_shader_parameter("concept_background",texture)
-	world.cover_material.set_shader_parameter("concept_aspect",float(texture.get_width())/texture.get_height())
 	# Own frame and road materials; no inherited additive glare or opaque plates over notes.
 	var rail:Color=Color("f5c482") if solar else Color("b2f4ff")
 	var custom=world.custom_color("rail_color")

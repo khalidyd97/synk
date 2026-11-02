@@ -33,8 +33,6 @@ uniform sampler2D ssrg_fever_3 : source_color, filter_linear, repeat_disable;
 uniform vec4 ssrg_fever_weights=vec4(0.0);
 uniform float ssrg_fever_dark=0.0;
 uniform int concept_style=0;
-uniform sampler2D concept_background:source_color,filter_linear,repeat_disable;
-uniform float concept_aspect=1.7778;
 void fragment() {
 	float zoom = 1.06 + 0.03 * sin(animation_time * 0.11);
 	// Cover the screen without stretching; square art sits slightly high, as before.
@@ -78,13 +76,7 @@ void fragment() {
 		base=mix(base*(1.0-clamp(ssrg_fever_dark,0.0,1.0)),color,clamp(alpha*rave_pulse,0.0,1.0));
 	}
 	if(concept_style>0){
-		vec2 stage_fit=concept_aspect>screen_aspect?vec2(screen_aspect/concept_aspect,1.0):vec2(1.0,concept_aspect/screen_aspect);
-		// A tiny ambient drift freezes with the shared clock on pause.
-		vec2 stage_uv=(UV-vec2(.5))*stage_fit/1.015+vec2(.5);
-		stage_uv.x+=sin(animation_time*.055)*.002;
-		vec3 stage=texture(concept_background,stage_uv).rgb;
-		float perimeter=1.0-inside_track;
-		base=stage*mix(.50,.78,perimeter)*brightness;
+		base=vec3(0.0);
 	}
 	ALBEDO=base;
 	ALPHA = strength;

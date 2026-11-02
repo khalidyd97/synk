@@ -149,8 +149,7 @@ class StyleTile extends Button:
         draw_style_box(box,Rect2(Vector2.ZERO,size))
         if style_name in ["aurora","solar"]:
             var solar=style_name=="solar"
-            var texture:Texture2D=preload("res://scripts/concept_highway.gd").STAGES[style_name]
-            draw_texture_rect(texture,Rect2(Vector2(8,8),Vector2(size.x-16,size.y*.59)),false,Color(1,1,1,.7))
+            draw_rect(Rect2(Vector2(8,8),Vector2(size.x-16,size.y*.59)),Color.BLACK)
             var rail=Color("f5c482") if solar else Color("a2efff")
             var a=Vector2(size.x*.48,size.y*.16);var b=Vector2(size.x*.52,size.y*.16)
             var c=Vector2(size.x*.85,size.y*.64);var d=Vector2(size.x*.15,size.y*.64)
