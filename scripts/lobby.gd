@@ -3,7 +3,6 @@ const UiMotion=preload("res://scripts/ui_motion.gd")
 const LobbyWordmark=preload("res://scripts/lobby_wordmark.gd")
 const LobbyCard=preload("res://scripts/lobby_card.gd")
 const SongBrowser=preload("res://scripts/song_browser.gd")
-const HOME_BACKGROUND=preload("res://assets/lobby/ui/concert_stage_clean.png")
 var game: Control
 var gateway: Control
 var browser: Control
@@ -303,20 +302,9 @@ func refresh_home() -> void:
 
 func build_gateway() -> void:
     gateway=Control.new(); place(gateway,self,0,0,1,1)
-    var backdrop=TextureRect.new(); place(backdrop,gateway,0,0,1,1)
-    backdrop.texture=HOME_BACKGROUND; backdrop.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
-    # The lobby has a grounded concert-studio backdrop, intentionally kept still so the
-    # cards and warm stage lighting remain calm rather than becoming a neon light show.
-    backdrop.stretch_mode=TextureRect.STRETCH_SCALE; backdrop.mouse_filter=Control.MOUSE_FILTER_IGNORE
-    var atmosphere=ColorRect.new(); place(atmosphere,gateway,0,0,1,1)
-    atmosphere.mouse_filter=Control.MOUSE_FILTER_IGNORE
-    var atmosphere_material=preload("res://scripts/background_motion.gd").attach(atmosphere,preload("res://scripts/image_atmosphere.gdshader"))
-    atmosphere_material.set_shader_parameter("overlay_only",true)
-    var dim=ColorRect.new(); place(dim,gateway,0,0,1,1)
-    dim.name="LobbyBackgroundDim"; dim.color=Color(.025,.025,.03,.34)
-    dim.mouse_filter=Control.MOUSE_FILTER_IGNORE
-    var spotlights=preload("res://scripts/lobby_spotlights.gd").new()
-    place(spotlights,gateway,0,0,1,1)
+    # A living concert stage: depth-cut photo planes, beams, haze and a backlit crowd, all on one tempo.
+    var stage=preload("res://scripts/lobby_stage.gd").new(); stage.name="LobbyStage"
+    place(stage,gateway,0,0,1,1)
     # Home: a quiet concert-poster layout with two tactile, equal actions.
     var safe_buttons=game.safe_parent("SafeLobbyButtons",gateway)
     var eyebrow=home_label(safe_buttons,"CHOOSE YOUR RHYTHM",630,245,660,42,22,Color("e8d9c5"),true)

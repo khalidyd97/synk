@@ -1,17 +1,30 @@
 extends Button
-# Lobby home cards are restrained concert-poster plates. Both actions intentionally share a
-# calm charcoal finish; their small warm / plum accents distinguish the destinations.
-const Soft = preload("res://scripts/soft_button.gd")
-const Icons = preload("res://scripts/ui_icons.gd")
-const ALBUM_SPRITE = preload("res://assets/lobby/ui/album_sleeve_sprite.png")
-const PLAY_SPRITE = preload("res://assets/lobby/ui/play_card_sprite.png")
-const CREATE_SPRITE = preload("res://assets/lobby/ui/create_card_sprite.png")
+# Lobby home cards are layered concert-poster plates (cut by tools/lobby_layers/build.py).
+# Play: the record behind the sleeves spins and slides out on hover, its label showing the
+# latest cover. Create: the mixer faders ride the lobby tempo. Both float over the stage floor
+# with a soft shadow and reflection, and drift at their own depth with the stage parallax.
+const Stage = preload("res://scripts/lobby_stage.gd")
+const L = "res://assets/lobby/layers/"
+const PLAY_PLATE = preload(L + "play_plate.png")
+const PLAY_SLEEVES = preload(L + "play_sleeves.png")
+const PLAY_VINYL = preload(L + "play_vinyl.png")
+const CREATE_PLATE = preload(L + "create_plate.png")
+const KNOBS = [preload(L + "create_knob_0.png"), preload(L + "create_knob_1.png"), preload(L + "create_knob_2.png")]
+const GLOW = preload(L + "glow.png")
+# Sprite-space layout of the moving parts.
+const SLEEVES_AT = Vector2(180, 140)
+const VINYL_CENTER = Vector2(665, 428)
+const VINYL_RADIUS = 213.0
+const LABEL_RADIUS = .33
+const KNOB_SLOTS = [[335.0, 325.0, 550.0, 397.0], [433.0, 360.0, 550.0, 472.0], [528.0, 325.0, 550.0, 430.0]]   # x, top, bottom, rest y
 var kind = "play"
 var title = "Play"
 var subtitle = ""
 var covers: Array = []   # up to three Texture2D, front cover first
 var hover = 0.0
 var press = 0.0
+var spin = 0.0
+var elapsed = 0.0
 
 func _ready() -> void:
 	focus_mode = Control.FOCUS_ALL; mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
@@ -20,80 +33,121 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if not is_visible_in_tree(): return
-	hover = lerpf(hover,1.0 if is_hovered() or has_focus() else 0.0,1-exp(-delta*14))
+	elapsed += delta
+	hover = lerpf(hover,1.0 if is_hovered() or has_focus() else 0.0,1-exp(-delta*10))
 	press = move_toward(press,1.0 if is_pressed() else 0.0,delta*8)
+	spin += delta*(.7+3.6*hover)
 	queue_redraw()
 
+func source_rect() -> Rect2:
+	return Rect2(80,90,1720,670) if kind=="play" else Rect2(75,110,1730,630)
+
+# Maps sprite pixels into the card, including lift, press and parallax depth.
+func sprite_transform(depth: float = 0.0) -> Transform2D:
+	var source := source_rect()
+	var factor := minf(size.x/source.size.x,size.y/source.size.y)
+	var fitted := source.size*factor
+	var unit := size.y/290.0
+	var lift := Vector2(0,(-9*hover+6*press)*unit) - Stage.tilt*(10.0+depth)*unit
+	var origin := (size-fitted)*.5 + lift - source.position*factor
+	return Transform2D(0,Vector2(factor,factor),0,origin)
+
 func _draw() -> void:
-	var sprite: Texture2D = PLAY_SPRITE if kind=="play" else CREATE_SPRITE
-	var source = Rect2(80,90,1720,670) if kind=="play" else Rect2(75,110,1730,630)
-	var factor = minf(size.x/source.size.x,size.y/source.size.y)
-	var fitted = source.size*factor
-	var destination = Rect2((size-fitted)*.5,fitted)
-	draw_texture_rect_region(sprite,destination,source,Color(1.1,1.07,1.02) if hover>.5 else Color.WHITE)
-	return
-	var unit = minf(size.y/290.0,size.x/740.0)
-	# Lifts a little on hover or focus, sinks when pressed.
-	var sink = Vector2(0,6*unit*press-5*unit*hover*(1-press))
-	var rect = Rect2(Vector2.ZERO+sink,size)
-	var radius = roundi(28*unit)
-	var shadow = StyleBoxFlat.new(); shadow.bg_color = Color(0,0,0,0); shadow.set_corner_radius_all(radius)
-	shadow.shadow_color = Color(0,0,0,.5*(1-.4*press)); shadow.shadow_size = roundi(lerpf(34,16,press)*unit); shadow.shadow_offset = Vector2(0,lerpf(18,8,press)*unit)
-	draw_style_box(shadow,rect)
-	var play = kind=="play"
-	var accent = Color("d7a66f") if play else Color("ae718d")
-	var plate = StyleBoxFlat.new(); plate.set_corner_radius_all(radius); plate.set_border_width_all(1)
-	plate.bg_color = Color("17181d").lightened(.045*hover)
-	plate.border_color = Color(accent,.72)
-	draw_style_box(plate,rect)
-	var shine = StyleBoxFlat.new(); shine.bg_color = Color(1,1,1,.045)
-	shine.corner_radius_top_left = radius; shine.corner_radius_top_right = radius
-	draw_style_box(shine,Rect2(rect.position+Vector2(1,1),Vector2(rect.size.x-2,rect.size.y*.45)))
-	var pad = 30*unit
-	var art_side = minf(rect.size.y-pad*2,rect.size.x*.27)
-	var art = Rect2(rect.position+Vector2(pad,pad),Vector2(art_side,art_side))
-	if play: draw_covers(art,unit)
-	else: draw_mixer(art,unit,accent)
-	var ink = Color("f4eadf")
-	var bold = Soft.BOLD; var regular = ThemeDB.fallback_font
-	var text_x = art.end.x+30*unit
-	var title_size = roundi((54 if play else 45)*unit)
-	var title_y = rect.position.y+rect.size.y*.43+bold.get_ascent(title_size)*.35
-	draw_string(bold,Vector2(text_x,title_y),title,HORIZONTAL_ALIGNMENT_LEFT,rect.end.x-text_x-pad,title_size,ink)
-	draw_line(Vector2(text_x,title_y+19*unit),Vector2(rect.end.x-pad,title_y+19*unit),Color(1,1,1,.13),1.0*unit)
-	draw_string(regular,Vector2(text_x,title_y+52*unit),subtitle,HORIZONTAL_ALIGNMENT_LEFT,rect.end.x-text_x-pad,roundi(19*unit),Color("c7bdb2"))
-	# A small forward affordance, without the former neon action bubble.
-	draw_string(bold,Vector2(rect.end.x-pad-32*unit,rect.end.y-pad),"››",HORIZONTAL_ALIGNMENT_LEFT,-1,roundi(30*unit),accent)
+	var source := source_rect()
+	var plate: Texture2D = PLAY_PLATE if kind=="play" else CREATE_PLATE
+	var base := sprite_transform()
+	var unit := size.y/290.0
+	var accent := Color("d7a66f") if kind=="play" else Color("ae718d")
+	# Contact shadow on the floor tightens as the card lifts.
+	var card := Rect2(base*source.position, base.basis_xform(source.size))
+	var shadow := Rect2(card.position.x+card.size.x*.04, card.end.y-card.size.y*.16+9*hover*unit, card.size.x*.92, card.size.y*.42)
+	draw_texture_rect(GLOW, shadow, false, Color(0,0,0,.75-.2*hover))
+	draw_reflection(plate, source, base)
+	# Accent halo when hovered or focused.
+	if hover > .01:
+		var halo := StyleBoxFlat.new(); halo.draw_center = false; halo.set_corner_radius_all(roundi(30*unit))
+		halo.shadow_color = Color(accent, .38*hover); halo.shadow_size = roundi(30*unit)
+		draw_style_box(halo, card.grow(-8*unit))
+	draw_set_transform_matrix(base)
+	var bright := Color(1,1,1).lerp(Color(1.08,1.05,1.0), hover)
+	draw_texture_rect_region(plate, source, source, bright)
+	if kind=="play":
+		draw_record(base)
+		draw_texture(PLAY_SLEEVES, SLEEVES_AT, bright)
+	else:
+		draw_faders(base)
+	draw_set_transform_matrix(Transform2D.IDENTITY)
+	draw_sheen(card, unit)
 
-func draw_covers(area: Rect2,unit: float) -> void:
-	var side = minf(area.size.y*.86,area.size.x*.6)
-	var center = area.get_center()+Vector2(0,area.size.y*.02)
-	var fan = [[Vector2(-side*.32,side*.04),-.14],[Vector2(side*.32,-side*.02),.11],[Vector2.ZERO,0.0]]
-	var shown = covers.slice(0,3)
-	var tints = [Color("706056"),Color("716975")]
-	for i in 3:
-		var offset: Vector2 = fan[i][0]; var angle: float = fan[i][1]
-		var texture: Texture2D = null
-		if i==2 and shown.size()>0: texture = shown[0]
-		elif i<2 and shown.size()>i+1: texture = shown[i+1]
-		draw_set_transform(center+offset,angle,Vector2.ONE)
-		var r = Rect2(-Vector2.ONE*side*.5,Vector2.ONE*side)
-		var drop = StyleBoxFlat.new(); drop.bg_color = Color(0,0,0,0); drop.set_corner_radius_all(roundi(22*unit))
-		drop.shadow_color = Color(0,0,0,.28); drop.shadow_size = roundi(16*unit); drop.shadow_offset = Vector2(0,8*unit)
-		draw_style_box(drop,r)
-		var back = StyleBoxFlat.new(); back.set_corner_radius_all(roundi(22*unit))
-		back.bg_color = tints[i] if i<2 else Color("2a2830")
-		draw_style_box(back,r)
-		if texture: draw_texture_rect(texture,r.grow(-2*unit),false)
-		elif i==2: draw_texture_rect(ALBUM_SPRITE,r.grow(-2*unit),false)
-	draw_set_transform(Vector2.ZERO)
+# The plate has no record baked in: it sits between the plate and the sleeve stack.
+func draw_record(base: Transform2D) -> void:
+	var slide := Vector2(105*hover, 0)
+	var pop := sprite_transform(6.0)
+	var center := VINYL_CENTER + slide
+	var spin_at := pop * Transform2D(spin, center)
+	draw_set_transform_matrix(spin_at)
+	draw_texture_rect(GLOW, Rect2(Vector2(-1.25, -1.15)*VINYL_RADIUS + Vector2(14, 22), Vector2(2.5, 2.5)*VINYL_RADIUS), false, Color(0,0,0,.6))
+	draw_texture_rect(PLAY_VINYL, Rect2(-Vector2.ONE*(VINYL_RADIUS+4), Vector2.ONE*(VINYL_RADIUS+4)*2), false)
+	# The label carries the latest cover when there is one.
+	if covers.size() > 0 and covers[0] is Texture2D:
+		var points := PackedVector2Array(); var uvs := PackedVector2Array()
+		var r := VINYL_RADIUS*(LABEL_RADIUS-.03)
+		for i in 40:
+			var a := TAU*i/40.0
+			points.append(Vector2(cos(a), sin(a))*r)
+			uvs.append(Vector2(.5,.5)+Vector2(cos(a), sin(a))*.5)
+		draw_polygon(points, PackedColorArray([Color(.92,.92,.92)]), uvs, covers[0])
+		draw_circle(Vector2.ZERO, 7, Color(.03,.03,.04))
+	draw_set_transform_matrix(base)
 
-func draw_mixer(area: Rect2,unit: float,accent: Color) -> void:
-	var housing = StyleBoxFlat.new(); housing.bg_color = Color("24242a"); housing.set_corner_radius_all(roundi(18*unit)); housing.border_color=Color(1,1,1,.08); housing.set_border_width_all(1)
-	draw_style_box(housing,area)
+func draw_faders(base: Transform2D) -> void:
+	var pop := sprite_transform(6.0)
+	var b := Stage.beat()
+	var reach := lerpf(.32, 1.0, hover)
 	for i in 3:
-		var x = area.position.x+area.size.x*(.27+i*.23)
-		var top = area.position.y+area.size.y*.22; var bottom=area.end.y-area.size.y*.2
-		draw_line(Vector2(x,top),Vector2(x,bottom),Color("a99e95"),2.0*unit)
-		var y = lerpf(top,bottom,[.28,.58,.42][i])
-		draw_circle(Vector2(x,y),11*unit,accent if i!=1 else Color("6f9eb2"))
+		var slot: Array = KNOB_SLOTS[i]
+		# Each fader rides to a new level every two beats, offset per channel like a live mix.
+		var step := b*.5 + i*.37
+		var n := floori(step)
+		var t := smoothstep(0.0, 1.0, clampf((step-n)*2.2, 0, 1))
+		var level := lerpf(fader_level(n, i), fader_level(n+1, i), t)
+		var y := lerpf(float(slot[3]), lerpf(float(slot[1]), float(slot[2]), level), reach)
+		var at := Vector2(float(slot[0]), y)
+		var knob: Texture2D = KNOBS[i]
+		draw_set_transform_matrix(pop)
+		var shade := knob.get_size()*1.5
+		draw_texture_rect(GLOW, Rect2(at - shade*.5 + Vector2(5, 11), shade), false, Color(0,0,0,.7))
+		draw_texture(knob, at - knob.get_size()*.5)
+	draw_set_transform_matrix(base)
+
+static func fader_level(n: int, channel: int) -> float:
+	var h := hash(Vector2i(n, channel)) % 1000
+	return h / 999.0
+
+# Mirrored plate fading into the glossy stage floor below the card.
+func draw_reflection(plate: Texture2D, source: Rect2, base: Transform2D) -> void:
+	var floor_y := (base*source.end).y + 6*size.y/290.0
+	var mirror := Transform2D(0, Vector2(1,-1), 0, Vector2(0, floor_y*2)) * base
+	var bands := 10
+	var band := source.size.y*.045
+	for k in bands:
+		var src := Rect2(source.position.x, source.end.y-(k+1)*band, source.size.x, band)
+		var fade: float = pow(1.0-float(k)/bands, 2.0)*.16*(1.0-.4*hover)
+		draw_set_transform_matrix(mirror)
+		draw_texture_rect_region(plate, src, src, Color(1,1,1,fade))
+	draw_set_transform_matrix(Transform2D.IDENTITY)
+
+# A slow diagonal glint crosses each card once every eight beats.
+func draw_sheen(card: Rect2, unit: float) -> void:
+	var phase := fposmod(Stage.beat()/8.0 + (0.0 if kind=="play" else .5), 1.0)
+	if phase > .22: return
+	var inner := card.grow(-26*unit)
+	var x := lerpf(inner.position.x - inner.size.y, inner.end.x, phase/.22)
+	var w := 46*unit
+	var box := PackedVector2Array([inner.position, Vector2(inner.end.x, inner.position.y), inner.end, Vector2(inner.position.x, inner.end.y)])
+	# Nested bands build a soft-edged glint instead of a hard stripe.
+	for layer in 3:
+		var grow := w*(.25+layer*.45)
+		var band := PackedVector2Array([Vector2(x-grow, inner.end.y), Vector2(x+w+grow, inner.end.y), Vector2(x+w+grow+inner.size.y*.6, inner.position.y), Vector2(x-grow+inner.size.y*.6, inner.position.y)])
+		for piece in Geometry2D.intersect_polygons(band, box):
+			draw_colored_polygon(piece, Color(1, .93, .8, .014 + .01*hover))
