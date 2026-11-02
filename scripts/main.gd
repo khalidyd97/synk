@@ -661,6 +661,7 @@ func build_ui() -> void:
 	pause_backdrop=ColorRect.new(); rect(pause_backdrop,pause_root,0,0,1,1); pause_backdrop.color=Color("101010")
 	pause_backdrop.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	modal=Panel.new(); rect(modal,safe_parent("SafeModal",pause_root),.19,.11,.81,.89)
+	preload("res://scripts/modal_input.gd").register(modal)
 	var pause_panel=StyleBoxFlat.new();pause_panel.bg_color=Color("1b1b1b");pause_panel.set_corner_radius_all(28)
 	modal.add_theme_stylebox_override("panel",pause_panel)
 	modal_title=label(modal,"S Y N K",.04,.025,.96,.17,48); modal_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER

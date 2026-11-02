@@ -31,6 +31,7 @@ func _ready() -> void:
 	layer = 100
 	root = Control.new(); add_child(root); root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_STOP
+	preload("res://scripts/modal_input.gd").register(root)
 	var dim = ColorRect.new(); place(dim,root,0,0,1,1); dim.color = Color(0.016,0.016,0.026)
 	var card = Panel.new(); place(card,root,.33,.14,.67,.86)
 	card.add_theme_stylebox_override("panel",box(Color(0.045,0.045,0.06),Color(ACCENT,.55),22))

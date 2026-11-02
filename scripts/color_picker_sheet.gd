@@ -33,6 +33,7 @@ var after_chip: ColorRect
 var hex: LineEdit
 var title: Label
 var dragging = ""
+var drag_pointer=-2
 
 # changed: live, while dragging. done/cancelled: once, on close. game: shows the live highway.
 static func open(host: Control, heading: String, start: Color, changed: Callable, done: Callable = Callable(), cancelled: Callable = Callable(), game: Control = null) -> Control:
@@ -51,6 +52,7 @@ static func open(host: Control, heading: String, start: Color, changed: Callable
 
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	preload("res://scripts/modal_input.gd").register(self)
 	var dim = ColorRect.new(); add_child(dim); dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.color = Color(0,0,0,.55); dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card = Panel.new(); add_child(card); card.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -203,16 +205,23 @@ func read_hex() -> void:
 	if Color.html_is_valid(code): set_color(Color(code))
 	else: sync(false)
 
-func drag_input(event: InputEvent, target: String) -> void:
-	var area: Control = square if target=="square" else hue_bar
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		dragging = target if event.pressed else ""
-	if dragging != target: return
-	if event is InputEventMouseButton or event is InputEventMouseMotion:
-		var p = (event.position/area.size).clamp(Vector2.ZERO,Vector2.ONE)
-		if target == "square": saturation = p.x; value = 1.0-p.y
-		else: hue = minf(p.x,.999)
-		sync(true); accept_event()
+func drag_input(event:InputEvent,target:String) -> void:
+	if closing:return
+	var area:Control=square if target=="square" else hue_bar
+	var moving=false
+	if event is InputEventScreenTouch:
+		if event.pressed and dragging=="":dragging=target;drag_pointer=event.index;moving=true
+		elif not event.pressed and drag_pointer==event.index:dragging="";drag_pointer=-2;accept_event();return
+	elif event is InputEventScreenDrag:moving=drag_pointer==event.index and dragging==target
+	elif event is InputEventMouseButton and event.device!=-1 and event.button_index==MOUSE_BUTTON_LEFT:
+		if event.pressed and dragging=="":dragging=target;drag_pointer=-1;moving=true
+		elif not event.pressed and drag_pointer==-1:dragging="";drag_pointer=-2;accept_event();return
+	elif event is InputEventMouseMotion and event.device!=-1:moving=drag_pointer==-1 and dragging==target
+	if moving:
+		var p=(event.position/area.size).clamp(Vector2.ZERO,Vector2.ONE)
+		if target=="square":saturation=p.x;value=1.0-p.y
+		else:hue=minf(p.x,.999)
+		sync(true);accept_event()
 
 func draw_square_marker() -> void:
 	var at = Vector2(saturation,1.0-value)*square.size
@@ -224,9 +233,11 @@ func draw_hue_marker() -> void:
 	knob.set_border_width_all(4); knob.border_color = Color.WHITE
 	hue_marker.draw_style_box(knob,Rect2(x-12,-6,24,hue_bar.size.y+12))
 
-func _gui_input(event: InputEvent) -> void:
-	# A tap on the dimmed area outside the card cancels.
-	if event is InputEventMouseButton and event.pressed and not card.get_global_rect().has_point(event.global_position): close(false)
+func _gui_input(event:InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and not card.get_global_rect().has_point(event.global_position):close(false)
+	elif event is InputEventScreenTouch and event.pressed:
+		var point=get_global_transform_with_canvas()*event.position
+		if not card.get_global_rect().has_point(point):close(false)
 
 func close(keep: bool) -> void:
 	if closing:return

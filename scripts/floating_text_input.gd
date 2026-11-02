@@ -16,6 +16,7 @@ func _ready() -> void:
     overlay=Control.new(); overlay.name="FloatingTextEntry"; add_child(overlay)
     overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     overlay.theme=game.ui.theme
+    preload("res://scripts/modal_input.gd").register(overlay)
     var dim=ColorRect.new(); overlay.add_child(dim)
     dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); dim.color=Color(0.006,0.006,0.006,.25)
     dim.mouse_filter=Control.MOUSE_FILTER_STOP

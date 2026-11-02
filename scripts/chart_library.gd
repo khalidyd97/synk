@@ -283,6 +283,7 @@ func confirm_level() -> void:
     selected_variant=Levels.key(roundi(level_input.value)); open_selected(level_action)
 func build_level_popup() -> void:
     level_popup=Control.new(); fraction_place(level_popup,canvas,0,0,1,1); level_popup.mouse_filter=Control.MOUSE_FILTER_STOP
+    preload("res://scripts/modal_input.gd").register(level_popup)
     var dim=ColorRect.new(); fraction_place(dim,level_popup,0,0,1,1); dim.color=Color(0.006,0.006,0.006,.72); dim.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var card=Panel.new(); fraction_place(card,level_popup,.3,.24,.7,.76)
     var style=StyleBoxFlat.new(); style.bg_color=Color(.04,.04,.04,.97); style.border_color=Color(1,1,1,.12)
@@ -340,6 +341,7 @@ func fraction_button(parent: Control,value: String,l: float,t: float,r: float,b:
 func build_confirm() -> void:
     # Deleting is permanent, so it always asks first.
     confirm=Control.new(); fraction_place(confirm,canvas,0,0,1,1); confirm.mouse_filter=Control.MOUSE_FILTER_STOP
+    preload("res://scripts/modal_input.gd").register(confirm)
     var dim=ColorRect.new(); fraction_place(dim,confirm,0,0,1,1); dim.color=Color(0.006,0.006,0.006,.72); dim.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var panel=Panel.new(); fraction_place(panel,confirm,.27,.28,.73,.72)
     var style=StyleBoxFlat.new(); style.bg_color=Color(.04,.04,.04,.97); style.border_color=Color(1,1,1,.12)

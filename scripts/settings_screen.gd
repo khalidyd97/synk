@@ -599,6 +599,7 @@ func build_notes(items: VBoxContainer) -> void:
     var focus=picker_style.duplicate(); focus.border_color=ACCENT
     for state in ["focus","hover","pressed"]: trail_style_input.add_theme_stylebox_override(state,focus)
     add_control(trail,trail_style_input)
+    preload("res://scripts/modal_input.gd").register(trail_style_input.get_popup())
     trail_style_input.item_selected.connect(func(index): game.change_trail_style("solid" if index==1 else "neon"))
     sizing_row(items,"hold_trail_width","Hold & slide trail width","Adjust both trail widths independently of note size.",30,150,game.hold_trail_width)
     action(items,"RESET NOTE SIZES",func():

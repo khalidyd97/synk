@@ -75,9 +75,8 @@ var list_arrows: Array = []
 # Horizontal drag on the carousel: a press that moves is a scroll, not a card tap.
 var carousel_press = false
 var carousel_dragged = false
-var carousel_press_x = 0.0
-var carousel_press_scroll = 0
 var carousel_tween: Tween
+var carousel_drag:Node
 var detail: Control
 var selected_id = ""
 var selected_variant = ""
@@ -157,6 +156,7 @@ func _ready() -> void:
 	# Game tabs (one per game folder, plus favourites) and the sign-out button.
 	var tab_scroll = ScrollContainer.new(); place(tab_scroll,self,.02,.135,.86,.2)
 	tab_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var tab_drag=preload("res://scripts/drag_scroll.gd").attach(tab_scroll);tab_drag.horizontal=true
 	game_tabs = HBoxContainer.new(); tab_scroll.add_child(game_tabs); game_tabs.add_theme_constant_override("separation",8)
 	logout_button = action(self,"LOG OUT",.87,.135,.98,.2,log_out,"small")
 
@@ -164,6 +164,12 @@ func _ready() -> void:
 	carousel = ScrollContainer.new(); place(carousel,self,.02,.215,.86,.73)
 	carousel.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	carousel.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	carousel_drag=preload("res://scripts/song_list_scroll.gd").new();carousel_drag.name="DragScroll";carousel_drag.scroll=carousel;carousel_drag.horizontal=true;carousel.add_child(carousel_drag)
+	carousel_drag.on_press=func():
+		carousel_press=true;carousel_dragged=false
+		if carousel_tween:carousel_tween.kill()
+	carousel_drag.on_drag=func():carousel_dragged=true
+	carousel_drag.on_release=func():carousel_press=false
 	song_list = HBoxContainer.new(); carousel.add_child(song_list)
 	song_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	song_list.add_theme_constant_override("separation",18)
@@ -355,6 +361,8 @@ func song_length(song: Dictionary) -> float:
 	return float(meta.get("duration",song.get("length",0.0)))
 
 func refresh_songs() -> void:
+	if carousel_drag:carousel_drag.stop()
+	if carousel_tween:carousel_tween.kill()
 	for child in song_list.get_children():
 		song_list.remove_child(child); child.queue_free()
 	rows.clear(); row_queue.clear()
@@ -524,23 +532,11 @@ func center_selected(animate: bool) -> void:
 	if not card.is_inside_tree(): return
 	var target = int(maxf(0,card.position.x+card.size.x*.5-carousel.size.x*.5))
 	if carousel_tween: carousel_tween.kill()
+	if carousel_drag:carousel_drag.stop()
 	if not animate: carousel.scroll_horizontal = target; return
 	carousel_tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	carousel_tween.tween_property(carousel,"scroll_horizontal",target,.28)
 
-func _input(event: InputEvent) -> void:
-	if not visible or carousel == null or not carousel.is_visible_in_tree(): return
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		if event.pressed and carousel.get_global_rect().has_point(event.position):
-			carousel_press = true; carousel_dragged = false
-			carousel_press_x = event.position.x; carousel_press_scroll = carousel.scroll_horizontal
-		elif not event.pressed: carousel_press = false
-	elif event is InputEventMouseMotion and carousel_press:
-		var distance = event.position.x-carousel_press_x
-		if not carousel_dragged and absf(distance) > 12.0:
-			carousel_dragged = true
-			if carousel_tween: carousel_tween.kill()
-		if carousel_dragged: carousel.scroll_horizontal = int(carousel_press_scroll-distance)
 
 func disarm_row() -> void:
 	if rows.has(row_armed_id) and rows[row_armed_id].trash != null and is_instance_valid(rows[row_armed_id].trash):

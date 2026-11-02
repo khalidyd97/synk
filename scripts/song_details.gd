@@ -43,6 +43,7 @@ func action(parent: Control,value: String,x: float,y: float,w: float,h: float,ca
 
 func _ready() -> void:
 	mouse_filter=Control.MOUSE_FILTER_STOP
+	preload("res://scripts/modal_input.gd").register(self)
 	var background=ColorRect.new(); add_child(background); background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	background.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	var mat=preload("res://scripts/background_motion.gd").attach(background,preload("res://scripts/song_browser_background.gdshader"))
