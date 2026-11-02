@@ -2,6 +2,7 @@ extends Control
 const JOB=preload("res://scripts/ssrg_import_job.gd")
 const TX=preload("res://scripts/ssrg_import_transaction.gd")
 var host:Control
+var target_game=""
 var job=JOB.new()
 var sources=PackedStringArray()
 var revision=-1
@@ -122,6 +123,9 @@ func _ready() -> void:
 	visible=false;set_step("idle");show_details();update_controls()
 
 func open() -> void:
+	var destination=str(host.selected_game)
+	if not job.busy() and destination!=target_game:
+		clear();target_game=destination;job.target_game=destination
 	job.root=host.game.library.root_path
 	if not job.busy():
 		var recovered=TX.recover(job.root)
@@ -144,7 +148,7 @@ func add_sources(paths:PackedStringArray) -> void:
 	if job.busy():return
 	for path in paths:
 		if path not in sources:sources.append(path)
-	job.root=host.game.library.root_path;warning_ack.button_pressed=false
+	job.root=host.game.library.root_path;job.target_game=target_game;warning_ack.button_pressed=false
 	job.scan(sources,host.game.library.songs);show()
 func clear() -> void:
 	if job.busy():return
@@ -288,7 +292,7 @@ func show_details() -> void:
 	for field in ["title","artist","game"]:
 		var column=VBoxContainer.new();column.size_flags_horizontal=Control.SIZE_EXPAND_FILL;fields.add_child(column)
 		label(str(field).capitalize(),column,14)
-		var edit=LineEdit.new();edit.text=str(item.get(field,""));edit.custom_minimum_size.y=42;column.add_child(edit)
+		var edit=LineEdit.new();edit.editable=field!="game" or target_game.is_empty();edit.text=str(item.get(field,""));edit.custom_minimum_size.y=42;column.add_child(edit)
 		edit.text_changed.connect(func(value):
 			if not job.busy():job.plan[index][field]=value;job.plan[index][field+"_edited"]=true)
 	var audio_row=row(details);label("Audio: "+str(item.get("audio","")).get_file(),audio_row,15);button("CHOOSE AUDIO",audio_row,func():choose_match("audio"))

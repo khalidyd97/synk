@@ -45,6 +45,7 @@ var demo_stream: AudioStream
 var song_metadata: Dictionary = {}
 var song_cover_textures: Dictionary = {}
 var song_background_textures: Dictionary = {}
+var song_details_return_ssrg=false
 var song_details: Control
 var cover_palettes: Dictionary = {}
 var metadata_queue: Array[String] = []
@@ -2035,10 +2036,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		if recorder.setup:
 			recorder.setup.queue_free(); recorder.setup=null; return
 		if recorder.review: recorder.keep(); return
-		if mode=="menu" and sync_helper.visible: sync_helper.close()
+		if mode=="menu" and ssrg_playables.visible:ssrg_playables.back()
+		elif mode=="menu" and sync_helper.visible: sync_helper.close()
 		elif mode=="menu" and menu_settings_open: close_lobby_settings()
 		elif mode=="guide": set_mode("menu")
-		elif mode=="library" and song_details.visible: close_song_details()
+		elif song_details.visible: close_song_details()
 		elif mode=="library": set_mode("menu")
 		elif mode=="editor": close_editor()
 		else: toggle_pause()
@@ -2734,7 +2736,9 @@ func update_song_details(id: String,fields: Dictionary) -> void:
 
 # Song details open from the Chart Studio song list and return there.
 func open_song_details(id: String) -> void:
-	if mode!="library" or song_details_entry(id).is_empty(): return
+	if (mode!="library" and not (mode=="menu" and ssrg_playables.visible)) or song_details_entry(id).is_empty(): return
+	song_details_return_ssrg=ssrg_playables.visible
+	if song_details_return_ssrg:ssrg_playables.stop_preview();ssrg_playables.hide()
 	UiMotion.transition(self)
 	chart_library.visible=false
 	song_details.open(id); song_details.visible=true
@@ -2748,6 +2752,9 @@ func open_chart_history(id: String,level: String) -> void:
 func close_song_details() -> void:
 	UiMotion.back(self)
 	song_details.visible=false
+	if song_details_return_ssrg and mode=="menu":
+		ssrg_playables.show();ssrg_playables.refresh_songs();UiMotion.reveal(ssrg_playables)
+	song_details_return_ssrg=false
 	if mode=="library":
 		chart_library.visible=true
 		UiMotion.reveal(chart_library)

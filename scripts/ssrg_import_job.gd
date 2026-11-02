@@ -3,6 +3,7 @@ const PARSER=preload("res://scripts/ssrg_import.gd")
 const TX=preload("res://scripts/ssrg_import_transaction.gd")
 const ARCHIVE=preload("res://scripts/ssrg_import_archive.gd")
 var root="user://"
+var target_game=""
 var task=-1
 var mutex=Mutex.new()
 var canceled=false
@@ -140,6 +141,7 @@ static func candidates(files:PackedStringArray,stems:Array,base:String) -> Array
 
 func inspect_item(original:Dictionary,songs:Array) -> Dictionary:
 	var item=original.duplicate(true)
+	if not target_game.is_empty():item.target_game=target_game;item.game=target_game;item.game_edited=true
 	item.errors=[];item.warnings=[];item.chart_reports=[];item.charts={};item.chart_hashes={};item.valid_keys=[]
 	var audio_name=""
 	for path in item.chart_files:
@@ -194,12 +196,13 @@ func inspect_item(original:Dictionary,songs:Array) -> Dictionary:
 				item.duration=stream.get_length()
 				if not is_finite(float(item.duration)) or item.duration<.2 or item.duration>1200:item.errors.append("Audio must be between 0.2 seconds and 20 minutes.")
 			if probe!=str(item.audio):DirAccess.remove_absolute(probe)
+	var existing_id=TX.song_id(item,songs)
 	for song in songs:
-		if str(song.id)!=str(item.audio_hash):continue
+		if str(song.id)!=existing_id:continue
 		item.existing=true
 		if not original.get("title_edited",false):item.title=str(song.title)
 		if not original.get("artist_edited",false):item.artist=str(song.get("artist",item.artist))
-		if not original.get("game_edited",false):item.game=str(song.get("album",item.game))
+		if not original.get("game_edited",false):item.game=str(song.get("ssrg_game",song.get("album",item.game)))
 		item.existing_charts=[]
 		for keys in [4,7,13]:
 			var target=root.path_join("charts/"+str(song.id)+"_lv%d.json" % keys)
@@ -235,7 +238,7 @@ func inspect_item(original:Dictionary,songs:Array) -> Dictionary:
 		if file_size(item.background)>12*1024*1024 or Image.load_from_file(ProjectSettings.globalize_path(item.background))==null:item.errors.append("Background is unreadable or exceeds 12 MB. Choose another image or remove it.")
 	item.ready=item.errors.is_empty() and not item.selected_keys.is_empty()
 	if item.existing and not original.get("include_edited",false):
-		item.include=item.valid_keys.any(func(keys):return not FileAccess.file_exists(root.path_join("charts/"+str(item.audio_hash)+"_lv%d.json" % int(keys))))
+		item.include=item.valid_keys.any(func(keys):return not FileAccess.file_exists(root.path_join("charts/"+TX.song_id(item,songs)+"_lv%d.json" % int(keys))))
 	return item
 
 func recheck(index:int,changes:Dictionary,songs:Array) -> void:

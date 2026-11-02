@@ -1,0 +1,23 @@
+[
+  {
+    "name": "chromaprint",
+    "version": "v1.6.2",
+    "folder": "chromaprint-1.6.2",
+    "url": "https://github.com/acoustid/chromaprint/archive/refs/tags/v1.6.2.zip",
+    "sha256": "bca11246ca74e1fcdb12fb27c34d4d086066665c4d2d422033f7198c2ed2a0b5"
+  },
+  {
+    "name": "godot-cpp",
+    "version": "godot-4.5-stable",
+    "folder": "godot-cpp-godot-4.5-stable",
+    "url": "https://github.com/godotengine/godot-cpp/archive/refs/tags/godot-4.5-stable.zip",
+    "sha256": "0316ea168750b5f4f1caea6457657a6c64241f890f78e2f042aee4be2b1085bf"
+  },
+  {
+    "name": "kissfft",
+    "version": "131.1.0",
+    "folder": "kissfft-131.1.0",
+    "url": "https://github.com/mborgerding/kissfft/archive/refs/tags/131.1.0.zip",
+    "sha256": "9c2e19cc34ed910dcb509fd8ab561a523b923b6578703ace8c8f37f5a286bb25"
+  }
+]

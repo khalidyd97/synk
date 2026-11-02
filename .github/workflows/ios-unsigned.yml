@@ -24,6 +24,9 @@ jobs:
       - name: Build iOS file picker extension
         shell: bash
         run: bash tools/ios_file_picker/build.sh "$PWD"
+      - name: Build iOS Chromaprint extension
+        shell: bash
+        run: bash tools/chromaprint/build_ios.sh "$PWD"
       - name: Export Xcode project
         shell: bash
         run: |

@@ -26,7 +26,7 @@ func run() -> void:
 	game.prefs.set_value("ssrg","preview",false)
 	for i in 20:
 		game.library.songs.append({"id":"scroll-test-%d" % i,"title":"Scroll song %02d" % i,"file":"none.wav","ssrg":{},"ssrg_charts":[{"keys":7,"variant":"7k","notes":1,"density":1,"length":60}]})
-	var screen=game.ssrg_playables;screen.refresh_songs()
+	var screen=game.ssrg_playables;screen.open_game("IMPORTED")
 	for i in 30:await process_frame
 	var chosen=screen.selected_id
 	var card_center=screen.rows[chosen].row.get_global_rect().get_center()

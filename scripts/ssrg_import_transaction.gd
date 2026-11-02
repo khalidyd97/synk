@@ -90,10 +90,19 @@ static func replacement_allowed(root:String,song:Dictionary,keys:int) -> bool:
 	var baseline=song.get("ssrg_import",{}).get("charts",{}).get(str(keys),{})
 	return baseline is Dictionary and not str(baseline.get("sha256","")).is_empty() and hash_file(root.path_join(relative))==str(baseline.sha256)
 
+static func song_id(item:Dictionary,songs:Array) -> String:
+	var hash=str(item.get("audio_hash",""));var target=str(item.get("target_game",""))
+	if target.is_empty():return hash
+	var catalog=preload("res://scripts/ssrg_game_catalog.gd")
+	target=catalog.normalize(target)
+	for song in songs:
+		if song.has("ssrg") and catalog.category(song)==target and (str(song.id)==hash or str(song.get("ssrg_import",{}).get("audio_sha256",""))==hash):return str(song.id)
+	return (hash+"|ssrg_game|"+target).sha256_text()
+
 static func prepare(root:String,item:Dictionary,songs:Array,cancel:Callable=Callable(),progress:Callable=Callable()) -> Dictionary:
 	if item.get("policy","add_missing")=="skip":return {"skipped":true,"reason":"Skipped by selection."}
-	var id=str(item.get("audio_hash",""))
-	if id.length()!=64:return {"error":"Audio has not been validated. Review this song first."}
+	var id=song_id(item,songs)
+	if str(item.get("audio_hash","")).length()!=64 or id.length()!=64:return {"error":"Audio has not been validated. Review this song first."}
 	var old_song:Dictionary={}
 	for saved_song in songs:
 		if str(saved_song.id)==id:old_song=saved_song;break
@@ -118,7 +127,7 @@ static func prepare(root:String,item:Dictionary,songs:Array,cancel:Callable=Call
 	var staged_audio="new/audio."+format
 	var error=copy_audio(audio,folder.path_join(staged_audio),cancel,progress)
 	if not error.is_empty():return fail(folder,error)
-	if hash_file(folder.path_join(staged_audio))!=id:return fail(folder,"Audio changed since review. Scan this song again.")
+	if hash_file(folder.path_join(staged_audio))!=str(item.audio_hash):return fail(folder,"Audio changed since review. Scan this song again.")
 	var stream=SynkLibrary.decode(folder.path_join(staged_audio))
 	if stream==null:return fail(folder,"Audio could not be decoded.")
 	var duration=stream.get_length()
@@ -168,7 +177,8 @@ static func prepare(root:String,item:Dictionary,songs:Array,cancel:Callable=Call
 	if not FileAccess.file_exists(root.path_join(audio_target)):
 		if not add_operation(root,tx,audio_target,staged_audio):return fail(folder,"Could not prepare audio storage.")
 	song.file=id+"."+format;song.title=str(item.get("title",song.get("title","Imported song")));song.artist=str(item.get("artist",song.get("artist","")))
-	song.album=str(item.get("game",song.get("album","SSRG")));song.length=duration;keys.sort();song.ssrg=keys
+	song.ssrg_game=preload("res://scripts/ssrg_game_catalog.gd").normalize(str(item.get("target_game",item.get("game","IMPORTED"))))
+	song.album=str(song.get("album",item.get("game","SSRG")));song.length=duration;keys.sort();song.ssrg=keys
 	song.erase("ssrg_charts")
 	var art=str(item.get("background",""))
 	var art_hash=str(song.get("ssrg_import",{}).get("background_sha256",""))
@@ -196,7 +206,7 @@ static func prepare(root:String,item:Dictionary,songs:Array,cancel:Callable=Call
 				copied.portrait=root.path_join(target)
 			cards.append(copied)
 		config.cards=cards;song.ssrg_presentation=config
-	song.ssrg_import={"version":4,"charts":baselines,"background_sha256":art_hash,"source_key":str(item.get("source_key",""))}
+	song.ssrg_import={"version":4,"audio_sha256":str(item.audio_hash),"charts":baselines,"background_sha256":art_hash,"source_key":str(item.get("source_key",""))}
 	tx.song=song;tx.outcome="imported" if existing.is_empty() else "updated"
 	if SynkLibrary.atomic_write(folder.path_join("journal.json"),tx)!=OK:return fail(folder,"Could not prepare recovery journal.")
 	return tx
