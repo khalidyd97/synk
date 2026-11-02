@@ -11,6 +11,14 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - name: Select Xcode 26
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -d /Applications/Xcode*.app
+          xcode=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
       - name: Install Godot and export templates
         shell: bash
         run: |
