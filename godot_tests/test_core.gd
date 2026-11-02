@@ -52,8 +52,8 @@ func _initialize() -> void:
 		var probe=SynkChart.note(0,2,"slide"); probe.duration=.6; probe.path=shaped
 		return is_equal_approx(SynkChart.lane_at(probe,t),lane_value)
 	check(held_on.call(2.0,.1) and held_on.call(4.0,.5) and shaped[0].lane==2.0 and shaped[-1].lane==4.0,"Lanes the finger rests on become locked runs, ends sit on lanes")
-	var swept=shaped.filter(func(point): return float(point.offset)>.24 and float(point.offset)<.36)
-	check(not swept.is_empty() and swept.any(func(point): return not is_equal_approx(float(point.lane),roundf(float(point.lane)))),"Lanes swept past quickly stay a smooth curve")
+	var ramp=SynkChart.note(0,2,"slide");ramp.duration=.6;ramp.end_lane=4;ramp.path=shaped;ramp.ssrg_path=true
+	check(SynkChart.lane_at(ramp,.28)<SynkChart.lane_at(ramp,.30) and SynkChart.lane_at(ramp,.30)<SynkChart.lane_at(ramp,.32),"Crossed lanes form one continuous ramp instead of dwell-snapped steps")
 	var count=capture.notes.size(); capture.begin(1,6,Vector2(.5,.765)); n=capture.end(1,6.3,Vector2(.5,.765),true)
 	check(n.is_empty() and capture.notes.size()==count,"Canceled touch discarded")
 	capture.begin(1,7,Vector2(.3,.765)); capture.begin(2,7,Vector2(.7,.765))

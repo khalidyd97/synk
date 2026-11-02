@@ -29,7 +29,7 @@ func begin(id: int, time: float, p: Vector2, tool = "auto",fixed: Array=[]) -> b
 			if distance<closest: time=float(previous.time); closest=distance
 	var n = SynkChart.note(time, note_lane)
 	n.path.append({"offset": 0.0, "lane": float(n.lane)})
-	gestures[id] = {"note": n, "tool": tool, "start": p, "position": p, "max_delta": 0.0,"lane_shift":0,"raw_lane":note_lane,"fixed":fixed}
+	gestures[id] = {"note": n, "tool": tool, "start": p, "position": p, "max_delta": 0.0,"lane_shift":float(note_lane)-lane(p.x),"samples":n.path.duplicate(true),"raw_lane":note_lane,"fixed":fixed}
 	chord_starts.append({"note":n,"id":id,"input_time":raw_time,"raw_lane":note_lane})
 	space_chord(n,fixed)
 	return true
@@ -47,16 +47,24 @@ func space_chord(n: Dictionary,fixed: Array) -> void:
 		movable.append(gestures[id].note); before[id]=int(gestures[id].note.lane)
 	last_spacing_resolved=SynkNoteSpacing.place(n,movable,fixed,minimum_lane_gap).resolved
 	# A moved gesture keeps following its finger with a constant lane offset.
-	for id in gestures: gestures[id].lane_shift+=int(gestures[id].note.lane)-int(before[id])
+	for id in gestures:
+		var delta=int(gestures[id].note.lane)-int(before[id])
+		gestures[id].lane_shift+=delta
+		if delta!=0:
+			for point in gestures[id].samples:point.lane=clampf(float(point.lane)+delta,0,SynkChart.MAX_LANE)
 
 func move(id: int, time: float, p: Vector2) -> void:
 	if not gestures.has(id): return
 	var g: Dictionary = gestures[id]; var n: Dictionary = g.note
-	g.position = p; g.max_delta = maxf(float(g.max_delta), absf(lane(p.x)-float(g.get("raw_lane",roundi(lane(g.start.x))))))
+	g.position = p; g.max_delta = maxf(float(g.max_delta), absf(lane(p.x)-lane(g.start.x)))
 	var mapped_lane=clampf(lane(p.x)+float(g.get("lane_shift",0)),0,SynkChart.MAX_LANE)
-	n.duration = maxf(0, time - float(n.time)); n.end_lane = roundi(mapped_lane)
-	if n.duration > float(n.path[-1].offset) + .016: n.path.append({"offset": n.duration, "lane": mapped_lane})
-	n.kind = "slide" if g.max_delta >= .8 else "hold"
+	n.duration = maxf(float(n.duration),maxf(0,time-float(n.time)));n.end_lane=roundi(mapped_lane)
+	var samples:Array=g.samples
+	if n.duration>float(samples[-1].offset)+.0001:samples.append({"offset":n.duration,"lane":mapped_lane})
+	elif samples.size()>1:samples[-1].lane=mapped_lane
+	n.kind = str(g.tool) if g.tool in ["hold","slide"] else ("slide" if g.max_delta>=.8 else "hold")
+	if n.kind=="slide" and n.duration>.04:
+		n.path=snap_path(samples,n.duration);n.ssrg_path=true
 
 func end(id: int, time: float, p: Vector2, canceled = false) -> Dictionary:
 	if not gestures.has(id): return {}
@@ -76,51 +84,50 @@ func end(id: int, time: float, p: Vector2, canceled = false) -> Dictionary:
 		if n.duration < .04: return {}
 		if n.kind == "hold": n.end_lane = n.lane; n.path = []
 		else:
-			if n.path[-1].offset == n.duration: n.path.pop_back()
-			n.path.append({"offset": n.duration, "lane": float(n.end_lane)})
-			n.path = snap_path(n.path, float(n.duration))
+			n.path=snap_path(g.samples,float(n.duration))
+			n.ssrg_path=true
 			n.end_lane = int(n.path[-1].lane)
+	if n.kind!="slide":n.erase("ssrg_path")
 	notes.append(n); space_chord(n,g.get("fixed",[])); return n
 
-# How long (seconds) the finger must stay over a lane for the slide to lock onto it.
-const DWELL = .12
-# Smooth sections keep a point at most this often (seconds).
-const SMOOTH_SPACING = .03
-
-# Turns a hand-drawn slide path into a cleaner one. Lanes the finger rested on become flat
-# runs locked to that lane; lanes it only swept across stay a smooth curve between them.
-# The start and end always sit exactly on a lane.
-static func snap_path(path: Array, duration: float) -> Array:
-	if path.is_empty(): return path
-	# Group consecutive points by the lane they are nearest to.
-	var runs: Array = []
-	for i in path.size():
-		var lane_index = clampi(roundi(float(path[i].lane)), 0, SynkChart.MAX_LANE)
-		if runs.is_empty() or runs[-1].lane != lane_index: runs.append({"lane": lane_index, "first": i, "last": i})
-		else: runs[-1].last = i
-	var result: Array = []
-	var add_point = func(offset: float, lane_value: float, spaced: bool) -> void:
-		if not result.is_empty():
-			var gap = offset - float(result[-1].offset)
-			if gap <= .0001 or (spaced and gap < SMOOTH_SPACING): return
-		result.append({"offset": offset, "lane": clampf(lane_value, 0, SynkChart.MAX_LANE)})
-	for r in runs.size():
-		var run: Dictionary = runs[r]
-		var start = float(path[run.first].offset); var finish = float(path[run.last].offset)
-		# Time over this lane: from entering it until entering the next one.
-		var left_at = float(path[runs[r+1].first].offset) if r < runs.size()-1 else duration
-		if r == 0 or r == runs.size()-1 or left_at - start >= DWELL:
-			add_point.call(start, float(run.lane), false)
-			add_point.call(finish, float(run.lane), false)
-		else:
-			for i in range(run.first, run.last+1):
-				# A light average with close neighbouring samples irons out finger jitter.
-				var total = float(path[i].lane); var weight = 1.0
-				for j in [i-1, i+1]:
-					if j >= 0 and j < path.size() and absf(float(path[j].offset) - float(path[i].offset)) <= .05:
-						total += float(path[j].lane); weight += 1.0
-				add_point.call(float(path[i].offset), total / weight, true)
-	if float(result[-1].offset) < duration: result.append({"offset": duration, "lane": result[-1].lane})
+# Fit authored straight ramps and flat holds instead of locking every crossed lane.
+# Time-based error keeps the same shape at 30/60/120 Hz and preserves deliberate turns.
+const SHAPE_ERROR=.16
+static func snap_path(path:Array,duration:float)->Array:
+	if path.is_empty():return []
+	var points:Array=[]
+	for point in path:
+		var at=clampf(float(point.offset),0,duration)
+		var value=clampf(float(point.lane),0,SynkChart.MAX_LANE)
+		if not points.is_empty() and at<=float(points[-1].offset):continue
+		points.append({"offset":at,"lane":value})
+	if points.is_empty():return []
+	points[0].offset=0.0;points[0].lane=float(roundi(points[0].lane))
+	if float(points[-1].offset)<duration:points.append({"offset":duration,"lane":points[-1].lane})
+	points[-1].lane=float(roundi(points[-1].lane))
+	# Median filtering removes isolated touch spikes without rounding a moving ramp.
+	var filtered=points.duplicate(true)
+	for i in range(1,points.size()-1):
+		if float(points[i+1].offset)-float(points[i-1].offset)>.08:continue
+		var values=[float(points[i-1].lane),float(points[i].lane),float(points[i+1].lane)];values.sort()
+		filtered[i].lane=values[1]
+	var keep={0:true,filtered.size()-1:true}
+	var pending=[[0,filtered.size()-1]]
+	while not pending.is_empty():
+		var span=pending.pop_back();var first=int(span[0]);var last=int(span[1]);var index=-1;var error=SHAPE_ERROR
+		var length=maxf(.0001,float(filtered[last].offset)-float(filtered[first].offset))
+		for i in range(first+1,last):
+			var weight=(float(filtered[i].offset)-float(filtered[first].offset))/length
+			var deviation=absf(float(filtered[i].lane)-lerpf(float(filtered[first].lane),float(filtered[last].lane),weight))
+			if deviation>error:error=deviation;index=i
+		if index>=0:keep[index]=true;pending.append([first,index]);pending.append([index,last])
+	var result:Array=[]
+	for i in filtered.size():
+		if not keep.has(i):continue
+		var point:Dictionary=filtered[i]
+		var nearest=float(roundi(point.lane))
+		if absf(point.lane-nearest)<=.22:point.lane=nearest
+		result.append(point)
 	return result
 
 # Evenly spaced samples of a slide's current shape, used before reshaping it.

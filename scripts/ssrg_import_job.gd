@@ -100,8 +100,7 @@ func _scan(paths:PackedStringArray,songs:Array) -> void:
 	for path in chart_files:
 		var base=path.get_base_dir()
 		if base.get_file().to_lower() in ["seq","seqs","chart","charts"]:base=base.get_base_dir()
-		var stem=path.get_file().get_basename();var cut=stem.rfind("_");var hint=int(stem.substr(cut+1)) if cut>=0 else 0
-		var song_id=stem.substr(0,cut) if hint in [4,7,13] else stem
+		var song_id=PARSER.song_key(path)
 		var key=base+"/"+song_id
 		if not groups.has(key):groups[key]={"source_key":key,"base":base,"song_id":song_id,"game":base.get_file(),"chart_files":[],"key_overrides":{},"audio":"","audio_manual":false,"background":"","background_manual":false,"policy":"add_missing","include":true}
 		groups[key].chart_files.append(path)
@@ -124,17 +123,12 @@ func _scan(paths:PackedStringArray,songs:Array) -> void:
 	update({"done":plan.size(),"total":entries.size()})
 	publish("review","Scan canceled. Review the songs already checked." if is_canceled() else ("Review matches and warnings before importing." if not plan.is_empty() else "No SSRG chart files found. Choose a folder, ZIP, or .seq/.bytes charts."))
 
-static func candidates(files:PackedStringArray,stems:Array,base:String) -> Array:
+static func candidates(files:PackedStringArray,stems:Array,base:String,primary_id:String="") -> Array:
 	var values=[]
 	for path in files:
-		var have=PARSER.simple(path.get_file().get_basename());var score=0
-		for i in stems.size():
-			var wanted=PARSER.simple(str(stems[i]))
-			if wanted.is_empty():continue
-			if have==wanted:score=maxi(score,100-i)
-			elif wanted.length()>=4 and (have.contains(wanted) or wanted.contains(have)):score=maxi(score,50-i)
+		var score=PARSER.match_score(path,stems,primary_id)
 		if score<=0:continue
-		if path.begins_with(base+"/"):score+=200
+		if path.begins_with(base+"/"):score+=50
 		values.append({"path":path,"score":score})
 	values.sort_custom(func(a,b):return a.score>b.score if a.score!=b.score else str(a.path)<str(b.path))
 	return values
@@ -148,9 +142,7 @@ func inspect_item(original:Dictionary,songs:Array) -> Dictionary:
 		if is_canceled():break
 		var hint=int(item.key_overrides.get(path,0))
 		if hint==0:
-			var stem=str(path).get_file().get_basename();var cut=stem.rfind("_")
-			hint=int(stem.substr(cut+1)) if cut>=0 else 0
-			if hint not in [4,7,13]:hint=0
+			hint=PARSER.level_hint(path)
 		var report:Dictionary
 		if file_size(path)>16*1024*1024 or file_size(path)<0:report={"chart":{},"errors":["Chart is unreadable or exceeds 16 MB."],"warnings":[]}
 		else:
@@ -169,11 +161,11 @@ func inspect_item(original:Dictionary,songs:Array) -> Dictionary:
 	var names=PARSER.artist_and_title(audio_name) if not audio_name.is_empty() else ["",str(item.song_id)]
 	if not item.has("title"):item.title=names[1]
 	if not item.has("artist"):item.artist=names[0]
-	var matches=candidates(item.audio_files,[audio_name,item.song_id],str(item.base));item.audio_matches=matches
+	var matches=candidates(item.audio_files,[audio_name,item.song_id],str(item.base),str(item.song_id));item.audio_matches=matches
 	if not item.get("audio_manual",false):
 		item.audio=str(matches[0].path) if not matches.is_empty() and (matches.size()==1 or matches[0].score>matches[1].score) else ""
 	if not item.get("background_manual",false):
-		var art=candidates(item.image_files,[item.song_id,audio_name],str(item.base))
+		var art=candidates(item.image_files,[item.song_id,audio_name],str(item.base),str(item.song_id))
 		item.background=str(art[0].path) if not art.is_empty() and (art.size()==1 or art[0].score>art[1].score) else ""
 	item.audio_hash="";item.duration=0.0;item.existing=false
 	if str(item.audio).is_empty():item.errors.append("Choose the matching audio file." if matches.size()<2 else "Audio match is ambiguous. Choose the correct file.")
