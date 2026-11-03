@@ -277,14 +277,32 @@ func build_cover_backdrop() -> void:
 	cover_backdrop.position = Vector3(0,0,-COVER_DISTANCE)
 	cover_backdrop.visible = false
 
-func set_cover(texture: Texture2D, tint: Color) -> void:
+func set_cover(texture: Texture2D, tint: Color, album_art: bool = false) -> void:
 	cover_material.set_shader_parameter("cover",texture)
+	# Album art alone is shown twice: blurred to fill the screen, and sharp at its own size on top.
+	var blurred = blurred_cover(texture) if album_art and texture else null
+	cover_material.set_shader_parameter("album_art",blurred != null)
+	cover_material.set_shader_parameter("cover_blurred",blurred)
 	cover_material.set_shader_parameter("tint",tint)
 	cover_material.set_shader_parameter("strength",1.0)
 	# With no background or album art, the stage behind the highway is plain black.
 	cover_material.set_shader_parameter("plain",texture == null)
 	cover_material.set_shader_parameter("image_aspect",float(texture.get_width())/maxf(1.0,texture.get_height()) if texture else 1.0)
 	cover_backdrop.visible = true
+
+var blurred_covers: Dictionary = {}
+# Shrinking to a few pixels and scaling back up smoothly gives a soft, cheap blur.
+func blurred_cover(texture: Texture2D) -> Texture2D:
+	var key = texture.get_instance_id()
+	if blurred_covers.has(key): return blurred_covers[key]
+	var image = texture.get_image()
+	if image == null: return null
+	if image.is_compressed(): image.decompress()
+	image.convert(Image.FORMAT_RGBA8)
+	image.resize(20,20,Image.INTERPOLATE_LANCZOS)
+	image.resize(256,256,Image.INTERPOLATE_CUBIC)
+	blurred_covers[key] = ImageTexture.create_from_image(image)
+	return blurred_covers[key]
 
 # Recolors notes, rails, the judgment bar, track and sky to the cover's colors.
 func apply_palette(palette: Dictionary) -> void:

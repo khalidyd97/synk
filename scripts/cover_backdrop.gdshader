@@ -14,6 +14,9 @@ uniform float image_aspect = 1.0;
 uniform bool plain = false;
 // SSRG style: the song photo at full brightness, with no haze, as the stage itself.
 uniform bool photo = false;
+// Album art with no wallpaper: a blurred, screen-filling copy with the sharp cover set on top.
+uniform bool album_art = false;
+uniform sampler2D cover_blurred : source_color, filter_linear;
 uniform float beat = 0.0;
 // One global clock for every highway shader (set once per frame by highway_3d.gd).
 global uniform float synk_time;
@@ -39,10 +42,23 @@ void fragment() {
 	vec2 fit = image_aspect > screen_aspect ? vec2(screen_aspect / image_aspect, 1.0) : vec2(1.0, image_aspect / screen_aspect);
 	float center_y = fit.y < 0.999 ? 0.42 : 0.5;
 	vec2 uv = vec2((UV.x - 0.5) * fit.x / zoom + 0.5, (UV.y - center_y) * fit.y / zoom + 0.5);
-	vec3 art = texture(cover, uv).rgb * tint;
+	vec3 picture = texture(cover, uv).rgb;
+	if (album_art) {
+		// Square cover sized to the screen height (or width on portrait), feathered into the blur.
+		float side = min(0.84, 0.9 * screen_aspect);
+		vec2 local = vec2((UV.x - 0.5) * screen_aspect, UV.y - 0.47) / (side * zoom / 1.06) + 0.5;
+		float radius = 0.07;
+		vec2 q = abs(local - 0.5) - vec2(0.5 - radius);
+		float box = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;
+		float mask = 1.0 - smoothstep(-0.09, 0.0, box);
+		float shadow = 1.0 - smoothstep(0.0, 0.12, box);
+		vec3 blurred = texture(cover_blurred, uv).rgb * 0.6 * (1.0 - 0.45 * shadow * (1.0 - mask));
+		picture = mix(blurred, texture(cover, clamp(local, 0.0, 1.0)).rgb, mask);
+	}
+	vec3 art = picture * tint;
 	float lum = dot(art, vec3(0.3, 0.55, 0.15));
 	// Evenly dimmed: no edge fade or glow band, the cover kept behind the notes but readable.
-	art = mix(art, vec3(lum), 0.22) * (0.3 + 0.06 * beat);
+	art = mix(art, vec3(lum), 0.22) * ((album_art ? 0.5 : 0.3) + 0.06 * beat);
 	// Reference: a broad ceiling of colored haze that falls down the outer sides.
 	// Its soft beat swell never flashes; the lane surface remains dark and readable.
 	float left_x = mix(glow_left_rail.x,glow_left_rail.y,UV.y);
@@ -57,7 +73,7 @@ void fragment() {
 	float haze = (top+side+edge_halo*0.16*(1.0-UV.y))*mix(1.0,0.12,inside_track);
 	vec3 wash_color = mix(rail_glow_left,rail_glow_right,smoothstep(0.15,0.85,UV.x));
 	vec3 wash = wash_color*haze*rail_glow_opacity*(1.25+glow_beat*0.45);
-	if (photo) { art = texture(cover, uv).rgb; wash = vec3(0.0); }
+	if (photo) { art = picture; wash = vec3(0.0); }
 	vec3 base=plain ? vec3(0.0) : photo ? art * brightness : (art+wash) * brightness;
 	if(photo){
 		// Source quarter texture is opaque at its outer corner (0,0),
@@ -75,7 +91,8 @@ void fragment() {
 		float rave_pulse=mix(0.65,1.0,clamp(glow_beat,0.0,1.0));
 		base=mix(base*(1.0-clamp(ssrg_fever_dark,0.0,1.0)),color,clamp(alpha*rave_pulse,0.0,1.0));
 	}
-	if(concept_style>0){
+	// Concept skins keep a black stage, except for the layered album art.
+	if(concept_style>0 && !album_art){
 		base=vec3(0.0);
 	}
 	ALBEDO=base;

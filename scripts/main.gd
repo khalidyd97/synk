@@ -1382,7 +1382,8 @@ func update_section_volume() -> void:
 
 func apply_stage_cover() -> void:
 	# The song's cover glows behind the highway during play and recording.
-	field.world.set_cover(stage_backdrop_for_id(str(song.id)),Color.WHITE)
+	var id=str(song.id)
+	field.world.set_cover(stage_backdrop_for_id(id),Color.WHITE,not has_background(id) and has_album_art(id))
 	var palette=cover_palette_for_id(str(song.id)) if highway_colors=="adaptive" and not uses_recorder_colors() else SynkCoverPalette.fallback()
 	if highway_style in preload("res://scripts/concept_highway.gd").STYLES and not uses_recorder_colors() and not ssrg_playable_run and not palette.from_cover:
 		palette=preload("res://scripts/concept_highway.gd").palette(highway_style)
@@ -1613,6 +1614,8 @@ func toggle_arrange() -> void :
 	if arranging:
 		countdown = 0;audio.stream_paused = true
 	else:
+		# Pick up where the corrections left off, not at the end of the recorded notes.
+		recorder_seek_target = maxf(0.0, song_time)
 		begin_resume_lead()
 		var playback_time = clampf(song_time - effective_timing_ms() / 1000.0, 0, maxf(0, length() - 0.02))
 		if audio.playing: audio.seek(playback_time);audio.stream_paused = false

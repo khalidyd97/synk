@@ -27,9 +27,10 @@ func run() -> void:
 	game.arrange_preview.request(4); game.arrange_preview._process(.05)
 	check(game.arrange_preview.seeks>0,"Arrange preview starts audio playback")
 	game.arrange_preview.stop()
+	var corrected_at=game.song_time
 	game.toggle_arrange()
-	check(is_equal_approx(game.ready_point,6),"Countdown targets final chart note")
-	check(is_equal_approx(game.song_time,4),"Resume gives two seconds before final chart note")
+	check(is_equal_approx(game.ready_point,corrected_at),"Leaving correction resumes where it was, not at the final chart note")
+	check(is_equal_approx(game.song_time,maxf(0.0,corrected_at-2)),"Resume gives two seconds before that position")
 	game.audio.stop(); game.song_time=5.5; game.toggle_arrange()
 	game.arrange_selection={"note":game.capture.notes[0],"document":false,"index":0}
 	game.refresh_arrange_controls(); game.flash=0
