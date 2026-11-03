@@ -65,6 +65,7 @@ func move(id: int, time: float, p: Vector2) -> void:
 	n.kind = str(g.tool) if g.tool in ["hold","slide"] else ("slide" if g.max_delta>=.8 else "hold")
 	if n.kind=="slide" and n.duration>.04:
 		n.path=snap_path(samples,n.duration);n.ssrg_path=true
+		n.checkpoints=slide_checkpoints(n.path)
 
 func end(id: int, time: float, p: Vector2, canceled = false) -> Dictionary:
 	if not gestures.has(id): return {}
@@ -86,13 +87,25 @@ func end(id: int, time: float, p: Vector2, canceled = false) -> Dictionary:
 		else:
 			n.path=snap_path(g.samples,float(n.duration))
 			n.ssrg_path=true
+			n.checkpoints=slide_checkpoints(n.path)
 			n.end_lane = int(n.path[-1].lane)
-	if n.kind!="slide":n.erase("ssrg_path")
+	if n.kind!="slide":n.erase("ssrg_path");n.erase("checkpoints")
 	notes.append(n); space_chord(n,g.get("fixed",[])); return n
 
 # Fit authored straight ramps and flat holds instead of locking every crossed lane.
 # Time-based error keeps the same shape at 30/60/120 Hz and preserves deliberate turns.
-const SHAPE_ERROR=.16
+const SHAPE_ERROR=.28
+
+static func slide_checkpoints(path:Array)->Array:
+	var result:Array=[]
+	for i in range(1,path.size()-1):
+		var incoming=float(path[i].lane)-float(path[i-1].lane)
+		var outgoing=float(path[i+1].lane)-float(path[i].lane)
+		# Path anchors define the ribbon shape. Only a substantial reversal needs
+		# an extra playable connector; a straight ramp needs none.
+		if incoming*outgoing<0.0 and minf(absf(incoming),absf(outgoing))>=.8:
+			result.append(float(path[i].offset))
+	return result
 static func snap_path(path:Array,duration:float)->Array:
 	if path.is_empty():return []
 	var points:Array=[]
@@ -105,12 +118,14 @@ static func snap_path(path:Array,duration:float)->Array:
 	points[0].offset=0.0;points[0].lane=float(roundi(points[0].lane))
 	if float(points[-1].offset)<duration:points.append({"offset":duration,"lane":points[-1].lane})
 	points[-1].lane=float(roundi(points[-1].lane))
-	# Median filtering removes isolated touch spikes without rounding a moving ramp.
+	# Reject one-event spikes, but retain a real apex even when the finger reverses
+	# direction within a few frames. SSRG's authored chains can turn in about 60 ms.
 	var filtered=points.duplicate(true)
 	for i in range(1,points.size()-1):
 		if float(points[i+1].offset)-float(points[i-1].offset)>.08:continue
-		var values=[float(points[i-1].lane),float(points[i].lane),float(points[i+1].lane)];values.sort()
-		filtered[i].lane=values[1]
+		var before=float(points[i-1].lane);var current=float(points[i].lane);var after=float(points[i+1].lane)
+		if absf(before-after)<.22 and absf(current-(before+after)*.5)>.45:
+			filtered[i].lane=(before+after)*.5
 	var keep={0:true,filtered.size()-1:true}
 	var pending=[[0,filtered.size()-1]]
 	while not pending.is_empty():

@@ -115,6 +115,10 @@ var note_speed = 1.0
 var note_shape = "circle"
 # Highway slope in degrees (Settings): low is flat and far-reaching, high looks down steeply.
 var highway_angle = 35.0
+var recorder_angle_slider: HSlider
+var recorder_angle_label: Label
+var record_overview: Control
+var recorder_seek_target=-1.0
 # Highway look: "gold" or "neon", optional custom rail/band colors ("" follows the style),
 # and how dark the see-through highway surface is (1 = the style's default).
 const HIGHWAY_STYLES=["gold","neon","ssrg","aurora","solar"]
@@ -369,7 +373,7 @@ func _ready() -> void:
 	bluetooth_latency_ms=clampf(float(prefs.get_value("audio","bluetooth_latency_ms",180)),0,600)
 	note_lines=bool(prefs.get_value("editor","note_lines",true))
 	ghost_recording=bool(prefs.get_value("editor","ghost_recording",true))
-	recorder_note_speed=clampf(float(prefs.get_value("editor","note_speed",1.0)),.5,3.0)
+	recorder_note_speed=clampf(snappedf(float(prefs.get_value("editor","note_speed",1.0)),.1),.1,5.0)
 	record_speed=float(prefs.get_value("editor","record_speed",1.0))
 	if record_speed not in RECORD_SPEEDS: record_speed=1.0
 	var legacy_speed = clampf(float(prefs.get_value("gameplay","note_speed",1.0)), .5, 3.0)
@@ -381,7 +385,7 @@ func _ready() -> void:
 	if hit_color!="" and not Color.html_is_valid(hit_color): hit_color=""
 	note_shape = str(prefs.get_value("gameplay","note_shape","circle"))
 	if note_shape not in ["rectangle","circle","puck"]: note_shape="rectangle"
-	highway_angle = clampf(float(prefs.get_value("gameplay","highway_angle",35.0)),18.0,44.0)
+	highway_angle = clampf(float(prefs.get_value("gameplay","highway_angle",35.0)),18.0,90.0)
 	highway_style = str(prefs.get_value("highway","style","gold"))
 	if highway_style not in HIGHWAY_STYLES: highway_style="gold"
 	rail_color = str(prefs.get_value("highway","rail_color",""))
@@ -702,6 +706,14 @@ func build_ui() -> void:
 				tool = kind;judgement = kind.to_upper() + " TOOL";flash = 1;refresh_arrange_controls(), "tool"))
 		kind_buttons[-1].tooltip_text = {"auto": "Detect taps, holds, and slides automatically", "tap": "Record individual taps", "hold": "Press and hold in a lane", "slide": "Hold and drag between lanes", "flick": "Swipe to set the flick direction"}[kind]
 	button(record_tools, "STOP & REVIEW", 0.84, 0.022, 0.988, 0.105, stop_take, "record")
+	label(record_tools, "ANGLE", 0.12, 0.035, 0.19, 0.095, 14)
+	recorder_angle_slider=HSlider.new();rect(recorder_angle_slider,record_tools,0.20,0.047,0.40,0.087)
+	recorder_angle_slider.min_value=18;recorder_angle_slider.max_value=90;recorder_angle_slider.step=1
+	recorder_angle_slider.value=highway_angle
+	recorder_angle_slider.tooltip_text="Recorder camera: 35° is the original view; 90° is flat overhead."
+	recorder_angle_slider.value_changed.connect(change_highway_angle)
+	recorder_angle_label=label(record_tools,"%d°" % roundi(highway_angle),0.405,0.035,0.465,0.095,16)
+	recorder_angle_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	var side = func(i: int) -> Array: return [0.89, 0.15 + i * 0.096, 0.98, 0.228 + i * 0.096]
 	var b = side.call(0);aids_toggle = button(record_tools, "AIDS  ◂", b[0], b[1], b[2], b[3], toggle_record_aids, "tool")
 	b = side.call(1);arrange_button = button(record_tools, "CORRECT", b[0], b[1], b[2], b[3], toggle_arrange)
@@ -710,11 +722,15 @@ func build_ui() -> void:
 	b = side.call(3);take_redo_button = button(record_tools, "REDO", b[0], b[1], b[2], b[3], redo_record_note, "tool")
 
 	record_info = label(record_tools, "", 0.55, 0.03, 0.83, 0.1, 15);record_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	recorder.progress = ProgressBar.new();rect(recorder.progress, record_tools, 0.12, 0.115, 0.87, 0.119)
+	recorder.progress = ProgressBar.new();rect(recorder.progress, record_tools, 0.12, 0.111, 0.67, 0.116)
 	recorder.progress.show_percentage = false;recorder.progress.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var track = StyleBoxFlat.new();track.bg_color = Color(1, 1, 1, 0.08);track.set_corner_radius_all(2)
 	var fill = track.duplicate();fill.bg_color = Color("ff6489")
 	recorder.progress.add_theme_stylebox_override("background", track);recorder.progress.add_theme_stylebox_override("fill", fill)
+	record_overview=preload("res://scripts/song_overview.gd").new()
+	record_overview.game=self;record_overview.horizontal=true;record_overview.recorder_mode=true
+	rect(record_overview,record_tools,0.12,0.126,0.67,0.186)
+	record_overview.rebuild()
 
 	record_help = label(record_tools, "", 0.2, 0.925, 0.8, 0.985, 15);record_help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	record_help.add_theme_color_override("font_color", Color(1, 1, 1, 0.72))
@@ -732,7 +748,7 @@ func build_ui() -> void:
 	ghost_button = button(aids_drawer, "GHOST ON" if ghost_recording else "GHOST OFF", r[0], r[1], r[2], r[3], toggle_ghost_recording, "tool")
 	ghost_button.tooltip_text = "Show faded existing chart notes approaching the judgment line while recording a new layer."
 	r = row.call(4);button(aids_drawer, "TAKE SETUP", r[0], r[1], r[2], r[3], recorder.show_setup, "tool")
-	r = row.call(5);recorder_note_speed_button = button(aids_drawer, "NOTES  " + str(recorder_note_speed) + "×", r[0], r[1], r[2], r[3], cycle_recorder_note_speed, "tool")
+	r = row.call(5);recorder_note_speed_button = button(aids_drawer, "NOTES  %.1f×" % recorder_note_speed, r[0], r[1], r[2], r[3], cycle_recorder_note_speed, "tool")
 	recorder_note_speed_button.tooltip_text = "Note travel speed only. Music playback speed stays unchanged."
 	r = row.call(6);record_speed_button = button(aids_drawer, str(record_speed) + "× SPEED", r[0], r[1], r[2], r[3], cycle_record_speed, "tool")
 	record_speed_button.tooltip_text = "Recording playback speed: 1×, 0.75×, 0.5×, 0.25×, 1.25×, 1.5×"
@@ -955,8 +971,11 @@ func change_pause_speed(value: float) -> void:
 	else: change_synk_speed(value)
 
 func change_highway_angle(value: float) -> void:
-	highway_angle=value
-	prefs.set_value("gameplay","highway_angle",value); prefs.save("user://preferences.cfg")
+	highway_angle=clampf(value,18.0,90.0)
+	prefs.set_value("gameplay","highway_angle",highway_angle); prefs.save("user://preferences.cfg")
+	if recorder_angle_slider: recorder_angle_slider.set_value_no_signal(highway_angle)
+	if recorder_angle_label: recorder_angle_label.text="%d°" % roundi(highway_angle)
+	if field and field.world: field.world.apply_camera()
 
 func change_highway_look(key: String,value: Variant) -> void:
 	match key:
@@ -1145,7 +1164,9 @@ func uses_recorder_colors() -> bool:
 	return mode=="record" or (mode=="paused" and paused_mode=="record") or (recorder!=null and recorder.reviewing_audio)
 
 func authoring_lane_gap() -> float:
-	return (field.world.NOTE_WIDTH*note_size+.08)/field.world.LANE_WIDTH
+	# The outer part of the sprite is a soft glow. Separate the visible bodies,
+	# keeping near-simultaneous notes close without forcing their centers together.
+	return (field.world.NOTE_WIDTH*note_size*.55+.08)/field.world.LANE_WIDTH
 
 func space_authored_notes(incoming: Array,fixed: Array) -> bool:
 	var resolved=true
@@ -1161,9 +1182,9 @@ func note_travel_seconds() -> float:
 	return 3.5/note_speed
 
 func cycle_recorder_note_speed() -> void:
-	recorder_note_speed=snappedf(recorder_note_speed+.25,.25)
-	if recorder_note_speed>3: recorder_note_speed=.5
-	recorder_note_speed_button.text="NOTES  "+str(recorder_note_speed)+"×"
+	recorder_note_speed=snappedf(recorder_note_speed+.1,.1)
+	if recorder_note_speed>5.0: recorder_note_speed=.1
+	recorder_note_speed_button.text="NOTES  %.1f×" % recorder_note_speed
 	prefs.set_value("editor","note_speed",recorder_note_speed); prefs.save("user://preferences.cfg")
 	field.world.clear_notes()
 func length() -> float: return audio.stream.get_length()
@@ -1500,6 +1521,7 @@ func start_new_recording() -> void:
 
 func record_here() -> void :
 	audio.stop();audio.stream_paused = false;audio.pitch_scale = record_speed;capture.notes.clear();capture.gestures.clear();pointers.clear();tool = "auto"
+	recorder_seek_target=-1.0
 	visual_clock_ready = false
 	resume_countdown = 0
 	arranging = false;arrange_touches.clear();arrange_selection.clear();arrange_button.text = "CORRECT"
@@ -1510,6 +1532,20 @@ func record_here() -> void :
 	apply_stage_cover()
 	refresh_arrange_controls()
 	refresh_section_marks()
+	if record_overview:record_overview.rebuild()
+
+func seek_recording_to(value: float) -> void:
+	if mode!="record":return
+	var first=recorder.region.x if recorder.active else 0.0
+	var last=recorder.region.y if recorder.active else length()
+	var target=clampf(value,first,maxf(first,last-.001))
+	if not arranging:
+		recorder.seal_gestures()
+		commit_take_history()
+		toggle_arrange()
+	song_time=target;visual_song_time=target;visual_clock_ready=false;cursor=target
+	recorder_seek_target=target
+	if record_overview:record_overview.queue_redraw()
 
 func stop_take() -> void :
 	if mode != "record" and not (mode == "paused" and paused_mode == "record"): return
@@ -1592,18 +1628,18 @@ func refresh_arrange_controls() -> void :
 		if kinds[i] in recorder.locks() or (recorder.current_pass() != "all" and kinds[i] != recorder.current_pass()): kind_buttons[i].disabled = true
 	dots_button.visible = arranging
 	ghost_button.visible = not arranging;ghost_button.set_selected(ghost_recording)
-	dots_button.text = "●  ADD POINTS: ON" if dots_mode else "●  ADD POINTS: OFF"
+	dots_button.text = "●  CONNECTOR: ON" if dots_mode else "●  CONNECTOR: OFF"
 	dots_button.set_selected(dots_mode)
 	if arranging and dots_mode:
 		var dots_note: Dictionary = arrange_selection.get("note", {})
-		if dots_note.is_empty() or dots_note.kind not in ["hold", "slide"]: record_help.text = "ADD POINTS: select a hold or slide, then tap along its trail to add points.\nDuring play the finger must be over the trail when each point reaches the bar."
-		else: record_help.text = "ADD POINTS: tap the trail to add a point, tap a point to remove it (%d on this note).\nSwipe up or down anywhere to scroll along the note; it stays selected." % dots_note.get("checkpoints", []).size()
+		if dots_note.is_empty() or dots_note.kind not in ["hold", "slide"]: record_help.text = "CONNECTOR: select a hold or slide, then tap its trail to add a playable connector."
+		else: record_help.text = "CONNECTOR: tap the trail to add or remove one (%d). Switch to SHAPE to drag its handle and bend or stretch the trail." % dots_note.get("checkpoints", []).size()
 	elif arranging:
 		if arrange_selection.is_empty(): record_help.text = "Tap a note head or any part of its trail to select and drag it.\nType buttons change the note. Scroll beside the highway."
 		else:
 			var n: Dictionary = arrange_selection.note
 			if n.kind in ["hold", "slide"]:
-				record_help.text = "%s · %.2f–%.2f s | START/END trim · dots bend · MOVE shifts" % [str(n.kind).to_upper(), float(n.time), float(n.time) + float(n.duration)]
+				record_help.text = "%s · %.2f–%.2f s | START/END stretch · SHAPE bends · CONNECTOR adds a playable point" % [str(n.kind).to_upper(), float(n.time), float(n.time) + float(n.duration)]
 			else: record_help.text = "SELECTED  %s  •  LANE %d  •  %.2f s\nDrag to move. Use the type buttons or DELETE above; scroll outside the highway." % [str(n.kind).to_upper(), int(n.lane) + 1, float(n.time)]
 	else:
 		var hints = {"auto": "AUTO · Tap, hold, or drag to record. Choose FLICK for swipes.", "tap": "TAP · Touch any lane at the glowing line to place a tap.", "hold": "HOLD · Press and keep your finger down; release to end.", "slide": "SLIDE · Hold and move across lanes to draw the trail.", "flick": "FLICK · Swipe in the direction you want the player to flick."}
@@ -1688,6 +1724,15 @@ func toggle_checkpoint(n: Dictionary, at: float, in_document: bool) -> bool:
 			return true
 	checks.append(snappedf(offset,.001)); checks.sort()
 	n.checkpoints=checks
+	if n.kind=="slide" and n.path.size()>=2:
+		var exists=false
+		for point in n.path:
+			if absf(float(point.offset)-offset)<.01: exists=true;break
+		if not exists:
+			var index=n.path.size()
+			for i in n.path.size():
+				if float(n.path[i].offset)>offset:index=i;break
+			n.path.insert(index,{"offset":snappedf(offset,.001),"lane":SynkChart.lane_at(n,at)})
 	return true
 
 func add_point_at(p: Vector2) -> void :
@@ -2890,7 +2935,8 @@ func snap_recorder_move(at: float, latest: float, moving: Dictionary = {}) -> fl
 
 
 func begin_resume_lead() -> float:
-	ready_point = chart_empty_point() if capture.notes.size() + document.notes.size() > 0 else song_time
+	ready_point = recorder_seek_target if recorder_seek_target>=0 else (chart_empty_point() if capture.notes.size() + document.notes.size() > 0 else song_time)
+	recorder_seek_target=-1.0
 	var target = maxf(maxf(0.0, recorder.region.x if recorder.active else 0.0), ready_point - float(recorder.resume_lead))
 	song_time = target;visual_song_time = target;visual_clock_ready = false
 	return target

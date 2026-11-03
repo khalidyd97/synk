@@ -93,7 +93,7 @@ const BAR_SCREEN_ANGLE = 14.0
 const BAR_DISTANCE = 14.142136*PERSPECTIVE_SCALE*cos(deg_to_rad(BAR_SCREEN_ANGLE))/cos(deg_to_rad(BAR_BELOW_CENTER))
 const BAR_BELOW_CENTER = rad_to_deg(atan(tan(deg_to_rad(BAR_SCREEN_ANGLE))/PERSPECTIVE_SCALE))
 const MIN_ANGLE = 18.0
-const MAX_ANGLE = 44.0
+const MAX_ANGLE = 90.0
 # Fixed gameplay lens, including the loading-card transition.
 # A closer, wider lens narrows the far end while preserving the judgment bar framing.
 const GAMEPLAY_FOV = rad_to_deg(2.0*atan(tan(deg_to_rad(45.0)*.5)/PERSPECTIVE_SCALE))
@@ -220,6 +220,20 @@ func apply_camera(shake: Vector3 = Vector3.ZERO) -> void:
 		var center_ui=canvas_height*.5-320.0
 		camera.position = Vector3(0,30,-(234.0+center_ui)*SSRG_UNIT)+shake
 		camera.rotation_degrees = Vector3(-90,0,0)
+	if game != null and game.mode == "record": orient_recorder_notes()
+
+func orient_recorder_notes() -> void:
+	# Recorder artwork lies on the track; perspective foreshortens it as the camera tilts.
+	for entry in notes.values():
+		orient_recorder_note(entry.node)
+
+func orient_recorder_note(node: Node3D) -> void:
+	for child in node.get_children():
+		if child.has_meta("recorder_billboard"):
+			child.rotation=Vector3(-PI*.5,0,0)
+			if child.has_meta("flick_axis"):
+				child.rotate_object_local(Vector3.FORWARD,float(child.get_meta("flick_direction"))*PI*.5)
+				child.set_meta("flick_axis",Basis(Vector3.RIGHT,-PI*.5)*child.get_meta("flick_axis_local"))
 
 func _ready() -> void:
 	var aids=preload("res://scripts/record_aids.gd").new(); aids.world=self; add_child.call_deferred(aids)
@@ -486,9 +500,9 @@ func refresh_highway_look() -> void:
 	if gold:
 		judgment_material.shader = preload("res://scripts/judgment_bar.gdshader")
 		# Adaptive colors pull the band toward the artwork's main color; the theme keeps it golden.
-		var base: Color = band if band != null else JUDGMENT_GOLD
+		var base: Color = Color("989ca4") if game.uses_recorder_colors() else (band if band != null else JUDGMENT_GOLD)
 		judgment_material.set_shader_parameter("base_color",base)
-		judgment_material.set_shader_parameter("sweep_color",base.lerp(Color.WHITE,.6))
+		judgment_material.set_shader_parameter("sweep_color",Color("b8bbc1") if game.uses_recorder_colors() else base.lerp(Color.WHITE,.6))
 		track_materials[0].set_shader_parameter("color",stage_color.darkened(.88) if cover_palette_active else TRACK_COLOR)
 		track_materials[1].set_shader_parameter("color",stage_color.darkened(.85) if cover_palette_active else TRACK_COLOR)
 		track_materials[0].set_shader_parameter("opacity",minf(.95,.30*darkness))
@@ -505,7 +519,7 @@ func refresh_highway_look() -> void:
 		for m in track_materials: m.set_shader_parameter("near_fraction",1.0)
 	for m in judgment_borders:
 		m.render_priority=-5 if uses_projected_highway() else 0
-		m.set_shader_parameter("color",Color(Color("fff1cf") if gold else Color("ead6ff"),.85 if gold else 1.0))
+		m.set_shader_parameter("color",Color(Color("9da1a8") if game.uses_recorder_colors() else (Color("fff1cf") if gold else Color("ead6ff")),.85 if gold else 1.0))
 	var judgment_color: Color=judgment_material.get_shader_parameter("base_color")
 	highway_shadow_material.set_shader_parameter("tint",judgment_color.darkened(.65))
 	highway_shadow_material.set_shader_parameter("opacity",.2)
@@ -1019,6 +1033,7 @@ func artwork(parent: Node3D, name: String, palette: int, position_value: Vector3
 	var quad = QuadMesh.new(); quad.size = dimensions
 	var node = mesh_node(quad,parent,asset_material(name,palette,region,opacity))
 	node.position = position_value; node.rotation = camera.rotation
+	node.set_meta("recorder_billboard",true)
 	return node
 
 func palette_for_kind(kind: String) -> int:
@@ -1066,6 +1081,7 @@ func make_circle_cap(parent: Node3D, position_value: Vector3, palette: int, size
 	var head = mesh_node(reference_note_meshes[mesh_key],parent,mat)
 	head.position = Vector3(position_value.x,.38*size,position_value.z)
 	head.rotation = camera.rotation
+	head.set_meta("recorder_billboard",true)
 	return head
 
 # SSRG style: glossy pucks coloured by note type (blue tap, gold hold, pink flick, green slide);
@@ -1128,6 +1144,9 @@ func make_flick(parent: Node3D, note: Dictionary, palette: int) -> void:
 		var arrow = mesh_node(arrow_mesh,parent,arrow_material)
 		arrow.position=base; arrow.rotation=camera.rotation
 		arrow.rotate_object_local(Vector3.FORWARD,float(note.direction)*PI*.5)
+		arrow.set_meta("recorder_billboard",true)
+		arrow.set_meta("flick_direction",int(note.direction))
+		arrow.set_meta("flick_axis_local",[Vector3.UP,Vector3.RIGHT,Vector3.DOWN,Vector3.LEFT][clampi(int(note.direction),0,3)])
 		arrow.set_meta("flick_base",base)
 		arrow.set_meta("flick_axis",axis)
 
@@ -1367,6 +1386,7 @@ func build_note_node(key: String, note: Dictionary, recording = false) -> void:
 	var keep_shared = animated_materials.slice(first_material).filter(func(ref): return ref.get_ref() != null and ref.get_ref().has_meta("shared"))
 	animated_materials.resize(first_material); animated_materials.append_array(keep_shared)
 	notes[key] = {"node":node,"signature":signature,"lines":lines,"held":false,"prebuilt":false,"materials":own_materials}
+	if game.mode=="record": orient_recorder_note(node)
 
 func ssrg_note_order(note: Dictionary, offset: float = 0.0) -> float:
 	for point in note.get("ssrg_orders",[]):

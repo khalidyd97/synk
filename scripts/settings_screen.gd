@@ -508,10 +508,6 @@ func section(items: VBoxContainer,title: String) -> void:
     var spacer=Control.new(); spacer.custom_minimum_size.y=6; items.add_child(spacer)
     var heading=label(items,title,13,ACCENT); heading.custom_minimum_size.y=26
 func build_highway(items: VBoxContainer) -> void:
-    highway_angle_input=Stepper.new(18,44,2,game.highway_angle,"°",0)
-    angle_row=row(items,"Recorder angle","Adjust the camera while recording charts. Gameplay uses the fixed SSRG view.")
-    add_control(angle_row,highway_angle_input)
-    highway_angle_input.value_changed.connect(game.change_highway_angle)
     var preview=preload("res://scripts/highway_look_preview.gd").new(); preview.game=game; items.add_child(preview)
     var styles=row(items,"Highway style","Five styles. Shared 13-lane SSRG view.",322)
     var tile_row=GridContainer.new(); tile_row.columns=3; tile_row.add_theme_constant_override("h_separation",12); tile_row.add_theme_constant_override("v_separation",12)
@@ -642,6 +638,10 @@ func editor_switch(items: VBoxContainer,key: String,title: String,hint: String,v
     var control=Switch.new(); add_control(row(items,title,hint),control,152)
     control.button_pressed=value; connect_switch(control,callback); authoring_switches[key]=control; return control
 func build_editor(items: VBoxContainer,guides: VBoxContainer) -> void:
+    highway_angle_input=Stepper.new(18,90,1,game.highway_angle,"°",0)
+    angle_row=row(items,"Recorder view angle","35° keeps the current perspective; 90° is a flat overhead view. Gameplay stays on its own camera.")
+    add_control(angle_row,highway_angle_input)
+    highway_angle_input.value_changed.connect(game.change_highway_angle)
     metronome_toggle=editor_switch(guides,"metronome","Metronome","Click to the beat while editing or recording.",game.beat_clock.enabled,func(on):
         if game.beat_clock.enabled!=on: game.beat_clock.toggle())
     editor_switch(guides,"mr","MR vocal reduction","Reduce center vocals while mapping the rhythm.",game.mr.enabled,func(on):
@@ -672,7 +672,6 @@ func refresh() -> void:
     for kind in style_tiles: style_tiles[kind].selected=kind==game.highway_style
     if ssrg_mode_row:
         ssrg_mode_row.visible=game.highway_style=="ssrg"
-        angle_row.visible=game.uses_recorder_colors()
         ssrg_mode_switch.set_pressed_no_signal(bool(game.prefs.get_value("highway","ssrg_mode",false)))
     for kind in color_mode_tiles: color_mode_tiles[kind].selected=kind==game.highway_colors
     if highway_opacity_input: highway_opacity_input.sync_value(game.highway_opacity*100)

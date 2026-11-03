@@ -9,7 +9,7 @@ func _ready() -> void :
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	for i in 3:
 		var key = ["move", "shape", "points"][i]
-		var b = preload("res://scripts/recorder_action.gd").new();b.text = ["MOVE", "SHAPE", "ADD POINTS"][i]
+		var b = preload("res://scripts/recorder_action.gd").new();b.text = ["MOVE", "SHAPE", "CONNECTOR"][i]
 		b.caption_size = 16;b.compact = true;b.variant = "tool";add_child(b)
 		b.anchor_left = 0.14 + i * 0.12;b.anchor_right = 0.25 + i * 0.12;b.anchor_top = 0.025;b.anchor_bottom = 0.105
 		b.pressed.connect( func():
@@ -125,6 +125,15 @@ static func edit(original: Dictionary, kind: String, dt: float, dl: float, index
 		if high <= low: return result
 		result.path[index].offset = clampf(float(original.path[index].offset) + dt, low, high)
 		result.path[index].lane = snappedf(clampf(float(original.path[index].lane) + dl, 0, SynkChart.MAX_LANE), 0.05)
+		if original.has("checkpoints"):
+			var previous=float(original.path[index].offset)
+			for i in result.checkpoints.size():
+				if absf(float(result.checkpoints[i])-previous)<=.01:
+					var check_low=.02 if i==0 else float(result.checkpoints[i-1])+.005
+					var check_high=float(result.duration)-.02 if i==result.checkpoints.size()-1 else float(result.checkpoints[i+1])-.005
+					result.path[index].offset=clampf(float(result.path[index].offset),maxf(low,check_low),minf(high,check_high))
+					result.checkpoints[i]=float(result.path[index].offset)
+					break
 		return result
 	var start = float(original.time); var finish = start + float(original.duration)
 	var new_start = clampf(start + dt, 0, finish - 0.04) if kind == "start" else start
