@@ -2,11 +2,11 @@ class_name SynkChart
 extends RefCounted
 
 const TYPES = ["tap", "hold", "slide", "flick"]
-# The highway has 10 lanes, numbered 0..9. Charts saved before version 2 used 13 lanes (0..12).
-const LANES = 10
+# Gameplay, recording and the studio share thirteen positions, numbered 0..12.
+const LANES = 13
 const MAX_LANE = LANES - 1
 const LEGACY_MAX_LANE = 12
-const FORMAT_VERSION = 2
+const FORMAT_VERSION = 3
 var notes: Array = []
 var settings: Dictionary = {}
 var selected = -1
@@ -108,25 +108,28 @@ func resize(duration: float, song_end: float) -> void:
 static func snap(time: float, bpm: float, division: int,offset: float=0) -> float:
 	return maxf(0, time) if division == 0 else maxf(0, offset+snappedf(time-offset, 60.0 / bpm / division))
 
-# Spreads a 13-lane chart proportionally across the 10 lanes. Note heads and ends snap to
-# the nearest lane; slide path points keep their in-between positions.
-static func from_legacy_lanes(source: Array) -> Array:
-	var scale = float(MAX_LANE) / LEGACY_MAX_LANE
+# Convert the former ten-lane format on read without rewriting charts, drafts or history.
+# Heads snap to thirteen positions; curve samples retain their proportional geometry.
+static func from_ten_lanes(source: Array) -> Array:
+	var scale = float(MAX_LANE) / 9.0
 	var result = source.duplicate(true)
 	for n in result:
 		n.lane = clampi(roundi(float(n.lane) * scale), 0, MAX_LANE)
 		n.end_lane = clampi(roundi(float(n.end_lane) * scale), 0, MAX_LANE)
 		for p in n.path: p.lane = clampf(float(p.lane) * scale, 0, MAX_LANE)
+		if not n.path.is_empty():
+			if is_zero_approx(float(n.path[0].offset)):n.path[0].lane=float(n.lane)
+			if is_equal_approx(float(n.path[-1].offset),float(n.duration)):n.path[-1].lane=float(n.end_lane)
 	return result
 
-# Reads the notes of a saved chart file in any supported version, as 10-lane notes.
+# Version 1 already had thirteen lanes. Version 2 used the ten-lane coordinate system.
 static func notes_from_file(data: Variant) -> Variant:
 	if not data is Dictionary: return null
 	match data.get("version"):
-		1.0, 1:
-			if valid(data.get("notes"), LEGACY_MAX_LANE): return from_legacy_lanes(data.notes)
-		2.0, 2:
+		1.0, 1, 3.0, 3:
 			if valid(data.get("notes")): return data.notes
+		2.0, 2:
+			if valid(data.get("notes"),9): return from_ten_lanes(data.notes)
 	return null
 
 static func valid(source: Variant, max_lane: int = MAX_LANE) -> bool:

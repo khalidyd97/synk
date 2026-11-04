@@ -23,6 +23,8 @@ func run():
 	while game.field.world.prebuilding:game.field.world.step_prebuild()
 	var state=game.ssrg_presentation
 	state.reset(100)
+	check(state.state==5,"Source run starts in Ultra Rave")
+	state.reset(100,{},0)
 	check(state.life==100 and state.gauge_fraction()==1,"Source run starts with full life")
 	state.judged("PERFECT");check(state.state==1,"Full life enters fever entry on first successful judgment")
 	state.judged("MISS");check(state.state==0 and state.life==70,"Hard miss deducts thirty life")

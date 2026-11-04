@@ -14,6 +14,9 @@ func run() -> void:
 	game.features.effects["Lasers"]=1.0
 	var state=game.ssrg_presentation;var world=game.field.world;var fx=world.ssrg_theme
 	state.reset(100)
+	check(state.state==5 and is_equal_approx(float(state.weights[3]),1.0),"Every run starts in Ultra Rave")
+	# The fever climb below starts from the energy tier.
+	state.reset(100,{},0)
 	check(state.state==0 and state.collected==0 and state.cards.is_empty(),"Run reset has no invented events or inventory")
 	check(state.profile_color(2).is_equal_approx(Color(0,.7843136787,1,1)),"First fever beam uses source scene color")
 	game.score_panel.energy=1;state.judged("PERFECT")

@@ -4,13 +4,21 @@ on:
   push:
     branches: [codex/unsigned-ios]
 permissions:
-  contents: write
+  contents: read
 jobs:
   build:
-    runs-on: macos-26
+    runs-on: macos-15
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - name: Select Xcode 26
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -d /Applications/Xcode*.app
+          xcode=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
       - name: Install Godot and export templates
         shell: bash
         run: |
@@ -24,6 +32,9 @@ jobs:
       - name: Build iOS file picker extension
         shell: bash
         run: bash tools/ios_file_picker/build.sh "$PWD"
+      - name: Remove music recognition from iOS
+        shell: bash
+        run: python3 tools/prepare_ios_without_recognition.py --project "$PWD"
       - name: Export Xcode project
         shell: bash
         run: |
@@ -50,6 +61,20 @@ jobs:
           xcodebuild -project "$project" -scheme "$scheme" -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath builds/ios-derived CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' build
           app=$(find builds/ios-derived/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' -print -quit)
           test -n "$app"
+          python3 - "$app" <<'PY'
+          from pathlib import Path
+          import plistlib, sys
+          app=Path(sys.argv[1])
+          for path in app.rglob('*'):
+              assert 'chromaprint' not in path.name.lower(), f'Recognition library was bundled: {path}'
+              if path.suffix == '.pck':
+                  data=path.read_bytes()
+                  assert b'music_recognition.gd' not in data, 'Recognition client was bundled'
+                  assert b'native/chromaprint' not in data, 'Recognition assets were bundled'
+          executable=plistlib.loads((app/'Info.plist').read_bytes())['CFBundleExecutable']
+          assert b'synk_chromaprint_init' not in (app/executable).read_bytes(), 'Native recognition entry point was linked'
+          print('Verified iOS app excludes the recognition client and native libraries.')
+          PY
           mkdir -p builds/ipa/Payload
           cp -R "$app" builds/ipa/Payload/SYNK.app
           cd builds/ipa
@@ -59,7 +84,3 @@ jobs:
         with:
           name: SYNK-unsigned-IPA
           path: builds/ipa/SYNK-unsigned.ipa
-      - name: Publish unsigned IPA
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "ios-unsigned-${{ github.run_id }}" builds/ipa/SYNK-unsigned.ipa --prerelease --title 'SYNK unsigned iOS test build' --notes 'Unsigned device IPA. Sign with your own signing tool before installing.'

@@ -22,6 +22,10 @@ const KEY_COLORS = {4: Color("5fd0ff"), 7: Color("ffd36a"), 13: Color("ff7ac8")}
 
 var game: Control
 var safe_content: Control
+var song_page:Control
+var games_page:Control
+var selected_game=""
+var title_label:Label
 var picker: FileDialog
 var image_picker: FileDialog
 # Which picture the image picker is choosing: "background" or "cover".
@@ -75,9 +79,8 @@ var list_arrows: Array = []
 # Horizontal drag on the carousel: a press that moves is a scroll, not a card tap.
 var carousel_press = false
 var carousel_dragged = false
-var carousel_press_x = 0.0
-var carousel_press_scroll = 0
 var carousel_tween: Tween
+var carousel_drag:Node
 var detail: Control
 var selected_id = ""
 var selected_variant = ""
@@ -90,7 +93,7 @@ var pending: Dictionary = {}
 var running: Dictionary = {}
 
 func place(node: Control, parent: Control, left: float, top: float, right: float, bottom: float) -> void:
-	if parent==self and safe_content!=null: parent=safe_content
+	if parent==self and safe_content!=null: parent=song_page if song_page!=null else safe_content
 	parent.add_child(node)
 	node.anchor_left = left; node.anchor_top = top; node.anchor_right = right; node.anchor_bottom = bottom
 	node.offset_left = 0; node.offset_top = 0; node.offset_right = 0; node.offset_bottom = 0
@@ -134,10 +137,11 @@ func _ready() -> void:
 	var fill = GradientTexture2D.new(); fill.gradient = gradient; fill.fill_from = Vector2(0,0); fill.fill_to = Vector2(0,1)
 	shade.texture = fill; shade.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; shade.stretch_mode = TextureRect.STRETCH_SCALE
 	safe_content=game.safe_parent("SafeSsrgControls",self)
+	song_page=Control.new();safe_content.add_child(song_page);song_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	# Top bar: back, title, search, order, speed and adding songs.
-	action(self,"‹  BACK",.02,.03,.11,.12,close,"nav")
-	text(self,"SSRG PLAYABLES",.125,.025,.33,.085,24)
+	action(self,"‹  GAMES",.02,.03,.12,.12,show_games,"nav")
+	title_label=text(self,"SSRG PLAYABLES",.125,.025,.35,.085,21)
 	status_label = text(self,"Play SSRG songs from your own game files.",.125,.075,.36,.125,13,MUTED)
 	search = LineEdit.new(); place(search,self,.365,.035,.53,.115)
 	search.placeholder_text = "Search songs"; search.clear_button_enabled = true
@@ -157,6 +161,7 @@ func _ready() -> void:
 	# Game tabs (one per game folder, plus favourites) and the sign-out button.
 	var tab_scroll = ScrollContainer.new(); place(tab_scroll,self,.02,.135,.86,.2)
 	tab_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var tab_drag=preload("res://scripts/drag_scroll.gd").attach(tab_scroll);tab_drag.horizontal=true
 	game_tabs = HBoxContainer.new(); tab_scroll.add_child(game_tabs); game_tabs.add_theme_constant_override("separation",8)
 	logout_button = action(self,"LOG OUT",.87,.135,.98,.2,log_out,"small")
 
@@ -164,6 +169,12 @@ func _ready() -> void:
 	carousel = ScrollContainer.new(); place(carousel,self,.02,.215,.86,.73)
 	carousel.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	carousel.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	carousel_drag=preload("res://scripts/song_list_scroll.gd").new();carousel_drag.name="DragScroll";carousel_drag.scroll=carousel;carousel_drag.horizontal=true;carousel.add_child(carousel_drag)
+	carousel_drag.on_press=func():
+		carousel_press=true;carousel_dragged=false
+		if carousel_tween:carousel_tween.kill()
+	carousel_drag.on_drag=func():carousel_dragged=true
+	carousel_drag.on_release=func():carousel_press=false
 	song_list = HBoxContainer.new(); carousel.add_child(song_list)
 	song_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	song_list.add_theme_constant_override("separation",18)
@@ -206,6 +217,7 @@ func _ready() -> void:
 	sort_mode = str(game.prefs.get_value("ssrg","sort","GAME"))
 	if sort_mode not in SORTS: sort_mode = "GAME"
 	refresh_staged(); refresh_speed(); refresh_sort_button()
+	games_page=preload("res://scripts/ssrg_games.gd").new();games_page.host=self;safe_content.add_child(games_page);games_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 func build_import_panel() -> void:
 	import_wizard=preload("res://scripts/ssrg_import_wizard.gd").new();import_wizard.host=self
@@ -215,10 +227,29 @@ func open() -> void:
 	pending = {}; delete_armed = 0
 	visible = true
 	logout_button.visible = game.app_login != null and game.app_login.required()
-	refresh_songs()
+	show_games()
 	for child in safe_content.get_children():
 		if child is Control and child.visible and child!=detail and child!=import_panel:
 			soft_reveal(child,minf(child.get_index()*.012,.10))
+
+func show_games() -> void:
+	stop_preview();carousel_drag.stop()
+	if import_wizard.job.busy():return
+	import_wizard.hide();song_page.hide();games_page.show();games_page.refresh()
+	selected_game="";backdrop.texture=null
+
+func open_game(id:String) -> void:
+	selected_game=preload("res://scripts/ssrg_game_catalog.gd").normalize(id)
+	game_filter=selected_game;search.clear();selected_id=""
+	games_page.hide();song_page.show()
+	title_label.text=preload("res://scripts/ssrg_game_catalog.gd").display_name(selected_game)
+	refresh_songs()
+
+func back() -> void:
+	if import_wizard.visible:
+		if not import_wizard.job.busy():import_wizard.hide()
+	elif song_page.visible:show_games()
+	else:close()
 
 func close() -> void:
 	stop_preview()
@@ -289,7 +320,7 @@ func stop_preview() -> void:
 
 func schedule_preview() -> void:
 	stop_preview()
-	if preview_enabled() and visible and not selected_id.is_empty(): preview_delay = .45
+	if preview_enabled() and visible and song_page.visible and not selected_id.is_empty(): preview_delay = .45
 
 func start_preview() -> void:
 	var song: Dictionary = game.song_entry_for_id(selected_id)
@@ -316,11 +347,11 @@ func play_preview() -> void:
 	preview_player.play(minf(length*.3, maxf(0.0,length-12.0)))
 
 func refresh_stats() -> void:
-	var songs = ssrg_songs()
+	var songs = shown_songs() if not selected_game.is_empty() else ssrg_songs()
 	var games = {}
 	for song in songs: games[category(song)] = true
 	var liked = favorites.filter(func(id): return songs.any(func(x): return str(x.id)==id)).size()
-	status_label.text = "%d songs  ·  %d games  ·  %d favourites" % [songs.size(), games.size(), liked]
+	status_label.text = ("%d songs  ·  %d favourites" % [songs.size(),liked]) if not selected_game.is_empty() else ("%d songs  ·  %d games  ·  %d favourites" % [songs.size(),games.size(),liked])
 
 # --- SSRG songs ------------------------------------------------------------------------
 func ssrg_songs() -> Array:
@@ -355,6 +386,8 @@ func song_length(song: Dictionary) -> float:
 	return float(meta.get("duration",song.get("length",0.0)))
 
 func refresh_songs() -> void:
+	if carousel_drag:carousel_drag.stop()
+	if carousel_tween:carousel_tween.kill()
 	for child in song_list.get_children():
 		song_list.remove_child(child); child.queue_free()
 	rows.clear(); row_queue.clear()
@@ -371,13 +404,14 @@ func refresh_songs() -> void:
 		if not query.is_empty() and not haystack.contains(query): continue
 		shown += 1
 		row_queue.append(song)
-	empty_state.visible = all_songs.is_empty()
+	empty_state.visible = songs.is_empty()
 	for arrow in list_arrows: arrow.visible = shown > 0
-	empty_label.text = "" if shown > 0 or all_songs.is_empty() else ("No favourites yet. Tap the star on a song." if game_filter == STAR else "No songs match your search.")
+	empty_label.text = "" if shown > 0 or songs.is_empty() else ("No favourites yet. Tap the star on a song." if game_filter == STAR else "No songs match your search.")
 	carousel.scroll_horizontal = 0
 	refresh_detail(); refresh_stats()
 
 func in_filter(song: Dictionary) -> bool:
+	if not selected_game.is_empty() and category(song)!=selected_game:return false
 	if game_filter.is_empty(): return true
 	if game_filter == STAR: return is_favorite(str(song.id))
 	return category(song) == game_filter
@@ -391,11 +425,15 @@ func shown_songs() -> Array:
 
 # The game folder a song was scanned from; songs added with + FILES go under IMPORTED.
 func category(song: Dictionary) -> String:
-	var album = str(song.get("album","")).strip_edges()
-	return "IMPORTED" if album.is_empty() or album == "SSRG" else album.to_upper()
+	return preload("res://scripts/ssrg_game_catalog.gd").category(song)
 
 func refresh_game_tabs(songs: Array) -> void:
-	for child in game_tabs.get_children(): child.queue_free()
+	for child in game_tabs.get_children():game_tabs.remove_child(child);child.queue_free()
+	if not selected_game.is_empty():
+		for favorite in [false,true]:
+			var tab=Action.new();tab.text="FAVOURITES" if favorite else "SONGS";tab.caption_size=15;tab.custom_minimum_size=Vector2(140,38);tab.primary=(game_filter==STAR)==favorite
+			tab.pressed.connect(func():game_filter=STAR if favorite else selected_game;refresh_songs());game_tabs.add_child(tab)
+		return
 	var names: Array = []
 	for song in songs:
 		if category(song) not in names: names.append(category(song))
@@ -524,23 +562,11 @@ func center_selected(animate: bool) -> void:
 	if not card.is_inside_tree(): return
 	var target = int(maxf(0,card.position.x+card.size.x*.5-carousel.size.x*.5))
 	if carousel_tween: carousel_tween.kill()
+	if carousel_drag:carousel_drag.stop()
 	if not animate: carousel.scroll_horizontal = target; return
 	carousel_tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	carousel_tween.tween_property(carousel,"scroll_horizontal",target,.28)
 
-func _input(event: InputEvent) -> void:
-	if not visible or carousel == null or not carousel.is_visible_in_tree(): return
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		if event.pressed and carousel.get_global_rect().has_point(event.position):
-			carousel_press = true; carousel_dragged = false
-			carousel_press_x = event.position.x; carousel_press_scroll = carousel.scroll_horizontal
-		elif not event.pressed: carousel_press = false
-	elif event is InputEventMouseMotion and carousel_press:
-		var distance = event.position.x-carousel_press_x
-		if not carousel_dragged and absf(distance) > 12.0:
-			carousel_dragged = true
-			if carousel_tween: carousel_tween.kill()
-		if carousel_dragged: carousel.scroll_horizontal = int(carousel_press_scroll-distance)
 
 func disarm_row() -> void:
 	if rows.has(row_armed_id) and rows[row_armed_id].trash != null and is_instance_valid(rows[row_armed_id].trash):
@@ -605,7 +631,7 @@ func refresh_detail() -> void:
 	style_star(star,is_favorite(id)); star.tooltip_text = "Favourite"
 	star.pressed.connect(func(): toggle_favorite(id))
 	# Song tools along the bottom of the panel.
-	var tools: Array = [["COVER",choose_cover],["BACKGROUND",choose_background],["PREVIEW " + ("ON" if preview_enabled() else "OFF"),toggle_preview]]
+	var tools: Array = [["DETAILS",func():game.open_song_details(selected_id)],["COVER",choose_cover],["BACKGROUND",choose_background],["PREVIEW " + ("ON" if preview_enabled() else "OFF"),toggle_preview]]
 	if game.has_custom_cover(id): tools.append(["NO COVER",func(): game.remove_cover(id); refresh_songs()])
 	if game.has_background(id): tools.append(["NO BACKGROUND",func(): game.remove_background(id); refresh_detail()])
 	tools.append(["DELETE",delete_selected])
@@ -696,6 +722,7 @@ func delete_song(id: String) -> void:
 
 # --- Import ----------------------------------------------------------------------------
 func open_import() -> void:
+	if selected_game.is_empty():show_games();return
 	import_wizard.open()
 
 func choose_files() -> void:
@@ -722,6 +749,7 @@ func import_staged() -> void:
 func store_song(audio_path:String,charts:Dictionary,meta:Dictionary) -> Dictionary:
 	# Compatibility entry point; interactive imports prepare on the worker instead.
 	var item={"audio":audio_path,"audio_hash":FileAccess.get_sha256(audio_path),"charts":{},"parsed_charts":charts,"selected_keys":charts.keys(),"title":str(meta.get("title","Imported song")),"artist":str(meta.get("artist","")),"game":str(meta.get("album","SSRG")),"background":str(meta.get("background","")),"policy":"add_missing"}
+	if not selected_game.is_empty():item.target_game=selected_game;item.game=selected_game
 	if meta.get("presentation") is Dictionary:item.presentation=meta.presentation
 	var transaction=preload("res://scripts/ssrg_import_transaction.gd")
 	var prepared=transaction.prepare(game.library.root_path,item,game.library.songs)

@@ -1,0 +1,10 @@
+[configuration]
+entry_symbol="synk_chromaprint_init"
+compatibility_minimum="4.5"
+reloadable=false
+[libraries]
+windows.x86_64="res://assets/native/chromaprint/windows/libsynk_chromaprint.dll"
+android.arm64="res://assets/native/chromaprint/android/libsynk_chromaprint.so"
+[dependencies]
+windows.x86_64={"res://assets/native/chromaprint/windows/libchromaprint.dll":""}
+android.arm64={"res://assets/native/chromaprint/android/libchromaprint.so":""}

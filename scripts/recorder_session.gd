@@ -271,6 +271,7 @@ func toggle(parent: Node, title: String, value: bool, callback: Callable) -> voi
 	b.toggled.connect( func(on): b.text = title + (" · ON" if on else " · OFF");b.set_selected(on);callback.call(on))
 func shell(title: String, narrow: bool = false) -> Dictionary:
 	var root = Control.new();game.ui.add_child(root);root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	preload("res://scripts/modal_input.gd").register(root)
 	var dim = ColorRect.new();root.add_child(dim);dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);dim.color = Color(0.007, 0.007, 0.007, 0.55)
 	var safe_content = game.safe_parent("SafeDialogControls", root)
 	var panel = Panel.new();game.rect(panel, safe_content, 0.55 if narrow else 0.14, 0.05, 0.98 if narrow else 0.86, 0.95)
@@ -343,6 +344,7 @@ func show_review() -> void :
 	game.seek_to(region.x)
 	if game.timeline: game.timeline.reveal_time(region.x)
 	review = Control.new();game.ui.add_child(review);review.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	preload("res://scripts/modal_input.gd").register(review)
 	review_dim = ColorRect.new();review.add_child(review_dim);review_dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	review_dim.color = Color(0.007, 0.007, 0.007, 0.72)
 	var safe = game.safe_parent("SafeTakeReview", review)

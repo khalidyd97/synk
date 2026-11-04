@@ -9,7 +9,7 @@ extends RefCounted
 #          ticks count from before the audio (1004_13.seq: tick 896, and onsets in its .ogg
 #          line up with the notes only when 1.721 s is taken off). Position 13 is the end.
 # A long note that stays in place is a hold and one that moves is a slide, however short:
-# SSRG has no flicks. The 13 positions spread across SYNK's 10 lanes. The song audio is plain Ogg Vorbis.
+# SSRG has no flicks. The 13 positions map directly to SYNK's 13 lanes. The song audio is plain Ogg Vorbis.
 const RECORD = 24
 
 static func is_audio(bytes: PackedByteArray) -> bool:
@@ -166,22 +166,50 @@ static func simple(text: String) -> String:
 		if (ch >= "a" and ch <= "z") or (ch >= "0" and ch <= "9"): out += ch
 	return out
 
-# The path whose file name best matches one of `stems`: same name first, then one name
-# containing the other (ignoring case, spaces and punctuation).
-static func find_file(paths: PackedStringArray, stems: Array, extensions: Array = []) -> String:
-	var candidates: Array = []
+# Export wrappers are not part of a song ID or a level suffix.
+static func file_stem(value:String)->String:
+	var stem=value.replace("\\","/").get_file()
+	while stem.get_extension().to_lower() in ["ogg","wav","mp3","bytes","seq","png","jpg","jpeg","webp"]:stem=stem.get_basename()
+	return stem
+
+static func leading_id(value:String)->String:
+	var result=""
+	for ch in file_stem(value):
+		if ch>="0" and ch<="9":result+=ch
+		else:break
+	return result
+
+static func level_hint(value:String)->int:
+	var stem=file_stem(value);var cut=stem.rfind("_")
+	if cut<0:return 0
+	var tail=stem.substr(cut+1)
+	return int(tail) if tail.is_valid_int() and int(tail) in [4,7,13] else 0
+
+static func song_key(value:String)->String:
+	var numeric=leading_id(value)
+	if not numeric.is_empty():return numeric
+	var stem=file_stem(value)
+	return stem.substr(0,stem.rfind("_")) if level_hint(value)>0 else stem
+
+static func match_score(path:String,stems:Array,primary_id:String="")->int:
+	var expected=leading_id(primary_id);var actual=leading_id(path)
+	if not expected.is_empty() and not actual.is_empty():return 2000 if expected==actual else 0
+	var have=simple(file_stem(path));var score=0
+	for i in stems.size():
+		var wanted=simple(file_stem(str(stems[i])))
+		if wanted.is_empty():continue
+		if have==wanted:score=maxi(score,1000-i)
+		elif wanted.length()>=4 and (have.contains(wanted) or wanted.contains(have)):score=maxi(score,500-i)
+	return score
+
+static func find_file(paths:PackedStringArray,stems:Array,extensions:Array=[],primary_id:String="")->String:
+	var best="";var best_score=0;var tied=false
 	for path in paths:
-		if extensions.is_empty() or path.get_extension().to_lower() in extensions: candidates.append(path)
-	for pass_index in 2:
-		for stem in stems:
-			var wanted = simple(str(stem))
-			if wanted.length() < 3: continue
-			for path in candidates:
-				var have = simple(path.get_file().get_basename())
-				if have.is_empty(): continue
-				if have == wanted: return path
-				if pass_index == 1 and (have.contains(wanted) or (have.length() >= 4 and wanted.contains(have))): return path
-	return ""
+		if not extensions.is_empty() and path.get_extension().to_lower() not in extensions:continue
+		var score=match_score(path,stems,primary_id)
+		if score>best_score:best=path;best_score=score;tied=false
+		elif score==best_score and score>0:tied=true
+	return "" if tied else best
 
 static func files_in(folder: String) -> PackedStringArray:
 	return DirAccess.get_files_at(folder) if not folder.is_empty() else PackedStringArray()
@@ -199,9 +227,8 @@ static func scan(root: String) -> Array:
 		var grouped = {}
 		for name in files_in(seq_dir):
 			if name.get_extension().to_lower() not in CHART_EXTENSIONS: continue
-			var stem = name.get_basename(); var cut = stem.rfind("_")
-			var song_id = stem.substr(0, cut) if cut > 0 else stem
-			var keys = int(stem.substr(cut + 1)) if cut > 0 and stem.substr(cut + 1).is_valid_int() else 0
+			var song_id=song_key(name)
+			var keys=level_hint(name)
 			if not grouped.has(song_id): grouped[song_id] = {}
 			grouped[song_id][keys if keys in [4, 7, 13] else grouped[song_id].size() + 100] = seq_dir.path_join(name)
 		var ids = grouped.keys(); ids.sort()
@@ -209,8 +236,8 @@ static func scan(root: String) -> Array:
 			var charts: Dictionary = grouped[song_id]
 			var name = audio_name(FileAccess.get_file_as_bytes(charts.values()[0]))
 			songs.append({"game": game_name, "song_id": song_id, "charts": charts, "name": name,
-				"audio": find_file(music, [name, song_id], AUDIO_EXTENSIONS),
-				"background": find_file(art, [song_id, name], IMAGE_EXTENSIONS),
+				"audio": find_file(music, [name, song_id], AUDIO_EXTENSIONS,song_id),
+				"background": find_file(art, [song_id, name], IMAGE_EXTENSIONS,song_id),
 				"music_dir": music_dir, "music_files": music.size()})
 	return songs
 

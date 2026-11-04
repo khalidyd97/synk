@@ -198,6 +198,7 @@ func open_tools(selected_tab: String="Drafts") -> void:
     game.stop_audition()
     if overlay: overlay.queue_free()
     overlay=Control.new(); game.ui.add_child(overlay); overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    preload("res://scripts/modal_input.gd").register(overlay)
     var dim=ColorRect.new(); overlay.add_child(dim); dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); dim.color=Color(0.006,0.006,0.006,.88)
     var safe_content=game.safe_parent("SafeDialogControls",overlay)
     var panel=Panel.new(); game.rect(panel,safe_content,.055,.06,.945,.94)

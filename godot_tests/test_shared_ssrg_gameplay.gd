@@ -17,7 +17,7 @@ func run() -> void:
 	check(not game.uses_ssrg_gameplay() and not world.ssrg_theme.active,"Normal play uses SYNK OG stage")
 	check(not game.live[1].note.get("ssrg_path",false),"Normal slides retain OG curves")
 	check(not slide.has("ssrg_path"),"Source chart remains intact")
-	check(is_equal_approx(game.note_travel_seconds(),2.6),"Normal play uses OG SYNK travel")
+	check(is_equal_approx(game.note_travel_seconds(),3.5),"Normal play uses the SSRG approach mechanism")
 	game.paused_mode="play"; game.set_mode("paused")
 	check(not game.uses_ssrg_gameplay(),"Normal pause retains OG stage")
 	game.set_mode("menu")
@@ -60,7 +60,7 @@ func run() -> void:
 	game.set_mode("menu")
 	check(game.highway_style=="ssrg" and not world.ssrg_theme.active,"Leaving play keeps the style and drops the stage")
 	# SSRG mode: the switch makes SYNK songs use SSRG rules too, then SYNK's own results.
-	var saved_mode=game.prefs.get_value("highway","ssrg_mode",null)
+	var saved_mode=game.prefs.get_value("highway","ssrg_mode",false)
 	game.prefs.set_value("highway","ssrg_mode",true)
 	game.start_game(notes,true)
 	game.countdown=0; game.song_time=2.0

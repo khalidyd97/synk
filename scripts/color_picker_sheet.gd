@@ -5,6 +5,15 @@ extends Control
 const Soft = preload("res://scripts/soft_button.gd")
 const Action = preload("res://scripts/settings_action.gd")
 const PRESETS = ["f3ece1","ffd257","ff9a3c","ff7a59","ff4d6a","ff5fd2","a36aff","5b7cff","38baff","3ce0c0","59e36b","ffffff"]
+const RECENT_LIMIT=24
+var palette_game:Control
+var recent_codes:Array[String]=[]
+var preset_grid:GridContainer
+var palette_scroll:ScrollContainer
+var recent_row:HBoxContainer
+var recent_label:Label
+var recent_empty:Label
+var closing=false
 var on_change: Callable
 var on_done: Callable
 var on_cancel: Callable
@@ -24,11 +33,13 @@ var after_chip: ColorRect
 var hex: LineEdit
 var title: Label
 var dragging = ""
+var drag_pointer=-2
 
 # changed: live, while dragging. done/cancelled: once, on close. game: shows the live highway.
 static func open(host: Control, heading: String, start: Color, changed: Callable, done: Callable = Callable(), cancelled: Callable = Callable(), game: Control = null) -> Control:
 	var sheet = load("res://scripts/color_picker_sheet.gd").new()
 	sheet.on_done = done; sheet.on_cancel = cancelled
+	sheet.palette_game=game;sheet.recent_codes=applied_colors(game);sheet.refresh_recent()
 	if game:
 		sheet.preview = preload("res://scripts/highway_look_preview.gd").new(); sheet.preview.game = game
 		sheet.card.add_child(sheet.preview); sheet.preview.custom_minimum_size = Vector2.ZERO
@@ -41,6 +52,7 @@ static func open(host: Control, heading: String, start: Color, changed: Callable
 
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	preload("res://scripts/modal_input.gd").register(self)
 	var dim = ColorRect.new(); add_child(dim); dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.color = Color(0,0,0,.55); dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card = Panel.new(); add_child(card); card.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -66,13 +78,16 @@ func _init() -> void:
 	hex = LineEdit.new(); card.add_child(hex); hex.max_length = 7; hex.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hex.add_theme_font_size_override("font_size",22)
 	hex.text_submitted.connect(func(_text): read_hex()); hex.focus_exited.connect(read_hex)
-	for code in PRESETS:
-		var swatch = Button.new(); card.add_child(swatch); swatch.set_meta("preset",code)
-		swatch.focus_mode = Control.FOCUS_NONE
-		var face = StyleBoxFlat.new(); face.bg_color = Color(code); face.set_corner_radius_all(40)
-		face.set_border_width_all(2); face.border_color = Color(1,1,1,.12)
-		for state in ["normal","hover","pressed"]: swatch.add_theme_stylebox_override(state,face)
-		swatch.pressed.connect(func(): set_color(Color(code)))
+	palette_scroll=ScrollContainer.new();card.add_child(palette_scroll);palette_scroll.name="PaletteScroll"
+	palette_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+	var palette_box=VBoxContainer.new();palette_scroll.add_child(palette_box);palette_box.size_flags_horizontal=Control.SIZE_EXPAND_FILL;palette_box.add_theme_constant_override("separation",8)
+	recent_label=Label.new();palette_box.add_child(recent_label);recent_label.text="RECENT COLORS";recent_label.add_theme_font_size_override("font_size",14)
+	var recent_scroll=ScrollContainer.new();palette_box.add_child(recent_scroll);recent_scroll.custom_minimum_size.y=48;recent_scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;recent_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	recent_row=HBoxContainer.new();recent_scroll.add_child(recent_row);recent_row.name="RecentColors";recent_row.add_theme_constant_override("separation",8)
+	recent_empty=Label.new();palette_box.add_child(recent_empty);recent_empty.text="Applied colors appear here.";recent_empty.add_theme_font_size_override("font_size",14)
+	var preset_label=Label.new();palette_box.add_child(preset_label);preset_label.text="PRESETS";preset_label.add_theme_font_size_override("font_size",14)
+	preset_grid=GridContainer.new();palette_box.add_child(preset_grid);preset_grid.columns=6;preset_grid.add_theme_constant_override("h_separation",8);preset_grid.add_theme_constant_override("v_separation",8)
+	for code in PRESETS:preset_grid.add_child(color_swatch(code,false))
 	var cancel = Action.new(); card.add_child(cancel); cancel.text = "CANCEL"; cancel.caption_size = 20; cancel.name = "Cancel"
 	cancel.pressed.connect(close.bind(false))
 	var done = Action.new(); card.add_child(done); done.text = "DONE"; done.caption_size = 20; done.primary = true; done.name = "Done"
@@ -102,32 +117,72 @@ void fragment(){ COLOR = vec4(hsv(UV.x),1.0); }"""
 # Card centred on screen, sized for touch: square on the left, swatches and actions on the right.
 func layout() -> void:
 	if card == null: return
-	var w = minf(size.x-48,1020.0); var h = minf(size.y-48,560.0)
-	card.size = Vector2(w,h); card.position = (size-card.size)*.5; card.pivot_offset = card.size*.5
-	var pad = 28.0
-	title.position = Vector2(pad,pad-4); title.size = Vector2(w*.6,40)
-	var left = Rect2(pad,pad+52,w*.5-pad*1.5,h-pad*2-52-74)
-	square.position = left.position; square.size = left.size
-	hue_bar.position = Vector2(pad,left.end.y+22); hue_bar.size = Vector2(left.size.x,46)
-	var right_x = w*.5+pad*.5; var right_w = w*.5-pad*1.5
-	# Right column: the live highway (when shown), old/new colour, hex, swatches, actions.
-	var y = pad+52
+	var w=minf(size.x-48,1020.0);var h=minf(size.y-48,640.0)
+	var compact=h<440
+	card.size=Vector2(w,h);card.position=(size-card.size)*.5;card.pivot_offset=card.size*.5
+	var pad=20.0 if compact else 28.0
+	var heading_height=42.0 if compact else 52.0
+	var action_height=52.0 if compact else 74.0
+	var hue_height=32.0 if compact else 46.0
+	title.position=Vector2(pad,pad-4);title.size=Vector2(w*.6,34 if compact else 40)
+	var left=Rect2(pad,pad+heading_height,w*.5-pad*1.5,h-pad*2-heading_height-hue_height-22)
+	square.position=left.position;square.size=left.size
+	hue_bar.position=Vector2(pad,left.end.y+22);hue_bar.size=Vector2(left.size.x,hue_height)
+	var right_x=w*.5+pad*.5;var right_w=w*.5-pad*1.5
+	var y=pad+heading_height
 	if preview:
-		preview.custom_minimum_size = Vector2.ZERO; preview.position = Vector2(right_x,y); preview.size = Vector2(right_w,118); y += 128
-	before_chip.position = Vector2(right_x,y); before_chip.size = Vector2(right_w*.5,44)
-	after_chip.position = Vector2(right_x+right_w*.5,y); after_chip.size = Vector2(right_w*.5,44)
-	hex.position = Vector2(right_x,y+54); hex.size = Vector2(right_w,52)
-	var swatch_top = y+116
-	var columns = 6; var gap = 10.0; var side = minf(minf((right_w-gap*(columns-1))/columns,64.0),(h-pad-74-12-swatch_top-gap)*.5)
-	var index = 0
-	for child in card.get_children():
-		if not child.has_meta("preset"): continue
-		child.position = Vector2(right_x+(index%columns)*(side+gap),swatch_top+(index/columns)*(side+gap)); child.size = Vector2(side,side)
-		index += 1
-	var cancel = card.get_node("Cancel"); var done = card.get_node("Done")
-	cancel.position = Vector2(right_x,h-pad-74); cancel.size = Vector2(right_w*.5-6,74)
-	done.position = Vector2(right_x+right_w*.5+6,h-pad-74); done.size = Vector2(right_w*.5-6,74)
-	square_marker.queue_redraw(); hue_marker.queue_redraw()
+		preview.visible=h>=480
+		if preview.visible:
+			preview.custom_minimum_size=Vector2.ZERO;preview.position=Vector2(right_x,y);preview.size=Vector2(right_w,96 if h>=560 else 58);y+=preview.size.y+10
+	var chip_height=30.0 if compact else 44.0
+	var hex_height=38.0 if compact else 52.0
+	before_chip.position=Vector2(right_x,y);before_chip.size=Vector2(right_w*.5,chip_height)
+	after_chip.position=Vector2(right_x+right_w*.5,y);after_chip.size=Vector2(right_w*.5,chip_height)
+	hex.position=Vector2(right_x,y+chip_height+10);hex.size=Vector2(right_w,hex_height)
+	var swatch_top=hex.position.y+hex.size.y+10
+	palette_scroll.position=Vector2(right_x,swatch_top)
+	palette_scroll.size=Vector2(right_w,maxf(32,h-pad-action_height-12-swatch_top))
+	preset_grid.columns=maxi(3,mini(6,int((right_w+8)/56)))
+	var cancel=card.get_node("Cancel");var done=card.get_node("Done")
+	cancel.position=Vector2(right_x,h-pad-action_height);cancel.size=Vector2(right_w*.5-6,action_height)
+	done.position=Vector2(right_x+right_w*.5+6,h-pad-action_height);done.size=Vector2(right_w*.5-6,action_height)
+	square_marker.queue_redraw();hue_marker.queue_redraw()
+
+static func applied_colors(game:Control) -> Array[String]:
+	var result:Array[String]=[]
+	if game==null:return result
+	var saved=game.prefs.get_value("colors","recent",[])
+	var candidates:Array=saved.duplicate() if saved is Array else []
+	candidates.append_array([game.rail_color,game.band_color,game.hit_color])
+	candidates.append_array(game.gameplay_colors.values())
+	for item in candidates:
+		var code=str(item).strip_edges().trim_prefix("#")
+		if code.length()!=6 or not Color.html_is_valid(code):continue
+		code=Color(code).to_html(false)
+		if not code in result:result.append(code)
+		if result.size()>=RECENT_LIMIT:break
+	return result
+
+func color_swatch(code:String,recent:bool) -> Button:
+	var swatch=Button.new();swatch.custom_minimum_size=Vector2(48,48);swatch.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	swatch.focus_mode=Control.FOCUS_ALL;swatch.tooltip_text="#"+code.to_upper();swatch.set_meta("recent" if recent else "preset",code)
+	var face=StyleBoxFlat.new();face.bg_color=Color(code);face.set_corner_radius_all(12);face.set_border_width_all(2);face.border_color=Color(1,1,1,.18)
+	for state in ["normal","hover","pressed","focus"]:swatch.add_theme_stylebox_override(state,face)
+	swatch.pressed.connect(func():set_color(Color(code)))
+	return swatch
+
+func refresh_recent() -> void:
+	for child in recent_row.get_children():recent_row.remove_child(child);child.queue_free()
+	for code in recent_codes:recent_row.add_child(color_swatch(code,true))
+	recent_label.visible=not recent_codes.is_empty();recent_row.get_parent().visible=not recent_codes.is_empty();recent_empty.visible=recent_codes.is_empty()
+
+func remember_color() -> void:
+	if palette_game==null:return
+	var code=current().to_html(false)
+	recent_codes.erase(code);recent_codes.push_front(code)
+	if recent_codes.size()>RECENT_LIMIT:recent_codes.resize(RECENT_LIMIT)
+	palette_game.prefs.set_value("colors","recent",recent_codes)
+	palette_game.prefs.save("user://preferences.cfg")
 
 func current() -> Color: return Color.from_hsv(hue,saturation,value)
 
@@ -137,6 +192,7 @@ func set_color(color: Color) -> void:
 	saturation = color.s; value = color.v; sync(true)
 
 func sync(notify: bool) -> void:
+	if closing and notify:return
 	var color = current()
 	square_fill.material.set_shader_parameter("hue",hue)
 	after_chip.color = color
@@ -149,16 +205,23 @@ func read_hex() -> void:
 	if Color.html_is_valid(code): set_color(Color(code))
 	else: sync(false)
 
-func drag_input(event: InputEvent, target: String) -> void:
-	var area: Control = square if target=="square" else hue_bar
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		dragging = target if event.pressed else ""
-	if dragging != target: return
-	if event is InputEventMouseButton or event is InputEventMouseMotion:
-		var p = (event.position/area.size).clamp(Vector2.ZERO,Vector2.ONE)
-		if target == "square": saturation = p.x; value = 1.0-p.y
-		else: hue = minf(p.x,.999)
-		sync(true); accept_event()
+func drag_input(event:InputEvent,target:String) -> void:
+	if closing:return
+	var area:Control=square if target=="square" else hue_bar
+	var moving=false
+	if event is InputEventScreenTouch:
+		if event.pressed and dragging=="":dragging=target;drag_pointer=event.index;moving=true
+		elif not event.pressed and drag_pointer==event.index:dragging="";drag_pointer=-2;accept_event();return
+	elif event is InputEventScreenDrag:moving=drag_pointer==event.index and dragging==target
+	elif event is InputEventMouseButton and event.device!=-1 and event.button_index==MOUSE_BUTTON_LEFT:
+		if event.pressed and dragging=="":dragging=target;drag_pointer=-1;moving=true
+		elif not event.pressed and drag_pointer==-1:dragging="";drag_pointer=-2;accept_event();return
+	elif event is InputEventMouseMotion and event.device!=-1:moving=drag_pointer==-1 and dragging==target
+	if moving:
+		var p=(event.position/area.size).clamp(Vector2.ZERO,Vector2.ONE)
+		if target=="square":saturation=p.x;value=1.0-p.y
+		else:hue=minf(p.x,.999)
+		sync(true);accept_event()
 
 func draw_square_marker() -> void:
 	var at = Vector2(saturation,1.0-value)*square.size
@@ -170,12 +233,19 @@ func draw_hue_marker() -> void:
 	knob.set_border_width_all(4); knob.border_color = Color.WHITE
 	hue_marker.draw_style_box(knob,Rect2(x-12,-6,24,hue_bar.size.y+12))
 
-func _gui_input(event: InputEvent) -> void:
-	# A tap on the dimmed area outside the card cancels.
-	if event is InputEventMouseButton and event.pressed and not card.get_global_rect().has_point(event.global_position): close(false)
+func _gui_input(event:InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and not card.get_global_rect().has_point(event.global_position):close(false)
+	elif event is InputEventScreenTouch and event.pressed:
+		var point=get_global_transform_with_canvas()*event.position
+		if not card.get_global_rect().has_point(point):close(false)
 
 func close(keep: bool) -> void:
-	if keep and on_done.is_valid(): on_done.call(current())
+	if closing:return
+	if keep:read_hex()
+	closing=true
+	if keep:
+		if on_done.is_valid():on_done.call(current())
+		remember_color()
 	elif not keep:
 		if on_cancel.is_valid(): on_cancel.call()
 		elif on_change.is_valid(): on_change.call(original)

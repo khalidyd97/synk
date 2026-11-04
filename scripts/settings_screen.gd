@@ -17,7 +17,8 @@ var metronome_toggle: Switch
 var shape_tiles: Dictionary = {}
 var render_scale_buttons: Dictionary = {}
 var hit_style_buttons: Dictionary = {}
-var hit_swatches: Array = []
+var look_color_pickers:Dictionary={}
+var look_color_resets:Dictionary={}
 var hit_size_input: Stepper
 var style_tiles: Dictionary = {}
 var ssrg_mode_row: PanelContainer
@@ -27,12 +28,8 @@ var ssrg_mode_switch: Switch
 var color_pickers: Dictionary = {}
 var color_reset_buttons: Dictionary = {}
 var rail_glow_input: Stepper
-var rail_swatches: Array = []
-var band_swatches: Array = []
 var highway_opacity_input: Stepper
 var color_mode_tiles: Dictionary = {}
-# Swatch colors offered for the rails and the judgment band; "" follows the chosen style.
-const LOOK_COLORS = ["","fff3dc","ffd257","ff9a3d","ff4d6d","ff5fc8","a46bff","4f7dff","4fd8ff","4dff9a","ffffff"]
 
 # A − value + control. Setting `value` (in code or with the buttons) emits value_changed.
 class Stepper extends Control:
@@ -134,31 +131,6 @@ class Switch extends Button:
         draw_circle(Vector2(track.position.x+16+knob*32,track.get_center().y),11,Color("cfcbd2").lerp(Soft.INK,knob))
 
 # A selectable tile previewing a note shape.
-# One color choice; an empty color is the "auto" swatch that follows the style.
-class Swatch extends Button:
-    var color_code = ""
-    var selected = false:
-        set(v): selected = v; queue_redraw()
-    func _init(code: String) -> void:
-        color_code = code; focus_mode = Control.FOCUS_ALL
-        mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-        custom_minimum_size = Vector2(52,52)
-        tooltip_text = "Style default" if code=="" else "#"+code
-        for state in ["normal","hover","pressed","disabled","focus","hover_pressed"]: add_theme_stylebox_override(state,StyleBoxEmpty.new())
-    func _draw() -> void:
-        var center = size*.5; var r = minf(size.x,size.y)*.36
-        if selected: draw_arc(center,r+6,0,TAU,40,Color("f3ece1"),3,true)
-        elif is_hovered() or has_focus(): draw_arc(center,r+6,0,TAU,40,Color("a499e8"),2,true)
-        if color_code=="":
-            draw_circle(center,r,Color("1e1e1e"))
-            draw_arc(center,r,0,TAU,40,Color(1,1,1,.5),1.5,true)
-            var font = ThemeDB.fallback_font
-            var w = font.get_string_size("A",HORIZONTAL_ALIGNMENT_LEFT,-1,18).x
-            draw_string(font,center+Vector2(-w*.5,7),"A",HORIZONTAL_ALIGNMENT_LEFT,-1,18,Color.WHITE)
-        else:
-            draw_circle(center,r,Color.from_string(color_code,Color.WHITE))
-            draw_arc(center,r,0,TAU,40,Color(1,1,1,.35),1.5,true)
-
 # A highway style choice drawn as a tiny rail pair and band.
 class StyleTile extends Button:
     var style_name = "gold"
@@ -175,6 +147,20 @@ class StyleTile extends Button:
         if is_hovered() or has_focus(): box.border_color=Color("a499e8")
         box.set_border_width_all(2 if selected else 1)
         draw_style_box(box,Rect2(Vector2.ZERO,size))
+        if style_name in ["aurora","solar"]:
+            var solar=style_name=="solar"
+            draw_rect(Rect2(Vector2(8,8),Vector2(size.x-16,size.y*.59)),Color.BLACK)
+            var rail=Color("f5c482") if solar else Color("a2efff")
+            var a=Vector2(size.x*.48,size.y*.16);var b=Vector2(size.x*.52,size.y*.16)
+            var c=Vector2(size.x*.85,size.y*.64);var d=Vector2(size.x*.15,size.y*.64)
+            draw_colored_polygon(PackedVector2Array([a,b,c,d]),Color("090b12"))
+            draw_line(a,d,rail.darkened(.5),5,true);draw_line(b,c,rail.darkened(.5),5,true)
+            draw_line(a,d,rail,1.5,true);draw_line(b,c,rail,1.5,true)
+            draw_line(a.lerp(d,.87),b.lerp(c,.87),rail,1.5,true)
+            var font=ThemeDB.fallback_font;var title:String=preload("res://scripts/concept_highway.gd").LABELS[style_name]
+            var width=font.get_string_size(title,HORIZONTAL_ALIGNMENT_LEFT,-1,14).x
+            draw_string(font,Vector2((size.x-width)*.5,size.y*.88),title,HORIZONTAL_ALIGNMENT_LEFT,-1,14,Color.WHITE)
+            return
         var gold = style_name=="gold"
         if style_name=="ssrg":
             # Dark glass track, silver rails, glass band and one glossy note.
@@ -292,7 +278,7 @@ var selected_sections: Dictionary={}
 var trail_style_input: OptionButton
 const PAGE_NAMES={"gameplay":"Gameplay","audio":"Audio & sync","visuals":"Visual effects","editor":"Editor preferences"}
 const SUBPAGES={"gameplay":{"play":"Play","browsing":"Browsing"},"audio":{"timing":"Timing","headset":"Headset"},"visuals":{"highway":"Highway","notes":"Notes","hits":"Hit effects","stage":"Stage effects","colors":"Colors"},"editor":{"recording":"Recording","guides":"Guides & audio"}}
-const SUBPAGE_HINTS={"colors":"Choose Theme in Highway to use custom colors. Adaptive keeps your choices saved.","play":"Tune how notes travel while you play.","browsing":"Choose how the song library behaves.","timing":"Match the judgment timing to your music.","headset":"Compensate for wireless audio delay.","highway":"Choose the rail style, colors, and viewing angle.","notes":"Choose note shapes, trail styles, and sizes.","hits":"Tune hit feedback and particle intensity.","stage":"Choose your stage atmosphere. Combine effects freely.","recording":"Personal recording aids and playback preferences.","guides":"Listen for the rhythm while you create charts."}
+const SUBPAGE_HINTS={"colors":"Choose Theme in Highway to use custom colors. Adaptive keeps your choices saved.","play":"Tune how notes travel while you play.","browsing":"Choose how the song library behaves.","timing":"Match the judgment timing to your music.","headset":"Compensate for wireless audio delay.","highway":"Choose your rail style and colors. Gameplay uses the SSRG view.","notes":"Choose note shapes, trail styles, and sizes.","hits":"Tune hit feedback and particle intensity.","stage":"Choose your stage atmosphere. Combine effects freely.","recording":"Personal recording aids and playback preferences.","guides":"Listen for the rhythm while you create charts."}
 const PAGE_HINTS={"gameplay":"Tune your highway and browsing experience.","audio":"Match your taps to the music and your headset.","visuals":"Customize the highway, note sizes and stage effects.","editor":"Personal preferences for every chart you create."}
 
 func style(fill: Color=Color("101010"),edge: Color=Color("2c2d44"),radius: int=22) -> StyleBoxFlat:
@@ -479,27 +465,54 @@ func sizing_row(items: VBoxContainer,key: String,title: String,hint: String,low:
     var control=Stepper.new(low,high,5,current*100,"%",0); sizing_inputs[key]=control
     add_control(row(items,title,hint),control)
     control.value_changed.connect(func(v): game.change_note_sizing(key,v/100))
-func swatch_row(items: VBoxContainer,key: String,title: String,hint: String,list: Array) -> void:
-    var panel=row(items,title,hint,128)
-    var line=HBoxContainer.new(); line.add_theme_constant_override("separation",4)
-    add_control(panel,line,LOOK_COLORS.size()*56)
-    for code in LOOK_COLORS:
-        var swatch=Swatch.new(code); line.add_child(swatch); list.append(swatch)
-        swatch.pressed.connect(func(): if not Action.was_dragged(swatch): game.change_highway_look(key,code))
+# All color tabs share the full picker, with an explicit automatic/default action.
+func look_color_row(items:VBoxContainer,key:String,title:String,hint:String) -> void:
+    var panel=row(items,title,hint,104)
+    var controls=HBoxContainer.new();controls.add_theme_constant_override("separation",12);add_control(panel,controls,340)
+    var picker=ColorChip.new();picker.custom_minimum_size=Vector2(168,72);controls.add_child(picker)
+    look_color_pickers[key]=picker
+    picker.pressed.connect(func():if not Action.was_dragged(picker):open_look_color_picker(key,title,picker.color))
+    var reset=action(controls,"AUTO",func():apply_look_color(key,""));reset.custom_minimum_size=Vector2(160,72)
+    look_color_resets[key]=reset
+
+func apply_look_color(key:String,code:String) -> void:
+    if key=="hit_color":game.change_hit_look("color",code)
+    else:game.change_highway_look(key,code)
+
+func look_color_value(key:String) -> Color:
+    if key=="hit_color":
+        return Color(game.hit_color) if game.hit_color!="" else game.field.world.element_color("hits",game.field.world.colors[0])
+    var role=key.trim_suffix("_color")
+    if game.highway_colors=="theme" and game.gameplay_colors.has(role):return Color(str(game.gameplay_colors[role]))
+    return Color(str(game.get(key))) if str(game.get(key))!="" else SynkGameplayColors.preview_default(game,role)
+
+func preview_look_color(key:String,code:String) -> void:
+    game.set(key,code)
+    if key in ["rail_color","band_color"]:game.gameplay_colors.erase(key.trim_suffix("_color"))
+    game.field.world.refresh_highway_look();refresh()
+
+func open_look_color_picker(key:String,heading:String,start:Color) -> Control:
+    var before=str(game.get(key));var role=key.trim_suffix("_color")
+    var had=game.gameplay_colors.has(role);var element_before=str(game.gameplay_colors.get(role,""))
+    return preload("res://scripts/color_picker_sheet.gd").open(self,heading,start,
+        func(color):preview_look_color(key,color.to_html(false)),
+        func(color):apply_look_color(key,color.to_html(false)),
+        func():
+            game.set(key,before)
+            if had:game.gameplay_colors[role]=element_before
+            elif key in ["rail_color","band_color"]:game.gameplay_colors.erase(role)
+            game.field.world.refresh_highway_look();refresh(),game)
+
 # A heading that starts a group of related settings on a page.
 func section(items: VBoxContainer,title: String) -> void:
     var spacer=Control.new(); spacer.custom_minimum_size.y=6; items.add_child(spacer)
     var heading=label(items,title,13,ACCENT); heading.custom_minimum_size.y=26
 func build_highway(items: VBoxContainer) -> void:
-    highway_angle_input=Stepper.new(18,44,2,game.highway_angle,"°",0)
-    angle_row=row(items,"Highway angle","Choose how flat or steep the SYNK highway looks.")
-    add_control(angle_row,highway_angle_input)
-    highway_angle_input.value_changed.connect(game.change_highway_angle)
     var preview=preload("res://scripts/highway_look_preview.gd").new(); preview.game=game; items.add_child(preview)
-    var styles=row(items,"Highway style","Gold or Neon rails and judgment band, or the SSRG highway.",166)
-    var tile_row=HBoxContainer.new(); tile_row.add_theme_constant_override("separation",12)
+    var styles=row(items,"Highway style","Five styles. Shared 13-lane SSRG view.",322)
+    var tile_row=GridContainer.new(); tile_row.columns=3; tile_row.add_theme_constant_override("h_separation",12); tile_row.add_theme_constant_override("v_separation",12)
     add_control(styles,tile_row,440)
-    for kind in ["gold","neon","ssrg"]:
+    for kind in game.HIGHWAY_STYLES:
         var tile=StyleTile.new(kind); tile_row.add_child(tile); tile.custom_minimum_size=Vector2(138,136)
         tile.pressed.connect(func(): if not Action.was_dragged(tile): game.change_highway_look("style",kind))
         style_tiles[kind]=tile
@@ -513,8 +526,8 @@ func build_highway(items: VBoxContainer) -> void:
         var tile=ModeTile.new(kind); mode_row.add_child(tile); tile.custom_minimum_size=Vector2(208,120)
         tile.pressed.connect(func(): if not Action.was_dragged(tile): game.change_highway_look("colors",kind))
         color_mode_tiles[kind]=tile
-    swatch_row(items,"rail_color","Rail color","A follows the colors above.",rail_swatches)
-    swatch_row(items,"band_color","Judgment band color","Where notes are hit.",band_swatches)
+    look_color_row(items,"rail_color","Rail color","Choose any color, or follow the highway style.")
+    look_color_row(items,"band_color","Judgment bar color","Choose any color for the hit area, or use AUTO.")
     highway_opacity_input=Stepper.new(30,160,10,game.highway_opacity*100,"%",0)
     add_control(row(items,"Highway darkness","How much of the stage shows through the highway."),highway_opacity_input)
     highway_opacity_input.value_changed.connect(func(v): game.change_highway_look("opacity",v/100))
@@ -581,6 +594,7 @@ func build_notes(items: VBoxContainer) -> void:
     var focus=picker_style.duplicate(); focus.border_color=ACCENT
     for state in ["focus","hover","pressed"]: trail_style_input.add_theme_stylebox_override(state,focus)
     add_control(trail,trail_style_input)
+    preload("res://scripts/modal_input.gd").register(trail_style_input.get_popup())
     trail_style_input.item_selected.connect(func(index): game.change_trail_style("solid" if index==1 else "neon"))
     sizing_row(items,"hold_trail_width","Hold & slide trail width","Adjust both trail widths independently of note size.",30,150,game.hold_trail_width)
     action(items,"RESET NOTE SIZES",func():
@@ -601,12 +615,7 @@ func build_hit_effects(items: VBoxContainer) -> void:
     hit_size_input=Stepper.new(60,160,10,game.hit_size*100,"%",0)
     add_control(row(items,"Hit size","How big each hit flash and burst is, on every highway style."),hit_size_input)
     hit_size_input.value_changed.connect(func(v): game.change_hit_look("size",v/100))
-    var colors=row(items,"Hit color","A follows each note's own color.",128)
-    var line=HBoxContainer.new(); line.add_theme_constant_override("separation",4)
-    add_control(colors,line,LOOK_COLORS.size()*56)
-    for code in LOOK_COLORS:
-        var swatch=Swatch.new(code); line.add_child(swatch); hit_swatches.append(swatch)
-        swatch.pressed.connect(func(): if not Action.was_dragged(swatch): game.change_hit_look("color",code))
+    look_color_row(items,"hit_color","Hit color","Choose any color, or follow each note with AUTO.")
     effect_row(items,"Hit flashes","Set the brightness of hit flashes and impact rings.")
     effect_row(items,"Particles","Set particle density for note-hit sparks.")
     action(items,"RESET HIT EFFECTS",func():
@@ -629,6 +638,10 @@ func editor_switch(items: VBoxContainer,key: String,title: String,hint: String,v
     var control=Switch.new(); add_control(row(items,title,hint),control,152)
     control.button_pressed=value; connect_switch(control,callback); authoring_switches[key]=control; return control
 func build_editor(items: VBoxContainer,guides: VBoxContainer) -> void:
+    highway_angle_input=Stepper.new(18,90,1,game.highway_angle,"°",0)
+    angle_row=row(items,"Recorder view angle","35° keeps the current perspective; 90° is a flat overhead view. Gameplay stays on its own camera.")
+    add_control(angle_row,highway_angle_input)
+    highway_angle_input.value_changed.connect(game.change_highway_angle)
     metronome_toggle=editor_switch(guides,"metronome","Metronome","Click to the beat while editing or recording.",game.beat_clock.enabled,func(on):
         if game.beat_clock.enabled!=on: game.beat_clock.toggle())
     editor_switch(guides,"mr","MR vocal reduction","Reduce center vocals while mapping the rhythm.",game.mr.enabled,func(on):
@@ -641,6 +654,10 @@ func build_editor(items: VBoxContainer,guides: VBoxContainer) -> void:
         game.cycle_record_speed(); speed_button.text="RECORD SPEED  ·  "+str(game.record_speed)+"×")
     action(items,"RECORDER PREFERENCES  →",func(): game.recorder.show_setup(true))
 func refresh() -> void:
+    for key in look_color_pickers:
+        look_color_pickers[key].color=look_color_value(key)
+        var role=key.trim_suffix("_color")
+        look_color_resets[key].set_selected(str(game.get(key))=="" and not (game.highway_colors=="theme" and game.gameplay_colors.has(role)))
     for key in color_pickers:
         var picker=color_pickers[key]
         picker.disabled=game.highway_colors=="adaptive"
@@ -650,17 +667,13 @@ func refresh() -> void:
     if trail_style_input: trail_style_input.select(1 if game.trail_style=="solid" else 0)
     for kind in shape_tiles: shape_tiles[kind].selected=kind==game.note_shape
     for key in hit_style_buttons: hit_style_buttons[key].set_selected(key==game.hit_style)
-    for swatch in hit_swatches: swatch.selected=swatch.color_code==game.hit_color
     if hit_size_input: hit_size_input.sync_value(game.hit_size*100)
     for value in render_scale_buttons: render_scale_buttons[value].set_selected(is_equal_approx(value,game.render_scale()))
     for kind in style_tiles: style_tiles[kind].selected=kind==game.highway_style
     if ssrg_mode_row:
         ssrg_mode_row.visible=game.highway_style=="ssrg"
-        angle_row.visible=game.highway_style!="ssrg"
         ssrg_mode_switch.set_pressed_no_signal(bool(game.prefs.get_value("highway","ssrg_mode",false)))
     for kind in color_mode_tiles: color_mode_tiles[kind].selected=kind==game.highway_colors
-    for swatch in rail_swatches: swatch.selected=swatch.color_code==game.rail_color and (game.highway_colors=="adaptive" or not game.gameplay_colors.has("rail"))
-    for swatch in band_swatches: swatch.selected=swatch.color_code==game.band_color and (game.highway_colors=="adaptive" or not game.gameplay_colors.has("band"))
     if highway_opacity_input: highway_opacity_input.sync_value(game.highway_opacity*100)
     if not song_preview_toggle: return
     song_preview_toggle.set_pressed_no_signal(game.lobby.preview_enabled)

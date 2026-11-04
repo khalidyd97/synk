@@ -24,6 +24,7 @@ var artist_label: Label
 var info_label: Label
 var cover: TextureRect
 var versions: VBoxContainer
+var version_scroll: ScrollContainer
 var stats_label: Label
 var chart_label: Label
 var density: Control
@@ -117,8 +118,10 @@ func _ready() -> void:
     info_label=label(panel,"",164,127,383,28,14,Color("b5c4df"),p)
     label(panel,"C H A R T   V E R S I O N S",24,188,375,30,13,Color("ff7a59"),p)
     new_button=button(panel,"+ NEW",433,176,118,64,show_new_version,p); new_button.caption_size=18
-    var version_scroll=ScrollContainer.new(); place(version_scroll,panel,24,246,528,140,p)
+    version_scroll=ScrollContainer.new(); place(version_scroll,panel,24,246,528,140,p)
     version_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+    version_scroll.scroll_deadzone=12
+    var version_drag=preload("res://scripts/song_list_scroll.gd").new();version_drag.name="DragScroll";version_drag.scroll=version_scroll;version_scroll.add_child(version_drag)
     versions=VBoxContainer.new(); version_scroll.add_child(versions); versions.size_flags_horizontal=Control.SIZE_EXPAND_FILL; versions.add_theme_constant_override("separation",8)
     chart_label=label(panel,"",24,417,262,24,13,Color("ff7a59"),p)
     # Saved versions of the selected level: browse and switch.
@@ -243,7 +246,7 @@ func update_panel() -> void:
         var n=ButtonArt.new(); n.menu_motion=true; versions.add_child(n); n.custom_minimum_size=Vector2(0,76)
         n.text=Levels.label(key)+"   ·   %d notes   ·   " % version.notes.size()+("Unsaved edits" if version.live else ("Draft saved" if version.draft else "Saved"))
         n.caption_size=19; n.set_selected(key==selected_variant)
-        n.pressed.connect(func(): selected_variant=key; update_panel())
+        n.pressed.connect(func(): if not DragScroll.was_dragged(version_scroll): selected_variant=key; update_panel())
         if key==selected_variant: current=version
     if data.versions.is_empty():
         var hint=Label.new(); versions.add_child(hint); hint.text="No charts yet. Record or edit to begin, and choose its level."; hint.add_theme_font_size_override("font_size",16)
@@ -283,6 +286,7 @@ func confirm_level() -> void:
     selected_variant=Levels.key(roundi(level_input.value)); open_selected(level_action)
 func build_level_popup() -> void:
     level_popup=Control.new(); fraction_place(level_popup,canvas,0,0,1,1); level_popup.mouse_filter=Control.MOUSE_FILTER_STOP
+    preload("res://scripts/modal_input.gd").register(level_popup)
     var dim=ColorRect.new(); fraction_place(dim,level_popup,0,0,1,1); dim.color=Color(0.006,0.006,0.006,.72); dim.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var card=Panel.new(); fraction_place(card,level_popup,.3,.24,.7,.76)
     var style=StyleBoxFlat.new(); style.bg_color=Color(.04,.04,.04,.97); style.border_color=Color(1,1,1,.12)
@@ -340,6 +344,7 @@ func fraction_button(parent: Control,value: String,l: float,t: float,r: float,b:
 func build_confirm() -> void:
     # Deleting is permanent, so it always asks first.
     confirm=Control.new(); fraction_place(confirm,canvas,0,0,1,1); confirm.mouse_filter=Control.MOUSE_FILTER_STOP
+    preload("res://scripts/modal_input.gd").register(confirm)
     var dim=ColorRect.new(); fraction_place(dim,confirm,0,0,1,1); dim.color=Color(0.006,0.006,0.006,.72); dim.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var panel=Panel.new(); fraction_place(panel,confirm,.27,.28,.73,.72)
     var style=StyleBoxFlat.new(); style.bg_color=Color(.04,.04,.04,.97); style.border_color=Color(1,1,1,.12)

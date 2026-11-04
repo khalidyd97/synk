@@ -16,6 +16,7 @@ var burst_done = false
 var done = false
 
 func _ready() -> void:
+	preload("res://scripts/modal_input.gd").register(self)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 

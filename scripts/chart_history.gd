@@ -30,6 +30,7 @@ func action(parent: Control, value: String, callback: Callable, primary: bool = 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	preload("res://scripts/modal_input.gd").register(self)
 	var dim = ColorRect.new(); add_child(dim); dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); dim.color = Color(0.006,0.006,0.006,.78)
 	canvas = Control.new(); add_child(canvas); canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	resized.connect(layout); layout()

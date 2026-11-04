@@ -16,20 +16,21 @@ func run() -> void:
     g.song_time=1.12; g.pointer_event(1,screen(g,4),false,true,false)
     var notes=g.capture.notes
     check(notes.size()==2 and notes[0].time==notes[1].time,"Recorder event path aligns chord timing")
-    check(absf(float(notes[0].lane)-float(notes[1].lane))*w.LANE_WIDTH>w.NOTE_WIDTH*g.note_size,"Actual note width determines the automatic gap")
+    check(absf(float(notes[0].lane)-float(notes[1].lane))==2.0,"Overlapping recorder heads stay two lanes apart")
     g.song_time=1.4; w._process(0)
     var heads: Array=[]
     for i in notes.size():
         var head=w.notes["captured"+str(i)].node.get_child(0)
         heads.append(w.camera.unproject_position(head.global_position))
     check(absf(heads[0].y-heads[1].y)<.1,"Chord heads render on the same horizontal line")
-    await create_timer(.25).timeout; await RenderingServer.frame_post_draw
-    root.get_texture().get_image().save_png("res://.tools/recorder-auto-chord-layout.png")
+    if DisplayServer.get_name()!="headless":
+        await create_timer(.25).timeout; await RenderingServer.frame_post_draw
+        root.get_texture().get_image().save_png("res://.tools/recorder-auto-chord-layout.png")
     var fixed=SynkChart.note(3,4); var original=fixed.duplicate(true)
     g.document.load_notes([fixed]); g.capture.notes.clear(); g.capture.gestures.clear(); g.song_time=3.03
     g.pointer_event(3,screen(g,4),true,false,false); g.song_time=3.13; g.pointer_event(3,screen(g,4),false,true,false)
     check(g.document.notes[0]==original,"Saved chart obstacles remain unchanged during overdub")
-    check(g.capture.notes[0].time==3.0 and abs(int(g.capture.notes[0].lane)-4)>=3,"Overdub aligns to an existing head and finds a different lane")
+    check(g.capture.notes[0].time==3.0 and abs(int(g.capture.notes[0].lane)-4)==2,"Overdub aligns to an existing head and picks the nearest free lane")
     g.recorder.region=Vector2(4,8); g.capture.notes.clear(); g.capture.gestures.clear()
     g.document.load_notes([SynkChart.note(3.97,2)]); g.song_time=4.01
     g.pointer_event(4,screen(g,2),true,false,false); g.song_time=4.10; g.pointer_event(4,screen(g,2),false,true,false)
@@ -38,7 +39,7 @@ func run() -> void:
     check(prepared.size()==1,"Punch-boundary notes survive take preparation")
     var new_notes=[SynkChart.note(6,4),SynkChart.note(6,5)]
     g.space_authored_notes(new_notes,[])
-    check(abs(int(new_notes[0].lane)-int(new_notes[1].lane))>=3,"Editor creation/paste shares the same spacing rule")
+    check(abs(int(new_notes[0].lane)-int(new_notes[1].lane))==2,"Editor creation/paste shares the close spacing rule")
     print("Recorder chord layout integration: "+("PASS" if failures==0 else "FAIL"))
     g.queue_free(); await process_frame; quit(failures)
 

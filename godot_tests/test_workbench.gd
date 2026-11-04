@@ -16,7 +16,7 @@ func run():
     game.document.load_notes([]); service.recovery_checked=""
     check(service.recover() and game.document.notes.size()==2 and game.document.dirty,"Recovery restores draft")
     service.choose_variant(1)
-    check(service.current_variant=="easy" and game.document.notes.is_empty(),"Difficulties have independent notes")
+    check(service.current_variant==service.VARIANTS[1] and game.document.notes.is_empty(),"Difficulties have independent notes")
     game.document.add(6,1); game.save_editor()
     check(FileAccess.file_exists(service.chart_path()) and not FileAccess.file_exists(service.draft_path()),"Saving publishes only current variant")
     service.choose_variant(0)

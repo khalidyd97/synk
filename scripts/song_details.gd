@@ -22,6 +22,12 @@ var choose_cover_button: Button
 var message: Label
 var picker: FileDialog
 var picking = ""
+var recognition:Node
+var recognition_button:Button
+var recognition_setup:ConfirmationDialog
+var recognition_token:LineEdit
+var recognition_fallback_token:LineEdit
+const TOKEN_FILE="user://recognition.cfg"
 # Pending edits: an Image to save, "remove", or null for unchanged.
 var pending_cover: Variant = null
 var pending_background: Variant = null
@@ -43,6 +49,7 @@ func action(parent: Control,value: String,x: float,y: float,w: float,h: float,ca
 
 func _ready() -> void:
 	mouse_filter=Control.MOUSE_FILTER_STOP
+	preload("res://scripts/modal_input.gd").register(self)
 	var background=ColorRect.new(); add_child(background); background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	background.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	var mat=preload("res://scripts/background_motion.gd").attach(background,preload("res://scripts/song_browser_background.gdshader"))
@@ -59,7 +66,9 @@ func _ready() -> void:
 	heading.add_theme_font_override("font",bold)
 	# Text details.
 	var info=place(Panel.new(),canvas,48,150,620,520); info.add_theme_stylebox_override("panel",style())
-	label(info,"Details",28,20,560,40,26)
+	label(info,"Details",28,20,230,40,26)
+	recognition_button=action(info,"RECOGNIZE SONG",290,18,300,48,configure_recognition)
+	recognition_button.caption_size=16
 	var rows=[["title","Title","Song title"],["artist","Artist","Artist name"],["album","Album","Album name"],["track","Track number","e.g. 3"]]
 	for i in rows.size():
 		var y=78+i*106
@@ -108,6 +117,23 @@ func _ready() -> void:
 	picker.file_mode=FileDialog.FILE_MODE_OPEN_FILE; picker.access=FileDialog.ACCESS_FILESYSTEM; picker.use_native_dialog=true
 	picker.filters=PackedStringArray(["*.png,*.jpg,*.jpeg;Images;image/png,image/jpeg"])
 	picker.file_selected.connect(picked)
+	recognition=preload("res://scripts/music_recognition.gd").new();add_child(recognition)
+	recognition.completed.connect(recognition_completed)
+	recognition.progress.connect(func(text):if visible:message.text=text)
+	recognition_setup=ConfirmationDialog.new();add_child(recognition_setup)
+	recognition_setup.title="Recognize song";recognition_setup.ok_button_text="RECOGNIZE"
+	recognition_setup.min_size=Vector2i(440,340)
+	preload("res://scripts/modal_input.gd").register(recognition_setup)
+	var setup=VBoxContainer.new();recognition_setup.add_child(setup);setup.add_theme_constant_override("separation",16)
+	var explanation=Label.new();setup.add_child(explanation);explanation.text="AcoustID first: sends a fingerprint, free for personal use.\nIf no match, AudD sends a 12-second audio excerpt.\nAudD account allowance applies. Leave its token blank to disable.\nReview results before SAVE. Keys stay on this device."
+	recognition_token=LineEdit.new();setup.add_child(recognition_token);recognition_token.secret=true;recognition_token.placeholder_text="AcoustID application key"
+	recognition_fallback_token=LineEdit.new();setup.add_child(recognition_fallback_token);recognition_fallback_token.secret=true;recognition_fallback_token.placeholder_text="AudD fallback token (optional)"
+	var account=LinkButton.new();setup.add_child(account);account.text="Register a free application at acoustid.org"
+	account.pressed.connect(func():OS.shell_open("https://acoustid.org/new-application"))
+	recognition_setup.confirmed.connect(start_recognition)
+	visibility_changed.connect(func():
+		if not visible:
+			recognition.cancel();recognition_button.disabled=false;recognition_button.text="RECOGNIZE SONG";recognition_setup.hide())
 	visible=false
 
 func layout() -> void:
@@ -180,3 +206,30 @@ func save() -> void:
 
 func cancel() -> void:
 	game.close_song_details()
+
+func configure_recognition() -> void:
+	var config=ConfigFile.new();config.load(TOKEN_FILE)
+	recognition_token.text=str(config.get_value("acoustid","client",""))
+	recognition_fallback_token.text=str(config.get_value("audd","token",""))
+	recognition_setup.popup_centered()
+
+func start_recognition() -> void:
+	var token=recognition_token.text.strip_edges()
+	if token.is_empty():message.text="Add an AcoustID application key to recognize songs.";return
+	var entry=game.song_details_entry(song_id)
+	var path="user://songs/"+str(entry.get("file",""))
+	if song_id=="eclipse":message.text="Recognition is available for imported audio.";return
+	var error=recognition.recognize(path,token,recognition_fallback_token.text)
+	if not error.is_empty():message.text=error;return
+	var config=ConfigFile.new();config.load(TOKEN_FILE);config.set_value("acoustid","client",token);config.set_value("audd","token",recognition_fallback_token.text.strip_edges());config.save(TOKEN_FILE)
+	recognition_button.disabled=true;recognition_button.text="RECOGNIZING…"
+	message.text="Looking up a local fingerprint with AcoustID…"
+
+func recognition_completed(details:Dictionary,error:String) -> void:
+	recognition_button.disabled=false;recognition_button.text="RECOGNIZE SONG"
+	if not visible:return
+	if not error.is_empty():message.text=error;return
+	for key in ["title","artist","album","track"]:
+		if details.has(key):fields[key].text=str(details[key])
+	if details.get("cover") is Image:pending_cover=details.cover;refresh_previews()
+	message.text="Match found with %s. Review the details and artwork, then SAVE." % str(details.get("provider","recognition"))

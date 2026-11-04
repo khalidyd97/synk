@@ -133,6 +133,7 @@ func _ready() -> void:
     sections.add_theme_stylebox_override("normal",section_style)
     var section_focus=section_style.duplicate(); section_focus.border_color=Color("f3ece1")
     for state in ["hover","pressed","focus"]: sections.add_theme_stylebox_override(state,section_focus)
+    preload("res://scripts/modal_input.gd").register(sections.get_popup())
     sections.get_popup().about_to_popup.connect(func():
         var r=sections.get_global_rect(); var k=sections.get_global_transform_with_canvas().get_scale()
         var popup=sections.get_popup()

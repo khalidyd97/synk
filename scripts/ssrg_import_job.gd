@@ -2,7 +2,10 @@ extends RefCounted
 const PARSER=preload("res://scripts/ssrg_import.gd")
 const TX=preload("res://scripts/ssrg_import_transaction.gd")
 const ARCHIVE=preload("res://scripts/ssrg_import_archive.gd")
+const CSV=preload("res://scripts/ssrg_import_csv.gd")
 var root="user://"
+var target_game=""
+var metadata_csv=""
 var task=-1
 var mutex=Mutex.new()
 var canceled=false
@@ -71,6 +74,9 @@ func file_size(path:String) -> int:
 	var f=FileAccess.open(path,FileAccess.READ);return f.get_length() if f!=null else -1
 
 func _scan(paths:PackedStringArray,songs:Array) -> void:
+	var metadata=CSV.read(metadata_csv) if not metadata_csv.is_empty() else {"songs":{},"warnings":[],"error":""}
+	if not str(metadata.error).is_empty():scan_messages.append(str(metadata.error))
+	scan_messages.append_array(metadata.warnings)
 	var files=PackedStringArray()
 	for path in paths:
 		if DirAccess.dir_exists_absolute(path):collect(path,files)
@@ -99,8 +105,7 @@ func _scan(paths:PackedStringArray,songs:Array) -> void:
 	for path in chart_files:
 		var base=path.get_base_dir()
 		if base.get_file().to_lower() in ["seq","seqs","chart","charts"]:base=base.get_base_dir()
-		var stem=path.get_file().get_basename();var cut=stem.rfind("_");var hint=int(stem.substr(cut+1)) if cut>=0 else 0
-		var song_id=stem.substr(0,cut) if hint in [4,7,13] else stem
+		var song_id=PARSER.song_key(path)
 		var key=base+"/"+song_id
 		if not groups.has(key):groups[key]={"source_key":key,"base":base,"song_id":song_id,"game":base.get_file(),"chart_files":[],"key_overrides":{},"audio":"","audio_manual":false,"background":"","background_manual":false,"policy":"add_missing","include":true}
 		groups[key].chart_files.append(path)
@@ -109,6 +114,7 @@ func _scan(paths:PackedStringArray,songs:Array) -> void:
 		if is_canceled():break
 		update({"message":"Checking song %d of %d" % [i+1,entries.size()],"done":i,"total":entries.size()})
 		var item:Dictionary=entries[i]
+		item.csv_details=metadata.songs
 		item.audio_files=audio_files;item.image_files=images
 		plan.append(inspect_item(item,songs))
 	var same_audio={}
@@ -123,32 +129,26 @@ func _scan(paths:PackedStringArray,songs:Array) -> void:
 	update({"done":plan.size(),"total":entries.size()})
 	publish("review","Scan canceled. Review the songs already checked." if is_canceled() else ("Review matches and warnings before importing." if not plan.is_empty() else "No SSRG chart files found. Choose a folder, ZIP, or .seq/.bytes charts."))
 
-static func candidates(files:PackedStringArray,stems:Array,base:String) -> Array:
+static func candidates(files:PackedStringArray,stems:Array,base:String,primary_id:String="") -> Array:
 	var values=[]
 	for path in files:
-		var have=PARSER.simple(path.get_file().get_basename());var score=0
-		for i in stems.size():
-			var wanted=PARSER.simple(str(stems[i]))
-			if wanted.is_empty():continue
-			if have==wanted:score=maxi(score,100-i)
-			elif wanted.length()>=4 and (have.contains(wanted) or wanted.contains(have)):score=maxi(score,50-i)
+		var score=PARSER.match_score(path,stems,primary_id)
 		if score<=0:continue
-		if path.begins_with(base+"/"):score+=200
+		if path.begins_with(base+"/"):score+=50
 		values.append({"path":path,"score":score})
 	values.sort_custom(func(a,b):return a.score>b.score if a.score!=b.score else str(a.path)<str(b.path))
 	return values
 
 func inspect_item(original:Dictionary,songs:Array) -> Dictionary:
 	var item=original.duplicate(true)
+	if not target_game.is_empty():item.target_game=target_game;item.game=target_game;item.game_edited=true
 	item.errors=[];item.warnings=[];item.chart_reports=[];item.charts={};item.chart_hashes={};item.valid_keys=[]
 	var audio_name=""
 	for path in item.chart_files:
 		if is_canceled():break
 		var hint=int(item.key_overrides.get(path,0))
 		if hint==0:
-			var stem=str(path).get_file().get_basename();var cut=stem.rfind("_")
-			hint=int(stem.substr(cut+1)) if cut>=0 else 0
-			if hint not in [4,7,13]:hint=0
+			hint=PARSER.level_hint(path)
 		var report:Dictionary
 		if file_size(path)>16*1024*1024 or file_size(path)<0:report={"chart":{},"errors":["Chart is unreadable or exceeds 16 MB."],"warnings":[]}
 		else:
@@ -167,11 +167,16 @@ func inspect_item(original:Dictionary,songs:Array) -> Dictionary:
 	var names=PARSER.artist_and_title(audio_name) if not audio_name.is_empty() else ["",str(item.song_id)]
 	if not item.has("title"):item.title=names[1]
 	if not item.has("artist"):item.artist=names[0]
-	var matches=candidates(item.audio_files,[audio_name,item.song_id],str(item.base));item.audio_matches=matches
+	var matches=candidates(item.audio_files,[audio_name,item.song_id],str(item.base),str(item.song_id));item.audio_matches=matches
 	if not item.get("audio_manual",false):
 		item.audio=str(matches[0].path) if not matches.is_empty() and (matches.size()==1 or matches[0].score>matches[1].score) else ""
+	var audio_id=PARSER.leading_id(str(item.audio))
+	var csv_details:Dictionary=item.get("csv_details",{}).get(audio_id,{}) if not audio_id.is_empty() else {}
+	for key in csv_details:
+		item[key]=csv_details[key]
+		if key in ["title","artist"]:item[key+"_edited"]=true
 	if not item.get("background_manual",false):
-		var art=candidates(item.image_files,[item.song_id,audio_name],str(item.base))
+		var art=candidates(item.image_files,[item.song_id,audio_name],str(item.base),str(item.song_id))
 		item.background=str(art[0].path) if not art.is_empty() and (art.size()==1 or art[0].score>art[1].score) else ""
 	item.audio_hash="";item.duration=0.0;item.existing=false
 	if str(item.audio).is_empty():item.errors.append("Choose the matching audio file." if matches.size()<2 else "Audio match is ambiguous. Choose the correct file.")
@@ -194,12 +199,13 @@ func inspect_item(original:Dictionary,songs:Array) -> Dictionary:
 				item.duration=stream.get_length()
 				if not is_finite(float(item.duration)) or item.duration<.2 or item.duration>1200:item.errors.append("Audio must be between 0.2 seconds and 20 minutes.")
 			if probe!=str(item.audio):DirAccess.remove_absolute(probe)
+	var existing_id=TX.song_id(item,songs)
 	for song in songs:
-		if str(song.id)!=str(item.audio_hash):continue
+		if str(song.id)!=existing_id:continue
 		item.existing=true
 		if not original.get("title_edited",false):item.title=str(song.title)
 		if not original.get("artist_edited",false):item.artist=str(song.get("artist",item.artist))
-		if not original.get("game_edited",false):item.game=str(song.get("album",item.game))
+		if not original.get("game_edited",false):item.game=str(song.get("ssrg_game",song.get("album",item.game)))
 		item.existing_charts=[]
 		for keys in [4,7,13]:
 			var target=root.path_join("charts/"+str(song.id)+"_lv%d.json" % keys)
@@ -235,7 +241,7 @@ func inspect_item(original:Dictionary,songs:Array) -> Dictionary:
 		if file_size(item.background)>12*1024*1024 or Image.load_from_file(ProjectSettings.globalize_path(item.background))==null:item.errors.append("Background is unreadable or exceeds 12 MB. Choose another image or remove it.")
 	item.ready=item.errors.is_empty() and not item.selected_keys.is_empty()
 	if item.existing and not original.get("include_edited",false):
-		item.include=item.valid_keys.any(func(keys):return not FileAccess.file_exists(root.path_join("charts/"+str(item.audio_hash)+"_lv%d.json" % int(keys))))
+		item.include=item.valid_keys.any(func(keys):return not FileAccess.file_exists(root.path_join("charts/"+TX.song_id(item,songs)+"_lv%d.json" % int(keys))))
 	return item
 
 func recheck(index:int,changes:Dictionary,songs:Array) -> void:

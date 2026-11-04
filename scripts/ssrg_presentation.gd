@@ -32,15 +32,18 @@ func _ready() -> void:
 	# Compile/load variants behind the loading screen, not during a chain.
 	for type in 5:
 		for item in 6:special_art(type,item,0.0)
-func reset(count:int,config:Dictionary={}) -> void:
+func reset(count:int,config:Dictionary={},start_state:int=5) -> void:
 	note_count=maxi(1,count);metadata=config.duplicate(true)
 	state=0;gauge=0;remaining=maxi(1,ceili(note_count/10.0))
 	life=100.0
 	difficulty_index=0 if game.ssrg_lane_count==4 else (1 if game.ssrg_lane_count==7 else 2)
 	score_rules.reset(note_count,game.ssrg_lane_count,metadata)
-	weights=[0.0,0.0,0.0,0.0];phase_weights=[1.0,0.0,0.0,0.0,0.0,0.0]
-	visual_state=0;transition_from=phase_weights.duplicate();transition_age=1.0;shown_gauge=1.0
-	beam_color=profile_color(0);collected=0;triggered_specials.clear();event_age=99;event_kind=-1;event_item=-1
+	# Every run opens in Ultra Rave (the top fever tier); misses still drop it as usual.
+	select_state(start_state)
+	phase_weights=[0.0,0.0,0.0,0.0,0.0,0.0];phase_weights[state]=1.0
+	weights=[float(phase_weights[2]),float(phase_weights[3]),float(phase_weights[4]),float(phase_weights[5])]
+	visual_state=state;transition_from=phase_weights.duplicate();transition_age=1.0;shown_gauge=1.0
+	beam_color=profile_color(state);collected=0;triggered_specials.clear();event_age=99;event_kind=-1;event_item=-1
 	cards=metadata.get("cards",[]).duplicate(true) if metadata.get("cards",[]) is Array else [];card_index=0
 	best_score=0
 	if game.ssrg_playables and not game.ssrg_playables.running.is_empty():

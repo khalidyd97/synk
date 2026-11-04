@@ -71,9 +71,9 @@ func run() -> void:
 	game.song_time=2.85
 	check(not game.process_checkpoints(dot_entry,11.0,false) and dot_entry.done and game.judgment_counts.MISS>=2 and dot_entry.checks_done==3,"Missing a dot breaks the hold and misses the remaining dots")
 	# Arrange DOTS tool adds and removes a dot on the selected trail.
-	var trail=SynkChart.note(3,5,"slide"); trail.duration=1.0
-	check(game.toggle_checkpoint(trail,3.5,false) and trail.checkpoints==[.5],"Arrange DOTS adds a checkpoint")
-	check(game.toggle_checkpoint(trail,3.52,false) and not trail.has("checkpoints"),"Tapping an existing dot removes it")
+	var trail=SynkChart.note(3,5,"slide"); trail.duration=1.0;trail.path=[{"offset":0.0,"lane":5.0},{"offset":1.0,"lane":8.0}];trail.end_lane=8
+	check(game.toggle_checkpoint(trail,3.5,false) and trail.checkpoints==[.5] and trail.path.size()==3,"CONNECTOR adds a playable node and draggable trail anchor")
+	check(game.toggle_checkpoint(trail,3.52,false) and not trail.has("checkpoints"),"Tapping an existing connector removes its playable node")
 	game.set_mode("menu")
 	# Chart deletion asks first; the built-in song only offers to delete its chart. Nothing is deleted here.
 	game.chart_library.ask_delete(game.eclipse_song())
@@ -512,7 +512,7 @@ func run() -> void:
 	game.capture.notes.append(pointed_hold)
 	game.arrange_selection={"note":pointed_hold,"document":false,"index":game.capture.notes.size()-1}
 	game.dots_mode=true; game.refresh_arrange_controls()
-	check(game.dots_button.visible and game.dots_button.text.contains("ADD POINTS"),"Arrange offers ADD POINTS")
+	check(game.dots_button.visible and game.dots_button.text.contains("CONNECTOR"),"Arrange offers CONNECTOR")
 	var point_at=pointed_hold.time+.3
 	var trail_point=game.field.world.camera.unproject_position(Vector3(game.field.world.lane_x(5),.09,(point_at-game.song_time)*game.field.world.travel_speed()))/Vector2(game.field.viewport.size)
 	game.arrange_pointer_event(11,trail_point,true,false,false); game.arrange_pointer_event(11,trail_point,false,true,false)
