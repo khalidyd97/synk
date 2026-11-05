@@ -169,6 +169,8 @@ func uses_projected_highway() -> bool:
 	return game != null and not game.uses_recorder_colors() and (game.mode in ["play","paused"] or game.highway_preview)
 func source_long_visuals() -> bool:
 	return uses_projected_highway()
+func enhanced_synk_long_visuals() -> bool:
+	return false
 func visible_length() -> float: return TRACK_LENGTH
 func travel_speed() -> float: return TRACK_LENGTH / game.note_travel_seconds()
 # Recovered from Perspective2dSettings.ToAcceleration in the supplied APK:
@@ -484,6 +486,7 @@ func element_color(key: String,fallback: Color) -> Color:
 	return SynkGameplayColors.resolve(game,key,fallback) if game!=null else fallback
 
 func trail_color(palette: int) -> Color:
+	if game.old_ssrg_ui() and palette in [1,3]: return Color("edb65c")
 	if source_long_visuals() and palette in [1,3]: return Color("f9d568")
 	return element_color("slide_trail" if palette==3 else "hold_trail",colors[palette])
 
@@ -1070,7 +1073,9 @@ func make_cap(parent: Node3D, lane: float, offset: float, palette: int, recordin
 	size*=game.note_size
 	var position_value = Vector3(note_x(lane),.2,offset*travel_speed()*(1 if recording else -1))
 	if not recording and (ssrg_theme and ssrg_theme.active or source_long_visuals() and palette in [1,3]):
-		return make_ssrg_cap(parent,position_value,palette,size)
+		var cap=make_ssrg_cap(parent,position_value,palette,size)
+		if enhanced_synk_long_visuals() and palette in [1,3]:make_source_long_glow(parent,position_value,size)
+		return cap
 	if game.round_notes():
 		return make_circle_cap(parent,position_value,palette,size)
 	return artwork(parent,"Tap_Note_Blue" if palette==0 else "Tap_Note_Pink",palette,position_value,Vector2(NOTE_WIDTH,1.4*FIT)*size,CAP_REGION)
@@ -1115,13 +1120,14 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 	var tail = size < game.note_size*.99
 	# Connector pucks along slides (and the end puck) are the head note's own art at 60%.
 	var phase=fposmod((render_time()-game.chart_offset())*game.chart_bpm()/60.0,1.0)
-	var art: Texture2D = SsrgNotes.artwork(palette in [1,3],not tail,phase)
-	var mat = shared("ssrg|%d|%s" % [palette,tail], func():
+	var skin=game.ssrg_note_skin()
+	var art: Texture2D = SsrgNotes.artwork(palette in [1,3],not tail,phase,skin)
+	var mat = shared("ssrg|%d|%s|%s" % [palette,tail,skin], func():
 		var m = ShaderMaterial.new(); m.shader = preload("res://scripts/reference_note.gdshader")
 		m.set_shader_parameter("artwork",art); m.set_shader_parameter("approach_glow",false)
-		m.set_meta("ssrg_palette",palette);m.set_meta("ssrg_tail",tail)
+		m.set_meta("ssrg_palette",palette);m.set_meta("ssrg_tail",tail);m.set_meta("ssrg_skin",skin)
 		m.set_shader_parameter("core_tint",Color("4fc8ff") if palette==0 else Color("ffc23a")); return m)
-	var mesh_key = "ssrg|%s|%s|%s|%s" % [size, tail, palette,ssrg_art_scale()]
+	var mesh_key = "ssrg|%s|%s|%s|%s|%s" % [size, tail, palette,ssrg_art_scale(),skin]
 	if not reference_note_meshes.has(mesh_key):
 		# Packaged IngameRenderer maximum sizes, before the shared p^6 scale.
 		var quad = QuadMesh.new()
@@ -1137,6 +1143,18 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 	ssrg_billboards.append(weakref(head))
 	return head
 
+func make_source_long_glow(parent: Node3D, position_value: Vector3, size: float) -> void:
+	var mesh=PlaneMesh.new()
+	mesh.size=Vector2.ONE*(2.8 if size>=game.note_size*.99 else 1.9)*game.note_size
+	var mat=shared("synk_long_glow",func():
+		var result=ShaderMaterial.new();result.shader=preload("res://scripts/source_long_glow.gdshader")
+		result.render_priority=-2
+		return result)
+	var glow=mesh_node(mesh,parent,mat)
+	glow.name="LongNoteGlow"
+	glow.position=Vector3(position_value.x,.14,position_value.z)
+	glow.extra_cull_margin=TRACK_LENGTH+SSRG_STAGE_DISTANCE
+
 # SSRG notes face the camera; when the view is changed mid-song they turn to face it again.
 var ssrg_billboards: Array = []
 func face_ssrg_billboards() -> void:
@@ -1149,7 +1167,7 @@ func face_ssrg_billboards() -> void:
 func make_tail_cap(parent: Node3D, lane: float, offset: float, palette: int, recording = false) -> MeshInstance3D:
 	var cap=make_cap(parent,lane,offset,palette,recording,TAIL_CAP_SIZE)
 	# Keep its filled center above the ribbon instead of sinking with the smaller sprite.
-	if game.round_notes() and not game.uses_ssrg_gameplay(): cap.position.y=.38*game.note_size
+	if game.round_notes() and not game.uses_ssrg_gameplay() and not source_long_visuals(): cap.position.y=.38*game.note_size
 	cap.name="SustainEndCap"
 	return cap
 
@@ -1218,30 +1236,43 @@ func connector_sides(centers: Array) -> Array:
 		var second=Vector3(-outgoing.z,0,outgoing.x)
 		if first.x<0: first=-first
 		if second.x<0: second=-second
-		var miter=(first+second).normalized()
-		sides.append(miter/maxf(.001,miter.dot(second)))
+		var joined=first+second
+		var miter=joined.normalized() if joined.length_squared()>.0001 else second
+		sides.append(miter*minf(4.0,1.0/maxf(.1,miter.dot(second))))
 	return sides
 
 func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = false) -> void:
 	var duration = float(note.duration)
 	var source_visual=source_long_visuals() and not recording
-	var half_width = TRAIL_HALF*.65*game.hold_trail_width
+	var old_source=source_visual and game.old_ssrg_ui()
+	var half_width = TRAIL_HALF*.65
 	# SSRG footage: holds and slides are a thin bar, about 23 px times p wide where the
 	# note is 148 px times p (0.12 of the 212-unit sprite); drawn a little thicker, at 0.16.
 	if source_visual: half_width = 116.0*.4*.5*SSRG_UNIT*ssrg_art_scale()
+	if old_source: half_width = 116.0*.48*.5*SSRG_UNIT*ssrg_art_scale()
 	var count = clampi(ceili(duration*96),32,1024)
 	var st = SurfaceTool.new(); st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	st.set_custom_format(0,SurfaceTool.CUSTOM_RGBA_FLOAT)
 	st.set_custom_format(1,SurfaceTool.CUSTOM_RGBA_FLOAT)
+	st.set_custom_format(2,SurfaceTool.CUSTOM_RGBA_FLOAT)
 	var edge = SurfaceTool.new(); edge.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var centers = trail_centers(note,count,recording)
 	var sides = trail_sides(centers)
 	var ordered_segments:Array=[]
 	var split_source=game.uses_ssrg_gameplay() and not recording and note.has("ssrg_orders")
-	if source_visual and note.kind=="slide" and note.path.size()>1:
+	if note.kind=="slide" and note.path.size()>1 and (source_visual or recording and note.get("ssrg_path",false)):
 		centers=[]
-		for point in note.path:
-			centers.append(Vector3(note_x(float(point.lane)),trail_height(),-float(point.offset)*travel_speed()))
+		var shape_points:Array=note.path.duplicate(true)
+		for offset_value in note.get("checkpoints",[]):
+			var offset=float(offset_value)
+			if offset<=0.0 or offset>=duration or shape_points.any(func(point):return absf(float(point.offset)-offset)<.001):continue
+			var anchor={"offset":offset,"lane":SynkChart.lane_at(note,float(note.time)+offset)}
+			var insert_at=shape_points.size()-1
+			for point_index in range(1,shape_points.size()):
+				if float(shape_points[point_index].offset)>offset:insert_at=point_index;break
+			shape_points.insert(insert_at,anchor)
+		for point in shape_points:
+			centers.append(Vector3(note_x(float(point.lane)),trail_height(),float(point.offset)*travel_speed()*(1.0 if recording else -1.0)))
 		count=centers.size()-1
 		sides=connector_sides(centers)
 	elif source_visual and note.kind!="slide":
@@ -1253,15 +1284,22 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 		var a: Vector3 = centers[i]; var b: Vector3 = centers[i+1]
 		var sa: Vector3 = sides[i]; var sb: Vector3 = sides[i+1]
 		var source=source_visual
-		for layer in (3 if source else 1):
-			var color=[Color8(255,199,33),Color8(255,242,111),Color8(255,220,89)][layer]
+		# One continuous face avoids three overlapping copies making dark
+		# triangles where a sharp slide changes direction.
+		var layers=[0] if source and (old_source or not game.uses_ssrg_gameplay()) else ([3,0,1,2] if source and enhanced_synk_long_visuals() else ([0,1,2] if source else [0]))
+		for layer in layers:
+			var color=Color8(255,188,52) if layer==3 else [Color8(255,199,33),Color8(255,242,111),Color8(255,220,89)][layer]
 			for index in [0,1,2,0,2,3]:
+				var anchor=i if index in [0,3] else i+1
+				var previous:Vector3=centers[maxi(0,anchor-1)]
+				var following:Vector3=centers[mini(centers.size()-1,anchor+1)]
 				st.set_uv([Vector2(0,float(i)/count),Vector2(0,float(i+1)/count),Vector2(1,float(i+1)/count),Vector2(1,float(i)/count)][index])
 				# Source l1/l2/l3 are uniform chips. CUSTOM1 retains their colors
 				# and the fixed horizontal 0/1/2-pixel expansions for each quad.
-				st.set_custom(1,Color(layer*SSRG_UNIT,color.r,color.g,color.b) if source else Color(0,1,1,1))
+				st.set_custom(1,Color((7.0 if layer==3 else float(layer))*SSRG_UNIT,color.r,color.g,color.b) if source else Color(0,1,1,1))
 				st.set_uv2(Vector2([a.z,b.z,b.z,a.z][index],[-1.0,-1.0,1.0,1.0][index]))
 				st.set_custom(0,Color(a.x,a.z,b.x,b.z) if source else Color(0,0,0,0))
+				st.set_custom(2,Color(previous.x,previous.z,following.x,following.z))
 				st.add_vertex([a-sa*half_width,b-sb*half_width,b+sb*half_width,a+sa*half_width][index])
 		for side in [-1,1]:
 			var lift = Vector3(0,.01,0)
@@ -1270,14 +1308,17 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 		if split_source:
 			ordered_segments.append({"mesh":st.commit(),"offset":-a.z/travel_speed()})
 			st=SurfaceTool.new();st.begin(Mesh.PRIMITIVE_TRIANGLES)
-			st.set_custom_format(0,SurfaceTool.CUSTOM_RGBA_FLOAT);st.set_custom_format(1,SurfaceTool.CUSTOM_RGBA_FLOAT)
+			st.set_custom_format(0,SurfaceTool.CUSTOM_RGBA_FLOAT);st.set_custom_format(1,SurfaceTool.CUSTOM_RGBA_FLOAT);st.set_custom_format(2,SurfaceTool.CUSTOM_RGBA_FLOAT)
 	var solid=game.trail_style=="solid" or source_visual
 	var trail_material: ShaderMaterial
 	if solid:
-		trail_material=shared("solid_trail|%s|%s|%s" % [trail_color(palette),half_width,source_visual], func():
+		trail_material=shared("solid_trail|%s|%s|%s|%s|%s|%s" % [trail_color(palette),half_width,source_visual,enhanced_synk_long_visuals(),game.uses_ssrg_gameplay(),old_source], func():
 			var m=ShaderMaterial.new(); m.shader=preload("res://scripts/solid_trail.gdshader")
 			if uses_projected_highway() and not recording: m.render_priority=-4
 			m.set_shader_parameter("source_art",source_visual)
+			m.set_shader_parameter("old_ssrg_art",old_source)
+			m.set_shader_parameter("joined_source",source_visual)
+			m.set_shader_parameter("enhanced_synk",enhanced_synk_long_visuals())
 			m.set_shader_parameter("ssrg_line_x_scale",ssrg_art_scale()*1.3 if source_visual else 1.0)
 			m.set_shader_parameter("tint",trail_color(palette)); m.set_shader_parameter("ssrg_half_width",half_width); return m)
 	else:
@@ -1329,9 +1370,7 @@ func solid_trail_offsets(note: Dictionary) -> Array:
 	var duration=float(note.duration)
 	var offsets: Array=[duration] if duration>0 else []
 	var checkpoints: Array=note.get("checkpoints",[]).duplicate()
-	# SSRG imports and SYNK slides use their path anchors as visible turns.
-	if source_long_visuals() and note.kind=="slide":
-		for point in note.get("path",[]): checkpoints.append(point.offset)
+	# Shape anchors bend the ribbon; only timed continuation nodes get caps.
 	for value in checkpoints:
 		var offset=float(value)
 		if not is_finite(offset) or offset<=0 or offset>=duration: continue
@@ -1348,8 +1387,8 @@ func make_solid_trail_joints(parent: Node3D,note: Dictionary,palette: int,record
 	for offset in offsets:
 		# The endpoint is the smaller note cap, rather than a second disc beneath it.
 		if is_equal_approx(float(offset),float(note.duration)): continue
-		if source_long_visuals() and not recording:
-			var cap=make_tail_cap(parent,SynkChart.lane_at(note,float(note.time)+float(offset)),float(offset),palette,false)
+		if source_long_visuals() or recording:
+			var cap=make_tail_cap(parent,SynkChart.lane_at(note,float(note.time)+float(offset)),float(offset),palette,recording)
 			cap.name="SlideTurnCap"
 			cap.set_meta("solid_trail_joint",true); cap.set_meta("checkpoint_offset",offset)
 			continue
@@ -1397,7 +1436,7 @@ func build_note_node(key: String, note: Dictionary, recording = false) -> void:
 		mat.set_shader_parameter("artwork",game.ssrg_presentation.special_art(int(note.ssrg_special),int(note.get("ssrg_item",0)),0.0))
 	var lines: Array = []
 	if recording: lines = make_alignment_lines(node,note,palette)
-	var signature = (hash(note) if recording or game.mode=="record" else 0)^hash([game.note_speed,game.ssrg_speed_setting() if game.ssrg_playable_run else 0,game.note_shape,game.note_size,game.hold_trail_width,game.trail_style,game.uses_ssrg_gameplay()])
+	var signature = (hash(note) if recording or game.mode=="record" else 0)^hash([game.note_speed,game.ssrg_speed_setting() if game.ssrg_playable_run else 0,game.note_shape,game.note_size,game.trail_style,game.uses_ssrg_gameplay(),game.old_ssrg_ui(),game.ssrg_note_skin()])
 	if uses_projected_highway() and not recording:
 		for child in node.get_children():
 			if child is GeometryInstance3D:
@@ -1455,7 +1494,7 @@ func sync_note(key: String, note: Dictionary, visible_keys: Dictionary, recordin
 	visible_keys[key] = true
 	if look_signature_frame != Engine.get_process_frames():
 		look_signature_frame = Engine.get_process_frames()
-		look_signature = hash([game.note_speed,game.ssrg_speed_setting() if game.ssrg_playable_run else 0,game.note_shape,game.note_size,game.hold_trail_width,game.trail_style,game.uses_ssrg_gameplay()])
+		look_signature = hash([game.note_speed,game.ssrg_speed_setting() if game.ssrg_playable_run else 0,game.note_shape,game.note_size,game.trail_style,game.uses_ssrg_gameplay(),game.old_ssrg_ui(),game.ssrg_note_skin()])
 	var signature = (hash(note) if recording or game.mode=="record" else 0)^look_signature
 	if notes.has(key) and notes[key].signature != signature:
 		notes[key].node.queue_free(); notes.erase(key)
@@ -1632,7 +1671,7 @@ func animate_ssrg_notes() -> void:
 			mat.set_shader_parameter("artwork",game.ssrg_presentation.special_art(int(mat.get_meta("ssrg_special")),int(mat.get_meta("ssrg_item",0)),beat))
 		elif mat.has_meta("ssrg_palette"):
 			var long_note=int(mat.get_meta("ssrg_palette")) in [1,3]
-			mat.set_shader_parameter("artwork",SsrgNotes.artwork(long_note,not bool(mat.get_meta("ssrg_tail")),beat))
+			mat.set_shader_parameter("artwork",SsrgNotes.artwork(long_note,not bool(mat.get_meta("ssrg_tail")),beat,str(mat.get_meta("ssrg_skin",""))))
 	ssrg_note_materials=alive
 
 func _process(delta: float) -> void:

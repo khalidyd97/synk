@@ -3,6 +3,7 @@ extends Control
 var game: Control
 var edit_mode = "shape"
 var drags: Dictionary = {}
+var blocked_touches: Dictionary = {}
 var buttons: Dictionary = {}
 var shape_buttons: Dictionary = {}
 var selected_point_index = -1
@@ -51,7 +52,7 @@ func _process(_delta: float) -> void :
 	visible = game.mode == "record" and game.arranging and not note.is_empty() and note.kind in ["hold", "slide"]
 	if not visible:
 		for id in drags: game.arrange_touches.erase(id)
-		drags.clear();selected_point_index = -1;selected_note_ref = {};return
+		drags.clear();blocked_touches.clear();selected_point_index = -1;selected_note_ref = {};return
 	if not is_same(selected_note_ref, note):
 		selected_point_index = -1
 		selected_note_ref = note
@@ -100,24 +101,32 @@ func _draw() -> void :
 		draw_circle(point, 4, color)
 		if handle.kind != "point": draw_string(ThemeDB.fallback_font, point + Vector2(-25, - radius - 10), handle.kind.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 14, color)
 func handle_event(id: int, p: Vector2, began: bool, ended: bool, canceled: bool) -> bool:
+	if blocked_touches.has(id):
+		if ended or canceled:blocked_touches.erase(id)
+		return true
 	if drags.has(id):
 		var drag: Dictionary = drags[id]
 		if canceled:
-			replace_note(drag.note, drag.original)
-			if drag.changed and drag.document:
+			if drag.changed:
+				replace_note(drag.note,edit(drag.note,drag.kind,-float(drag.applied_dt),-float(drag.applied_dl),int(drag.index),game.length()))
+			if drag.changed and drag.document and drags.size()==1:
 				game.document.undo_stack.resize(drag.undo_size);game.document.redo_stack = drag.redo
 				game.document.dirty = drag.was_dirty
 		elif not ended:
 			var dt = game.stage_time_at(p) - float(drag.pointer_time)
 			var dl = game.arrange_lane_at(p) - float(drag.pointer_lane)
-			var edited = edit(drag.original, drag.kind, dt, dl, int(drag.index), game.length())
+			var before_time=handle_time(drag.note,drag.kind,int(drag.index))
+			var before_lane=handle_lane(drag.note,drag.kind,int(drag.index))
+			var edited = edit(drag.note, drag.kind, dt-float(drag.applied_dt), dl-float(drag.applied_dl), int(drag.index), game.length())
 			if edited != drag.note:
 				if not drag.changed and drag.document: game.document.checkpoint()
 				drag.changed = true;replace_note(drag.note, edited);game.refresh_arrange_controls()
+				drag.applied_dt=float(drag.applied_dt)+handle_time(drag.note,drag.kind,int(drag.index))-before_time
+				drag.applied_dl=float(drag.applied_dl)+handle_lane(drag.note,drag.kind,int(drag.index))-before_lane
 			game.arrange_preview.request(float(drag.note.time) + (float(drag.note.duration) if drag.kind == "end" else (float(drag.note.path[drag.index].offset) if drag.kind == "point" else 0.0)))
 		if ended or canceled:
 			drags.erase(id);game.arrange_touches.erase(id)
-			if not canceled: game.commit_take_history()
+			if not canceled and drags.is_empty(): game.commit_take_history()
 		queue_redraw();return true
 	var note = selected_note()
 	if not began or edit_mode == "move" or game.dots_mode or note.is_empty() or not game.recorder.writable(note): return false
@@ -127,14 +136,25 @@ func handle_event(id: int, p: Vector2, began: bool, ended: bool, canceled: bool)
 		var gap = local.distance_to(handle.position)
 		if gap < distance: distance = gap;best = handle
 	if best.is_empty(): return false
+	for active in drags.values():
+		if is_same(active.note,note) and active.kind==best.kind and active.index==best.index:
+			blocked_touches[id]=true;return true
 	selected_note_ref = note
 	selected_point_index = int(best.index) if best.kind == "point" else -1
 	var in_document = bool(game.arrange_selection.get("document", false))
-	drags[id] = {"kind": best.kind, "index": best.index, "note": note, "original": note.duplicate(true), "pointer_time": game.stage_time_at(p), "pointer_lane": game.arrange_lane_at(p), "changed": false, "document": in_document, "undo_size": game.document.undo_stack.size(), "redo": game.document.redo_stack.duplicate(true) if in_document else [], "was_dirty": game.document.dirty}
+	drags[id] = {"kind": best.kind, "index": best.index, "note": note, "pointer_time": game.stage_time_at(p), "pointer_lane": game.arrange_lane_at(p), "applied_dt":0.0,"applied_dl":0.0,"changed": false, "document": in_document, "undo_size": game.document.undo_stack.size(), "redo": game.document.redo_stack.duplicate(true) if in_document else [], "was_dirty": game.document.dirty}
 	game.arrange_touches[id] = {"kind": "handle"};game.arrange_preview.request(best.at)
 	return true
 static func replace_note(note: Dictionary, value: Dictionary) -> void :
 	note.clear();note.merge(value.duplicate(true))
+static func handle_time(note:Dictionary,kind:String,index:int)->float:
+	if kind=="start":return float(note.time)
+	if kind=="end":return float(note.time)+float(note.duration)
+	return float(note.time)+float(note.path[index].offset)
+static func handle_lane(note:Dictionary,kind:String,index:int)->float:
+	if kind=="start":return float(note.lane)
+	if kind=="end":return float(note.end_lane)
+	return float(note.path[index].lane)
 static func edit(original: Dictionary, kind: String, dt: float, dl: float, index: int, song_end: float) -> Dictionary:
 	var result = original.duplicate(true)
 	if kind == "point":
@@ -154,26 +174,31 @@ static func edit(original: Dictionary, kind: String, dt: float, dl: float, index
 					break
 		return result
 	var start = float(original.time); var finish = start + float(original.duration)
-	var new_start = clampf(start + dt, 0, finish - 0.04) if kind == "start" else start
-	var new_end = clampf(finish + dt, start + 0.04, song_end) if kind == "end" else finish
+	var start_limit=finish-.04
+	var end_limit=start+.04
+	if original.kind=="slide" and original.path.size()>2:
+		start_limit=minf(start_limit,start+float(original.path[1].offset)-.005)
+		end_limit=maxf(end_limit,start+float(original.path[-2].offset)+.005)
+	if original.has("checkpoints") and not original.checkpoints.is_empty():
+		start_limit=minf(start_limit,start+float(original.checkpoints[0])-.02)
+		end_limit=maxf(end_limit,start+float(original.checkpoints[-1])+.02)
+	var new_start = clampf(start + dt, 0, start_limit) if kind == "start" else start
+	var new_end = clampf(finish + dt, end_limit, song_end) if kind == "end" else finish
 	result.time = new_start;result.duration = new_end - new_start
 	if original.kind == "slide":
-		var first = clampi(roundi(SynkChart.lane_at(original, new_start) + (dl if kind == "start" else 0.0)), 0, SynkChart.MAX_LANE)
-		var last = clampi(roundi(SynkChart.lane_at(original, new_end) + (dl if kind == "end" else 0.0)), 0, SynkChart.MAX_LANE)
-		result.lane = first;result.end_lane = last;result.path = [{"offset": 0.0, "lane": float(first)}]
-		var path: Array = original.path.duplicate(true)
-		if path.is_empty(): path = [{"offset": 0.0, "lane": float(original.lane)}, {"offset": float(original.duration), "lane": float(original.end_lane)}]
-		for point in path:
-			var at = start + float(point.offset)
-			if at > new_start + 0.005 and at < new_end - 0.005: result.path.append({"offset": at - new_start, "lane": point.lane})
-		result.path.append({"offset": result.duration, "lane": float(last)})
+		if result.path.size()<2:result.path=[{"offset":0.0,"lane":float(result.lane)},{"offset":float(result.duration),"lane":float(result.end_lane)}]
+		if kind=="start":
+			result.lane=clampi(roundi(float(original.lane)+dl),0,SynkChart.MAX_LANE)
+			result.path[0].lane=float(result.lane)
+			for i in range(1,result.path.size()):result.path[i].offset=float(original.path[i].offset)+start-new_start
+		else:
+			result.end_lane=clampi(roundi(float(original.end_lane)+dl),0,SynkChart.MAX_LANE)
+			result.path[-1].offset=float(result.duration)
+			result.path[-1].lane=float(result.end_lane)
 	else: result.end_lane = result.lane;result.path = []
 	if original.has("checkpoints"):
-		var checks: Array = []
-		for value in original.checkpoints:
-			var offset = start + float(value) - new_start
-			if offset > 0.02 and offset < result.duration - 0.02: checks.append(offset)
-		result.checkpoints = checks
+		if kind=="start":
+			for i in result.checkpoints.size():result.checkpoints[i]=float(original.checkpoints[i])+start-new_start
 	return result
 
 func reshape(operation: String) -> void :

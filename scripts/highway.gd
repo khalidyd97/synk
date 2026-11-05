@@ -162,7 +162,7 @@ func draw_overlay(overlay: Control) -> void:
 			var centers=world.trail_centers(note,clampi(ceili(float(note.duration)*32),16,256),true)
 			var sides=world.trail_sides(centers)
 			var shift=Vector3(0,0,(float(note.time)-game.song_time)*world.travel_speed())
-			var width=world.TRAIL_HALF*.65*game.hold_trail_width
+			var width=world.TRAIL_HALF*.65
 			for i in centers.size()-1:
 				var a: Vector3=centers[i]+shift; var b: Vector3=centers[i+1]+shift
 				if maxf(a.z,b.z)<-world.TRACK_LENGTH or minf(a.z,b.z)>world.JUDGMENT_DEPTH: continue

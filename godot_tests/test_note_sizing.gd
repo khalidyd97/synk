@@ -25,25 +25,23 @@ func run() -> void:
     var large_circle=Node3D.new(); world.add_child(large_circle); world.make_cap(large_circle,4,0,0)
     check(is_equal_approx(large_circle.get_child(0).mesh.size.x/circle.get_child(0).mesh.size.x,1.25),"Circle heads scale consistently")
     var hold=SynkChart.note(4,4,"hold"); hold.duration=1
-    g.change_note_sizing("hold_trail_width",1)
     var full=Node3D.new(); world.add_child(full); var full_width=body_width(world,full,hold)
     g.change_note_sizing("hold_trail_width",.3)
     var thin=Node3D.new(); world.add_child(thin); var thin_width=body_width(world,thin,hold)
-    check(is_equal_approx(thin_width/full_width,.3),"Hold ribbon has independent width control")
+    check(is_equal_approx(thin_width,full_width) and is_equal_approx(g.hold_trail_width,1.0),"Legacy width changes cannot resize the fixed trail")
     var slide=hold.duplicate(true); slide.kind="slide"
     var first=Node3D.new(); world.add_child(first); var slide_width=body_width(world,first,slide)
-    check(is_equal_approx(slide_width,thin_width),"Hold and slide ribbons use the same selected width")
+    check(is_equal_approx(slide_width,thin_width),"Hold and slide ribbons use the same fixed width")
     g.change_note_sizing("hold_trail_width",1.5)
     var second=Node3D.new(); world.add_child(second)
-    check(is_equal_approx(body_width(world,second,slide)/slide_width,5),"Trail width scales slides from 30% to 150%")
+    check(is_equal_approx(body_width(world,second,slide),slide_width),"Trail width cannot be customized")
     check(g.document.notes==original and g.document.settings==settings,"Sizing never modifies chart data")
-    var prefs=ConfigFile.new(); prefs.load("user://preferences.cfg")
-    check(prefs.get_value("gameplay","note_size")==1.25 and prefs.get_value("gameplay","hold_trail_width")==1.5,"Visual preferences persist globally")
+    check(is_equal_approx(g.note_size,1.25),"Note size remains adjustable")
     g.set_mode("menu"); g.open_lobby_settings(); g.features.open_tools("Effects")
     var box=g.features.tabs.get_tab_control(3).get_child(0)
-    var size_slider=box.get_node("NoteSize"); var width_slider=box.get_node("HoldTrailWidth")
-    size_slider.value=.8; width_slider.value=.5
-    check(is_equal_approx(g.note_size,.8) and is_equal_approx(g.hold_trail_width,.5),"Both Settings controls update their independent renderer properties")
+    var size_slider=box.get_node("NoteSize")
+    size_slider.value=.8
+    check(is_equal_approx(g.note_size,.8) and is_equal_approx(g.hold_trail_width,1.0) and box.get_node_or_null("HoldTrailWidth")==null,"Settings exposes note size without a trail width control")
     await create_timer(.5).timeout
     await RenderingServer.frame_post_draw; root.get_texture().get_image().save_png("res://.tools/note-size-settings.png")
     g.features.close_tools(); g.queue_free(); await process_frame

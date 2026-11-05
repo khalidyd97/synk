@@ -52,7 +52,12 @@ func looping() -> bool: return bool(config.get("loop", loop_takes))
 func writable(n: Dictionary) -> bool:
 	return n.kind not in locks() and (current_pass() == "all" or n.kind == current_pass())
 func can_capture(at: float) -> bool: return active and at >= region.x and at < region.y
-func capture_tool() -> String: return game.tool if current_pass() == "all" else current_pass()
+func allowed_types() -> Array:
+	if current_pass()!="all":return [current_pass()] if current_pass() not in locks() else []
+	return game.record_types.filter(func(kind):return kind not in locks())
+func capture_tool() -> String:
+	var allowed=allowed_types()
+	return str(allowed[0]) if allowed.size()==1 else "auto"
 
 func begin() -> void :
 	close_review()
@@ -73,7 +78,7 @@ func begin() -> void :
 	continuing = false;active = true;auto_round = false
 	game.start_position = maxf(0, region.x - int(config.pre_roll) * 4 * 60.0 / game.chart_bpm())
 	game.song_time = game.start_position - game.countdown
-	game.tool = "auto" if current_pass() == "all" else current_pass()
+	game.tool = capture_tool()
 
 func seal_gestures() -> void :
 	for id in game.capture.gestures.keys():

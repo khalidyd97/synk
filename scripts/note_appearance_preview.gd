@@ -73,7 +73,7 @@ func _draw() -> void:
     var note_positions=[size.x*.125,size.x*.375,size.x*.625,size.x*.875]
     for x in note_positions: draw_line(Vector2(x,15),Vector2(x,size.y-28),Color(.3,.5,.8,.20),1,true)
     draw_line(Vector2(20,baseline),Vector2(size.x-20,baseline),Color("6d7dba"),1,true)
-    var trail=14.0*game.hold_trail_width
+    var trail=14.0
     var hold_color=note_color(1); var slide_color=note_color(3)
     draw_rect(Rect2(Vector2(note_positions[1]-trail*.5,24),Vector2(trail,baseline-24)),Color(hold_color,.45))
     for side in ([] if game.trail_style=="solid" else [-1,1]): draw_line(Vector2(note_positions[1]+side*trail*.5,24),Vector2(note_positions[1]+side*trail*.5,baseline),hold_color.lightened(.4),1.5,true)

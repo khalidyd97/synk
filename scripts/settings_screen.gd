@@ -22,6 +22,9 @@ var look_color_resets:Dictionary={}
 var hit_size_input: Stepper
 var style_tiles: Dictionary = {}
 var ssrg_mode_row: PanelContainer
+var old_ssrg_ui_row: PanelContainer
+var old_ssrg_ui_switch: Switch
+var ssrg_skin_buttons: Dictionary = {}
 # The SSRG highway is a fixed flat view: its style hides the angle row.
 var angle_row: PanelContainer
 var ssrg_mode_switch: Switch
@@ -519,6 +522,9 @@ func build_highway(items: VBoxContainer) -> void:
     ssrg_mode_row=row(items,"SSRG mode","SYNK songs use SSRG judging, scoring, fever and note speed, not just its look.",112)
     ssrg_mode_switch=Switch.new(); add_control(ssrg_mode_row,ssrg_mode_switch,152)
     connect_switch(ssrg_mode_switch,game.change_ssrg_mode)
+    old_ssrg_ui_row=row(items,"OLD UI SSRG","STAYC note sprites, guide rings, judgment bar and thin edge rails.",112)
+    old_ssrg_ui_switch=Switch.new();add_control(old_ssrg_ui_row,old_ssrg_ui_switch,152)
+    connect_switch(old_ssrg_ui_switch,game.change_old_ssrg_ui)
     var modes=row(items,"Colors","Theme keeps the style's colors. Adaptive takes them from the song's artwork.",148)
     var mode_row=HBoxContainer.new(); mode_row.add_theme_constant_override("separation",12)
     add_control(modes,mode_row,440)
@@ -583,6 +589,12 @@ func build_notes(items: VBoxContainer) -> void:
         tile.pressed.connect(func(): if not Action.was_dragged(tile): game.change_note_shape(kind))
         shape_tiles[kind]=tile
     var preview=preload("res://scripts/note_appearance_preview.gd").new(); preview.game=game; items.add_child(preview)
+    var skins=row(items,"SSRG note design","Note art on the SSRG highway.")
+    var skin_row=HBoxContainer.new(); skin_row.add_theme_constant_override("separation",10); add_control(skins,skin_row,480)
+    for value in preload("res://scripts/ssrg_note_animation.gd").SKINS:
+        var key: String=value
+        var b=action(skin_row,key.capitalize(),func(): game.change_ssrg_note_skin(key))
+        b.custom_minimum_size=Vector2(150,72); b.caption_size=21; ssrg_skin_buttons[key]=b
     sizing_row(items,"note_size","Note size","Adjust the visual size of note heads.",60,125,game.note_size)
     var trail=row(items,"Trail style","A filled band with round connectors at the points you add in the recorder.")
     trail_style_input=OptionButton.new(); trail_style_input.add_item("Neon trail"); trail_style_input.add_item("Solid ribbon")
@@ -596,8 +608,7 @@ func build_notes(items: VBoxContainer) -> void:
     add_control(trail,trail_style_input)
     preload("res://scripts/modal_input.gd").register(trail_style_input.get_popup())
     trail_style_input.item_selected.connect(func(index): game.change_trail_style("solid" if index==1 else "neon"))
-    sizing_row(items,"hold_trail_width","Hold & slide trail width","Adjust both trail widths independently of note size.",30,150,game.hold_trail_width)
-    action(items,"RESET NOTE SIZES",func():
+    action(items,"RESET NOTE SIZE",func():
         for control in sizing_inputs.values(): control.value=100)
 func effect_row(items: VBoxContainer,key: String,hint: String) -> void:
     var control=Stepper.new(0,100,5,game.features.effect(key)*100,"%",0); effect_inputs[key]=control
@@ -667,12 +678,16 @@ func refresh() -> void:
     if trail_style_input: trail_style_input.select(1 if game.trail_style=="solid" else 0)
     for kind in shape_tiles: shape_tiles[kind].selected=kind==game.note_shape
     for key in hit_style_buttons: hit_style_buttons[key].set_selected(key==game.hit_style)
+    for key in ssrg_skin_buttons: ssrg_skin_buttons[key].set_selected(key==str(game.prefs.get_value("highway","ssrg_note_skin","stock")))
     if hit_size_input: hit_size_input.sync_value(game.hit_size*100)
     for value in render_scale_buttons: render_scale_buttons[value].set_selected(is_equal_approx(value,game.render_scale()))
     for kind in style_tiles: style_tiles[kind].selected=kind==game.highway_style
     if ssrg_mode_row:
         ssrg_mode_row.visible=game.highway_style=="ssrg"
         ssrg_mode_switch.set_pressed_no_signal(bool(game.prefs.get_value("highway","ssrg_mode",false)))
+    if old_ssrg_ui_row:
+        old_ssrg_ui_row.visible=game.highway_style=="ssrg"
+        old_ssrg_ui_switch.set_pressed_no_signal(bool(game.prefs.get_value("highway","old_ssrg_ui",false)))
     for kind in color_mode_tiles: color_mode_tiles[kind].selected=kind==game.highway_colors
     if highway_opacity_input: highway_opacity_input.sync_value(game.highway_opacity*100)
     if not song_preview_toggle: return
@@ -681,7 +696,7 @@ func refresh() -> void:
     bluetooth_toggle.set_pressed_no_signal(game.bluetooth_mode); bluetooth_latency_input.editable=game.bluetooth_mode
     note_speed_input.sync_value(game.synk_speed_setting()); highway_angle_input.sync_value(game.highway_angle)
     timing_input.sync_value(game.timing_ms); bluetooth_latency_input.sync_value(game.bluetooth_latency_ms)
-    for key in sizing_inputs: sizing_inputs[key].sync_value((game.note_size if key=="note_size" else game.hold_trail_width)*100)
+    for key in sizing_inputs: sizing_inputs[key].sync_value(game.note_size*100)
     for key in effect_inputs: effect_inputs[key].sync_value(game.features.effect(key)*100)
     for key in stage_effect_switches: stage_effect_switches[key].set_pressed_no_signal(game.features.effect(key)>0)
     authoring_switches.mr.set_pressed_no_signal(game.mr.enabled)

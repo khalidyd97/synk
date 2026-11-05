@@ -10,6 +10,12 @@ func _init() -> void:
 	assert(NoteAnimation.artwork(false, false, 0.99).get_size() == Vector2(212, 116))
 	assert(NoteAnimation.artwork(true, true, 0.99).get_size() == Vector2(212, 116))
 	assert(NoteAnimation.artwork(true, false, 0.99).get_size() == Vector2(132, 72))
+	for skin in ["old", "lens", "halo"]:
+		for beat in [0.0, 0.1, 0.5, 0.99]:
+			assert(NoteAnimation.artwork(false, false, beat, skin).get_size() == Vector2(212, 116))
+			assert(NoteAnimation.artwork(true, true, beat, skin).get_size() == Vector2(212, 116))
+			assert(NoteAnimation.artwork(true, false, beat, skin).get_size() == Vector2(132, 72))
+	assert(NoteAnimation.artwork(false, false, 0.5, "lens").resource_path.ends_with("lens_ui/normal/na6.png"))
 	assert(NoteAnimation.note_tint(true, true, false, true) == Color(0.2, 0.2, 0.2, 0.25))
 	assert(NoteAnimation.note_tint(true, true, true, false) == Color.WHITE)
 	assert(NoteAnimation.note_tint(false, true, false, true) == Color.WHITE)

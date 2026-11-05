@@ -2,10 +2,16 @@ extends Node3D
 var receptors: Array = []
 var press: MeshInstance3D
 var rails: Array = []
+var old_rails: Array = []
+var old_rail_glows: Array = []
+var old_rail_dots: Array = []
 var entrance_shadow: MeshInstance3D
 var feedback_marks:Array=[]
 var feedback_states:Dictionary={}
 const TRACK_REACH = 1500.0
+const OLD_RAIL_TOP=Vector2(0,280)
+const OLD_RAIL_BOTTOM_Y=-400.0
+const OLD_RAIL_BOTTOM_X=663.0
 func _init() -> void :
 	name = "SSRGStage"
 	# Direct original UI canvas: world Z = -(UI y + 234) * UNIT.
@@ -33,6 +39,12 @@ func _init() -> void :
 		mat.set_shader_parameter("artwork",preload("res://assets/ssrg/imported/rail_original.png"))
 		mat.set_shader_parameter("along_rail",false)
 		rail.material_override=mat; add_child(rail); rails.append(rail)
+		var old_rail=make_old_rail(side,UNIT)
+		add_child(old_rail);old_rails.append(old_rail)
+		var old_glow=make_old_rail_glow(side,UNIT)
+		add_child(old_glow);old_rail_glows.append(old_glow)
+		var old_dot=make_old_rail_dot(side,UNIT)
+		add_child(old_dot);old_rail_dots.append(old_dot)
 	press=MeshInstance3D.new(); var plane=PlaneMesh.new()
 	plane.size=Vector2(1156,130)*UNIT; press.mesh=plane
 	press.position=Vector3(-5*UNIT,.035,16*UNIT)
@@ -54,6 +66,74 @@ func _init() -> void :
 		feedback.material_override=material.duplicate();feedback.material_override.render_priority=5
 		add_child(feedback);feedback_marks.append(feedback)
 
+func make_old_rail(side:int, unit:float) -> MeshInstance3D:
+	# The 2014 rail is a broad silver strip with a narrow red line on its
+	# highway-facing edge. Its center follows the recovered 2D rail boundary.
+	var start=OLD_RAIL_TOP;var finish=Vector2(side*OLD_RAIL_BOTTOM_X,OLD_RAIL_BOTTOM_Y)
+	var direction=(finish-start).normalized()
+	var normal=Vector2(-direction.y,direction.x)
+	var points=[start-normal*2.5,start+normal*2.5,finish-normal*30.0,finish+normal*30.0]
+	var surface=SurfaceTool.new();surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for index in [0,1,2,2,1,3]:
+		var point:Vector2=points[index]
+		surface.set_uv(Vector2(0.0 if index<2 else 1.0,0.0 if index%2==0 else 1.0))
+		surface.add_vertex(Vector3(point.x*unit,.11,-(point.y+234.0)*unit))
+	var rail=MeshInstance3D.new();rail.mesh=surface.commit()
+	rail.name="OldRailLeft" if side<0 else "OldRailRight"
+	var material=ShaderMaterial.new();material.shader=preload("res://scripts/ssrg_old_rail.gdshader")
+	material.render_priority=-6
+	material.set_shader_parameter("inner_at_high_uv",side<0)
+	rail.material_override=material
+	rail.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	rail.visible=false
+	return rail
+
+func make_old_rail_glow(side:int, unit:float) -> MeshInstance3D:
+	var centers=old_rail_light_centers(side)
+	var top_center:Vector2=centers[0];var bottom_center:Vector2=centers[1]
+	var normal=Vector2(-(bottom_center-top_center).normalized().y,(bottom_center-top_center).normalized().x)
+	var points=[top_center-normal*.5,top_center+normal*.5,bottom_center-normal*4.2,bottom_center+normal*4.2]
+	var surface=SurfaceTool.new();surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for index in [0,1,2,2,1,3]:
+		var point:Vector2=points[index]
+		surface.set_uv(Vector2(0.0 if index<2 else 1.0,0.0 if index%2==0 else 1.0))
+		surface.add_vertex(Vector3(point.x*unit,.12,-(point.y+234.0)*unit))
+	var glow=MeshInstance3D.new();glow.mesh=surface.commit()
+	glow.name="OldRailGlowLeft" if side<0 else "OldRailGlowRight"
+	var material=ShaderMaterial.new();material.shader=preload("res://scripts/ssrg_old_rail_glow.gdshader")
+	material.render_priority=-5
+	material.set_shader_parameter("artwork",preload("res://assets/ssrg/old_ui/track/Main_side line_01.png"))
+	glow.material_override=material
+	glow.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	glow.visible=false
+	return glow
+
+func old_rail_light_centers(side:int) -> Array:
+	var start=OLD_RAIL_TOP;var finish=Vector2(side*OLD_RAIL_BOTTOM_X,OLD_RAIL_BOTTOM_Y)
+	var normal=Vector2(-(finish-start).normalized().y,(finish-start).normalized().x)
+	# In the 2014 close-up the colored line lies toward the outside third of
+	# the silver rail, leaving the wider pale band on the highway-facing side.
+	var inward=1.0 if side<0 else -1.0
+	var top_center=start-normal*inward*.95
+	var bottom_center=finish-normal*inward*11.4
+	return [top_center,bottom_center]
+
+func make_old_rail_dot(side:int, unit:float) -> MeshInstance3D:
+	var dot=MeshInstance3D.new();var quad=QuadMesh.new()
+	quad.size=Vector2(255,255)*unit;dot.mesh=quad
+	dot.name="OldRailDotLeft" if side<0 else "OldRailDotRight"
+	var material=ShaderMaterial.new();material.shader=preload("res://scripts/ssrg_old_rail_dot.gdshader")
+	material.render_priority=-4
+	material.set_shader_parameter("artwork",preload("res://assets/ssrg/old_ui/side_light/Main_side light_R.png"))
+	var start=OLD_RAIL_TOP;var finish=Vector2(side*OLD_RAIL_BOTTOM_X,OLD_RAIL_BOTTOM_Y)
+	material.set_shader_parameter("rail_start",Vector2(start.x*unit,-(start.y+234.0)*unit))
+	material.set_shader_parameter("rail_end",Vector2(finish.x*unit,-(finish.y+234.0)*unit))
+	material.set_shader_parameter("rail_half_widths",Vector2(2.5,30.0)*unit)
+	dot.material_override=material
+	dot.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	dot.visible=false
+	return dot
+
 
 # SSRG's bottom bar is 130 of 640 screen units tall, centred 250 units below the middle
 # (79% to 99% down the screen). Cover that same screen band on the floor, whatever the view.
@@ -61,6 +141,22 @@ const BAND_TOP = .5 + 185.0/640.0
 const BAND_BOTTOM = .5 + 315.0/640.0
 func update(world: Node3D) -> void :
 	if not visible: return
+	if world.game.old_ssrg_ui():
+		var presentation=world.game.ssrg_presentation
+		var rave_color:Color=presentation.beam_color if presentation and presentation.active else Color8(255,67,88)
+		var chosen=world.custom_color("rail_color")
+		if chosen!=null:rave_color=chosen
+		for rail in old_rail_glows:
+			rail.material_override.set_shader_parameter("accent",rave_color)
+			rail.material_override.set_shader_parameter("motion_time",world.game.hud_motion_time)
+		var travel=.5+.45*sin(world.game.hud_motion_time*1.5)
+		for index in old_rail_dots.size():
+			var dot:MeshInstance3D=old_rail_dots[index]
+			var centers=old_rail_light_centers(-1 if index==0 else 1)
+			var point:Vector2=centers[0].lerp(centers[1],travel)
+			dot.position=Vector3(point.x*(9.75/512.0),.16,-(point.y+234.0)*(9.75/512.0))
+			dot.rotation=world.camera.rotation
+			dot.material_override.set_shader_parameter("accent",rave_color)
 	for receptor in receptors: receptor.hide()
 	for mark in feedback_marks:mark.hide()
 	var game = world.game
@@ -135,14 +231,25 @@ func warmup(world: Node3D) -> void :
 
 func configure(world: Node3D) -> void :
 	var stock_road = true
+	var old_ui=world.game.old_ssrg_ui()
 	press.visible = stock_road
+	press.material_override.set_shader_parameter("artwork",preload("res://assets/ssrg/old_ui/track/Main_black BG3.png") if old_ui else preload("res://assets/ssrg/imported/judgment_Main_black_BG3.png"))
+	entrance_shadow.visible=not old_ui
+	for ring in receptors:ring.material_override.set_shader_parameter("artwork",preload("res://assets/ssrg/old_ui/track/note_guide 01.png") if old_ui else preload("res://assets/ssrg/imported/guide_original.png"))
+	for mark in feedback_marks:mark.material_override.set_shader_parameter("artwork",preload("res://assets/ssrg/old_ui/track/note_guide 01.png") if old_ui else preload("res://assets/ssrg/imported/guide_original.png"))
 	# Source gold tier, unless the player picked a judgment band color.
 	var band = world.custom_color("band_color")
-	press.material_override.set_shader_parameter("base_color",Color(band,149/255.0) if band != null else Color8(255,220,65,149))
+	press.material_override.set_shader_parameter("base_color",Color(band,.82 if old_ui else 149/255.0) if band != null else (Color8(255,75,91,210) if old_ui else Color8(255,220,65,149)))
 	var rail_tint = world.custom_color("rail_color")
 	if rail_tint == null: rail_tint = Color.WHITE
 	for rail in rails:
-		rail.visible = stock_road
+		rail.visible = stock_road and not old_ui
 		rail.material_override.set_shader_parameter("tint", rail_tint)
 		rail.material_override.set_shader_parameter("floor_opacity",clampf(float(world.game.highway_opacity),.3,1.6))
 		rail.material_override.set_shader_parameter("floor_tint",world.element_color("track",Color.BLACK))
+	for rail in old_rails:
+		rail.visible=stock_road and old_ui
+	for rail in old_rail_glows:
+		rail.visible=stock_road and old_ui
+	for dot in old_rail_dots:
+		dot.visible=stock_road and old_ui

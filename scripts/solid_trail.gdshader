@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode unshaded, blend_mix, depth_prepass_alpha, cull_disabled, fog_disabled;
+render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, fog_disabled;
 #include "res://scripts/highway_clip.gdshaderinc"
 uniform vec3 tint : source_color=vec3(1.0,.73,.16);
 uniform float clip_z=1000.0;
@@ -7,18 +7,44 @@ uniform float ghost_fade=1.0;
 uniform float desaturate=0.0;
 uniform bool joint=false;
 uniform bool source_art=false;
+uniform bool old_ssrg_art=false;
+uniform bool joined_source=false;
+uniform bool enhanced_synk=false;
 uniform float ssrg_half_width=0.0;
 uniform float ssrg_line_x_scale=1.3;
 uniform vec4 source_tint : source_color=vec4(1.0);
 varying vec3 source_chip;
+varying float source_layer;
 varying float world_z;
 #include "res://scripts/ssrg_warp.gdshaderinc"
 void vertex(){
     source_chip=CUSTOM1.yzw;
+    source_layer=CUSTOM1.x;
     // world_z stays the linear track position, so clip_z and the far fade are unchanged.
     world_z=(MODEL_MATRIX*vec4(VERTEX,1.0)).z;
     // Ribbons carry their centreline depth in UV2 (make_ribbon in highway_3d.gd).
-    if(!joint && ssrg_warp.x>0.5 && length(CUSTOM0)>0.0){
+    if(!joint && joined_source && ssrg_warp.x>0.5){
+        // The two adjacent segments use this anchor's same projected miter.
+        // Width is perpendicular to the projected path, including at bends.
+        float section=MODEL_MATRIX[3].z+UV2.x;
+        bool at_start=abs(UV2.x-CUSTOM0.y)<0.00001;
+        float center_x=at_start?CUSTOM0.x:CUSTOM0.z;
+        vec2 center=vec2(center_x*ssrg_scale(section),ssrg_warp_z(section));
+        vec2 previous=vec2(CUSTOM2.x*ssrg_scale(MODEL_MATRIX[3].z+CUSTOM2.y),ssrg_warp_z(MODEL_MATRIX[3].z+CUSTOM2.y));
+        vec2 following=vec2(CUSTOM2.z*ssrg_scale(MODEL_MATRIX[3].z+CUSTOM2.w),ssrg_warp_z(MODEL_MATRIX[3].z+CUSTOM2.w));
+        vec2 incoming=center-previous;
+        vec2 outgoing=following-center;
+        if(length(incoming)<0.00001) incoming=outgoing;
+        if(length(outgoing)<0.00001) outgoing=incoming;
+        vec2 first=length(incoming)>0.00001?normalize(vec2(-incoming.y,incoming.x)):vec2(1.0,0.0);
+        vec2 second=length(outgoing)>0.00001?normalize(vec2(-outgoing.y,outgoing.x)):first;
+        vec2 sum=first+second;
+        vec2 miter=length(sum)>0.00001?normalize(sum):second;
+        float width=ssrg_half_width*ssrg_scale(section)+CUSTOM1.x;
+        vec2 point=center+miter*(width*min(4.0,1.0/max(0.1,dot(miter,second))))*UV2.y;
+        vec3 target=vec3(point.x,(MODEL_MATRIX*vec4(VERTEX,1.0)).y,point.y);
+        VERTEX=inverse(mat3(MODEL_MATRIX))*(target-MODEL_MATRIX[3].xyz);
+    }else if(!joint && ssrg_warp.x>0.5 && length(CUSTOM0)>0.0){
         // Original RenderLongLine measures its normal AFTER projecting endpoints.
         vec2 a=vec2(CUSTOM0.x*ssrg_scale(MODEL_MATRIX[3].z+CUSTOM0.y),ssrg_warp_z(MODEL_MATRIX[3].z+CUSTOM0.y));
         vec2 b=vec2(CUSTOM0.z*ssrg_scale(MODEL_MATRIX[3].z+CUSTOM0.w),ssrg_warp_z(MODEL_MATRIX[3].z+CUSTOM0.w));
@@ -26,7 +52,8 @@ void vertex(){
         vec2 normal=length(delta)>0.00001?normalize(vec2(-delta.y,delta.x)):vec2(1.0,0.0);
         float section=MODEL_MATRIX[3].z+UV2.x;
         bool at_start=abs(UV2.x-CUSTOM0.y)<0.00001;
-        vec2 point=(at_start?a:b)+normal*vec2(ssrg_line_x_scale,1.0)*UV2.y*ssrg_half_width*ssrg_scale(section);
+        float perspective_width=enhanced_synk?mix(.72,1.0,clamp(ssrg_scale(section),0.0,1.0)):1.0;
+        vec2 point=(at_start?a:b)+normal*vec2(ssrg_line_x_scale,1.0)*UV2.y*ssrg_half_width*ssrg_scale(section)*perspective_width;
         point.x+=UV2.y*CUSTOM1.x;
         vec3 target=vec3(point.x,(MODEL_MATRIX*vec4(VERTEX,1.0)).y,point.y);
         VERTEX=inverse(mat3(MODEL_MATRIX))*(target-MODEL_MATRIX[3].xyz);
@@ -44,6 +71,25 @@ void fragment(){
     }else if(world_z>clip_z) discard;
     vec3 color=source_art?source_chip:tint*.87;
     float opacity=source_art?.2:.8;
+    if(joined_source && source_art && !old_ssrg_art && !joint){
+        float core=pow(max(0.0,1.0-abs(UV.x*2.0-1.0)),2.0);
+        color=mix(tint,vec3(1.0,.98,.78),core*.45);
+        opacity=.43+core*.12;
+    }
+    if(old_ssrg_art && source_art && !joint){
+        color=mix(tint,vec3(1.0,.86,.78),.12);
+        opacity=.58;
+    }
+    if(enhanced_synk && source_art && !joint){
+        float core=pow(max(0.0,1.0-abs(UV.x*2.0-1.0)),2.4);
+        if(source_layer>0.05){
+            color=tint*1.25;
+            opacity=.16*pow(max(0.0,1.0-abs(UV.x*2.0-1.0)),1.6);
+        }else{
+            color=mix(color,vec3(1.0,.98,.78),core*.72);
+            opacity+=core*.10;
+        }
+    }
     if(!joint){
         float edge=min(UV.x,1.0-UV.x);
         float feather=max(fwidth(UV.x),.001);
