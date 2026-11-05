@@ -35,8 +35,15 @@ func run():
 	assert(cover.hit_glow==held,"Miss does not trigger artwork glow")
 	cover._process(2)
 	assert(cover.hit_glow<.001,"Artwork glow settles between notes")
-	game.ssrg_playable_run=false;game.highway_style="gold"
-	assert(cover.target_rect().position.x>cover.size.x*.65,"Other highway styles keep their corner cover")
+	game.ssrg_playable_run=false
+	game.stage_intro_enabled=false
+	for style in game.HIGHWAY_STYLES:
+		game.highway_style=style
+		game.start_game([],true)
+		var card_center=cover.get_global_transform_with_canvas()*cover.target_rect().get_center()
+		var highway_center=game.field.get_global_transform_with_canvas()*game.field.project(game.field.world.CENTER_LANE,1.0)
+		assert(absf(card_center.x-highway_center.x)<1,"Cover lines up with the highway on "+style)
+		assert(cover.visible and not game.stage_intro.running(),"Cover appears when the intro is skipped on "+style)
 	game.toggle_pause(false)
 	assert(game.pause_backdrop.visible and game.pause_backdrop.material==null,"Pause uses a solid backdrop without screen sampling")
 	assert(is_equal_approx(game.pause_backdrop.color.a,1.0) and is_equal_approx(game.pause_backdrop.modulate.a,1.0),"Pause covers gameplay immediately")

@@ -142,11 +142,13 @@ func old_ssrg_ui() -> bool:
 	return uses_ssrg_gameplay() and bool(prefs.get_value("highway","old_ssrg_ui",false))
 func prism_type_enabled() -> bool:
 	return bool(prefs.get_value("highway","prism_type",false))
+func uses_prism_type() -> bool:
+	return uses_ssrg_gameplay() and prism_type_enabled()
 func change_prism_type(on: bool) -> void:
 	prefs.set_value("highway","prism_type",on)
 	prefs.save("user://preferences.cfg")
 	if field and field.world:
-		field.world.ssrg_animation_frame=-1
+		field.world.clear_notes()
 func change_old_ssrg_ui(on: bool) -> void:
 	prefs.set_value("highway","old_ssrg_ui",on);prefs.save("user://preferences.cfg")
 	if field and field.world:
@@ -1373,14 +1375,17 @@ func start_game(notes: Array,automated: bool = false,section: String = "",is_pra
 	apply_stage_cover()
 	# Build every note of the chart now (behind the loading card); play only shows and hides them.
 	field.world.begin_prebuild()
+	var cover_id := str(song.id)
+	var cover := cover_texture_for_id(cover_id)
+	var tint := Color.WHITE if cover_id=="eclipse" or has_custom_cover(cover_id) else cover_tint_for_id(cover_id)
 	if stage_intro_enabled:
 		# Compile every gameplay shader behind the loading card, not mid-song.
 		if not restarting: field.world.prewarm(); warm_hud_text()
 		field.world.prefill_hits()
-		var tinted=song.id!="eclipse" and not has_custom_cover(str(song.id))
-		stage_intro.begin(cover_texture_for_id(str(song.id)),cover_tint_for_id(str(song.id)) if tinted else Color.WHITE,str(song.title),intro_details(),restarting)
+		stage_intro.begin(cover,tint,str(song.title),intro_details(),restarting)
 		judgement=""
-	else: stage_intro.skip()
+	else:
+		stage_intro.show_gameplay_cover(cover,tint)
 	for banner in [song_hud,difficulty_hud]:
 		banner.modulate.a=0
 		banner.scale=Vector2(.96,.96)

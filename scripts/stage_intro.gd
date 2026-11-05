@@ -126,6 +126,14 @@ func begin(cover: Texture2D, tint: Color, song_title: String, details: String, s
 	for part in details.split("•"):
 		if part.strip_edges() != "": chips.append(part.strip_edges())
 	tip.text = "TIP  ·  " + TIPS[randi() % TIPS.size()]
+	style_cover(cover,tint)
+	load_time = 0.0 if skip_loading else LOAD_TIME
+	elapsed = 0.0; visible = true
+	arriving = arrive_from.has_area() and not skip_loading
+	layout(); animate()
+	if not arriving: arrive_from = Rect2()
+
+func style_cover(cover: Texture2D, tint: Color) -> void:
 	# Glow behind the cover, and a light rim drawn over its rounded edge.
 	var frame = StyleBoxFlat.new(); frame.bg_color = accent.darkened(.92); frame.set_corner_radius_all(22)
 	frame.shadow_color = Color(accent,.24); frame.shadow_size = 24
@@ -135,11 +143,12 @@ func begin(cover: Texture2D, tint: Color, song_title: String, details: String, s
 	card_rim.add_theme_stylebox_override("panel",rim)
 	gliding = game != null and play_cover != null and not game.uses_recorder_colors()
 	if gliding: play_cover.style_from(cover,tint,frame,rim)
-	load_time = 0.0 if skip_loading else LOAD_TIME
-	elapsed = 0.0; visible = true
-	arriving = arrive_from.has_area() and not skip_loading
-	layout(); animate()
-	if not arriving: arrive_from = Rect2()
+
+func show_gameplay_cover(cover: Texture2D, tint: Color) -> void:
+	accent = song_colors(cover)[0]
+	style_cover(cover,tint)
+	skip()
+	if gliding: play_cover.take_over()
 
 # Called just before begin(): the on-screen rectangle the cover flies in from.
 func arrive(global_rect: Rect2) -> void:

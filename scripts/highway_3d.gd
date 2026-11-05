@@ -486,6 +486,8 @@ func element_color(key: String,fallback: Color) -> Color:
 	return SynkGameplayColors.resolve(game,key,fallback) if game!=null else fallback
 
 func trail_color(palette: int) -> Color:
+	if game.uses_prism_type() and palette in [1,3]:
+		return Color("ffd36a") if palette==1 else Color("c29aff")
 	if game.old_ssrg_ui() and palette in [1,3]: return Color("edb65c")
 	if source_long_visuals() and palette in [1,3]: return Color("f9d568")
 	return element_color("slide_trail" if palette==3 else "hold_trail",colors[palette])
@@ -1121,10 +1123,13 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 	# Connector pucks along slides (and the end puck) are the head note's own art at 60%.
 	var phase=fposmod((render_time()-game.chart_offset())*game.chart_bpm()/60.0,1.0)
 	var old_ui=game.old_ssrg_ui()
+	var prism := uses_prism_cap(palette)
 	var art := ssrg_cap_artwork(palette,tail,phase,old_ui)
-	var mat = shared("ssrg|%d|%s|%s" % [palette,tail,old_ui], func():
+	var mat = shared("ssrg|%d|%s|%s|%s" % [palette,tail,old_ui,prism], func():
 		var m = ShaderMaterial.new(); m.shader = preload("res://scripts/reference_note.gdshader")
 		m.set_shader_parameter("artwork",art); m.set_shader_parameter("approach_glow",false)
+		if prism and palette in [1,3]:
+			m.set_shader_parameter("hue_shift",-0.41 if palette==1 else 0.22)
 		m.set_meta("ssrg_palette",palette);m.set_meta("ssrg_tail",tail);m.set_meta("ssrg_old_ui",old_ui)
 		m.set_shader_parameter("core_tint",Color("4fc8ff") if palette==0 else Color("ffc23a")); return m)
 	var mesh_key = "ssrg|%s|%s|%s|%s|%s" % [size, tail, palette,ssrg_art_scale(),old_ui]
@@ -1143,9 +1148,12 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 	ssrg_billboards.append(weakref(head))
 	return head
 
+func uses_prism_cap(palette: int) -> bool:
+	return palette in [0,1,3] and game.uses_prism_type()
+
 func ssrg_cap_artwork(palette: int, tail: bool, phase: float, old_ui: bool) -> Texture2D:
-	if palette==0 and game.prism_type_enabled():
-		return SsrgNotes.PRISM_TAP_FRAMES[SsrgNotes.frame_index(phase)]
+	if uses_prism_cap(palette):
+		return SsrgNotes.PRISM_FRAMES[SsrgNotes.frame_index(phase)]
 	return SsrgNotes.artwork(palette in [1,3],not tail,phase,old_ui)
 
 func make_source_long_glow(parent: Node3D, position_value: Vector3, size: float) -> void:

@@ -1,7 +1,6 @@
 extends Control
-# The song's album art at the highway entrance on the SSRG look,
-# a smaller tile in the top-right corner (above the combo) on SYNK's Gold and Neon highways. The loading card glides into
-# this exact rectangle (stage_intro.gd), then this panel takes over with the same look.
+# The song's album art at the highway entrance. The loading card glides into
+# this exact rectangle, then this panel takes over with the same look.
 const RADIUS = 22.0
 var game: Control
 var frame: Panel
@@ -30,9 +29,6 @@ func _ready() -> void:
 
 # Where the loading cover lands; results flights use this same rectangle.
 func target_rect() -> Rect2:
-	if not game.uses_ssrg_gameplay() and game.highway_style not in preload("res://scripts/concept_highway.gd").STYLES:
-		var corner = clampf(size.y*.17,72.0,190.0)
-		return Rect2(Vector2(size.x-corner-size.x*.03,size.y*.04),Vector2(corner,corner))
 	var side = clampf(size.y*.20,72.0,170.0)
 	var entrance=game.field.get_global_transform_with_canvas()*game.field.project(game.field.world.CENTER_LANE,1.0)
 	var center=get_global_transform_with_canvas().affine_inverse()*entrance

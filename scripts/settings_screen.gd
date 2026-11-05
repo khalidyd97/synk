@@ -526,7 +526,7 @@ func build_highway(items: VBoxContainer) -> void:
     old_ssrg_ui_row=row(items,"OLD UI SSRG","STAYC note sprites, guide rings, judgment bar and thin edge rails.",112)
     old_ssrg_ui_switch=Switch.new();add_control(old_ssrg_ui_row,old_ssrg_ui_switch,152)
     connect_switch(old_ssrg_ui_switch,game.change_old_ssrg_ui)
-    prism_type_row=row(items,"Prism Type","Use the animated aqua glow for SSRG tap notes.",112)
+    prism_type_row=row(items,"Prism Type","Animated glow for SSRG taps, holds and slides.",112)
     prism_type_switch=Switch.new()
     add_control(prism_type_row,prism_type_switch,152)
     connect_switch(prism_type_switch,game.change_prism_type)
