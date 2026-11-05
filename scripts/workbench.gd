@@ -250,19 +250,19 @@ func open_tools(selected_tab: String="Drafts") -> void:
     ui_text(pages.Effects,"EFFECT INTENSITY",24)
     ui_text(pages.Effects,"Changes save immediately. 0% turns an effect off. Notes and the judgment line stay visible.")
     ui_text(pages.Effects,"NOTE APPEARANCE",22)
-    ui_text(pages.Effects,"Visual size only. Timing, lanes and hit detection stay the same. Hold and slide trails share one width, independent of note size.")
+    ui_text(pages.Effects,"Visual size only. Timing, lanes and hit detection stay the same. Hold and slide trails use a fixed width relative to the notes.")
     var preview=preload("res://scripts/note_appearance_preview.gd").new(); preview.game=game; pages.Effects.add_child(preview)
     var sizing_sliders: Dictionary={}
-    for key in ["note_size","hold_trail_width"]:
-        var title="Note size" if key=="note_size" else "Hold & slide trail width"
-        var value=game.note_size if key=="note_size" else game.hold_trail_width
+    for key in ["note_size"]:
+        var title="Note size"
+        var value=game.note_size
         var label=ui_text(pages.Effects,title+" · %d%%" % roundi(value*100),19)
         var slider=HSlider.new(); pages.Effects.add_child(slider); slider.name=key.to_pascal_case()
-        slider.min_value=.6 if key=="note_size" else .3; slider.max_value=1.25 if key=="note_size" else 1.5
+        slider.min_value=.6; slider.max_value=1.25
         slider.step=.05; slider.value=value; slider.custom_minimum_size=Vector2(0,44)
         slider.tooltip_text=title; sizing_sliders[key]=slider
         slider.value_changed.connect(func(v): game.change_note_sizing(key,v); label.text=title+" · %d%%" % roundi(v*100))
-    ui_button(pages.Effects,"RESET NOTE SIZES",func():
+    ui_button(pages.Effects,"RESET NOTE SIZE",func():
         for slider in sizing_sliders.values(): slider.value=1.0)
     ui_text(pages.Effects,"HIT & STAGE EFFECTS",22)
     effect_sliders={}

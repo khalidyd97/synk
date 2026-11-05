@@ -12,7 +12,7 @@ const CHORD_WINDOW=.06
 static func lane(x: float) -> float:
 	return clampf((x - .07) / .86 * SynkChart.LANES - .5, 0, SynkChart.MAX_LANE)
 
-func begin(id: int, time: float, p: Vector2, tool = "auto",fixed: Array=[]) -> bool:
+func begin(id: int, time: float, p: Vector2, tool = "auto",fixed: Array=[], allowed_types: Array=[]) -> bool:
 	if time < 0 or p.x < .07 or p.x > .93 or p.y < .6 or p.y > .92 or gestures.has(id): return false
 	var note_lane = roundi(lane(p.x))
 	var raw_time=time
@@ -29,7 +29,8 @@ func begin(id: int, time: float, p: Vector2, tool = "auto",fixed: Array=[]) -> b
 			if distance<closest: time=float(previous.time); closest=distance
 	var n = SynkChart.note(time, note_lane)
 	n.path.append({"offset": 0.0, "lane": float(n.lane)})
-	gestures[id] = {"note": n, "tool": tool, "start": p, "position": p, "max_delta": 0.0,"lane_shift":float(note_lane)-lane(p.x),"samples":n.path.duplicate(true),"raw_lane":note_lane,"fixed":fixed}
+	var allowed = allowed_types.duplicate() if not allowed_types.is_empty() else (["tap", "hold", "slide"] if tool == "auto" else [tool])
+	gestures[id] = {"note": n, "tool": tool, "allowed": allowed, "start": p, "position": p, "max_delta": 0.0,"lane_shift":float(note_lane)-lane(p.x),"samples":n.path.duplicate(true),"raw_lane":note_lane,"fixed":fixed}
 	chord_starts.append({"note":n,"id":id,"input_time":raw_time,"raw_lane":note_lane})
 	space_chord(n,fixed)
 	return true
@@ -65,7 +66,7 @@ func move(id: int, time: float, p: Vector2) -> void:
 	n.kind = str(g.tool) if g.tool in ["hold","slide"] else ("slide" if g.max_delta>=.8 else "hold")
 	if n.kind=="slide" and n.duration>.04:
 		n.path=snap_path(samples,n.duration);n.ssrg_path=true
-		n.checkpoints=slide_checkpoints(n.path)
+		n.erase("checkpoints")
 
 func end(id: int, time: float, p: Vector2, canceled = false) -> Dictionary:
 	if not gestures.has(id): return {}
@@ -74,7 +75,17 @@ func end(id: int, time: float, p: Vector2, canceled = false) -> Dictionary:
 	if canceled: return {}
 	var n: Dictionary = g.note
 	n.kind = g.tool
-	if g.tool == "auto": n.kind = "tap" if n.duration < .14 else ("slide" if g.max_delta >= .8 else "hold")
+	if g.tool == "auto":
+		var allowed: Array = g.allowed
+		var displacement: Vector2 = p - g.start
+		var swipe = maxf(absf(displacement.x), absf(displacement.y)) >= .035 and (absf(displacement.x) > absf(displacement.y) or displacement.y < 0)
+		if "flick" in allowed and n.duration <= .30 and swipe: n.kind = "flick"
+		elif "slide" in allowed and n.duration >= .04 and g.max_delta >= .8: n.kind = "slide"
+		elif "hold" in allowed and n.duration >= .14: n.kind = "hold"
+		elif "tap" in allowed and n.duration < .14: n.kind = "tap"
+		elif "hold" in allowed and n.duration >= .14: n.kind = "hold"
+		elif "slide" in allowed and n.duration >= .04 and g.max_delta >= .8: n.kind = "slide"
+		else: return {}
 	if n.kind=="flick":
 		var displacement: Vector2=p-g.start
 		if maxf(absf(displacement.x),absf(displacement.y))<.035: return {}
@@ -87,25 +98,16 @@ func end(id: int, time: float, p: Vector2, canceled = false) -> Dictionary:
 		else:
 			n.path=snap_path(g.samples,float(n.duration))
 			n.ssrg_path=true
-			n.checkpoints=slide_checkpoints(n.path)
+			n.erase("checkpoints")
 			n.end_lane = int(n.path[-1].lane)
 	if n.kind!="slide":n.erase("ssrg_path");n.erase("checkpoints")
 	notes.append(n); space_chord(n,g.get("fixed",[])); return n
 
-# Fit authored straight ramps and flat holds instead of locking every crossed lane.
-# Time-based error keeps the same shape at 30/60/120 Hz and preserves deliberate turns.
-const SHAPE_ERROR=.28
+# Finger samples only locate meaningful turns. The saved trail consists of
+# straight spans; it does not trace easing or small side-to-side finger motion.
+const TURN_LANES=.8
+const MOVE_LANES=.5
 
-static func slide_checkpoints(path:Array)->Array:
-	var result:Array=[]
-	for i in range(1,path.size()-1):
-		var incoming=float(path[i].lane)-float(path[i-1].lane)
-		var outgoing=float(path[i+1].lane)-float(path[i].lane)
-		# Path anchors define the ribbon shape. Only a substantial reversal needs
-		# an extra playable connector; a straight ramp needs none.
-		if incoming*outgoing<0.0 and minf(absf(incoming),absf(outgoing))>=.8:
-			result.append(float(path[i].offset))
-	return result
 static func snap_path(path:Array,duration:float)->Array:
 	if path.is_empty():return []
 	var points:Array=[]
@@ -124,18 +126,40 @@ static func snap_path(path:Array,duration:float)->Array:
 	for i in range(1,points.size()-1):
 		if float(points[i+1].offset)-float(points[i-1].offset)>.08:continue
 		var before=float(points[i-1].lane);var current=float(points[i].lane);var after=float(points[i+1].lane)
-		if absf(before-after)<.22 and absf(current-(before+after)*.5)>.45:
+		var spike=absf(current-(before+after)*.5)
+		if absf(before-after)<.22 and spike>.45 and spike<.75:
 			filtered[i].lane=(before+after)*.5
 	var keep={0:true,filtered.size()-1:true}
-	var pending=[[0,filtered.size()-1]]
-	while not pending.is_empty():
-		var span=pending.pop_back();var first=int(span[0]);var last=int(span[1]);var index=-1;var error=SHAPE_ERROR
-		var length=maxf(.0001,float(filtered[last].offset)-float(filtered[first].offset))
-		for i in range(first+1,last):
-			var weight=(float(filtered[i].offset)-float(filtered[first].offset))/length
-			var deviation=absf(float(filtered[i].lane)-lerpf(float(filtered[first].lane),float(filtered[last].lane),weight))
-			if deviation>error:error=deviation;index=i
-		if index>=0:keep[index]=true;pending.append([first,index]);pending.append([index,last])
+	var direction=0
+	var extreme=0
+	for i in range(1,filtered.size()):
+		var value=float(filtered[i].lane)
+		var peak=float(filtered[extreme].lane)
+		if direction==0:
+			var delta=value-float(filtered[0].lane)
+			if absf(delta)>=MOVE_LANES:
+				direction=1 if delta>0 else -1
+				extreme=i
+		elif direction>0:
+			if value>peak:extreme=i
+			elif peak-value>=TURN_LANES:
+				keep[extreme]=true;direction=-1;extreme=i
+		elif value<peak:extreme=i
+		elif value-peak>=TURN_LANES:
+			keep[extreme]=true;direction=1;extreme=i
+	# A genuine stationary lead-in or tail-out gets a corner too.
+	for i in range(1,filtered.size()-1):
+		if absf(float(filtered[i].lane)-float(filtered[0].lane))<MOVE_LANES:continue
+		var still=i-1
+		while still>0 and absf(float(filtered[still].lane)-float(filtered[0].lane))>.15:still-=1
+		if float(filtered[still].offset)>=.12:keep[still]=true
+		break
+	for i in range(filtered.size()-2,0,-1):
+		if absf(float(filtered[i].lane)-float(filtered[-1].lane))<MOVE_LANES:continue
+		var still=i+1
+		while still<filtered.size()-1 and absf(float(filtered[still].lane)-float(filtered[-1].lane))>.15:still+=1
+		if duration-float(filtered[still].offset)>=.12:keep[still]=true
+		break
 	var result:Array=[]
 	for i in filtered.size():
 		if not keep.has(i):continue
