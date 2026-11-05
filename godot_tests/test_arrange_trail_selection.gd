@@ -26,11 +26,8 @@ func run() -> void:
         g.arrange_pointer_event(1,p,false,false,false)
         check(note==original,"Grabbing the middle does not move the note")
         g.arrange_pointer_event(1,p,false,true,false)
-        for width in [.3,1.5]:
-            g.hold_trail_width=width
-            var edge=point(g,note,at,g.field.world.TRAIL_HALF*.65*width*.8)
-            check(g.arrange_note_distance(note,edge)<.09,"Selectable ribbon follows configured width")
-        g.hold_trail_width=1
+        var edge=point(g,note,at,g.field.world.TRAIL_HALF*.65*.8)
+        check(g.arrange_note_distance(note,edge)<.09,"Selectable ribbon follows fixed width")
     g.note_arranger.edit_mode="move"
     g.capture.notes=[]; g.document.notes=[slide]; var at=9.5; var p=point(g,slide,at)
     g.arrange_pointer_event(2,p,true,false,false)

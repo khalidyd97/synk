@@ -32,9 +32,9 @@ func run() -> void:
     g.close_sync_helper(); check(s.visible and s.selected_page=="audio","Sync helper returns to same Settings category")
     s.bluetooth_toggle.button_pressed=false
     check(not s.bluetooth_latency_input.editable and s.bluetooth_latency_input.plus.disabled,"Bluetooth off disables extra delay")
-    s.show_page("visuals"); s.sizing_inputs.note_size.value=85; s.sizing_inputs.hold_trail_width.value=45
+    s.show_page("visuals"); s.sizing_inputs.note_size.value=85
     s.effect_inputs.Particles.value=35
-    check(is_equal_approx(g.note_size,.85) and is_equal_approx(g.hold_trail_width,.45) and is_equal_approx(g.features.effect("Particles"),.35),"Visual controls apply global note and effect preferences")
+    check(is_equal_approx(g.note_size,.85) and is_equal_approx(g.hold_trail_width,1.0) and not s.sizing_inputs.has("hold_trail_width") and is_equal_approx(g.features.effect("Particles"),.35),"Visual controls keep trail width fixed")
     await shot("visuals")
     s.show_page("editor"); s.authoring_switches.ghost.button_pressed=false; s.authoring_switches.lines.button_pressed=false
     s.authoring_switches.mr.button_pressed=true; s.metronome_toggle.button_pressed=true

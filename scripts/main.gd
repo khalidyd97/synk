@@ -138,6 +138,22 @@ func change_ssrg_mode(on: bool) -> void:
 # SSRG judging and scoring rules stay with ssrg_playable_run.
 func uses_ssrg_gameplay() -> bool:
 	return (ssrg_playable_run or (highway_style=="ssrg" and (mode in ["play","paused"] or highway_preview))) and not uses_recorder_colors()
+func old_ssrg_ui() -> bool:
+	return uses_ssrg_gameplay() and bool(prefs.get_value("highway","old_ssrg_ui",false))
+func prism_type_enabled() -> bool:
+	return bool(prefs.get_value("highway","prism_type",false))
+func change_prism_type(on: bool) -> void:
+	prefs.set_value("highway","prism_type",on)
+	prefs.save("user://preferences.cfg")
+	if field and field.world:
+		field.world.ssrg_animation_frame=-1
+func change_old_ssrg_ui(on: bool) -> void:
+	prefs.set_value("highway","old_ssrg_ui",on);prefs.save("user://preferences.cfg")
+	if field and field.world:
+		field.world.refresh_highway_look()
+		field.world.ssrg_animation_frame=-1
+		field.world.look_signature_frame=-1
+	if settings_panel:settings_panel.refresh()
 # True while a settings preview shows the live highway outside gameplay. Each visible
 # preview registers itself, so switching pages never turns the stage off under another one.
 var highway_preview = false
@@ -298,6 +314,7 @@ var record_info: Label
 var record_help: Label
 var arrange_button: Button
 var kind_buttons: Array[Button] = []
+var record_types: Array=["tap","hold","slide"]
 var studio_kind_buttons: Dictionary = {}
 var arrange_selection: Dictionary = {}
 var arranging = false
@@ -401,7 +418,7 @@ func _ready() -> void:
 	note_size=clampf(float(prefs.get_value("gameplay","note_size",1.0)),.6,1.25)
 	trail_style=str(prefs.get_value("gameplay","trail_style","neon"))
 	if trail_style not in ["neon","solid"]: trail_style="neon"
-	hold_trail_width=clampf(float(prefs.get_value("gameplay","hold_trail_width",1.0)),.3,1.5)
+	hold_trail_width=1.0
 	features=load("res://scripts/workbench.gd").new(); features.game=self; add_child(features)
 	song = eclipse_song()
 	add_child(audio); demo_stream = SynkLibrary.synth_demo(); audio.stream = demo_stream
@@ -695,16 +712,17 @@ func build_ui() -> void:
 
 	recorder_plate(Rect2(0.012, 0.135, 0.105, 0.5))
 	recorder_plate(Rect2(0.883, 0.135, 0.105, 0.405))
-	var kinds = ["auto", "tap", "hold", "slide", "flick"]
+	var kinds = ["all", "tap", "hold", "slide", "flick"]
 	for i in kinds.size():
 		var kind = kinds[i]
 		kind_buttons.append(button(record_tools, kind.to_upper(), 0.02, 0.15 + i * 0.096, 0.11, 0.228 + i * 0.096, func():
 			if arranging:
-				if kind == "auto": delete_arrange_note()
+				if kind == "all": delete_arrange_note()
 				else: change_arrange_note_type(kind)
 			else:
-				tool = kind;judgement = kind.to_upper() + " TOOL";flash = 1;refresh_arrange_controls(), "tool"))
-		kind_buttons[-1].tooltip_text = {"auto": "Detect taps, holds, and slides automatically", "tap": "Record individual taps", "hold": "Press and hold in a lane", "slide": "Hold and drag between lanes", "flick": "Swipe to set the flick direction"}[kind]
+				if kind=="all":select_all_record_types()
+				else:toggle_record_type(kind), "tool"))
+		kind_buttons[-1].tooltip_text = {"all": "Enable every note type for gesture detection", "tap": "Detect taps", "hold": "Detect holds", "slide": "Detect slides", "flick": "Detect flicks"}[kind]
 	button(record_tools, "STOP & REVIEW", 0.84, 0.022, 0.988, 0.105, stop_take, "record")
 	label(record_tools, "ANGLE", 0.12, 0.035, 0.19, 0.095, 14)
 	recorder_angle_slider=HSlider.new();rect(recorder_angle_slider,record_tools,0.20,0.047,0.40,0.087)
@@ -1045,7 +1063,6 @@ func change_trail_style(style: String) -> void:
 func change_note_sizing(key: String,value: float) -> void:
 	if not is_finite(value): return
 	if key=="note_size": note_size=clampf(value,.6,1.25); value=note_size
-	elif key=="hold_trail_width": hold_trail_width=clampf(value,.3,1.5); value=hold_trail_width
 	else: return
 	prefs.set_value("gameplay",key,value); prefs.save("user://preferences.cfg")
 	if field and field.world: field.world.clear_notes()
@@ -1622,9 +1639,9 @@ func toggle_arrange() -> void :
 		else: audio.play(playback_time)
 
 func refresh_arrange_controls() -> void :
-	kind_buttons[0].text = "DELETE" if arranging else "AUTO"
-	var kinds = ["auto", "tap", "hold", "slide", "flick"]
-	for i in kind_buttons.size(): kind_buttons[i].set_selected( not arranging and kinds[i] == tool)
+	kind_buttons[0].text = "DELETE" if arranging else "ALL"
+	var kinds = ["all", "tap", "hold", "slide", "flick"]
+	for i in kind_buttons.size(): kind_buttons[i].set_selected( not arranging and (record_types.size()==4 if i==0 else kinds[i] in record_types))
 	for kind_button in kind_buttons: kind_button.disabled = arranging and arrange_selection.is_empty()
 	if not arranging and recorder.current_pass() != "all": kind_buttons[0].disabled = true
 	for i in range(1, kind_buttons.size()):
@@ -1645,8 +1662,20 @@ func refresh_arrange_controls() -> void :
 				record_help.text = "%s · %.2f–%.2f s | SHAPE: drag trail to bend or stretch · CONNECTOR: tap trail · DELETE POINT: select a handle" % [str(n.kind).to_upper(), float(n.time), float(n.time) + float(n.duration)]
 			else: record_help.text = "SELECTED  %s  •  LANE %d  •  %.2f s\nDrag to move. Use the type buttons or DELETE above; scroll outside the highway." % [str(n.kind).to_upper(), int(n.lane) + 1, float(n.time)]
 	else:
-		var hints = {"auto": "AUTO · Tap, hold, or drag to record. Choose FLICK for swipes.", "tap": "TAP · Touch any lane at the glowing line to place a tap.", "hold": "HOLD · Press and keep your finger down; release to end.", "slide": "SLIDE · Hold and move across lanes to draw the trail.", "flick": "FLICK · Swipe in the direction you want the player to flick."}
-		record_help.text = str(hints.get(tool, hints.auto))
+		record_help.text = "DETECT: %s · Tap or gesture; enabled types are classified automatically." % ", ".join(record_types.map(func(kind):return str(kind).to_upper()))
+
+func select_all_record_types() -> void:
+	record_types=["tap","hold","slide","flick"].filter(func(kind):return kind not in recorder.locks())
+	if record_types.is_empty():return
+	tool=recorder.capture_tool();judgement="ALL TYPES";flash=1;refresh_arrange_controls()
+func toggle_record_type(kind:String) -> void:
+	if kind in recorder.locks():return
+	if kind in record_types:
+		if record_types.size()<=1:return
+		record_types.erase(kind)
+	else:record_types.append(kind)
+	tool=recorder.capture_tool();judgement="DETECT %s" % ", ".join(record_types.map(func(value):return str(value).to_upper()))
+	flash=1;refresh_arrange_controls()
 
 func toggle_ghost_recording() -> void :
 	ghost_recording = not ghost_recording
@@ -1773,7 +1802,7 @@ func arrange_note_distance(n: Dictionary, p: Vector2) -> float:
 
 	var centers = world.trail_centers(n, clampi(ceili(float(n.duration) * 32), 16, 256), true)
 	var sides = world.trail_sides(centers)
-	var half_width = world.TRAIL_HALF * 0.65 * hold_trail_width
+	var half_width = world.TRAIL_HALF * 0.65
 	var pointer = p * viewport_size
 	for i in centers.size() - 1:
 		var a: Vector3 = centers[i] + origin; var b: Vector3 = centers[i + 1] + origin
@@ -2136,7 +2165,7 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 		if began:
 			capture.minimum_lane_gap=authoring_lane_gap()
 			capture.onset_bounds=recorder.region
-			capture.begin(id,song_time,p,recorder.capture_tool(),recorder.spacing_blockers())
+			capture.begin(id,song_time,p,recorder.capture_tool(),recorder.spacing_blockers(),recorder.allowed_types())
 		capture.move(id,song_time,p)
 		if ended:
 			var n=capture.end(id,song_time,p,canceled)
