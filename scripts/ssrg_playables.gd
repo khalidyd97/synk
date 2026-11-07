@@ -3,12 +3,12 @@ const ScreenStyle = preload("res://scripts/screen_style.gd")
 const Action = preload("res://scripts/settings_action.gd")
 const Levels = preload("res://scripts/chart_levels.gd")
 const SsrgImport = preload("res://scripts/ssrg_import.gd")
-const TEXT = Color("eef0ff")
+const TEXT = Color("f4f1ea")
 const MUTED = Color(.8,.82,.95,.6)
 const ACCENT = Color("ffd36a")
 const STAR = "★"
 const STAR_OFF = "☆"
-const KEY_COLORS = {4: Color("5fd0ff"), 7: Color("ffd36a"), 13: Color("ff7ac8")}
+const KEY_COLORS = {4: Color("5fd0ff"), 7: Color("ffd36a"), 13: Color("ff8a5b")}
 
 # SSRG Playables (lobby button). The player picks the files of an SSRG song from their own copy
 # of the game: the song audio (.bytes, really Ogg) and its 4, 7 and 13 key charts (.bytes).
@@ -126,13 +126,18 @@ func panel(parent: Control, left: float, top: float, right: float, bottom: float
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	# The selected song's art, dimmed, behind everything (refresh_detail swaps it).
-	var base = ColorRect.new(); place(base,self,0,0,1,1); base.color = Color(0.03,0.03,0.04); base.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var base = ColorRect.new(); place(base,self,0,0,1,1); base.color = Color.WHITE; base.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Signal Arcade lane grid; the selected game's art glows faintly over it.
+	preload("res://scripts/background_motion.gd").attach(base,preload("res://scripts/song_browser_background.gdshader"))
 	backdrop = TextureRect.new(); place(backdrop,self,0,0,1,1); backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	backdrop.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; backdrop.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	backdrop.modulate = Color(1,1,1,.32)
+	backdrop.modulate = Color(1,1,1,.55)
+	# Album Takeover: the game's art becomes soft coloured light rather than a photo.
+	var blur = ShaderMaterial.new(); blur.shader = preload("res://scripts/blurred_art.gdshader"); blur.set_shader_parameter("radius",.09)
+	backdrop.material = blur
 	backdrop_layers.append(backdrop)
 	var shade = TextureRect.new(); place(shade,self,0,0,1,1); shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var gradient = Gradient.new(); gradient.colors = PackedColorArray([Color(0.03,0.03,0.04,.55),Color(0.03,0.03,0.04,.25),Color(0.03,0.03,0.04,.92)])
+	var gradient = Gradient.new(); gradient.colors = PackedColorArray([Color(0.03,0.03,0.06,.5),Color(0.03,0.03,0.06,.05),Color(0.03,0.03,0.06,.55)])
 	gradient.offsets = PackedFloat32Array([0,.45,1])
 	var fill = GradientTexture2D.new(); fill.gradient = gradient; fill.fill_from = Vector2(0,0); fill.fill_to = Vector2(0,1)
 	shade.texture = fill; shade.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; shade.stretch_mode = TextureRect.STRETCH_SCALE
@@ -141,7 +146,8 @@ func _ready() -> void:
 
 	# Top bar: back, title, search, order, speed and adding songs.
 	action(self,"‹  GAMES",.02,.03,.12,.12,show_games,"nav")
-	title_label=text(self,"SSRG PLAYABLES",.125,.025,.35,.085,21)
+	title_label=text(self,"SSRG PLAYABLES",.125,.018,.45,.1,34)
+	title_label.add_theme_font_override("font",preload("res://scripts/arcade_style.gd").SERIF)
 	status_label = text(self,"Play SSRG songs from your own game files.",.125,.075,.36,.125,13,MUTED)
 	search = LineEdit.new(); place(search,self,.365,.035,.53,.115)
 	search.placeholder_text = "Search songs"; search.clear_button_enabled = true
@@ -183,7 +189,7 @@ func _ready() -> void:
 	var art = Control.new(); place(art,empty_state,.3,0,.7,.42); art.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	art.draw.connect(func(): draw_empty_art(art))
 	var heading = text(empty_state,"No SSRG songs yet",0,.44,1,.56,30,TEXT); heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	heading.add_theme_font_override("font",preload("res://assets/fonts/FiraSans-Bold.ttf"))
+	heading.add_theme_font_override("font",preload("res://scripts/arcade_style.gd").SERIF)
 	var hint = text(empty_state,"Add .ssrg files or a folder of charts." + "\n" + "Songs with only some levels import too.",0,.56,1,.72,18,MUTED)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	action(empty_state,"+  ADD SONGS",.2,.78,.49,.92,open_import,"primary")
@@ -520,9 +526,10 @@ func change_backdrop(texture:Texture2D) -> void:
 	backdrop.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	backdrop.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;backdrop.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	backdrop.texture=texture;backdrop.modulate=Color(1,1,1,0)
+	var blur=ShaderMaterial.new(); blur.shader=preload("res://scripts/blurred_art.gdshader"); blur.set_shader_parameter("radius",.09); backdrop.material=blur
 	backdrop_layers.append(backdrop)
 	var fade=backdrop.create_tween()
-	fade.tween_property(backdrop,"modulate:a",.32,.32)
+	fade.tween_property(backdrop,"modulate:a",.55,.32)
 	backdrop.set_meta("ssrg_fade",fade)
 
 func style_row(row: Button, selected: bool) -> void:
@@ -842,7 +849,7 @@ func record_result() -> void:
 # Stacked cover cards with a play mark and a coral "+": the empty library's illustration.
 func draw_empty_art(art: Control) -> void:
 	var side = minf(art.size.x,art.size.y)*.78; var c = art.size*.5
-	for card in [[Vector2(-side*.18,side*.04),-.17,Color("2a2830")],[Vector2(side*.16,-side*.02),.14,Color("34323a")],[Vector2.ZERO,0.0,Color("f3ece1")]]:
+	for card in [[Vector2(-side*.18,side*.04),-.17,Color(1,1,1,.13)],[Vector2(side*.16,-side*.02),.14,Color("34323a")],[Vector2.ZERO,0.0,Color("f4f1ea")]]:
 		art.draw_set_transform(c+card[0],card[1],Vector2.ONE)
 		var plate = StyleBoxFlat.new(); plate.bg_color = card[2]; plate.set_corner_radius_all(roundi(side*.14))
 		art.draw_style_box(plate,Rect2(-Vector2.ONE*side*.5,Vector2.ONE*side))
@@ -850,5 +857,5 @@ func draw_empty_art(art: Control) -> void:
 	var r = side*.2
 	art.draw_colored_polygon(PackedVector2Array([c+Vector2(-r*.6,-r*.8),c+Vector2(r*.9,0),c+Vector2(-r*.6,r*.8)]),Color("1a1720"))
 	var badge = c+Vector2(side*.52,-side*.46)
-	art.draw_circle(badge,side*.12,Color("ff7a59"))
+	art.draw_circle(badge,side*.12,Color("ff8a5b"))
 	preload("res://scripts/ui_icons.gd").draw(art,"add",badge,side*.16,Color.WHITE)

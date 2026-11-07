@@ -20,8 +20,8 @@ func _draw() -> void:
     for i in 48:
         var t=TAU*i/48.0
         points.append(center+Vector2(16*pow(sin(t),3),-(13*cos(t)-5*cos(2*t)-2*cos(3*t)-cos(4*t)))*minf(size.x,size.y)/60.0)
-    if amount>.001: draw_colored_polygon(points,Color("f53cce",amount))
-    points.append(points[0]); draw_polyline(points,Color("6b637e").lerp(Color("f53cce"),amount) if not is_hovered() else Color("e991e3"),1.4,true)
+    if amount>.001: draw_colored_polygon(points,Color("ff8a5b",amount))
+    points.append(points[0]); draw_polyline(points,Color("6b637e").lerp(Color("ff8a5b"),amount) if not is_hovered() else Color("ff8a5b"),1.4,true)
     draw_set_transform(Vector2.ZERO)
 
 # Hidden widgets stop their per-frame update (screens keep many of them alive offscreen).

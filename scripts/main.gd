@@ -441,30 +441,30 @@ func _ready() -> void:
 	safe_poll.timeout.connect(apply_safe_area); add_child(safe_poll)
 	build_combo_digit_textures()
 	build_ui()
-	lobby=Control.new(); lobby.set_script(load("res://scripts/lobby.gd")); lobby.game=self
+	lobby=Control.new(); lobby.set_script(load("res://scripts/lobby.gd")); lobby.game=self; lobby.theme=preload("res://scripts/game_theme.gd").arcade()
 	ui.add_child(lobby); lobby.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.move_child(lobby,0)
 	arrange_preview=preload("res://scripts/arrange_audio_preview.gd").new(); arrange_preview.game=self; add_child(arrange_preview)
 	build_studio()
 	note_arranger=preload("res://scripts/recorder_note_arranger.gd").new(); note_arranger.game=self
 	record_tools.add_child(note_arranger); note_arranger.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	chart_library=Control.new(); chart_library.set_script(load("res://scripts/chart_library.gd")); chart_library.game=self
+	chart_library=Control.new(); chart_library.set_script(load("res://scripts/chart_library.gd")); chart_library.game=self; chart_library.theme=preload("res://scripts/game_theme.gd").arcade()
 	ui.add_child(chart_library); chart_library.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.move_child(chart_library,1)
 	extras=preload("res://scripts/gameplay_extras.gd").new(); extras.game=self; add_child(extras)
-	settings_panel=Control.new(); settings_panel.set_script(load("res://scripts/settings_screen.gd")); settings_panel.game=self
+	settings_panel=Control.new(); settings_panel.set_script(load("res://scripts/settings_screen.gd")); settings_panel.game=self; settings_panel.theme=preload("res://scripts/game_theme.gd").arcade()
 	ui.add_child(settings_panel); settings_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.move_child(settings_panel,2); settings_panel.visible=false
-	song_details=Control.new(); song_details.set_script(load("res://scripts/song_details.gd")); song_details.game=self
+	song_details=Control.new(); song_details.set_script(load("res://scripts/song_details.gd")); song_details.game=self; song_details.theme=preload("res://scripts/game_theme.gd").arcade()
 	ui.add_child(song_details); song_details.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.move_child(song_details,3); song_details.visible=false
 	bluetooth_toggle=settings_panel.bluetooth_toggle; bluetooth_latency_input=settings_panel.bluetooth_latency_input
-	sync_helper=Control.new(); sync_helper.set_script(load("res://scripts/sync_helper.gd")); sync_helper.game=self
+	sync_helper=Control.new(); sync_helper.set_script(load("res://scripts/sync_helper.gd")); sync_helper.game=self; sync_helper.theme=preload("res://scripts/game_theme.gd").arcade()
 	ui.add_child(sync_helper); sync_helper.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.move_child(sync_helper,3); sync_helper.visible=false
-	song_sync=Control.new(); song_sync.set_script(load("res://scripts/song_sync.gd")); song_sync.game=self
+	song_sync=Control.new(); song_sync.set_script(load("res://scripts/song_sync.gd")); song_sync.game=self; song_sync.theme=preload("res://scripts/game_theme.gd").arcade()
 	ui.add_child(song_sync); song_sync.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	ssrg_playables=Control.new(); ssrg_playables.set_script(load("res://scripts/ssrg_playables.gd")); ssrg_playables.game=self
+	ssrg_playables=Control.new(); ssrg_playables.set_script(load("res://scripts/ssrg_playables.gd")); ssrg_playables.game=self; ssrg_playables.theme=preload("res://scripts/game_theme.gd").arcade()
 	ui.add_child(ssrg_playables); ssrg_playables.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.move_child(ssrg_playables,3); ssrg_playables.visible=false
 	saved_notes = library.load_chart("eclipse")
@@ -676,7 +676,7 @@ func build_ui() -> void:
 	stage_intro=StageIntro.new(); stage_intro.game=self; ui.add_child(stage_intro)
 	var play_cover=preload("res://scripts/play_cover.gd").new(); play_cover.game=self
 	safe_parent("SafePlayCover").add_child(play_cover); stage_intro.play_cover=play_cover
-	results_screen=ResultsScreen.new(); results_screen.game=self; ui.add_child(results_screen)
+	results_screen=ResultsScreen.new(); results_screen.game=self; results_screen.theme=preload("res://scripts/game_theme.gd").arcade(); ui.add_child(results_screen)
 	# Pause uses a solid full-screen background and an opaque card.
 	pause_layer=CanvasLayer.new();pause_layer.name="PauseOverlay";pause_layer.layer=1000;add_child(pause_layer)
 	var pause_root=Control.new();pause_root.name="PauseRoot";pause_layer.add_child(pause_root)
@@ -687,7 +687,7 @@ func build_ui() -> void:
 	preload("res://scripts/modal_input.gd").register(modal)
 	var pause_panel=StyleBoxFlat.new();pause_panel.bg_color=Color("1b1b1b");pause_panel.set_corner_radius_all(28)
 	modal.add_theme_stylebox_override("panel",pause_panel)
-	modal_title=label(modal,"S Y N K",.04,.025,.96,.17,48); modal_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	modal_title=label(modal,"synk",.04,.025,.96,.17,48); modal_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	modal_title.add_theme_font_override("font",preload("res://assets/fonts/FiraSans-Bold.ttf"))
 	modal_body=label(modal,"",.06,.17,.94,.43,22); modal_body.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; modal_body.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	primary=pause_action(modal,"PLAY",.23,.88,.77,.97,primary_action,"primary")
@@ -706,7 +706,7 @@ func build_ui() -> void:
 	button(actions,"PLAY SAVED",.22,.91,.39,.98,func(): start_game(saved_notes),"primary")
 	button(actions,"AUTO PLAY",.41,.91,.58,.98,start_autoplay)
 	button(actions,"CHART STUDIO / IMPORT AUDIO",.60,.91,.98,.98,open_editor)
-	record_tools = Control.new();rect(record_tools, safe_parent("SafeRecorderControls"), 0, 0, 1, 1);record_tools.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	record_tools = Control.new();record_tools.theme=preload("res://scripts/game_theme.gd").arcade();rect(record_tools, safe_parent("SafeRecorderControls"), 0, 0, 1, 1);record_tools.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	record_tools.set_meta("keep_caption_size", true)
 
 
@@ -2446,6 +2446,8 @@ func process_ssrg_press_events() -> void:
 		if best.is_empty():continue
 		best.started=true;best.pointer=int(press.id);best.error=best_error;best.timing_error=float(press.at)-float(best.note.time)
 		ssrg_touch_router.consume(channel)
+		# A flick is judged once the finger swipes the arrow's way (update_game), not on the press.
+		if best.note.kind=="flick": continue
 		judge(best,best_error,best.note.kind not in ["hold","slide"])
 
 func update_game() -> void:
@@ -2502,7 +2504,7 @@ func update_game() -> void:
 			var displacement: Vector2=p.position-p.start
 			var direction: Vector2=[Vector2.UP,Vector2.RIGHT,Vector2.DOWN,Vector2.LEFT][int(n.direction)]
 			if displacement.dot(direction)>.035 and displacement.dot(direction)>absf(displacement.dot(direction.orthogonal())): judge(entry,float(entry.error))
-			elif song_time>float(n.time)+extras.good_window(): judge(entry,-1)
+			elif song_time>float(n.time)+(hit_good_window("flick") if ssrg_playable_run else extras.good_window()) or (ssrg_playable_run and p.get("ssrg_ended",false)): judge(entry,-1)
 		elif n.kind in ["hold","slide"] and not process_checkpoints(entry,SynkCapture.lane(p.position.x),false):
 			continue
 		elif n.kind=="slide":
@@ -2650,7 +2652,7 @@ func show_pending_results() -> void:
 
 
 func build_studio() -> void:
-	studio=Panel.new(); studio.set_script(load("res://scripts/chart_editor.gd")); studio.game=self
+	studio=Panel.new(); studio.set_script(load("res://scripts/chart_editor.gd")); studio.game=self; studio.theme=preload("res://scripts/game_theme.gd").arcade()
 	rect(studio,ui,0,0,1,1)
 	picker=FileDialog.new(); add_child(picker); picker.file_mode=FileDialog.FILE_MODE_OPEN_FILE; picker.access=FileDialog.ACCESS_FILESYSTEM; picker.use_native_dialog=true
 	picker.filters=PackedStringArray(["*.mp3,*.wav,*.ogg;Audio;audio/mpeg,audio/wav,audio/ogg"]); picker.file_selected.connect(import_audio)
