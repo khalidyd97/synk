@@ -12,12 +12,12 @@ var icon_game=""
 var message:Label
 func _ready():
  set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
- var stage=TextureRect.new();add_child(stage);stage.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
- stage.texture=preload("res://assets/lobby/ui/concert_stage_clean.png");stage.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;stage.stretch_mode=TextureRect.STRETCH_SCALE;stage.mouse_filter=Control.MOUSE_FILTER_IGNORE
- var veil=ColorRect.new();add_child(veil);veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);veil.color=Color("121116",.76);veil.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ # Album Takeover: the same soft cover-coloured light as every other menu, no stage photo.
+ var stage=ColorRect.new();add_child(stage);stage.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);stage.color=Color.WHITE;stage.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ preload("res://scripts/background_motion.gd").attach(stage,preload("res://scripts/song_browser_background.gdshader"))
  host.action(self,"‹  BACK",.02,.03,.12,.12,host.close,"nav")
- var heading=host.text(self,"GAMES",.15,.025,.6,.09,34,Color("f5ecdf"));heading.add_theme_font_override("font",preload("res://assets/fonts/FiraSans-Bold.ttf"))
- host.text(self,"Select a game to see its songs.",.15,.09,.7,.14,16,Color("d6c6b4"))
+ var heading=host.text(self,"Games",.15,.015,.6,.1,46,Color("f4f1ea"));heading.add_theme_font_override("font",preload("res://scripts/arcade_style.gd").SERIF)
+ host.text(self,"Select a game to see its songs.",.15,.09,.7,.14,16,Color("a19d95"))
  host.action(self,"+ ADD GAME",.78,.035,.98,.12,func():name_input.clear();add_dialog.popup_centered(),"primary")
  search=LineEdit.new();host.place(search,self,.02,.17,.98,.24);search.placeholder_text="Search games";search.clear_button_enabled=true;search.text_changed.connect(func(_value):refresh())
  scroll=ScrollContainer.new();host.place(scroll,self,.02,.27,.98,.92);scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED

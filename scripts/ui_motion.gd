@@ -147,8 +147,80 @@ static func page(tabs: TabContainer) -> void:
 
 static func screen(target: Control) -> void:
 	reveal(target)
+	cascade(target)
+
+# Staggered entrance: every card, row, button and field on a screen fades in and settles,
+# top to bottom, one after another. Only the visual transform moves; layout stays put.
+static func cascade(root: Control, start_delay: float = .05, step: float = .05, max_items: int = 40) -> void:
+	if not is_instance_valid(root) or not root.is_visible_in_tree(): return
+	# Let freshly shown or refilled lists lay themselves out first, so each piece knows its slot.
+	await root.get_tree().process_frame
+	if not is_instance_valid(root) or not root.is_visible_in_tree(): return
+	var items: Array[Control] = []
+	_collect(root, items, 0)
+	items.sort_custom(func(a, b): return a.global_position.y < b.global_position.y - 4 or (absf(a.global_position.y - b.global_position.y) <= 4 and a.global_position.x < b.global_position.x))
+	var view=root.get_viewport_rect()
 	var index=0
-	for child in target.get_children():
-		if child is Panel and child.visible:
-			pop(child,minf(index*.045,.18))
-			index+=1
+	for item in items:
+		if index>=max_items: break
+		# Off-screen items (far down a scroll list) appear without waiting their turn.
+		if not view.intersects(item.get_global_rect()): continue
+		enter(item, start_delay + minf(index * step, .7))
+		if is_main_action(item): shimmer(item)
+		index+=1
+
+static func _collect(node: Node, items: Array[Control], depth: int) -> void:
+	for child in node.get_children():
+		if not (child is Control) or not child.visible or child.has_meta("interface_life_decoration"): continue
+		var c: Control = child
+		var leaf = c is BaseButton or c is LineEdit or c is TextEdit or c is Range or c is TextureRect
+		var card = (c is PanelContainer or c is Panel) and c.size.y < 260
+		if leaf or card or (c is Label and depth > 0):
+			if c.size.x > 4 and c.size.y > 4: items.append(c)
+			continue
+		if depth < 8: _collect(c, items, depth + 1)
+
+# One element's entrance: fades in, grows from 92 % with a little overshoot and travels into
+# place. Wide rows and cards sweep in from the left; buttons and smaller pieces rise from below.
+static func enter(target: Control, delay: float = 0.0) -> void:
+	if not is_instance_valid(target): return
+	var previous: Variant=target.get_meta("enter_tween") if target.has_meta("enter_tween") else null
+	var parent=target.get_parent()
+	var home: Vector2=target.get_meta("enter_home") if previous is Tween and previous.is_running() else target.position
+	if previous is Tween: previous.kill()
+	# Inside a container the slot comes from the container: re-run its layout to read it now.
+	if parent is Container:
+		parent.notification(Container.NOTIFICATION_SORT_CHILDREN)
+		home=target.position
+	target.pivot_offset=target.size*.5
+	target.modulate.a=0.0
+	target.scale=Vector2.ONE*.92
+	var offset=Vector2(-56,0) if target.size.x>360 else Vector2(0,26)
+	target.position=home+offset
+	var tween=target.create_tween().set_parallel(true)
+	tween.tween_property(target,"modulate:a",1.0,.36).set_delay(delay).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.tween_property(target,"scale",Vector2.ONE,.55).set_delay(delay).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(target,"position",home,.5).set_delay(delay).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+	# A quick white flash as each piece lands.
+	tween.tween_property(target,"self_modulate",Color(1.35,1.35,1.35),.08).set_delay(delay+.22)
+	tween.chain().tween_property(target,"self_modulate",Color.WHITE,.25)
+	# Hand the slot back to the container in case the list changed while this piece moved.
+	if parent is Container: tween.chain().tween_callback(parent.queue_sort)
+	target.set_meta("enter_home",home)
+	target.set_meta("enter_tween",tween)
+
+# The screen's main action (Play, Save, Add…) keeps a light sweep running across it.
+static func is_main_action(node: Control) -> bool:
+	if not node is BaseButton: return false
+	for property in node.get_property_list():
+		match property.name:
+			"primary", "hot":
+				if bool(node.get(property.name)): return true
+			"variant":
+				if str(node.get("variant")) in ["primary", "record"]: return true
+	return false
+
+static func shimmer(target: Control) -> void:
+	if not is_instance_valid(target) or target.has_node("Shimmer") or "fill_color" in target: return
+	var sweep=preload("res://scripts/arcade_shimmer.gd").new(); sweep.name="Shimmer"
+	target.add_child(sweep)

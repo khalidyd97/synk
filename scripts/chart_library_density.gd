@@ -4,7 +4,7 @@ var duration=1.0
 func _ready() -> void: mouse_filter=Control.MOUSE_FILTER_IGNORE
 func _draw() -> void:
     var font=ThemeDB.fallback_font
-    draw_string(font,Vector2(0,11),"N O T E   D E N S I T Y",HORIZONTAL_ALIGNMENT_LEFT,-1,9,Color("6dc5e9"))
+    draw_string(font,Vector2(0,11),"Note density",HORIZONTAL_ALIGNMENT_LEFT,-1,10,Color("a19d95"))
     var bins: Array=[]; bins.resize(32); bins.fill(0)
     for note in notes:
         var at=clampi(int(float(note.time)/maxf(1,duration)*32),0,31); bins[at]+=1
