@@ -21,14 +21,12 @@ var look_color_pickers:Dictionary={}
 var look_color_resets:Dictionary={}
 var hit_size_input: Stepper
 var style_tiles: Dictionary = {}
-var ssrg_mode_row: PanelContainer
 var old_ssrg_ui_row: PanelContainer
 var old_ssrg_ui_switch: Switch
 var prism_type_row: PanelContainer
 var prism_type_switch: Switch
 # The SSRG highway is a fixed flat view: its style hides the angle row.
 var angle_row: PanelContainer
-var ssrg_mode_switch: Switch
 var color_pickers: Dictionary = {}
 var color_reset_buttons: Dictionary = {}
 var rail_glow_input: Stepper
@@ -520,9 +518,6 @@ func build_highway(items: VBoxContainer) -> void:
         var tile=StyleTile.new(kind); tile_row.add_child(tile); tile.custom_minimum_size=Vector2(138,136)
         tile.pressed.connect(func(): if not Action.was_dragged(tile): game.change_highway_look("style",kind))
         style_tiles[kind]=tile
-    ssrg_mode_row=row(items,"SSRG mode","SYNK songs use SSRG judging, scoring, fever and note speed, not just its look.",112)
-    ssrg_mode_switch=Switch.new(); add_control(ssrg_mode_row,ssrg_mode_switch,152)
-    connect_switch(ssrg_mode_switch,game.change_ssrg_mode)
     old_ssrg_ui_row=row(items,"OLD UI SSRG","STAYC note sprites, guide rings, judgment bar and thin edge rails.",112)
     old_ssrg_ui_switch=Switch.new();add_control(old_ssrg_ui_row,old_ssrg_ui_switch,152)
     connect_switch(old_ssrg_ui_switch,game.change_old_ssrg_ui)
@@ -680,9 +675,6 @@ func refresh() -> void:
     if hit_size_input: hit_size_input.sync_value(game.hit_size*100)
     for value in render_scale_buttons: render_scale_buttons[value].set_selected(is_equal_approx(value,game.render_scale()))
     for kind in style_tiles: style_tiles[kind].selected=kind==game.highway_style
-    if ssrg_mode_row:
-        ssrg_mode_row.visible=game.highway_style=="ssrg"
-        ssrg_mode_switch.set_pressed_no_signal(bool(game.prefs.get_value("highway","ssrg_mode",false)))
     if old_ssrg_ui_row:
         old_ssrg_ui_row.visible=game.highway_style=="ssrg"
         old_ssrg_ui_switch.set_pressed_no_signal(bool(game.prefs.get_value("highway","old_ssrg_ui",false)))

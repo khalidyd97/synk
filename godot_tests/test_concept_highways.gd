@@ -46,7 +46,7 @@ func run():
   check(is_equal_approx(inset,world.FRAME_HALF_WIDTH),"Painted frames remain outside the exact playable boundary")
   check(world.concept_theme.road_material.get_shader_parameter("artwork")==world.concept_theme.ROAD_IMAGES[style],"Road and full rail frames come from the selected image")
   check(not world.gold_nodes.any(func(n):return n.visible) and not world.neon_nodes.any(func(n):return n.visible),"Other rails never overlap the new theme")
-  check(not world.ssrg_theme.active and not game.ssrg_playable_run,"Visual theme never changes chart rules")
+  check(not world.ssrg_theme.active and not game.uses_ssrg_gameplay(),"SSRG rules never replace the visual theme")
   check(world.camera.projection==Camera3D.PROJECTION_ORTHOGONAL and game.note_travel_seconds()==expected_time,"SSRG projection and timing are unchanged")
   check(int(world.cover_material.get_shader_parameter("concept_style"))==(1 if style=="aurora" else 2),"Correct black backdrop mode is selected")
   check(game.prefs.get_value("highway","style","")==style,"Selection is saved")

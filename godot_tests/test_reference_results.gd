@@ -10,6 +10,8 @@ func run() -> void:
     AudioServer.set_bus_mute(0,true)
     var g=load("res://scenes/main.tscn").instantiate(); root.add_child(g); await process_frame
     g.set_process(false); g.stage_intro_enabled=false
+    # This history check uses SYNK's own grading; normal play uses SSRG rules.
+    g.ssrg_rules_everywhere=false
     var n=SynkChart.note(2,4,"hold"); n.duration=1; n.checkpoints=[.5]
     g.start_game([n,SynkChart.note(4,3)])
     g.countdown=0; g.song_time=2; g.live[0].timing_error=.02; g.judge(g.live[0],.02,false)

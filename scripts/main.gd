@@ -127,17 +127,16 @@ var ssrg_presentation:Node
 var ssrg_screens:Control
 var ssrg_playable_run = false
 var ssrg_lane_count = 13
-# A SYNK song played with SSRG rules ("SSRG mode" switch on the SSRG highway style).
+# A SYNK song played with SSRG rules. Every SYNK play run uses them, on every highway style;
+# the editor and practice keep SYNK's own rules.
 var ssrg_forced_run = false
+var ssrg_rules_everywhere = true  # tests of SYNK's own rules turn this off
 func forces_ssrg_mode() -> bool:
-	return highway_style=="ssrg" and bool(prefs.get_value("highway","ssrg_mode",false))
-func change_ssrg_mode(on: bool) -> void:
-	prefs.set_value("highway","ssrg_mode",on); prefs.save("user://preferences.cfg")
-	if settings_panel: settings_panel.refresh()
+	return ssrg_rules_everywhere
 # The SSRG look: imported SSRG runs, and SYNK songs played with the "ssrg" highway style.
-# SSRG judging and scoring rules stay with ssrg_playable_run.
+# SSRG judging and scoring rules follow ssrg_playable_run, so other styles keep their own look.
 func uses_ssrg_gameplay() -> bool:
-	return (ssrg_playable_run or (highway_style=="ssrg" and (mode in ["play","paused"] or highway_preview))) and not uses_recorder_colors()
+	return ((ssrg_playable_run and not ssrg_forced_run) or (highway_style=="ssrg" and (mode in ["play","paused"] or highway_preview))) and not uses_recorder_colors()
 func old_ssrg_ui() -> bool:
 	return uses_ssrg_gameplay() and bool(prefs.get_value("highway","old_ssrg_ui",false))
 func prism_type_enabled() -> bool:
@@ -1307,7 +1306,7 @@ func warm_hud_text() -> void:
 func start_game(notes: Array,automated: bool = false,section: String = "",is_practice: bool=false) -> void:
 	# SSRG mode: the SYNK song is judged, scored and sped like an imported SSRG run.
 	if (not ssrg_playable_run or ssrg_forced_run) and forces_ssrg_mode() and mode!="editor" and not is_practice:
-		ssrg_playable_run=true; ssrg_forced_run=true; ssrg_lane_count=13; ssrg_playable_previous_style="ssrg"
+		ssrg_playable_run=true; ssrg_forced_run=true; ssrg_lane_count=13; ssrg_playable_previous_style=highway_style
 	# Mirror and other note modifiers apply to real runs; a replay reuses the exact notes it recorded.
 	if extras:
 		if not extras.replay_pending and not automated: notes=extras.apply_mods(notes)

@@ -32,7 +32,8 @@ func run() -> void:
 	x.settings.sudden=false
 	# Chords, judging hooks, miss flash, milestone, touch assist
 	var chart=[SynkChart.note(10,2),SynkChart.note(10,6),SynkChart.note(11,4),SynkChart.note(12,1)]
-	g.start_game(chart,false); g.countdown=0; g.song_time=10
+	# SYNK's own leniency (touch assist, lenient ends) now applies to practice; play uses SSRG rules.
+	g.start_game(chart,false,"",true); g.countdown=0; g.song_time=10
 	check(w.chords.is_empty(),"Gameplay draws no chord lines (recorder only)")
 	tap_at(g,1,2); tap_at(g,2,6)
 	check(g.combo==2 and g.judgment_counts.PERFECT==2,"Chord taps are judged")
@@ -43,12 +44,12 @@ func run() -> void:
 	g.combo=50; x.on_judged(g.live[0],"PERFECT",50); check(g.combo_view.caption=="50 COMBO" and g.combo_view.flare>0,"Combo milestones flare the combo display")
 	# Lenient hold and slide ends
 	var hold=SynkChart.note(20,4,"hold"); hold.duration=2.0
-	g.start_game([hold],false); g.countdown=0; g.song_time=20.0
+	g.start_game([hold],false,"",true); g.countdown=0; g.song_time=20.0
 	var hp=w.camera.unproject_position(Vector3(w.lane_x(4),.035,0))/Vector2(g.field.viewport.size)
 	g.pointer_event(40,hp,true,false,false)
 	g.song_time=21.65; g.pointer_event(40,hp,false,true,false)
 	check(g.judgment_counts.MISS==0 and g.judgment_counts.PERFECT==2,"Releasing a hold 0.35 s early still completes it as PERFECT")
-	g.start_game([hold],false); g.countdown=0; g.song_time=20.0
+	g.start_game([hold],false,"",true); g.countdown=0; g.song_time=20.0
 	g.pointer_event(41,hp,true,false,false); g.song_time=20.8; g.pointer_event(41,hp,false,true,false)
 	check(g.judgment_counts.MISS==1,"Letting go far too early is still a miss")
 	# Shared note materials and copy-on-write
@@ -91,12 +92,14 @@ func run() -> void:
 	var run_chart=[SynkChart.note(5,3),SynkChart.note(6,7),SynkChart.note(7,1)]
 	g.start_game(run_chart,false); g.countdown=0
 	for i in 3:
-		g.song_time=5.0+i+.02; tap_at(g,10+i,float([3,7,1][i]))
+		# SSRG rules judge each touch batch in the gameplay update, as on every frame in play.
+		g.song_time=5.0+i+.02; tap_at(g,10+i,float([3,7,1][i])); g.update_game()
 	x.finish_run(); var real_score=g.score
 	check(x.has_replay() and x.last_replay.events.size()==6,"Real touches are recorded")
+	check(real_score>0 and g.judgment_counts.PERFECT==3,"Taps on time are judged PERFECT under SSRG rules")
 	x.start_replay(); g.countdown=0
 	for i in 3:
-		g.song_time=5.0+i+.05; x.step_replay()
+		g.song_time=5.0+i+.05; x.step_replay(); g.update_game()
 	check(g.score==real_score and g.judgment_counts.PERFECT==3,"Replay reproduces the same result")
 	tap_at(g,99,3); check(true,"Real touches are ignored during a replay")
 	x.replaying=false

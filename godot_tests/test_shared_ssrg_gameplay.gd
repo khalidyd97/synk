@@ -1,4 +1,5 @@
 extends SceneTree
+const SsrgRulesRef = preload("res://scripts/ssrg_input_rules.gd")
 var failures=0
 func check(ok: bool,label: String) -> void:
 	if not ok: failures+=1; push_error(label)
@@ -10,18 +11,30 @@ func run() -> void:
 	var slide=SynkChart.note(4,2,"slide"); slide.duration=1; slide.end_lane=7
 	slide.path=[{"offset":0.0,"lane":2.0},{"offset":.5,"lane":6.0},{"offset":1.0,"lane":7.0}]
 	var notes=[SynkChart.note(3,4),slide]
+	game.prefs.set_value("ssrg","speed_value",3.0)
+	game.highway_style="gold"
 	game.start_game(notes,true)
 	game.countdown=0; game.song_time=2.0
 	var world=game.field.world
-	check(not game.ssrg_playable_run,"Normal song does not become an SSRG import")
-	check(not game.uses_ssrg_gameplay() and not world.ssrg_theme.active,"Normal play uses SYNK OG stage")
-	check(not game.live[1].note.get("ssrg_path",false),"Normal slides retain OG curves")
+	# Every SYNK song plays with SSRG rules, on every highway style, and keeps that style's look.
+	check(game.ssrg_playable_run and game.ssrg_forced_run,"SYNK songs on Gold use SSRG rules")
+	check(not game.uses_ssrg_gameplay() and not world.ssrg_theme.active,"Gold keeps its own stage under SSRG rules")
+	check(game.live[1].note.get("ssrg_path",false),"SSRG rules use straight slide connectors on Gold")
 	check(not slide.has("ssrg_path"),"Source chart remains intact")
-	check(is_equal_approx(game.note_travel_seconds(),3.5),"Normal play uses the SSRG approach mechanism")
+	check(is_equal_approx(game.note_travel_seconds(),3.5/game.ssrg_note_speed()),"SSRG rules use the SSRG note speed on Gold")
+	check(game.hit_good_window()==SsrgRulesRef.good_window(),"Gold uses SSRG timing windows")
+	check(game.ssrg_presentation.active,"SSRG scoring stays active on Gold")
+	game.ssrg_presentation._process(.016)
+	check(game.ssrg_presentation.active,"SSRG scoring is not switched off by the Gold look")
+	# SSRG touch zones are measured in world space, so lanes line up on every highway.
+	check(game.ssrg_touch_lane(Vector3(world.note_x(6.0),.035,0.0),6.0),"Touching a lane's note on Gold hits it under SSRG rules")
+	check(not game.ssrg_touch_lane(Vector3(world.note_x(9.0),.035,0.0),6.0),"Touching another lane on Gold misses under SSRG rules")
 	game.paused_mode="play"; game.set_mode("paused")
-	check(not game.uses_ssrg_gameplay(),"Normal pause retains OG stage")
-	game.set_mode("menu")
-	game.prefs.set_value("ssrg","speed_value",3.0)
+	check(not game.uses_ssrg_gameplay() and game.ssrg_playable_run,"Pause keeps Gold's stage and SSRG rules")
+	var gold_results={}; game.begin_finish(gold_results)
+	check(not gold_results.ssrg,"SSRG rules on SYNK songs keep SYNK's results screen")
+	game.finishing=false; game.set_mode("menu")
+	check(not game.ssrg_playable_run and game.highway_style=="gold","Leaving play keeps the Gold style")
 	game.ssrg_playable_run=true
 	game.start_game(notes,true)
 	game.countdown=0; game.song_time=2.0
@@ -72,33 +85,23 @@ func run() -> void:
 	check(is_equal_approx(game.note_travel_seconds(),2.6),"Recorder travel remains unchanged")
 	game.set_mode("menu")
 	check(not game.uses_ssrg_gameplay(),"Menu does not inherit gameplay presentation")
-	# The "ssrg" highway style: SYNK songs draw on the SSRG stage with SYNK's own rules.
+	# The "ssrg" highway style: SYNK songs draw on the SSRG stage with SSRG rules.
 	game.ssrg_playable_run=false; game.highway_style="ssrg"
 	check(not game.uses_ssrg_gameplay(),"SSRG style stays out of the menus")
 	game.start_game(notes,true)
 	game.countdown=0; game.song_time=2.0
 	check(game.uses_ssrg_gameplay() and world.ssrg_theme.active,"SSRG style plays SYNK songs on the SSRG stage")
-	check(not game.ssrg_playable_run and not game.live[1].note.get("ssrg_path",false),"SSRG style keeps SYNK rules and curved slides")
-	check(is_equal_approx(game.note_travel_seconds(),3.5/game.note_speed),"SSRG style follows SYNK's note speed")
-	game.set_mode("menu")
-	check(game.highway_style=="ssrg" and not world.ssrg_theme.active,"Leaving play keeps the style and drops the stage")
-	# SSRG mode: the switch makes SYNK songs use SSRG rules too, then SYNK's own results.
-	var saved_mode=game.prefs.get_value("highway","ssrg_mode",false)
-	game.prefs.set_value("highway","ssrg_mode",true)
-	game.start_game(notes,true)
-	game.countdown=0; game.song_time=2.0
-	check(game.ssrg_playable_run and game.ssrg_forced_run,"SSRG mode plays the SYNK song with SSRG rules")
-	check(is_equal_approx(game.note_travel_seconds(),3.5/game.ssrg_note_speed()),"SSRG mode uses the SSRG note speed")
-	check(game.live[1].note.get("ssrg_path",false),"SSRG mode uses straight SSRG connectors")
+	check(game.ssrg_playable_run and game.ssrg_forced_run,"SSRG style plays SYNK songs with SSRG rules")
+	check(is_equal_approx(game.note_travel_seconds(),3.5/game.ssrg_note_speed()),"SSRG style uses the SSRG note speed")
+	check(game.live[1].note.get("ssrg_path",false),"SSRG style uses straight SSRG connectors")
 	var results={}; game.begin_finish(results)
-	check(not results.ssrg,"SSRG mode keeps SYNK's results screen")
+	check(not results.ssrg,"SSRG style keeps SYNK's results screen")
 	game.finishing=false; game.set_mode("menu")
-	check(not game.ssrg_playable_run and not game.ssrg_forced_run and game.highway_style=="ssrg","Leaving SSRG mode restores the SSRG style")
-	game.highway_style="gold"
-	game.start_game(notes,true)
-	check(not game.ssrg_playable_run,"SSRG mode needs the SSRG style")
+	check(not game.ssrg_playable_run and not game.ssrg_forced_run and game.highway_style=="ssrg" and not world.ssrg_theme.active,"Leaving play keeps the SSRG style and drops the stage")
+	# Practice keeps SYNK's own rules.
+	game.start_game(notes,true,"",true)
+	check(not game.ssrg_playable_run,"Practice keeps SYNK rules")
 	game.set_mode("menu")
-	game.prefs.set_value("highway","ssrg_mode",saved_mode); game.prefs.save("user://preferences.cfg")
 	game.queue_free(); await process_frame
 	print("Shared SSRG gameplay failures: ",failures)
 	quit(failures)

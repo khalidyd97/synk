@@ -83,8 +83,10 @@ func threshold() -> float:
 func gauge_fraction() -> float:
 	return clampf(life/100.0,0,1) if state==0 else clampf(gauge/threshold(),0,1)
 func _process(delta:float) -> void:
-	if not game.uses_ssrg_gameplay():
+	# SSRG score and fever rules run on every highway; only the SSRG stage draws them.
+	if not game.ssrg_playable_run:
 		active=false;return
+	if not game.uses_ssrg_gameplay():return
 	if not active or game.mode!="play" or game.countdown>0 or game.resume_countdown>0 or game.finishing:return
 	event_age+=delta
 	if cards.size()>1:

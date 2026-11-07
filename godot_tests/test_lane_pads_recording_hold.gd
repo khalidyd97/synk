@@ -37,6 +37,7 @@ func run() -> void:
                 g.start_game([SynkChart.note(1,lane)],false)
                 g.countdown=0; g.song_time=1
                 g.pointer_event(1,screen_point(g,w.lane_x(lane+fraction),z),true,false,false)
+                g.update_game()  # SSRG rules judge each touch batch in the gameplay update
                 check(g.live[0].done and g.judgment_counts.PERFECT==1,"Gameplay judges taps throughout each entire pad")
     g.set_mode("editor"); g.document.load_notes([]); g.cursor=0; g.record_here()
     g.countdown=0; g.song_time=1; g.audio.stop()
