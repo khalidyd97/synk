@@ -2,9 +2,9 @@ extends Control
 # Song details, opened from the song browser: title, artist, album, track number, album art
 # and the gameplay background shown behind the highway. Nothing is written until SAVE.
 const Action = preload("res://scripts/settings_action.gd")
-const TEXT = Color("eef0ff")
-const MUTED = Color("a7aac6")
-const ACCENT = Color("ff7a59")
+const TEXT = Color("f4f1ea")
+const MUTED = Color("a19d95")
+const ACCENT = Color("ff8a5b")
 
 var game: Control
 var song_id = ""
@@ -32,7 +32,7 @@ const TOKEN_FILE="user://recognition.cfg"
 var pending_cover: Variant = null
 var pending_background: Variant = null
 
-func style(fill: Color=Color("101010"),edge: Color=Color("2c2d44"),radius: int=22) -> StyleBoxFlat:
+func style(fill: Color=Color(1,1,1,.05),edge: Color=Color("34353a"),radius: int=22) -> StyleBoxFlat:
 	var box=StyleBoxFlat.new(); box.bg_color=fill; box.border_color=edge; box.set_corner_radius_all(radius); box.set_border_width_all(1); return box
 func place(node: Control,parent: Control,x: float,y: float,w: float,h: float) -> Control:
 	parent.add_child(node); node.position=Vector2(x,y); node.size=Vector2(w,h); return node
@@ -56,13 +56,12 @@ func _ready() -> void:
 	mat.set_shader_parameter("ambience",Color(0.116,0.116,0.116))
 	preload("res://scripts/screen_backdrop.gd").video(self,0.08,.5)  # magenta stage
 	canvas=Control.new(); add_child(canvas); canvas.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	var theme_local=Theme.new(); theme_local.default_font=ThemeDB.fallback_font; canvas.theme=theme_local
-	for type in ["Label","Button","LineEdit"]: theme_local.set_font("font",type,ThemeDB.fallback_font)
+	canvas.theme=preload("res://scripts/game_theme.gd").arcade()
 	resized.connect(layout); game.safe_area_changed.connect(layout); layout()
 	var back=action(canvas,"‹",48,36,84,84,cancel); back.caption_size=34
-	label(canvas,"S O N G   D E T A I L S",144,33,600,24,14,ACCENT)
+	label(canvas,"",144,33,600,24,14,ACCENT)
 	heading=label(canvas,"",144,57,900,52,40)
-	var bold=FontVariation.new(); bold.base_font=ThemeDB.fallback_font; bold.variation_embolden=.5
+	var bold=FontVariation.new(); bold.base_font=preload("res://scripts/arcade_style.gd").HEAD; bold.variation_embolden=.5
 	heading.add_theme_font_override("font",bold)
 	# Text details.
 	var info=place(Panel.new(),canvas,48,150,620,520); info.add_theme_stylebox_override("panel",style())
@@ -75,7 +74,7 @@ func _ready() -> void:
 		label(info,rows[i][1],28,y,560,26,17,MUTED)
 		var input=LineEdit.new(); place(input,info,28,y+30,564 if i<3 else 200,62)
 		input.placeholder_text=rows[i][2]; input.add_theme_font_size_override("font_size",22)
-		var box=style(Color("0d0d0d"),Color("302a42"),15); box.content_margin_left=18; box.content_margin_right=14
+		var box=style(Color(1,1,1,.05),Color("34353a"),15); box.content_margin_left=18; box.content_margin_right=14
 		input.add_theme_stylebox_override("normal",box)
 		var focus=box.duplicate(); focus.border_color=ACCENT; input.add_theme_stylebox_override("focus",focus)
 		input.text_submitted.connect(func(_text): input.release_focus())
@@ -91,7 +90,7 @@ func _ready() -> void:
 	var art=place(Panel.new(),canvas,696,150,712,520); art.add_theme_stylebox_override("panel",style())
 	label(art,"Artwork",28,20,640,40,26)
 	label(art,"Album art",28,78,300,26,17,MUTED)
-	var cover_frame=place(Panel.new(),art,28,110,180,180); cover_frame.add_theme_stylebox_override("panel",style(Color("0d0d0d"),Color("302a42"),18))
+	var cover_frame=place(Panel.new(),art,28,110,180,180); cover_frame.add_theme_stylebox_override("panel",style(Color(1,1,1,.05),Color("34353a"),18))
 	cover_frame.clip_contents=true
 	cover_preview=TextureRect.new(); place(cover_preview,cover_frame,0,0,180,180)
 	cover_preview.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; cover_preview.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED
@@ -101,7 +100,7 @@ func _ready() -> void:
 	cover_note=label(art,"",230,186,450,100,15,MUTED); cover_note.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	cover_note.vertical_alignment=VERTICAL_ALIGNMENT_TOP
 	label(art,"Gameplay background",28,306,400,26,17,MUTED)
-	var bg_frame=place(Panel.new(),art,28,338,288,162); bg_frame.add_theme_stylebox_override("panel",style(Color("0d0d0d"),Color("302a42"),14))
+	var bg_frame=place(Panel.new(),art,28,338,288,162); bg_frame.add_theme_stylebox_override("panel",style(Color(1,1,1,.05),Color("34353a"),14))
 	bg_frame.clip_contents=true
 	background_black=ColorRect.new(); place(background_black,bg_frame,1,1,286,160); background_black.color=Color.BLACK
 	background_preview=TextureRect.new(); place(background_preview,bg_frame,1,1,286,160)

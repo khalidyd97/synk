@@ -2,7 +2,7 @@ extends Control
 const CATALOG=preload("res://scripts/ssrg_game_catalog.gd")
 const Action=preload("res://scripts/settings_action.gd")
 var host:Control
-var list:VBoxContainer
+var list:HFlowContainer
 var scroll:ScrollContainer
 var search:LineEdit
 var add_dialog:ConfirmationDialog
@@ -12,17 +12,21 @@ var icon_game=""
 var message:Label
 func _ready():
  set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
- var stage=TextureRect.new();add_child(stage);stage.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
- stage.texture=preload("res://assets/lobby/ui/concert_stage_clean.png");stage.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;stage.stretch_mode=TextureRect.STRETCH_SCALE;stage.mouse_filter=Control.MOUSE_FILTER_IGNORE
- var veil=ColorRect.new();add_child(veil);veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);veil.color=Color("121116",.76);veil.mouse_filter=Control.MOUSE_FILTER_IGNORE
- host.action(self,"‹  BACK",.02,.03,.12,.12,host.close,"nav")
- var heading=host.text(self,"GAMES",.15,.025,.6,.09,34,Color("f5ecdf"));heading.add_theme_font_override("font",preload("res://assets/fonts/FiraSans-Bold.ttf"))
- host.text(self,"Select a game to see its songs.",.15,.09,.7,.14,16,Color("d6c6b4"))
- host.action(self,"+ ADD GAME",.78,.035,.98,.12,func():name_input.clear();add_dialog.popup_centered(),"primary")
+ # Album Takeover: the same soft cover-coloured light as every other menu, no stage photo.
+ var stage=ColorRect.new();add_child(stage);stage.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);stage.color=Color.WHITE;stage.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ # Bleed past the safe area so the light reaches every edge of the phone.
+ stage.offset_left=-800;stage.offset_right=800;stage.offset_top=-400;stage.offset_bottom=400
+ preload("res://scripts/background_motion.gd").attach(stage,preload("res://scripts/song_browser_background.gdshader"))
+ host.action(self,"‹  Back",.02,.03,.12,.12,host.close,"nav")
+ var heading=host.text(self,"Games",.15,.015,.6,.1,46,Color("f4f1ea"));heading.add_theme_font_override("font",preload("res://scripts/arcade_style.gd").SERIF)
+ host.text(self,"Select a game to see its songs.",.15,.09,.7,.14,16,Color("a19d95"))
+ host.action(self,"+ Add game",.78,.035,.98,.12,func():name_input.clear();add_dialog.popup_centered(),"primary")
  search=LineEdit.new();host.place(search,self,.02,.17,.98,.24);search.placeholder_text="Search games";search.clear_button_enabled=true;search.text_changed.connect(func(_value):refresh())
- scroll=ScrollContainer.new();host.place(scroll,self,.02,.27,.98,.92);scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+ scroll=ScrollContainer.new();host.place(scroll,self,.02,.28,.98,.92);scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
  preload("res://scripts/drag_scroll.gd").attach(scroll)
- list=VBoxContainer.new();scroll.add_child(list);list.size_flags_horizontal=Control.SIZE_EXPAND_FILL;list.add_theme_constant_override("separation",12)
+ # Album Takeover: games stand on a shelf as large cover tiles, not as boxed rows.
+ list=HFlowContainer.new();scroll.add_child(list);list.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+ list.add_theme_constant_override("h_separation",34);list.add_theme_constant_override("v_separation",26)
  message=host.text(self,"",.02,.94,.98,.99,14,host.MUTED)
  add_dialog=ConfirmationDialog.new();add_child(add_dialog);add_dialog.title="Add a game";add_dialog.ok_button_text="ADD GAME";add_dialog.min_size=Vector2i(440,140)
  preload("res://scripts/modal_input.gd").register(add_dialog)
@@ -37,23 +41,44 @@ func refresh():
  for entry in CATALOG.entries(host.game):
   if not needle.is_empty() and not (str(entry.name)+" "+str(entry.id)).to_lower().contains(needle):continue
   count+=1
-  var row=HBoxContainer.new();row.custom_minimum_size.y=94;list.add_child(row);row.add_theme_constant_override("separation",12)
-  var button=Button.new();row.add_child(button);button.custom_minimum_size.y=94;button.size_flags_horizontal=Control.SIZE_EXPAND_FILL;button.focus_mode=Control.FOCUS_NONE
-  button.add_theme_stylebox_override("normal",host.box(Color("19191e",.94),Color("c9a67e",.55),18))
-  button.add_theme_stylebox_override("hover",host.box(Color("28252a",.98),Color("dfbb91",.9),18))
-  button.add_theme_stylebox_override("pressed",host.box(Color("342b2b"),Color("dfbb91"),18))
-  var icon=Panel.new();button.add_child(icon);icon.position=Vector2(16,11);icon.size=Vector2(72,72);icon.mouse_filter=Control.MOUSE_FILTER_IGNORE;icon.add_theme_stylebox_override("panel",host.box(Color("29262a"),Color("b79978",.6),16))
-  var path=CATALOG.icon_path(entry.id)
-  if FileAccess.file_exists(path):
-   var texture=TextureRect.new();icon.add_child(texture);texture.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);texture.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;texture.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;texture.texture=ImageTexture.create_from_image(Image.load_from_file(ProjectSettings.globalize_path(path)));texture.mouse_filter=Control.MOUSE_FILTER_IGNORE
-  else:
-   var badge=Label.new();icon.add_child(badge);badge.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);badge.text=entry.badge;badge.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER;badge.vertical_alignment=VERTICAL_ALIGNMENT_CENTER;badge.add_theme_font_size_override("font_size",18 if badge.text.length()>3 else 24);badge.add_theme_color_override("font_color",Color("e9d2b5"));badge.mouse_filter=Control.MOUSE_FILTER_IGNORE
-  var title=Label.new();button.add_child(title);title.position=Vector2(112,14);title.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE);title.offset_left=112;title.offset_right=-40;title.offset_top=14;title.offset_bottom=48;title.text=entry.name;title.add_theme_font_size_override("font_size",24);title.add_theme_color_override("font_color",Color("f5ecdf"));title.mouse_filter=Control.MOUSE_FILTER_IGNORE;title.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
-  var info=Label.new();button.add_child(info);info.position=Vector2(112,54);info.text="%d song%s   ›" % [int(entry.count),"" if int(entry.count)==1 else "s"];info.add_theme_color_override("font_color",Color("bfb1a6"));info.mouse_filter=Control.MOUSE_FILTER_IGNORE
-  button.pressed.connect(func():if not preload("res://scripts/drag_scroll.gd").was_dragged(scroll):host.open_game(entry.id))
-  var edit=Action.new();row.add_child(edit);edit.text="ICON";edit.caption_size=15;edit.custom_minimum_size=Vector2(90,94)
-  edit.pressed.connect(func():if not Action.was_dragged(edit):choose_icon(entry.id))
- message.text="%d games  ·  Add a game or choose ICON to use your own artwork." % count
+  list.add_child(tile(entry))
+ message.text="%d game%s  ·  Add a game, or use Icon on a tile to set its artwork." % [count,"" if count==1 else "s"]
+# One game: its artwork (or a colour wash with its initials in the serif), the name below,
+# and how many songs it holds. Hovering lifts the tile a little.
+func tile(entry:Dictionary) -> Control:
+ var A=preload("res://scripts/arcade_style.gd")
+ var side=320.0
+ var holder=Control.new();holder.custom_minimum_size=Vector2(side,side+96)
+ var button=Button.new();holder.add_child(button);button.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);button.focus_mode=Control.FOCUS_ALL;button.flat=true
+ for state in ["normal","hover","pressed","focus","disabled"]:button.add_theme_stylebox_override(state,StyleBoxEmpty.new())
+ preload("res://scripts/ui_motion.gd").bind_button(button)
+ button.pressed.connect(func():if not preload("res://scripts/drag_scroll.gd").was_dragged(scroll):host.open_game(entry.id))
+ var art=TextureRect.new();button.add_child(art);art.position=Vector2.ZERO;art.size=Vector2(side,side);art.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ art.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;art.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED
+ var path=CATALOG.icon_path(entry.id)
+ if FileAccess.file_exists(path):
+  art.texture=ImageTexture.create_from_image(Image.load_from_file(ProjectSettings.globalize_path(path)))
+ else:
+  var hue=float(posmod(str(entry.id).hash(),360))/360.0
+  var ramp=Gradient.new();ramp.set_color(0,Color.from_hsv(hue,.6,.85));ramp.set_color(1,Color.from_hsv(fmod(hue+.2,1.0),.75,.5))
+  var wash=GradientTexture2D.new();wash.gradient=ramp;wash.width=64;wash.height=64;wash.fill_from=Vector2(0,0);wash.fill_to=Vector2(1,1)
+  art.texture=wash
+  var initials=Label.new();art.add_child(initials);initials.text=str(entry.badge);initials.position=Vector2(20,side-104);initials.size=Vector2(side-40,96)
+  initials.add_theme_font_override("font",A.SERIF);initials.add_theme_font_size_override("font_size",76);initials.add_theme_color_override("font_color",Color(1,1,1,.92))
+  initials.vertical_alignment=VERTICAL_ALIGNMENT_BOTTOM;initials.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ preload("res://scripts/screen_style.gd").round_cover(art,14)
+ var shadow=Panel.new();button.add_child(shadow);button.move_child(shadow,0);shadow.position=Vector2.ZERO;shadow.size=Vector2(side,side);shadow.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ var drop=StyleBoxFlat.new();drop.bg_color=Color(0,0,0,.25);drop.set_corner_radius_all(14);drop.shadow_color=Color(0,0,0,.45);drop.shadow_size=26;drop.shadow_offset=Vector2(0,14)
+ shadow.add_theme_stylebox_override("panel",drop)
+ var title=Label.new();button.add_child(title);title.position=Vector2(2,side+12);title.size=Vector2(side-4,40);title.text=entry.name
+ title.add_theme_font_override("font",A.SERIF);title.add_theme_font_size_override("font_size",32);title.add_theme_color_override("font_color",A.TEXT)
+ title.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS;title.clip_text=true;title.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ var info=Label.new();button.add_child(info);info.position=Vector2(3,side+54);info.size=Vector2(side,28)
+ info.text="%d song%s" % [int(entry.count),"" if int(entry.count)==1 else "s"]
+ info.add_theme_font_override("font",A.mono());info.add_theme_font_size_override("font_size",17);info.add_theme_color_override("font_color",A.MUTED);info.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ var edit=Action.new();holder.add_child(edit);edit.text="Icon";edit.caption_size=14;edit.position=Vector2(side-86,12);edit.size=Vector2(74,40);edit.tooltip_text="Use your own artwork for this game"
+ edit.pressed.connect(func():if not Action.was_dragged(edit):choose_icon(entry.id))
+ return holder
 func add_game():
  var value=name_input.text.strip_edges()
  if value.is_empty():message.text="Enter a game name.";return

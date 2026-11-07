@@ -1,5 +1,5 @@
 extends CanvasLayer
-const COLORS={"info":Color("f3ece1"),"success":Color("f3ece1"),"warning":Color("ff7a59"),"error":Color("ff6b6b")}
+const COLORS={"info":Color("f4f1ea"),"success":Color("f4f1ea"),"warning":Color("ff8a5b"),"error":Color("ff6b6b")}
 const HEADINGS={"info":"NOTICE","success":"DONE","warning":"CHECK","error":"ERROR"}
 const MAX_VISIBLE=3
 var game: Control
@@ -25,7 +25,7 @@ func _ready():
     layer=120
     overlay=Control.new(); overlay.name="ToastNotifications"; add_child(overlay)
     overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    overlay.mouse_filter=Control.MOUSE_FILTER_IGNORE; overlay.theme=game.ui.theme
+    overlay.mouse_filter=Control.MOUSE_FILTER_IGNORE; overlay.theme=preload("res://scripts/game_theme.gd").arcade()
     set_process(false)
 
 func severity(message: String) -> String:
@@ -52,9 +52,10 @@ func notify(message: String,kind: String="auto",seconds: float=-1.0):
     var card=PanelContainer.new(); overlay.add_child(card); card.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var tint: Color=COLORS[kind]
     # A soft graphite bubble; the icon carries the message's colour.
-    var style=StyleBoxFlat.new(); style.bg_color=Color("2a2830")
-    style.border_color=Color(1,1,1,.07); style.set_border_width_all(1)
-    style.set_corner_radius_all(20); style.shadow_color=Color(0,0,0,.45); style.shadow_size=16; style.shadow_offset=Vector2(0,6)
+    # Signal Arcade: a slanted dark plate edged in the message's colour.
+    # Album Takeover: a dark rounded slip with a soft shadow; only the icon carries colour.
+    var style=StyleBoxFlat.new(); style.bg_color=Color("1c1d21",.97); style.set_corner_radius_all(22); style.anti_aliasing=true
+    style.shadow_color=Color(0,0,0,.45); style.shadow_size=26; style.shadow_offset=Vector2(0,10)
     style.content_margin_left=16; style.content_margin_right=14; style.content_margin_top=14; style.content_margin_bottom=10
     card.add_theme_stylebox_override("panel",style)
     var column=VBoxContainer.new(); card.add_child(column); column.mouse_filter=Control.MOUSE_FILTER_IGNORE
@@ -69,13 +70,14 @@ func notify(message: String,kind: String="auto",seconds: float=-1.0):
     heading.add_theme_font_size_override("font_size",13); heading.add_theme_color_override("font_color",tint)
     heading.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var body=Label.new(); words.add_child(body); body.text=message; body.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
-    body.add_theme_font_size_override("font_size",20); body.add_theme_color_override("font_color",Color("f2efe9"))
+    body.add_theme_font_size_override("font_size",20); body.add_theme_color_override("font_color",Color("f4f1ea"))
+    body.add_theme_font_override("font",preload("res://scripts/arcade_style.gd").mono())
     body.custom_minimum_size.y=25; body.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var close=preload("res://scripts/settings_action.gd").new(); row.add_child(close)
     close.text="×"; close.caption_size=26; close.custom_minimum_size=Vector2(44,44); close.tooltip_text="Dismiss notification"
     var timer_track=Control.new(); column.add_child(timer_track); timer_track.custom_minimum_size.y=3
     timer_track.mouse_filter=Control.MOUSE_FILTER_IGNORE
-    var progress=ColorRect.new(); timer_track.add_child(progress); progress.color=Color(tint,.35)
+    var progress=ColorRect.new(); timer_track.add_child(progress); progress.color=Color(1,1,1,.12)
     progress.mouse_filter=Control.MOUSE_FILTER_IGNORE; progress.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     var item={"card":card,"message":message,"kind":kind,"duration":duration,"remaining":duration,"progress":progress,"hiding":false,"tween":null,"born":Engine.get_process_frames()}
     items.push_front(item); close.pressed.connect(dismiss.bind(item,true))
