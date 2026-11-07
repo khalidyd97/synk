@@ -41,7 +41,7 @@ func _draw() -> void:
     if horizontal:
         draw_horizontal(); return
     draw_rect(Rect2(Vector2.ZERO,size),Color("151515"))
-    var font=ThemeDB.fallback_font
+    var font=preload("res://scripts/arcade_style.gd").HEAD
     draw_string(font,Vector2(4,16),"ALL",HORIZONTAL_ALIGNMENT_LEFT,-1,12,Color("a5cde8"))
     var h=maxf(1,size.y-30); var length=maxf(.001,game.length()); var peak=1
     for count in bins: peak=maxi(peak,count)
@@ -64,7 +64,7 @@ func _draw() -> void:
 
 func draw_horizontal() -> void:
     draw_rect(Rect2(Vector2.ZERO,size),Color("151515"))
-    var font=ThemeDB.fallback_font
+    var font=preload("res://scripts/arcade_style.gd").HEAD
     draw_string(font,Vector2(5,size.y*.5+4),"ALL",HORIZONTAL_ALIGNMENT_LEFT,-1,12,Color("a5cde8"))
     var left=34.0;var span=maxf(1.0,size.x-42.0);var duration=maxf(.001,game.length())
     var peak=1

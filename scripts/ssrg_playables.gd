@@ -126,13 +126,15 @@ func panel(parent: Control, left: float, top: float, right: float, bottom: float
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	# The selected song's art, dimmed, behind everything (refresh_detail swaps it).
-	var base = ColorRect.new(); place(base,self,0,0,1,1); base.color = Color(0.03,0.03,0.04); base.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var base = ColorRect.new(); place(base,self,0,0,1,1); base.color = Color.WHITE; base.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Signal Arcade lane grid; the selected game's art glows faintly over it.
+	preload("res://scripts/background_motion.gd").attach(base,preload("res://scripts/song_browser_background.gdshader"))
 	backdrop = TextureRect.new(); place(backdrop,self,0,0,1,1); backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	backdrop.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; backdrop.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	backdrop.modulate = Color(1,1,1,.32)
+	backdrop.modulate = Color(1,1,1,.14)
 	backdrop_layers.append(backdrop)
 	var shade = TextureRect.new(); place(shade,self,0,0,1,1); shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var gradient = Gradient.new(); gradient.colors = PackedColorArray([Color(0.03,0.03,0.04,.55),Color(0.03,0.03,0.04,.25),Color(0.03,0.03,0.04,.92)])
+	var gradient = Gradient.new(); gradient.colors = PackedColorArray([Color(0.03,0.03,0.06,.5),Color(0.03,0.03,0.06,.05),Color(0.03,0.03,0.06,.55)])
 	gradient.offsets = PackedFloat32Array([0,.45,1])
 	var fill = GradientTexture2D.new(); fill.gradient = gradient; fill.fill_from = Vector2(0,0); fill.fill_to = Vector2(0,1)
 	shade.texture = fill; shade.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; shade.stretch_mode = TextureRect.STRETCH_SCALE
@@ -522,7 +524,7 @@ func change_backdrop(texture:Texture2D) -> void:
 	backdrop.texture=texture;backdrop.modulate=Color(1,1,1,0)
 	backdrop_layers.append(backdrop)
 	var fade=backdrop.create_tween()
-	fade.tween_property(backdrop,"modulate:a",.32,.32)
+	fade.tween_property(backdrop,"modulate:a",.14,.32)
 	backdrop.set_meta("ssrg_fade",fade)
 
 func style_row(row: Button, selected: bool) -> void:
@@ -842,7 +844,7 @@ func record_result() -> void:
 # Stacked cover cards with a play mark and a coral "+": the empty library's illustration.
 func draw_empty_art(art: Control) -> void:
 	var side = minf(art.size.x,art.size.y)*.78; var c = art.size*.5
-	for card in [[Vector2(-side*.18,side*.04),-.17,Color("2a2830")],[Vector2(side*.16,-side*.02),.14,Color("34323a")],[Vector2.ZERO,0.0,Color("f3ece1")]]:
+	for card in [[Vector2(-side*.18,side*.04),-.17,Color("2a2830")],[Vector2(side*.16,-side*.02),.14,Color("34323a")],[Vector2.ZERO,0.0,Color("3ff2ff")]]:
 		art.draw_set_transform(c+card[0],card[1],Vector2.ONE)
 		var plate = StyleBoxFlat.new(); plate.bg_color = card[2]; plate.set_corner_radius_all(roundi(side*.14))
 		art.draw_style_box(plate,Rect2(-Vector2.ONE*side*.5,Vector2.ONE*side))
@@ -850,5 +852,5 @@ func draw_empty_art(art: Control) -> void:
 	var r = side*.2
 	art.draw_colored_polygon(PackedVector2Array([c+Vector2(-r*.6,-r*.8),c+Vector2(r*.9,0),c+Vector2(-r*.6,r*.8)]),Color("1a1720"))
 	var badge = c+Vector2(side*.52,-side*.46)
-	art.draw_circle(badge,side*.12,Color("ff7a59"))
+	art.draw_circle(badge,side*.12,Color("ff3d9a"))
 	preload("res://scripts/ui_icons.gd").draw(art,"add",badge,side*.16,Color.WHITE)

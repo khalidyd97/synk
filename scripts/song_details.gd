@@ -4,7 +4,7 @@ extends Control
 const Action = preload("res://scripts/settings_action.gd")
 const TEXT = Color("eef0ff")
 const MUTED = Color("a7aac6")
-const ACCENT = Color("ff7a59")
+const ACCENT = Color("ff3d9a")
 
 var game: Control
 var song_id = ""
@@ -56,13 +56,12 @@ func _ready() -> void:
 	mat.set_shader_parameter("ambience",Color(0.116,0.116,0.116))
 	preload("res://scripts/screen_backdrop.gd").video(self,0.08,.5)  # magenta stage
 	canvas=Control.new(); add_child(canvas); canvas.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	var theme_local=Theme.new(); theme_local.default_font=ThemeDB.fallback_font; canvas.theme=theme_local
-	for type in ["Label","Button","LineEdit"]: theme_local.set_font("font",type,ThemeDB.fallback_font)
+	canvas.theme=preload("res://scripts/game_theme.gd").arcade()
 	resized.connect(layout); game.safe_area_changed.connect(layout); layout()
 	var back=action(canvas,"‹",48,36,84,84,cancel); back.caption_size=34
 	label(canvas,"S O N G   D E T A I L S",144,33,600,24,14,ACCENT)
 	heading=label(canvas,"",144,57,900,52,40)
-	var bold=FontVariation.new(); bold.base_font=ThemeDB.fallback_font; bold.variation_embolden=.5
+	var bold=FontVariation.new(); bold.base_font=preload("res://scripts/arcade_style.gd").HEAD; bold.variation_embolden=.5
 	heading.add_theme_font_override("font",bold)
 	# Text details.
 	var info=place(Panel.new(),canvas,48,150,620,520); info.add_theme_stylebox_override("panel",style())

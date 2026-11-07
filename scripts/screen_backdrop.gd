@@ -42,14 +42,12 @@ func _ready() -> void:
 		var front = ShaderMaterial.new(); front.shader = preload("res://scripts/blurred_art.gdshader"); art_front.material = front
 		front.set_shader_parameter("radius", .03); front.set_shader_parameter("edge_fade", .3)
 	else:
-		var stream = load(video_path)
-		if stream:
-			player = VideoStreamPlayer.new(); add_child(player); player.stream = stream
-			player.loop = true; player.expand = true; player.volume_db = -80; player.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			var grade = ShaderMaterial.new(); grade.shader = preload("res://scripts/video_grade.gdshader"); player.material = grade
-			# Calm menus: the footage stays a muted, dark texture behind the panels.
-			grade.set_shader_parameter("hue_shift", hue_shift); grade.set_shader_parameter("saturation", saturation * .45)
-			grade.set_shader_parameter("brightness", brightness)
+		# Signal Arcade: menu screens draw the lane-grid stage instead of stage footage.
+		var stage = ColorRect.new(); add_child(stage); stage.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		stage.mouse_filter = Control.MOUSE_FILTER_IGNORE; stage.color = Color.WHITE
+		var mat = preload("res://scripts/background_motion.gd").attach(stage, preload("res://scripts/song_browser_background.gdshader"))
+		mat.set_shader_parameter("ambience", Color.from_hsv(fposmod(.75 + hue_shift, 1.0), .7, .5))
+		return
 	shade = ColorRect.new(); add_child(shade); shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	shade.color = Color(.06, .055, .07, maxf(dim, .62)); shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	# Darker toward the bottom, where buttons and lists sit.
@@ -58,6 +56,11 @@ func _ready() -> void:
 	var ramp = Gradient.new(); ramp.set_color(0, Color(.06, .055, .07, 0)); ramp.set_color(1, Color(.06, .055, .07, .55))
 	var fall_texture = GradientTexture2D.new(); fall_texture.gradient = ramp; fall_texture.fill_from = Vector2(0, 0); fall_texture.fill_to = Vector2(0, 1)
 	fall_texture.width = 4; fall_texture.height = 64; fall.texture = fall_texture
+	# The arcade lane grid glows over the blurred cover.
+	var grid = ColorRect.new(); add_child(grid); grid.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE; grid.color = Color.WHITE
+	var grid_mat = preload("res://scripts/background_motion.gd").attach(grid, preload("res://scripts/song_browser_background.gdshader"))
+	grid_mat.set_shader_parameter("overlay", 1.0); grid_mat.set_shader_parameter("grid_strength", .8)
 	resized.connect(fit); fit()
 
 func fit() -> void:

@@ -73,19 +73,18 @@ func _ready() -> void:
     # The selected song's cover, softly blurred, behind the library.
     cover_backdrop=preload("res://scripts/screen_backdrop.gd").album_art(self,.72)
     canvas=Control.new(); add_child(canvas); canvas.mouse_filter=Control.MOUSE_FILTER_IGNORE
-    var local_theme=Theme.new(); local_theme.default_font=ThemeDB.fallback_font; canvas.theme=local_theme
-    for type in ["Label","Button","LineEdit","OptionButton","PopupMenu"]: local_theme.set_font("font",type,ThemeDB.fallback_font)
+    canvas.theme=preload("res://scripts/game_theme.gd").arcade()
     resized.connect(layout_cards); game.safe_area_changed.connect(layout_cards); layout_cards()
     button(canvas,"‹",30,18,84,84,func(): game.set_mode("menu")).caption_size=34
-    label(canvas,"C H A R T   S T U D I O",136,25,580,23,14,Color("ff7a59"))
+    label(canvas,"C H A R T   S T U D I O",136,25,580,23,14,Color("ff3d9a"))
     label(canvas,"Chart library",136,48,580,48,36)
     search=LineEdit.new(); place(search,canvas,800,18,350,80)
     search.placeholder_text="Search songs or charts"; search.add_theme_font_size_override("font_size",18)
     var style=box_style(Color("0e0e0e"),Color("34334e"),14); style.content_margin_left=18
     search.add_theme_stylebox_override("normal",style)
-    var focused=style.duplicate(); focused.border_color=Color("f3ece1"); search.add_theme_stylebox_override("focus",focused)
+    var focused=style.duplicate(); focused.border_color=Color("3ff2ff"); search.add_theme_stylebox_override("focus",focused)
     search.text_changed.connect(func(_value): refresh())
-    button(canvas,"+  IMPORT SONG",1174,18,252,80,game.choose_audio).accent=Color("f3ece1")
+    button(canvas,"+  IMPORT SONG",1174,18,252,80,game.choose_audio).accent=Color("3ff2ff")
     var strip=card(canvas,30,105,1396,64)
     var tab_data=[["all","All songs",25,138],["draft","In progress",185,150],["charted","Ready",355,110],["recent","Recent",485,115]]
     for item in tab_data:
@@ -101,13 +100,13 @@ func _ready() -> void:
     scroll.get_v_scroll_bar().custom_minimum_size.x=4
     var rail=StyleBoxFlat.new(); rail.bg_color=Color(0,0,0,0)
     scroll.get_v_scroll_bar().add_theme_stylebox_override("scroll",rail)
-    var grip=StyleBoxFlat.new(); grip.bg_color=Color(.6,.55,.8,.18); grip.set_corner_radius_all(3)
+    var grip=StyleBoxFlat.new(); grip.bg_color=Color(.6,.55,.8,.18); grip.set_corner_radius_all(mini(3,4))
     for state in ["grabber","grabber_highlight","grabber_pressed"]: scroll.get_v_scroll_bar().add_theme_stylebox_override(state,grip)
     empty=label(canvas,"No matching songs. Try another filter or import audio.",55,350,745,100,19,Color("aaa8c1"))
     empty.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART; empty.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     panel=card(canvas,850,169,576,610)
     var p=Vector2(576,610)
-    label(panel,"S E L E C T E D   S O N G",24,17,390,23,13,Color("ff7a59"),p)
+    label(panel,"S E L E C T E D   S O N G",24,17,390,23,13,Color("ff3d9a"),p)
     # Song details (title, artist, album, track, album art, gameplay background) live here only;
     # the Play browser shows the same saved details.
     var details=button(panel,"✎  DETAILS",422,8,130,46,func():
@@ -118,14 +117,14 @@ func _ready() -> void:
     title_label=label(panel,"",164,48,383,44,29,Color("f5f3ff"),p)
     artist_label=label(panel,"",164,92,383,28,16,Color("c1bbd6"),p)
     info_label=label(panel,"",164,127,383,28,14,Color("b5c4df"),p)
-    label(panel,"C H A R T   V E R S I O N S",24,188,375,30,13,Color("ff7a59"),p)
+    label(panel,"C H A R T   V E R S I O N S",24,188,375,30,13,Color("ff3d9a"),p)
     new_button=button(panel,"+ NEW",433,176,118,64,show_new_version,p); new_button.caption_size=18
     version_scroll=ScrollContainer.new(); place(version_scroll,panel,24,246,528,140,p)
     version_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
     version_scroll.scroll_deadzone=12
     var version_drag=preload("res://scripts/song_list_scroll.gd").new();version_drag.name="DragScroll";version_drag.scroll=version_scroll;version_scroll.add_child(version_drag)
     versions=VBoxContainer.new(); version_scroll.add_child(versions); versions.size_flags_horizontal=Control.SIZE_EXPAND_FILL; versions.add_theme_constant_override("separation",8)
-    chart_label=label(panel,"",24,417,262,24,13,Color("ff7a59"),p)
+    chart_label=label(panel,"",24,417,262,24,13,Color("ff3d9a"),p)
     # Saved versions of the selected level: browse and switch.
     var history=button(panel,"HISTORY",298,392,122,64,func():
         if not selected_id.is_empty(): game.open_chart_history(selected_id,selected_variant),p); history.caption_size=17
@@ -307,9 +306,9 @@ func build_level_popup() -> void:
     var dim=ColorRect.new(); fraction_place(dim,level_popup,0,0,1,1); dim.color=Color(0.006,0.006,0.006,.72); dim.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var card=Panel.new(); fraction_place(card,level_popup,.08,.08,.92,.92)
     var style=StyleBoxFlat.new(); style.bg_color=Color(.04,.04,.04,.97); style.border_color=Color(1,1,1,.12)
-    style.set_border_width_all(1); style.set_corner_radius_all(24); style.shadow_color=Color(0,0,0,.55); style.shadow_size=24
+    style.set_border_width_all(1); style.set_corner_radius_all(mini(24,4)); style.shadow_color=Color(0,0,0,.55); style.shadow_size=24
     card.add_theme_stylebox_override("panel",style)
-    fraction_label(card,"C H A R T   L E V E L",.08,.04,.92,.12,14,Color("ff7a59")).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    fraction_label(card,"C H A R T   L E V E L",.08,.04,.92,.12,14,Color("ff3d9a")).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     level_title=fraction_label(card,"",.06,.12,.94,.23,23); level_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     var choices=Control.new();fraction_place(choices,card,.07,.27,.93,.77)
     var gap=.012
@@ -371,7 +370,7 @@ func build_confirm() -> void:
     var dim=ColorRect.new(); fraction_place(dim,confirm,0,0,1,1); dim.color=Color(0.006,0.006,0.006,.72); dim.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var panel=Panel.new(); fraction_place(panel,confirm,.27,.28,.73,.72)
     var style=StyleBoxFlat.new(); style.bg_color=Color(.04,.04,.04,.97); style.border_color=Color(1,1,1,.12)
-    style.set_border_width_all(1); style.set_corner_radius_all(24); style.shadow_color=Color(0,0,0,.55); style.shadow_size=24
+    style.set_border_width_all(1); style.set_corner_radius_all(mini(24,4)); style.shadow_color=Color(0,0,0,.55); style.shadow_size=24
     panel.add_theme_stylebox_override("panel",style)
     confirm_title=fraction_label(panel,"",.06,.06,.94,.24,30); confirm_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     confirm_body=fraction_label(panel,"",.08,.24,.92,.58,18,Color("cfc6ea")); confirm_body.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER

@@ -281,10 +281,10 @@ func shell(title: String, narrow: bool = false) -> Dictionary:
 	var safe_content = game.safe_parent("SafeDialogControls", root)
 	var panel = Panel.new();game.rect(panel, safe_content, 0.55 if narrow else 0.14, 0.05, 0.98 if narrow else 0.86, 0.95)
 	var style = StyleBoxFlat.new();style.bg_color = Color(0.035, 0.035, 0.035, 0.96);style.border_color = Color(1, 1, 1, 0.1);style.set_border_width_all(1)
-	style.set_corner_radius_all(26);style.shadow_color = Color(0, 0, 0, 0.5);style.shadow_size = 24;panel.add_theme_stylebox_override("panel", style)
+	style.set_corner_radius_all(mini(26,4));style.shadow_color = Color(0, 0, 0, 0.5);style.shadow_size = 24;panel.add_theme_stylebox_override("panel", style)
 	panel.set_meta("keep_caption_size", true)
 	var plate = StyleBoxFlat.new();plate.bg_color = Color("121212");plate.border_color = Color("3e4663")
-	plate.set_border_width_all(1);plate.set_corner_radius_all(20)
+	plate.set_border_width_all(1);plate.set_corner_radius_all(mini(20,4))
 	panel.add_theme_stylebox_override("panel", plate)
 	game.label(panel, title, 0.04, 0.02, 0.76, 0.105, 26)
 	var done = Action.new();done.text = "KEEP" if narrow else "DONE";done.variant = "primary";done.caption_size = 21
@@ -305,7 +305,7 @@ func persist(name: String, value: Variant) -> void :
 func setup_group(parent: Node, title: String) -> VBoxContainer:
 	var card = PanelContainer.new();parent.add_child(card)
 	var plate = StyleBoxFlat.new();plate.bg_color = Color("171717");plate.border_color = Color("2e354d")
-	plate.set_corner_radius_all(16);plate.set_border_width_all(1)
+	plate.set_corner_radius_all(mini(16,4));plate.set_border_width_all(1)
 	for edge in ["left", "right", "top", "bottom"]: plate.set("content_margin_" + edge, 18)
 	card.add_theme_stylebox_override("panel", plate)
 	var contents = VBoxContainer.new();card.add_child(contents);contents.add_theme_constant_override("separation", 12)
@@ -355,7 +355,7 @@ func show_review() -> void :
 	var safe = game.safe_parent("SafeTakeReview", review)
 	review_panel = Panel.new();game.rect(review_panel, safe, 0.1, 0.07, 0.9, 0.95);review_panel.set_meta("keep_caption_size", true)
 	var plate = StyleBoxFlat.new();plate.bg_color = Color("121212");plate.border_color = Color("3e4663")
-	plate.set_border_width_all(1);plate.set_corner_radius_all(22);review_panel.add_theme_stylebox_override("panel", plate)
+	plate.set_border_width_all(1);plate.set_corner_radius_all(mini(22,4));review_panel.add_theme_stylebox_override("panel", plate)
 	game.label(review_panel, "TAKE REVIEW", 0.035, 0.025, 0.8, 0.1, 30)
 	game.label(review_panel, "%.2f–%.2f s · %s · %s" % [region.x, region.y, "REPLACE" if bool(config.get("replace", replace)) else "LAYER", current_pass().to_upper()], 0.035, 0.105, 0.965, 0.16, 17)
 	var left = review_column(review_panel, Rect2(0.035, 0.2, 0.445, 0.58), "TAKE SUMMARY")
@@ -395,7 +395,7 @@ func review_action(title: String, left: float, right: float, callback: Callable,
 func review_column(parent: Control, bounds: Rect2, title: String) -> VBoxContainer:
 	var panel = Panel.new();game.rect(panel, parent, bounds.position.x, bounds.position.y, bounds.end.x, bounds.end.y)
 	var plate = StyleBoxFlat.new();plate.bg_color = Color("171717");plate.border_color = Color("2e354d")
-	plate.set_border_width_all(1);plate.set_corner_radius_all(16);panel.add_theme_stylebox_override("panel", plate)
+	plate.set_border_width_all(1);plate.set_corner_radius_all(mini(16,4));panel.add_theme_stylebox_override("panel", plate)
 	var scroll = ScrollContainer.new();game.rect(scroll, panel, 0.045, 0.04, 0.955, 0.96);scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	var drag = preload("res://scripts/song_list_scroll.gd").new();drag.scroll = scroll;scroll.add_child(drag)
 	var box = VBoxContainer.new();scroll.add_child(box);box.size_flags_horizontal = Control.SIZE_EXPAND_FILL;box.add_theme_constant_override("separation", 16)

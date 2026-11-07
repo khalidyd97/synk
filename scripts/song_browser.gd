@@ -1,5 +1,6 @@
 extends Control
 const ButtonArt=preload("res://scripts/song_browser_button.gd")
+const Arcade=preload("res://scripts/arcade_style.gd")
 const Row=preload("res://scripts/song_list_row.gd")
 const Motion=preload("res://scripts/ui_motion.gd")
 const PLACEHOLDER=preload("res://assets/brand/song_placeholder.svg")
@@ -42,7 +43,9 @@ var cover_glow: Panel
 var play_tween: Tween
 
 func box_style(fill: Color,edge: Color,radius: int=20) -> StyleBoxFlat:
-    var s=StyleBoxFlat.new(); s.bg_color=fill; s.border_color=edge; s.set_corner_radius_all(radius); s.set_border_width_all(1); return s
+    # Signal Arcade: square-cut dark glass with a cyan hairline.
+    var s=StyleBoxFlat.new(); s.bg_color=Color(Arcade.NIGHT,maxf(fill.a,.85)); s.border_color=Color(Arcade.CYAN,.28)
+    s.set_border_width_all(1); s.border_width_bottom=2; return s
 func place(node: Control,parent: Control,x: float,y: float,w: float,h: float,base: Vector2=Vector2(1456,819)) -> void:
     parent.add_child(node); node.anchor_left=x/base.x; node.anchor_top=y/base.y
     node.anchor_right=(x+w)/base.x; node.anchor_bottom=(y+h)/base.y
@@ -53,8 +56,7 @@ func label(parent: Control,value: String,x: float,y: float,w: float,h: float,fon
 func button(parent: Control,value: String,x: float,y: float,w: float,h: float,callback: Callable,base: Vector2=Vector2(1456,819),primary: bool=false) -> Button:
     var n=preload("res://scripts/song_play_button.gd").new() if value.begins_with("▶") else ButtonArt.new(); n.menu_motion=true; n.text=value; n.primary=primary; n.caption_size=22; place(n,parent,x,y,w,h,base); n.pressed.connect(callback); return n
 func card(parent: Control,x: float,y: float,w: float,h: float,base: Vector2=Vector2(1456,819),radius: int=20) -> Panel:
-    var n=Panel.new(); place(n,parent,x,y,w,h,base)
-    n.add_theme_stylebox_override("panel",box_style(Color(0.041,0.041,0.041,.88),Color("2b263b"),radius)); return n
+    var n=preload("res://scripts/arcade_panel.gd").new(); place(n,parent,x,y,w,h,base); return n
 func _ready() -> void:
     mouse_filter=Control.MOUSE_FILTER_IGNORE
     background=ColorRect.new(); add_child(background); background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -64,21 +66,20 @@ func _ready() -> void:
     # Stage footage behind the list, recoloured blue for this screen.
     art_backdrop=preload("res://scripts/screen_backdrop.gd").video(self,0.25,.5)  # blue stage
     canvas=Control.new(); add_child(canvas); canvas.mouse_filter=Control.MOUSE_FILTER_IGNORE
-    var local_theme=Theme.new(); local_theme.default_font=ThemeDB.fallback_font; local_theme.default_font_size=16; canvas.theme=local_theme
-    for type in ["Label","Button","LineEdit","OptionButton","PopupMenu"]: local_theme.set_font("font",type,ThemeDB.fallback_font)
+    canvas.theme=preload("res://scripts/game_theme.gd").arcade()
     resized.connect(layout); game.safe_area_changed.connect(layout); layout()
     button(canvas,"‹",48,23,76,76,lobby.show_gateway).caption_size=32
-    label(canvas,"S E L E C T   A   S O N G",140,28,600,22,14,Color("ff7a59"))
-    var heading=label(canvas,"Choose your track",140,52,700,42,34)
-    var bold=FontVariation.new(); bold.base_font=ThemeDB.fallback_font; bold.variation_embolden=.5
-    heading.add_theme_font_override("font",bold)
+    label(canvas,"S E L E C T   A   S O N G",140,28,600,22,14,Arcade.MAGENTA)
+    var heading=label(canvas,"SELECT TRACK",140,52,700,42,34)
+    var bold=Arcade.HEAD
+    heading.add_theme_font_override("font",bold); heading.add_theme_font_size_override("font_size",40)
     search=LineEdit.new(); place(search,canvas,1084,23,324,76)
     search.placeholder_text="⌕   Search songs or artists"; search.add_theme_font_size_override("font_size",19)
     var s=box_style(Color("0d0d0d"),Color("302a42"),15); s.content_margin_left=18; s.content_margin_right=14
     search.add_theme_stylebox_override("normal",s)
-    var focus=s.duplicate(); focus.border_color=Color("f3ece1"); search.add_theme_stylebox_override("focus",focus)
+    var focus=s.duplicate(); focus.border_color=Arcade.MAGENTA; search.add_theme_stylebox_override("focus",focus)
     search.text_changed.connect(func(_text): lobby.refresh_tracks())
-    var gear=preload("res://scripts/gear_button.gd").new(); gear.accent=Color("bcb2d4")
+    var gear=preload("res://scripts/gear_button.gd").new(); gear.accent=Arcade.CYAN
     place(gear,canvas,996,23,72,76); gear.pressed.connect(func(): game.open_lobby_settings())
     var auto=preload("res://scripts/autoplay_toggle.gd").new(); place(auto,canvas,884,23,96,76)
     auto.toggled.connect(func(enabled): lobby.auto_enabled=enabled)
@@ -87,21 +88,21 @@ func _ready() -> void:
     for item in tab_data:
         var key: String=item[0]; var n=button(canvas,item[1],item[2],96,item[3],56,func(): lobby.set_filter(key))
         n.tab=true; n.caption_size=21; tabs[key]=n
-    var rule=ColorRect.new(); place(rule,canvas,48,154,1360,1); rule.color=Color("232323"); rule.mouse_filter=Control.MOUSE_FILTER_IGNORE
+    var rule=ColorRect.new(); place(rule,canvas,48,154,1360,1); rule.color=Color(Arcade.CYAN,.25); rule.mouse_filter=Control.MOUSE_FILTER_IGNORE
     canvas.move_child(rule,canvas.get_child_count()-tabs.size()-2)
-    count=label(canvas,"",1250,106,158,28,13,Color("aaa2bf")); count.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
+    count=label(canvas,"",1250,106,158,28,13,Arcade.MUTED); count.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
     scroll=ScrollContainer.new(); place(scroll,canvas,48,168,794,615)
     scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
     scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO; scroll.scroll_deadzone=12
     var rail=StyleBoxFlat.new(); rail.bg_color=Color(0,0,0,0)
     scroll.get_v_scroll_bar().add_theme_stylebox_override("scroll",rail)
-    var grabber=StyleBoxFlat.new(); grabber.bg_color=Color(.6,.55,.8,.14); grabber.set_corner_radius_all(3)
+    var grabber=StyleBoxFlat.new(); grabber.bg_color=Color(Arcade.CYAN,.5); grabber.set_corner_radius_all(3)
     for state in ["grabber","grabber_highlight","grabber_pressed"]: scroll.get_v_scroll_bar().add_theme_stylebox_override(state,grabber)
     scroll.get_v_scroll_bar().custom_minimum_size.x=4
     var drag=preload("res://scripts/song_list_scroll.gd").new(); drag.scroll=scroll; drag.name="DragScroll"; scroll.add_child(drag)
     list=GridContainer.new(); scroll.add_child(list); list.columns=1; list.size_flags_horizontal=Control.SIZE_EXPAND_FILL
     list.add_theme_constant_override("v_separation",9)
-    empty=label(canvas,"",72,320,746,130,20,Color("aaa2bf")); empty.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    empty=label(canvas,"",72,320,746,130,20,Arcade.MUTED); empty.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     empty.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
     panel=card(canvas,882,168,526,615,Vector2(1456,819),25)
     var p=Vector2(526,615)
@@ -116,12 +117,12 @@ func _ready() -> void:
     cover=TextureRect.new(); art_holder.add_child(cover); cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     cover.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; cover.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED
     cover.mouse_filter=Control.MOUSE_FILTER_IGNORE; preload("res://scripts/screen_style.gd").round_cover(cover,22)
-    label(panel,"N O W   S E L E C T E D",192,35,305,22,13,Color("ff7a59"),p)
+    label(panel,"N O W   S E L E C T E D",192,35,305,22,13,Arcade.MAGENTA,p)
     title_label=label(panel,"",192,59,305,43,32,Color("f5f3ff"),p); title_label.add_theme_font_override("font",bold)
-    artist_label=label(panel,"",192,102,305,28,16,Color("c4bcd6"),p)
+    artist_label=label(panel,"",192,102,305,28,16,Arcade.SUBTLE,p)
     metadata=HBoxContainer.new(); place(metadata,panel,192,135,305,28,p); metadata.add_theme_constant_override("separation",7)
     bpm=chip(); duration=chip(); genre=chip()
-    label(panel,"L E V E L",29,271,146,22,12,Color("bfb5d5"),p)
+    label(panel,"L E V E L",29,271,146,22,12,Arcade.MUTED,p)
     sections=OptionButton.new(); place(sections,panel,29,191,468,64,p)
     sections.tooltip_text="Choose the full song, a verse, or the bridge"
     for key in ["full","verse1","verse2","bridge"]: sections.add_item(game.SECTION_NAMES[key])
@@ -131,7 +132,7 @@ func _ready() -> void:
     var section_style=box_style(Color("131313"),Color("2b2b2b"),18)
     section_style.content_margin_left=18; section_style.content_margin_right=18
     sections.add_theme_stylebox_override("normal",section_style)
-    var section_focus=section_style.duplicate(); section_focus.border_color=Color("f3ece1")
+    var section_focus=section_style.duplicate(); section_focus.border_color=Arcade.MAGENTA
     for state in ["hover","pressed","focus"]: sections.add_theme_stylebox_override(state,section_focus)
     preload("res://scripts/modal_input.gd").register(sections.get_popup())
     sections.get_popup().about_to_popup.connect(func():
@@ -145,13 +146,13 @@ func _ready() -> void:
     level_scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
     level_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_SHOW_NEVER
     level_row=HBoxContainer.new(); level_scroll.add_child(level_row); level_row.add_theme_constant_override("separation",9)
-    level_empty=label(panel,"No charts yet",29,300,468,80,16,Color("8f88a6"),p)
+    level_empty=label(panel,"No charts yet",29,300,468,80,16,Arcade.DIM,p)
     var best=card(panel,29,394,468,76,p,18)
-    best_label=label(best,"",17,11,330,23,12,Color("a9a0bd"),Vector2(468,76))
+    best_label=label(best,"",17,11,330,23,12,Arcade.MUTED,Vector2(468,76))
     best_value=label(best,"0",17,34,330,30,24,Color("f7f3ff"),Vector2(468,76))
-    label(best,"Rank",390,12,60,20,12,Color("aaa2bf"),Vector2(468,76)).horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
+    label(best,"Rank",390,12,60,20,12,Arcade.MUTED,Vector2(468,76)).horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
     rank_value=label(best,"—",390,34,60,30,24,Color("51d8ec"),Vector2(468,76)); rank_value.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
-    details_label=label(panel,"",29,472,468,26,13,Color("a9a0bd"),p)
+    details_label=label(panel,"",29,472,468,26,13,Arcade.MUTED,p)
     play=button(panel,"▶  PLAY",16,502,494,104,lobby.press_play,p,true)
     create=button(panel,"CREATE CHART",29,508,468,84,func():
         # Opens Chart Studio on this song and asks for the new chart's level (1-30).
@@ -162,7 +163,7 @@ func _ready() -> void:
     create.visible=false
 func chip() -> Label:
     var n=Label.new(); metadata.add_child(n); n.add_theme_font_size_override("font_size",14)
-    n.add_theme_color_override("font_color",Color("d7d1e5"))
+    n.add_theme_color_override("font_color",Arcade.SUBTLE)
     var style=box_style(Color("1a1a1a"),Color(0,0,0,0),14)
     style.content_margin_left=10; style.content_margin_right=10; style.content_margin_top=5; style.content_margin_bottom=5
     n.add_theme_stylebox_override("normal",style); return n

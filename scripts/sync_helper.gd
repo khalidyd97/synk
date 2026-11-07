@@ -109,7 +109,7 @@ func _ready() -> void:
 	ScreenStyle.glass(self,Rect2(.035,.20,.465,.75),Color("65dfff"),2)
 
 	var panel = Panel.new(); place(panel,self,.53,.2,.965,.95)
-	var style = StyleBoxFlat.new(); style.bg_color = Color(0.041,0.041,0.041,.84); style.set_corner_radius_all(22)
+	var style = StyleBoxFlat.new(); style.bg_color = Color(0.041,0.041,0.041,.84); style.set_corner_radius_all(mini(22,4))
 	style.border_color = Color(.55,.4,.9,.30); style.set_border_width_all(1)
 	panel.add_theme_stylebox_override("panel",style)
 	text(panel,"HEADSET DELAY",.07,.03,.93,.11,20,Color("bdadff"))
@@ -234,7 +234,7 @@ func draw_lane() -> void:
 		else:
 			lane.draw_rect(Rect2(center-half,y-height*.5,half*2,height),Color(color,alpha))
 			lane.draw_rect(Rect2(center-half,y-height*.5,half*2,height),Color(1,1,1,alpha*.8),false,2.0)
-	var font = ThemeDB.fallback_font
+	var font = preload("res://scripts/arcade_style.gd").HEAD
 	var hint = "TAP HERE ON EACH CLICK"
 	var width = font.get_string_size(hint,HORIZONTAL_ALIGNMENT_LEFT,-1,16).x
 	lane.draw_string(font,Vector2(center-width*.5,size_value.y*.94),hint,HORIZONTAL_ALIGNMENT_LEFT,-1,16,Color(1,1,1,.45))

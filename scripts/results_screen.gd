@@ -1,6 +1,6 @@
 extends Control
 const ButtonArt=preload("res://scripts/song_browser_button.gd")
-const JUDGMENT_COLORS={"PERFECT":Color("f3ece1"),"GREAT":Color("d9cdbb"),"GOOD":Color("ff7a59"),"MISS":Color("6d6a73")}
+const JUDGMENT_COLORS={"PERFECT":Color("3ff2ff"),"GREAT":Color("d9cdbb"),"GOOD":Color("ff3d9a"),"MISS":Color("6d6a73")}
 var game: Control
 var canvas: Control
 var cover_backdrop: Control
@@ -54,7 +54,7 @@ func label(parent: Control,value: String,x: float,y: float,w: float,h: float,fon
     n.add_theme_font_size_override("font_size",roundi(font_size*1.15) if font_size<=30 else font_size); n.add_theme_color_override("font_color",tint)
     n.mouse_filter=Control.MOUSE_FILTER_IGNORE; n.clip_text=true; n.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
     if bold:
-        var f=FontVariation.new(); f.base_font=ThemeDB.fallback_font; f.variation_embolden=.6; n.add_theme_font_override("font",f)
+        var f=FontVariation.new(); f.base_font=preload("res://scripts/arcade_style.gd").HEAD; f.variation_embolden=.6; n.add_theme_font_override("font",f)
     return n
 func panel(parent: Control,x: float,y: float,w: float,h: float,base: Vector2=Vector2(2048,1152)) -> Panel:
     var n=Panel.new(); place(n,parent,x,y,w,h,base)
@@ -69,15 +69,13 @@ func _ready() -> void:
     var mat=preload("res://scripts/background_motion.gd").attach(background,preload("res://scripts/song_browser_background.gdshader"))
     cover_backdrop=preload("res://scripts/screen_backdrop.gd").album_art(self,.72)  # the song's own cover, blurred
     canvas=Control.new(); add_child(canvas); canvas.mouse_filter=Control.MOUSE_FILTER_IGNORE
-    var theme_local=Theme.new(); theme_local.default_font=ThemeDB.fallback_font; theme_local.default_font_size=20
-    for type in ["Label","Button"]: theme_local.set_font("font",type,ThemeDB.fallback_font)
-    canvas.theme=theme_local; resized.connect(layout); game.safe_area_changed.connect(layout); layout()
+    canvas.theme=preload("res://scripts/game_theme.gd").arcade(); resized.connect(layout); game.safe_area_changed.connect(layout); layout()
     card=Control.new(); place(card,canvas,68,51,137,137)
     card.anchor_right=card.anchor_left; card.anchor_bottom=card.anchor_top; card.offset_right=137; card.offset_bottom=137
     card_art=TextureRect.new(); card.add_child(card_art); card_art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     card_art.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; card_art.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED
     card_art.mouse_filter=Control.MOUSE_FILTER_IGNORE; preload("res://scripts/screen_style.gd").round_cover(card_art,27)
-    completion_label=label(canvas,"S O N G   C O M P L E T E",236,51,1050,31,18,Color("ff7a59"))
+    completion_label=label(canvas,"S O N G   C O M P L E T E",236,51,1050,31,18,Color("ff3d9a"))
     song_title=label(canvas,"",236,80,1500,68,52,Color("f3f0ff"),Vector2(2048,1152),true)
     song_meta=label(canvas,"",236,149,390,36,23,Color("bcb4d2"))
     difficulty_label=label(canvas,"",644,149,110,42,20,Color("e8f8ff"))
@@ -99,12 +97,12 @@ func _ready() -> void:
     ring_accuracy=label(ring,"",70,276,260,55,30,Color("6b6258"),Vector2(400,400),true)
     ring_accuracy.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     best_badge=label(canvas,"NEW BEST!",552,280,168,48,20,Color.WHITE)
-    var badge=style(Color("ff7a59"),Color(0,0,0,0),24)
+    var badge=style(Color("ff3d9a"),Color(0,0,0,0),24)
     best_badge.add_theme_stylebox_override("normal",badge); best_badge.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; best_badge.rotation=.12
     label(canvas,"S C O R E",275,733,380,36,20,Color("a8a0c2")).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     score_label=label(canvas,"0",170,776,590,98,86,Color("fbfaff"),Vector2(2048,1152),true)
     score_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-    note_label=label(canvas,"",150,891,630,47,22,Color("ff7a59")); note_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    note_label=label(canvas,"",150,891,630,47,22,Color("ff3d9a")); note_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     detail_panel=panel(canvas,922,225,1058,753)
     var p=Vector2(1058,753)
     var combo=panel(detail_panel,44,41,311,150,p)
@@ -280,8 +278,8 @@ func draw_ring() -> void:
     ring.draw_style_box(shadow,Rect2(center-Vector2.ONE*radius,Vector2.ONE*radius*2))
     ring.draw_arc(center,radius+22,0,TAU,128,Color(1,1,1,.07),10,true)
     var progress=final_accuracy/100*ease_out((elapsed-.15)/1.1)
-    if progress>0: ring.draw_arc(center,radius+22,-PI*.5,-PI*.5+TAU*progress,128,Color("ff7a59"),10,true)
-    ring.draw_circle(center,radius,Color("f3ece1"))
+    if progress>0: ring.draw_arc(center,radius+22,-PI*.5,-PI*.5+TAU*progress,128,Color("ff3d9a"),10,true)
+    ring.draw_circle(center,radius,Color("3ff2ff"))
     ring.draw_arc(center,radius-1,PI*1.1,PI*1.9,48,Color(1,1,1,.7),2,true)
 func draw_breakdown() -> void:
     var font=breakdown.get_theme_font("font"); var row=breakdown.size.y/4.0

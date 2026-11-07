@@ -2,7 +2,7 @@ extends Control
 var samples: Array=[]
 func _ready(): mouse_filter=Control.MOUSE_FILTER_IGNORE
 func _draw() -> void:
-    var font=ThemeDB.fallback_font
+    var font=preload("res://scripts/arcade_style.gd").HEAD
     if samples.is_empty():
         draw_string(font,Vector2(8,size.y*.5),"No manual timing samples",HORIZONTAL_ALIGNMENT_LEFT,-1,18,Color("a9bbd7")); return
     var mean=0.0

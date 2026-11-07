@@ -4,7 +4,7 @@ extends Control
 const Action = preload("res://scripts/settings_action.gd")
 const TEXT = Color("eef0ff")
 const MUTED = Color(0.8,0.82,0.95,.78)
-const ACCENT = Color("ff7a59")
+const ACCENT = Color("ff3d9a")
 
 var game: Control
 var note_speed_input: Stepper
@@ -71,7 +71,7 @@ class Stepper extends Control:
         readout = Label.new(); readout.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; readout.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
         readout.add_theme_font_size_override("font_size",24); readout.add_theme_color_override("font_color",TEXT)
         var value_style=StyleBoxFlat.new(); value_style.bg_color=Color("121212")
-        value_style.set_corner_radius_all(16); value_style.border_color=Color("2d3048"); value_style.set_border_width_all(1)
+        value_style.set_corner_radius_all(mini(16,4)); value_style.border_color=Color("2d3048"); value_style.set_border_width_all(1)
         readout.add_theme_stylebox_override("normal",value_style)
         for node in [minus,readout,plus]: add_child(node)
         anchor(minus,0,.24); anchor(readout,.26,.74); anchor(plus,.76,1)
@@ -128,7 +128,7 @@ class Switch extends Button:
         var caption="ON" if button_pressed else "OFF"
         draw_string(Soft.BOLD,Vector2(18,size.y*.5+6),caption,HORIZONTAL_ALIGNMENT_LEFT,-1,16,Color("8f8b94").lerp(Soft.TEXT,knob))
         var track=Rect2(size.x-79,(size.y-32)*.5,64,32)
-        var pill=StyleBoxFlat.new(); pill.set_corner_radius_all(16); pill.bg_color=Color("3a3840").lerp(Soft.CREAM,knob)
+        var pill=StyleBoxFlat.new(); pill.set_corner_radius_all(mini(16,4)); pill.bg_color=Color("3a3840").lerp(Soft.CREAM,knob)
         draw_style_box(pill,track)
         draw_circle(Vector2(track.position.x+16+knob*32,track.get_center().y),11,Color("cfcbd2").lerp(Soft.INK,knob))
 
@@ -143,9 +143,9 @@ class StyleTile extends Button:
         mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
         for state in ["normal","hover","pressed","disabled","focus","hover_pressed"]: add_theme_stylebox_override(state,StyleBoxEmpty.new())
     func _draw() -> void:
-        var box = StyleBoxFlat.new(); box.set_corner_radius_all(18)
+        var box = StyleBoxFlat.new(); box.set_corner_radius_all(mini(18,4))
         box.bg_color = Color("2a2830") if selected else Color("121212")
-        box.border_color = Color("f3ece1") if selected else Color("30364e")
+        box.border_color = Color("3ff2ff") if selected else Color("30364e")
         if is_hovered() or has_focus(): box.border_color=Color("a499e8")
         box.set_border_width_all(2 if selected else 1)
         draw_style_box(box,Rect2(Vector2.ZERO,size))
@@ -159,7 +159,7 @@ class StyleTile extends Button:
             draw_line(a,d,rail.darkened(.5),5,true);draw_line(b,c,rail.darkened(.5),5,true)
             draw_line(a,d,rail,1.5,true);draw_line(b,c,rail,1.5,true)
             draw_line(a.lerp(d,.87),b.lerp(c,.87),rail,1.5,true)
-            var font=ThemeDB.fallback_font;var title:String=preload("res://scripts/concept_highway.gd").LABELS[style_name]
+            var font=preload("res://scripts/arcade_style.gd").HEAD;var title:String=preload("res://scripts/concept_highway.gd").LABELS[style_name]
             var width=font.get_string_size(title,HORIZONTAL_ALIGNMENT_LEFT,-1,14).x
             draw_string(font,Vector2((size.x-width)*.5,size.y*.88),title,HORIZONTAL_ALIGNMENT_LEFT,-1,14,Color.WHITE)
             return
@@ -173,7 +173,7 @@ class StyleTile extends Button:
             draw_line(pa.lerp(pd,.8),pb.lerp(pc,.8),Color(1,1,1,.85),2,true)
             var note: Texture2D=preload("res://assets/ssrg/tap.png"); var nw=size.x*.26
             draw_texture_rect(note,Rect2(Vector2(size.x*.5-nw*.5,size.y*.36),Vector2(nw,nw*note.get_height()/note.get_width())),false)
-            var font=ThemeDB.fallback_font; var w=font.get_string_size("SSRG",HORIZONTAL_ALIGNMENT_LEFT,-1,18).x
+            var font=preload("res://scripts/arcade_style.gd").HEAD; var w=font.get_string_size("SSRG",HORIZONTAL_ALIGNMENT_LEFT,-1,18).x
             draw_string(font,Vector2((size.x-w)*.5,size.y*.88),"SSRG",HORIZONTAL_ALIGNMENT_LEFT,-1,18,Color.WHITE)
             return
         var top = size.y*.14; var bottom = size.y*.66
@@ -187,7 +187,7 @@ class StyleTile extends Button:
             else:
                 draw_line(rail[0],rail[1],Color(rail[2],.3),8,true)
                 draw_line(rail[0],rail[1],rail[2],2,true)
-        var font = ThemeDB.fallback_font; var caption = style_name.to_upper()
+        var font = preload("res://scripts/arcade_style.gd").HEAD; var caption = style_name.to_upper()
         var width = font.get_string_size(caption,HORIZONTAL_ALIGNMENT_LEFT,-1,18).x
         draw_string(font,Vector2((size.x-width)*.5,size.y*.88),caption,HORIZONTAL_ALIGNMENT_LEFT,-1,18,Color.WHITE if selected else Color(1,1,1,.65))
 
@@ -201,9 +201,9 @@ class ModeTile extends Button:
         mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
         for state in ["normal","hover","pressed","disabled","focus","hover_pressed"]: add_theme_stylebox_override(state,StyleBoxEmpty.new())
     func _draw() -> void:
-        var box = StyleBoxFlat.new(); box.set_corner_radius_all(18)
+        var box = StyleBoxFlat.new(); box.set_corner_radius_all(mini(18,4))
         box.bg_color = Color("2a2830") if selected else Color("121212")
-        box.border_color = Color("f3ece1") if selected else Color("30364e")
+        box.border_color = Color("3ff2ff") if selected else Color("30364e")
         if is_hovered() or has_focus(): box.border_color=Color("a499e8")
         box.set_border_width_all(2 if selected else 1)
         draw_style_box(box,Rect2(Vector2.ZERO,size))
@@ -215,10 +215,10 @@ class ModeTile extends Button:
             # A small "artwork" whose colors flow into the swatches beside it.
             var art = Rect2(center-Vector2(62,20),Vector2(40,40))
             draw_polygon(PackedVector2Array([art.position,art.position+Vector2(art.size.x,0),art.end,art.position+Vector2(0,art.size.y)]),
-                PackedColorArray([Color("ff7a59"),Color("ffd166"),Color("7b2cbf"),Color("e0457b")]))
+                PackedColorArray([Color("ff3d9a"),Color("ffd166"),Color("7b2cbf"),Color("e0457b")]))
             draw_line(center+Vector2(-14,0),center+Vector2(2,0),Color(1,1,1,.7),2,true)
-            for i in 3: draw_circle(center+Vector2(18+i*24,0),9,[Color("ff7a59"),Color("ffd166"),Color("e0457b")][i])
-        var font = ThemeDB.fallback_font; var caption = mode.to_upper()
+            for i in 3: draw_circle(center+Vector2(18+i*24,0),9,[Color("ff3d9a"),Color("ffd166"),Color("e0457b")][i])
+        var font = preload("res://scripts/arcade_style.gd").HEAD; var caption = mode.to_upper()
         var width = font.get_string_size(caption,HORIZONTAL_ALIGNMENT_LEFT,-1,18).x
         draw_string(font,Vector2((size.x-width)*.5,size.y*.86),caption,HORIZONTAL_ALIGNMENT_LEFT,-1,18,Color.WHITE if selected else Color(1,1,1,.65))
 
@@ -235,9 +235,9 @@ class ShapeTile extends Button:
         mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
         for state in ["normal","hover","pressed","disabled","focus","hover_pressed"]: add_theme_stylebox_override(state,StyleBoxEmpty.new())
     func _draw() -> void:
-        var style = StyleBoxFlat.new(); style.set_corner_radius_all(18)
+        var style = StyleBoxFlat.new(); style.set_corner_radius_all(mini(18,4))
         style.bg_color = Color("121212").lerp(Color("2a2830"),selected_amount)
-        style.border_color = Color("30364e").lerp(Color("f3ece1"),selected_amount)
+        style.border_color = Color("30364e").lerp(Color("3ff2ff"),selected_amount)
         if is_hovered() or has_focus(): style.border_color=Color("a499e8")
         style.set_border_width_all(2 if selected else 1)
         draw_style_box(style,Rect2(Vector2.ZERO,size))
@@ -254,7 +254,7 @@ class ShapeTile extends Button:
             var art: Texture2D = preload("res://assets/neon/Circle_Note_Puck_Blue.png") if puck else preload("res://assets/neon/Circle_Note_Reference.png")
             var w = size.x*(.56 if puck else .78); var dim = Vector2(w, w*art.get_height()/art.get_width())
             draw_texture_rect(art, Rect2(center-dim*.5, dim), false)
-        var font = ThemeDB.fallback_font
+        var font = preload("res://scripts/arcade_style.gd").HEAD
         var caption = shape.to_upper()
         var font_size = 18
         var width = font.get_string_size(caption,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x
@@ -353,8 +353,7 @@ func _ready() -> void:
     mat.set_shader_parameter("ambience",Color(0.116,0.116,0.116))
     preload("res://scripts/screen_backdrop.gd").video(self,0.17,.5)  # violet stage
     canvas=Control.new(); add_child(canvas); canvas.mouse_filter=Control.MOUSE_FILTER_IGNORE
-    var theme_local=Theme.new(); theme_local.default_font=ThemeDB.fallback_font; canvas.theme=theme_local
-    for type in ["Label","Button","PopupMenu"]: theme_local.set_font("font",type,ThemeDB.fallback_font)
+    canvas.theme=preload("res://scripts/game_theme.gd").arcade()
     resized.connect(layout); game.safe_area_changed.connect(layout); layout()
     back_button=action(canvas,"‹",game.close_lobby_settings); back_button.caption_size=34; back_button.position=Vector2(48,36); back_button.size=Vector2(84,84)
     var eyebrow=label(canvas,"G A M E   S E T T I N G S",12,ACCENT); eyebrow.position=Vector2(144,33); eyebrow.size=Vector2(600,24)
@@ -365,7 +364,7 @@ func _ready() -> void:
     for key in PAGE_NAMES:
         var n=action(rail,PAGE_NAMES[key],func(): show_page(key)); n.caption_size=21
         n.position=Vector2(14,y); n.size=Vector2(204,84); nav_buttons[key]=n; y+=94
-    var scope=label(rail,"GLOBAL PREFERENCES",13,Color("ff7a59")); scope.position=Vector2(22,572); scope.size=Vector2(194,24)
+    var scope=label(rail,"GLOBAL PREFERENCES",13,Color("ff3d9a")); scope.position=Vector2(22,572); scope.size=Vector2(194,24)
     var scope_hint=label(rail,"Applies across all songs\nand chart versions.",14,Color("a7aac6")); scope_hint.position=Vector2(22,601); scope_hint.size=Vector2(194,52)
     page_host=Panel.new(); place(page_host,canvas,308,136,1100,671); page_host.add_theme_stylebox_override("panel",style())
     page_title=label(page_host,"",28); page_title.position=Vector2(28,23); page_title.size=Vector2(1044,39)
@@ -574,7 +573,7 @@ class ColorChip extends Button:
         var Soft=preload("res://scripts/soft_button.gd")
         Soft.draw_plate(self,size,"quiet",1.0 if is_hovered() else 0.0,1.0 if is_pressed() else 0.0,0.0,disabled,16.0)
         var dot=Rect2(Vector2(12,(size.y-40)*.5),Vector2(40,40))
-        var face=StyleBoxFlat.new(); face.bg_color=color if not disabled else color.darkened(.5); face.set_corner_radius_all(12)
+        var face=StyleBoxFlat.new(); face.bg_color=color if not disabled else color.darkened(.5); face.set_corner_radius_all(mini(12,4))
         face.set_border_width_all(1); face.border_color=Color(1,1,1,.2)
         draw_style_box(face,dot)
         var code="#"+color.to_html(false).to_upper()

@@ -22,7 +22,7 @@ func _ready() -> void:
     cover=TextureRect.new(); add_child(cover); cover.position=Vector2(12,16); cover.size=Vector2(92,92)
     cover.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; cover.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED; cover.mouse_filter=Control.MOUSE_FILTER_IGNORE
     title_label=text_label(27,Color("f4f2ff")); subtitle=text_label(18,Color("aaaecb"))
-    status=text_label(14,Color("f3ece1")); status.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    status=text_label(14,Color("3ff2ff")); status.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     edited=text_label(14,Color("aaaecb")); edited.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
     resized.connect(layout); layout()
     button_down.connect(func(): preload("res://scripts/ui_sound.gd").play(self,"click"))
@@ -40,10 +40,10 @@ func update_entry(value: Dictionary,data: Dictionary) -> void:
     subtitle.text=entry.artist+" · "+("No charts yet" if count==0 else "%d chart version%s" % [count,"" if count==1 else "s"])
     cover.texture=library.game.lobby.cover_for(entry.id); library.game.lobby.style_cover(cover,entry.id,13)
     status.text="DRAFT" if data.draft else ("READY" if data.charted else "NEW")
-    var tint=Color("a9a5c9") if data.draft else (Color("f3ece1") if data.charted else Color("ff7a59"))
+    var tint=Color("a9a5c9") if data.draft else (Color("3ff2ff") if data.charted else Color("ff3d9a"))
     status.add_theme_color_override("font_color",tint)
     var style=StyleBoxFlat.new(); style.bg_color=Color(tint,.07); style.border_color=Color(tint,.45)
-    style.set_border_width_all(1); style.set_corner_radius_all(9); status.add_theme_stylebox_override("normal",style)
+    style.set_border_width_all(1); style.set_corner_radius_all(mini(9,4)); status.add_theme_stylebox_override("normal",style)
     edited.text=relative_time(int(data.modified))
     tooltip_text=entry.title+" · Select a chart version"
 func relative_time(at: int) -> String:
@@ -60,13 +60,13 @@ func _process(delta: float) -> void:
     hover_amount=lerpf(hover_amount,1.0 if is_hovered() or has_focus() else 0.0,1-exp(-delta*14))
     motion.advance(delta,selected or hover_amount>.01)
 func _draw() -> void:
-    var style=StyleBoxFlat.new(); style.set_corner_radius_all(18); style.set_border_width_all(1)
+    var style=StyleBoxFlat.new(); style.set_corner_radius_all(mini(18,4)); style.set_border_width_all(1)
     style.bg_color=Color("0e0e0e").lerp(Color("1a1a1a"),amount)
     style.bg_color=style.bg_color.lightened(hover_amount*.04)
-    style.border_color=Color("2a2830").lerp(Color("f3ece1"),amount*.6)
+    style.border_color=Color("2a2830").lerp(Color("3ff2ff"),amount*.6)
     style.shadow_color=Color(.05,.75,.9,.12*amount); style.shadow_size=8
     draw_style_box(style,Rect2(Vector2.ONE,size-Vector2.ONE*2))
-    motion.paint(self,Color("f3ece1"),maxf(amount*.65,hover_amount),18)
+    motion.paint(self,Color("3ff2ff"),maxf(amount*.65,hover_amount),18)
 
 # Hidden widgets stop their per-frame update (screens keep many of them alive offscreen).
 func _notification(what: int) -> void:

@@ -50,14 +50,14 @@ func action(parent: Node,value: String,l: float,t: float,r: float,b: float,callb
 func card(parent: Node,l: float,t: float,r: float,b: float) -> Panel:
     var n=Panel.new(); place(n,parent,l,t,r,b); n.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var box=StyleBoxFlat.new(); box.bg_color=Color(0.041,0.041,0.041,.88); box.border_color=Color("2b263b")
-    box.set_corner_radius_all(20); box.set_border_width_all(1); n.add_theme_stylebox_override("panel",box)
+    box.set_corner_radius_all(mini(20,4)); box.set_border_width_all(1); n.add_theme_stylebox_override("panel",box)
     return n
 func eyebrow(parent: Node,value: String,l: float,t: float,r: float,b: float) -> Label:
     var n=caption(parent," ".join(value.split("")),l,t,r,b,12); n.add_theme_color_override("font_color",CYAN)
     return n
 func field_style(n: Control) -> void:
     var box=StyleBoxFlat.new(); box.bg_color=Color("0d0d0d"); box.border_color=Color("302a42")
-    box.set_corner_radius_all(14); box.set_border_width_all(1); box.content_margin_left=14; box.content_margin_right=10
+    box.set_corner_radius_all(mini(14,4)); box.set_border_width_all(1); box.content_margin_left=14; box.content_margin_right=10
     var focus=box.duplicate(); focus.border_color=CYAN
     for state in ["normal","read_only"]: n.add_theme_stylebox_override(state,box)
     for state in ["focus","hover","pressed"]: n.add_theme_stylebox_override(state,focus)

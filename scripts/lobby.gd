@@ -1,5 +1,6 @@
 extends Control
 const UiMotion=preload("res://scripts/ui_motion.gd")
+const UiSound=preload("res://scripts/ui_sound.gd")
 const LobbyWordmark=preload("res://scripts/lobby_wordmark.gd")
 const LobbyCard=preload("res://scripts/lobby_card.gd")
 const SongBrowser=preload("res://scripts/song_browser.gd")
@@ -276,7 +277,7 @@ func lobby_card(parent: Control,x: float,y: float,w: float,h: float,icon: String
     design_rect(card,parent,x,y,w,h)
     return card
 
-var resume_label: Label
+var resume_label: Button
 var play_home_card: Button
 func home_label(parent: Control,value: String,x: float,y: float,w: float,h: float,font_size: int,color: Color,bold: bool) -> Label:
     var result=Label.new(); design_rect(result,parent,x,y,w,h); result.text=value
@@ -298,43 +299,49 @@ func refresh_home() -> void:
     play_home_card.covers=covers
     play_home_card.subtitle="%d song%s to play" % [songs.size(),"" if songs.size()==1 else "s"]
     var last: Dictionary=order[0] if not order.is_empty() and recent.has(str(order[0].id)) else {}
-    resume_label.text=("Pick up where you left off: "+display_title(str(last.get("title","")))) if not last.is_empty() else "Pick a song and play, or record your own chart."
+    if last.is_empty():
+        resume_label.label="START"; resume_label.song="Pick a song and play"
+    else:
+        resume_label.label="RESUME"; resume_label.song=display_title(str(last.get("title","")))
 
 func build_gateway() -> void:
     gateway=Control.new(); place(gateway,self,0,0,1,1)
-    # A living concert stage: depth-cut photo planes, beams, haze and a backlit crowd, all on one tempo.
-    var stage=preload("res://scripts/lobby_stage.gd").new(); stage.name="LobbyStage"
+    # Signal Arcade home: the lane grid streams toward the player, the menu sits on the
+    # judgment line as three note plates, and the wordmark's equalizer keeps the beat.
+    var stage=ColorRect.new(); stage.name="ArcadeStage"; stage.color=Color.WHITE; stage.mouse_filter=Control.MOUSE_FILTER_IGNORE
     place(stage,gateway,0,0,1,1)
-    # Home: a quiet concert-poster layout with two tactile, equal actions.
+    var stage_mat=preload("res://scripts/background_motion.gd").attach(stage,preload("res://scripts/song_browser_background.gdshader"))
+    stage_mat.set_shader_parameter("horizon",.7)
     var safe_buttons=game.safe_parent("SafeLobbyButtons",gateway)
-    var eyebrow=home_label(safe_buttons,"CHOOSE YOUR RHYTHM",630,245,660,42,22,Color("e8d9c5"),true)
-    eyebrow.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-    var logo=home_label(safe_buttons,"SYNK",530,52,860,190,172,Color("f5ecdf"),true)
-    logo.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-    logo.name="LobbyWordmark"
-    resume_label=home_label(safe_buttons,"",560,786,800,48,19,Color("d7c9b8"),false)
-    resume_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-    resume_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART; resume_label.vertical_alignment=VERTICAL_ALIGNMENT_TOP
-    var ssrg=preload("res://scripts/lobby_sprite_button.gd").new()
-    design_rect(ssrg,safe_buttons,820,695,280,66); ssrg.name="SsrgPlayablesButton"
+    var logo=preload("res://scripts/arcade_wordmark.gd").new(); logo.name="LobbyWordmark"
+    design_rect(logo,safe_buttons,560,34,800,300)
+    var line=TextureRect.new(); line.mouse_filter=Control.MOUSE_FILTER_IGNORE; design_rect(line,safe_buttons,0,640,1920,5)
+    var ramp=Gradient.new(); ramp.offsets=PackedFloat32Array([0.0,.2,.8,1.0])
+    ramp.colors=PackedColorArray([Color(0.25,.95,1,0),Color("3ff2ff"),Color("ff3d9a"),Color(1,.24,.6,0)])
+    var line_texture=GradientTexture2D.new(); line_texture.gradient=ramp; line_texture.width=256; line_texture.height=2
+    line.texture=line_texture; line.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; line.stretch_mode=TextureRect.STRETCH_SCALE
+    var Note=preload("res://scripts/arcade_note_button.gd")
+    var play=Note.new(); play.title="PLAY"; play.hot=true; play.title_size=92; play.subtitle="Songs ready"
+    design_rect(play,safe_buttons,300,352,620,276); play.name="PlayCard"; play.tooltip_text="Choose a song and play"
+    play.pressed.connect(func(): UiSound.play(self,"confirm"); show_play_browser(true))
+    var create=Note.new(); create.title="CREATE CHARTS"; create.title_size=60; create.subtitle="Build the rhythm"
+    design_rect(create,safe_buttons,960,428,520,200); create.name="CreateCard"; create.tooltip_text="Edit charts, import music, and record notes"
+    create.pressed.connect(func(): UiSound.play(self,"confirm"); game.open_editor())
+    var ssrg=Note.new(); ssrg.title="GAMES"; ssrg.title_size=56; ssrg.accent=Color("9aa3d8")
+    design_rect(ssrg,safe_buttons,1520,488,260,140); ssrg.name="SsrgPlayablesButton"
     ssrg.tooltip_text="Import and play SSRG songs from your own game files"
-    ssrg.pressed.connect(func(): game.open_ssrg_playables())
+    ssrg.pressed.connect(func(): UiSound.play(self,"confirm"); game.open_ssrg_playables())
+    resume_label=preload("res://scripts/arcade_resume_chip.gd").new(); resume_label.name="ResumeChip"
+    design_rect(resume_label,safe_buttons,600,690,720,80)
+    resume_label.pressed.connect(func(): UiSound.play(self,"confirm"); show_play_browser(true))
     var settings=preload("res://scripts/settings_action.gd").new(); settings.text="⚙"; settings.caption_size=30
-    design_rect(settings,safe_buttons,1740,44,100,80); settings.name="SettingsButton"
+    design_rect(settings,safe_buttons,1740,44,110,84); settings.name="SettingsButton"
     settings.pressed.connect(func(): game.open_lobby_settings())
-    var HomeCard=preload("res://scripts/lobby_home_card.gd")
-    var play=HomeCard.new(); play.kind="play"; play.title="PLAY"; design_rect(play,safe_buttons,190,330,740,290)
-    play.name="PlayCard"; play.tooltip_text="Choose a song and play"
-    play.pressed.connect(func(): show_play_browser(true))
-    var create=HomeCard.new(); create.kind="create"; create.title="CREATE CHARTS"; create.subtitle="Build the rhythm. Make it yours."
-    design_rect(create,safe_buttons,990,330,740,290)
-    create.name="CreateCard"; create.tooltip_text="Edit charts, import music, and record notes"
-    create.pressed.connect(func(): game.open_editor())
     play_home_card=play
     # Launch entrance (after the start-up intro): node, offset it arrives from, delay, bounce.
-    launch_items=[[eyebrow,Vector2(0,-30),0.0,false],[logo,Vector2(0,-60),.04,true],[resume_label,Vector2(0,24),.18,false],
-        [play,Vector2(0,80),.12,false],[create,Vector2(0,80),.2,false],[ssrg,Vector2(0,40),.3,false],[settings,Vector2(0,40),.36,false]]
-    gateway_entrance_items=[{"node":logo,"delay":.02},{"node":play,"delay":.08},{"node":create,"delay":.14},{"node":ssrg,"delay":.2},{"node":settings,"delay":.24}]
+    launch_items=[[logo,Vector2(0,-60),.04,true],[resume_label,Vector2(0,24),.3,false],
+        [play,Vector2(-120,0),.12,false],[create,Vector2(0,90),.2,false],[ssrg,Vector2(120,0),.26,false],[settings,Vector2(0,-40),.36,false]]
+    gateway_entrance_items=[{"node":logo,"delay":.02},{"node":play,"delay":.08},{"node":create,"delay":.14},{"node":ssrg,"delay":.2},{"node":resume_label,"delay":.24},{"node":settings,"delay":.26}]
     refresh_home()
     gateway.visible=false
 

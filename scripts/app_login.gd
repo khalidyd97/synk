@@ -29,14 +29,13 @@ func unlocked() -> bool:
 
 func _ready() -> void:
 	layer = 100
-	root = Control.new(); add_child(root); root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root = Control.new(); root.theme = preload("res://scripts/game_theme.gd").arcade(); add_child(root); root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_STOP
 	preload("res://scripts/modal_input.gd").register(root)
-	var dim = ColorRect.new(); place(dim,root,0,0,1,1); dim.color = Color(0.016,0.016,0.026)
-	var card = Panel.new(); place(card,root,.33,.14,.67,.86)
-	card.add_theme_stylebox_override("panel",box(Color(0.045,0.045,0.06),Color(ACCENT,.55),22))
-	label(card,"SYNK",.08,.04,.92,.17,38,Color.WHITE)
-	label(card,"Sign in to continue.",.08,.17,.92,.25,15,MUTED)
+	var dim = ColorRect.new(); place(dim,root,0,0,1,1); dim.color = Color.WHITE
+	preload("res://scripts/background_motion.gd").attach(dim,preload("res://scripts/song_browser_background.gdshader"))
+	var card = preload("res://scripts/arcade_panel.gd").new(); place(card,root,.33,.14,.67,.86)
+	var mark = preload("res://scripts/arcade_wordmark.gd").new(); mark.tagline = "SIGN IN TO CONTINUE"; place(mark,card,.12,.01,.88,.27)
 	user_field = field(card,"Username",.29)
 	pass_field = field(card,"Password",.45); pass_field.secret = true
 	pass_field.text_submitted.connect(func(_t): try_sign_in())
@@ -65,8 +64,8 @@ func label(parent: Control, value: String, left: float, top: float, right: float
 func field(parent: Control, hint: String, top: float) -> LineEdit:
 	var result = LineEdit.new(); place(result,parent,.08,top,.92,top+.13)
 	result.placeholder_text = hint; result.add_theme_font_size_override("font_size",18)
-	var normal = box(Color(1,1,1,.06),Color(1,1,1,.16),14); normal.content_margin_left = 16
-	var focus = box(Color(1,1,1,.08),Color(ACCENT,.6),14); focus.content_margin_left = 16
+	var normal = box(Color("07070f",.85),Color("3ff2ff",.45),0); normal.content_margin_left = 16
+	var focus = box(Color("07070f",.9),Color("ff3d9a"),0); focus.content_margin_left = 16
 	result.add_theme_stylebox_override("normal",normal); result.add_theme_stylebox_override("focus",focus)
 	return result
 

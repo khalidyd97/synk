@@ -90,7 +90,7 @@ func _ready() -> void:
 	caption.add_theme_color_override("font_color",caption_color)
 	caption.add_theme_color_override("font_outline_color",style.get("outline",Color(accent_color,.67)))
 	caption.add_theme_constant_override("outline_size",0)
-	caption.add_theme_font_override("font",Soft.BOLD)
+	caption.add_theme_font_override("font",Soft.font_for(self))
 	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	# The plate is drawn by soft_button.gd; the shader backdrop only keeps the animated state.
 	backdrop.visible = false
@@ -201,7 +201,8 @@ func set_selected(value: bool) -> void:
 func refresh_caption_color() -> void:
 	# Filled-when-selected chips need brighter text to stay readable on the fill.
 	if caption==null: return
-	caption.add_theme_color_override("font_color",Soft.text_color(soft_role(),1.0 if selected else 0.0,disabled))
+	caption.add_theme_font_override("font",Soft.font_for(self))
+	caption.add_theme_color_override("font_color",Soft.text_color(soft_role(),1.0 if selected else 0.0,disabled,self))
 
 func animate_hover(value: float) -> void:
 	if hover_tween and hover_tween.is_running(): hover_tween.kill()
