@@ -28,24 +28,25 @@ func set_selected(value: bool) -> void: selected=value
 func _process(delta: float) -> void:
     if not is_visible_in_tree(): return
     amount=lerpf(amount,1.0 if selected else 0.0,1-exp(-delta*16))
-    hover_amount=lerpf(hover_amount,1.0 if not disabled and (is_hovered() or has_focus()) else 0.0,1-exp(-delta*14))
+    hover_amount=lerpf(hover_amount,1.0 if not disabled and (preload("res://scripts/ui_motion.gd").hovered(self) or has_focus()) else 0.0,1-exp(-delta*14))
     press_amount=move_toward(press_amount,0,delta*5)
     if motion: motion.advance(delta,not disabled)
     queue_redraw()
 func _draw() -> void:
     var font=get_theme_font("font"); var font_size=caption_size if not primary else maxi(23,caption_size)
-    var tint=Color("f3f2ff") if not disabled else Color("69677e")
+    var tint=Color("f4f1ea") if not disabled else Color("69677e")
     if tab:
-        if amount>.005:
-            var inset=size.x*.5*(1-amount) if menu_motion else 0.0
-            draw_line(Vector2(inset,size.y-1),Vector2(size.x-inset,size.y-1),Color(accent,amount),2,true)
-        tint=Color("b7b2cd").lerp(Color.WHITE,maxf(amount,hover_amount*.7))
+        # Album Takeover tabs: plain words; the chosen one becomes a paper-white pill.
+        var SoftTab=preload("res://scripts/soft_button.gd")
+        SoftTab.draw_plate(self,size,"quiet",hover_amount,press_amount,amount,disabled)
+        tint=SoftTab.text_color("quiet",amount,disabled,self)
+        font=SoftTab.font_for(self)
     else:
         var Soft=preload("res://scripts/soft_button.gd")
         var role=soft_role if soft_role!="" else ("primary" if primary else "surface")
         Soft.draw_plate(self,size,role,hover_amount,press_amount,amount,disabled)
         tint=Soft.text_color(role,amount,disabled)
-        font=Soft.BOLD
+        font=Soft.font_for(self)
     if motion:
         # Compress only the drawn content; the actual control never moves or scales.
         var compression=1.0-motion.press*.025

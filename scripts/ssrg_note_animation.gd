@@ -5,14 +5,6 @@ const BEAT_FRAME_MULTIPLIER := 11.989999771118164
 const FRAME_ORDER := [1, 2, 3, 4, 5, 5, 5, 5, 5, 5, 5, 0]
 const MISSED_TINT := Color(0.2, 0.2, 0.2, 0.25)
 const CONNECTOR_TINT := Color(1.0, 1.0, 1.0, 0.2)
-const PRISM_FRAMES := [
-	preload("res://assets/ssrg/prism/na1.png"),
-	preload("res://assets/ssrg/prism/na2.png"),
-	preload("res://assets/ssrg/prism/na3.png"),
-	preload("res://assets/ssrg/prism/na4.png"),
-	preload("res://assets/ssrg/prism/na5.png"),
-	preload("res://assets/ssrg/prism/na6.png"),
-]
 const TAP_FRAMES := [
 	preload("res://assets/ssrg/imported/note_animation/na1.png"),
 	preload("res://assets/ssrg/imported/note_animation/na2.png"),

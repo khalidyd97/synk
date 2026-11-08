@@ -8,7 +8,7 @@ func _ready() -> void:
     tooltip_text="Choose a song and play" if kind=="play" else "Edit charts, import music, and record notes"
 func _process(delta: float) -> void:
     if not is_visible_in_tree(): return
-    hover=move_toward(hover,1.0 if is_hovered() else 0.0,delta*5)
+    hover=move_toward(hover,1.0 if preload("res://scripts/ui_motion.gd").hovered(self) else 0.0,delta*5)
     queue_redraw()
 func _draw() -> void:
     var inset=8.0; var cut=26.0

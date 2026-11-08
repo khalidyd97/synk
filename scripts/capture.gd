@@ -66,7 +66,7 @@ func move(id: int, time: float, p: Vector2) -> void:
 	n.kind = str(g.tool) if g.tool in ["hold","slide"] else ("slide" if g.max_delta>=.8 else "hold")
 	if n.kind=="slide" and n.duration>.04:
 		n.path=snap_path(samples,n.duration);n.ssrg_path=true
-		n.erase("checkpoints")
+		SynkChart.sync_connectors(n)
 
 func end(id: int, time: float, p: Vector2, canceled = false) -> Dictionary:
 	if not gestures.has(id): return {}
@@ -98,7 +98,7 @@ func end(id: int, time: float, p: Vector2, canceled = false) -> Dictionary:
 		else:
 			n.path=snap_path(g.samples,float(n.duration))
 			n.ssrg_path=true
-			n.erase("checkpoints")
+			SynkChart.sync_connectors(n)
 			n.end_lane = int(n.path[-1].lane)
 	if n.kind!="slide":n.erase("ssrg_path");n.erase("checkpoints")
 	notes.append(n); space_chord(n,g.get("fixed",[])); return n

@@ -13,13 +13,13 @@ const Soft = preload("res://scripts/soft_button.gd")
 # nav       - see-through plate: moves between screens (Back, Home, Library).
 # track     - song row in the lobby list; the selected song fills in violet-to-pink.
 const VARIANTS = {
-	"primary": {"accent":Color("b35cff"),"end":Color("ff4fd8"),"fill":1.0,"slant":1.0,"rim":1.0,"ring":.35,"text":Color("ffffff"),"outline":Color("4a1478")},
-	"record": {"accent":Color("ff3d6e"),"end":Color("ff8a3d"),"fill":1.0,"slant":1.0,"rim":1.0,"ring":.35,"text":Color("ffffff"),"outline":Color("7a0f2c")},
-	"secondary": {"accent":Color("38baff"),"end":Color("38baff"),"fill":0.0,"slant":1.0,"rim":1.0,"ring":0.0,"text":Color("e6f6ff"),"outline":Color("0c4a78")},
-	"tool": {"accent":Color("9b8cff"),"end":Color("c77dff"),"fill":0.0,"slant":1.0,"rim":.55,"ring":0.0,"selected_fill":.8,"text":Color("ddd6ff"),"outline":Color("2b2160")},
+	"primary": {"accent":Color("d9d4ca"),"end":Color("ff8a5b"),"fill":1.0,"slant":1.0,"rim":1.0,"ring":.35,"text":Color("ffffff"),"outline":Color("4a1478")},
+	"record": {"accent":Color("ff8a5b"),"end":Color("ff8a3d"),"fill":1.0,"slant":1.0,"rim":1.0,"ring":.35,"text":Color("ffffff"),"outline":Color("7a0f2c")},
+	"secondary": {"accent":Color("d9d4ca"),"end":Color("d9d4ca"),"fill":0.0,"slant":1.0,"rim":1.0,"ring":0.0,"text":Color("e6f6ff"),"outline":Color("0c4a78")},
+	"tool": {"accent":Color("d9d4ca"),"end":Color("c77dff"),"fill":0.0,"slant":1.0,"rim":.55,"ring":0.0,"selected_fill":.8,"text":Color("ddd6ff"),"outline":Color("2b2160")},
 	"danger": {"accent":Color("ff4d6a"),"end":Color("ff4d6a"),"fill":0.0,"slant":1.0,"rim":.9,"ring":0.0,"text":Color("ffd9df"),"outline":Color("6a0f22")},
-	"track": {"accent":Color("9b6cff"),"end":Color("ff4fd8"),"fill":0.0,"slant":1.0,"rim":.6,"ring":.6,"selected_fill":.62,"text":Color("d9d2f5"),"outline":Color("2b1660")},
-	"nav": {"accent":Color("a9a3d9"),"end":Color("a9a3d9"),"fill":0.0,"slant":1.0,"rim":.45,"ring":0.0,"ghost":1.0,"text":Color("d9d4f2"),"outline":Color("212121")},
+	"track": {"accent":Color("9b6cff"),"end":Color("ff8a5b"),"fill":0.0,"slant":1.0,"rim":.6,"ring":.6,"selected_fill":.62,"text":Color("d9d2f5"),"outline":Color("2b1660")},
+	"nav": {"accent":Color("a19d95"),"end":Color("a19d95"),"fill":0.0,"slant":1.0,"rim":.45,"ring":0.0,"ghost":1.0,"text":Color("d9d4f2"),"outline":Color("212121")},
 }
 
 var caption_text = ""
@@ -31,14 +31,14 @@ var caption_icons = ["",""]
 # Chart Studio marks itself with the "keep_caption_size" meta and keeps its compact text.
 const CAPTION_SCALE = 1.4
 var fitted_for = ""
-var accent_color = Color("b35cff")
+var accent_color = Color("d9d4ca")
 var caption_size = 20
 var left_aligned = false
 var compact = false
 var selected = false
 # Empty keeps the original look driven by accent_color (lobby track rows).
 var variant = ""
-var caption_color = Color("f8eeff")
+var caption_color = Color("f4f1ea")
 var backdrop: ColorRect
 var caption: Label
 var content_icon: TextureRect
@@ -86,17 +86,17 @@ func _ready() -> void:
 	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT if left_aligned else HORIZONTAL_ALIGNMENT_CENTER
 	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	caption.add_theme_font_size_override("font_size",caption_size)
-	caption_color=style.get("text",Color("f8eeff"))
+	caption_color=style.get("text",Color("f4f1ea"))
 	caption.add_theme_color_override("font_color",caption_color)
 	caption.add_theme_color_override("font_outline_color",style.get("outline",Color(accent_color,.67)))
 	caption.add_theme_constant_override("outline_size",0)
-	caption.add_theme_font_override("font",Soft.BOLD)
+	caption.add_theme_font_override("font",Soft.font_for(self))
 	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	# The plate is drawn by soft_button.gd; the shader backdrop only keeps the animated state.
 	backdrop.visible = false
 	resized.connect(update_aspect)
 	update_aspect()
-	mouse_entered.connect(func(): animate_hover(1.0))
+	mouse_entered.connect(func(): if preload("res://scripts/ui_motion.gd").hover_allowed(): animate_hover(1.0))
 	mouse_exited.connect(func(): animate_hover(0.0))
 	button_down.connect(func(): art_material.set_shader_parameter("press_amount",1.0))
 	button_up.connect(func(): art_material.set_shader_parameter("press_amount",0.0))
@@ -150,7 +150,7 @@ func keeps_caption_size() -> bool:
 func fit_caption() -> void:
 	fitted_for = caption.text+str(size)+str(caption_size)
 	if keeps_caption_size():
-		caption.add_theme_font_size_override("font_size",caption_size); return
+		caption.add_theme_font_size_override("font_size",maxi(caption_size,16)); return
 	var target = int(round(caption_size*CAPTION_SCALE))
 	var icon_side=minf(size.y*.58,36.0) if content_icon else 0.0
 	var available = Vector2(size.x*(.62 if left_aligned else .84)-6-icon_side-(10.0 if content_icon else 0.0),size.y*.9)
@@ -201,7 +201,8 @@ func set_selected(value: bool) -> void:
 func refresh_caption_color() -> void:
 	# Filled-when-selected chips need brighter text to stay readable on the fill.
 	if caption==null: return
-	caption.add_theme_color_override("font_color",Soft.text_color(soft_role(),1.0 if selected else 0.0,disabled))
+	caption.add_theme_font_override("font",Soft.font_for(self))
+	caption.add_theme_color_override("font_color",Soft.text_color(soft_role(),1.0 if selected else 0.0,disabled,self))
 
 func animate_hover(value: float) -> void:
 	if hover_tween and hover_tween.is_running(): hover_tween.kill()
