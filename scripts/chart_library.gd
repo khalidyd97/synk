@@ -55,7 +55,7 @@ func box_style(fill: Color,edge: Color,radius: int=20) -> StyleBoxFlat:
 func place(node: Control,parent: Control,x: float,y: float,w: float,h: float,base: Vector2=Vector2(1456,819)) -> void:
     parent.add_child(node); node.anchor_left=x/base.x; node.anchor_top=y/base.y
     node.anchor_right=(x+w)/base.x; node.anchor_bottom=(y+h)/base.y
-func label(parent: Control,value: String,x: float,y: float,w: float,h: float,font_size: int,tint: Color=Color("f3f0ff"),base: Vector2=Vector2(1456,819)) -> Label:
+func label(parent: Control,value: String,x: float,y: float,w: float,h: float,font_size: int,tint: Color=Color("f4f1ea"),base: Vector2=Vector2(1456,819)) -> Label:
     var n=Label.new(); place(n,parent,x,y,w,h,base); n.text=value; n.vertical_alignment=VERTICAL_ALIGNMENT_CENTER
     n.add_theme_font_size_override("font_size",roundi(font_size*1.15)); n.add_theme_color_override("font_color",tint)
     n.mouse_filter=Control.MOUSE_FILTER_IGNORE; n.clip_text=true; n.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS; return n
@@ -63,7 +63,7 @@ func button(parent: Control,value: String,x: float,y: float,w: float,h: float,ca
     var n=ButtonArt.new(); n.menu_motion=true; n.text=value; n.primary=primary; n.caption_size=22; place(n,parent,x,y,w,h,base); n.pressed.connect(callback); return n
 func card(parent: Control,x: float,y: float,w: float,h: float,base: Vector2=Vector2(1456,819),radius: int=20) -> Panel:
     var n=Panel.new(); place(n,parent,x,y,w,h,base)
-    n.add_theme_stylebox_override("panel",box_style(Color(0.041,0.041,0.041,.88),Color("2b263b"),radius)); return n
+    n.add_theme_stylebox_override("panel",StyleBoxEmpty.new()); n.mouse_filter=Control.MOUSE_FILTER_IGNORE; return n
 func _ready() -> void:
     mouse_filter=Control.MOUSE_FILTER_IGNORE
     var bg=ColorRect.new(); add_child(bg); bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -73,73 +73,75 @@ func _ready() -> void:
     # The selected song's cover, softly blurred, behind the library.
     cover_backdrop=preload("res://scripts/screen_backdrop.gd").album_art(self,.72)
     canvas=Control.new(); add_child(canvas); canvas.mouse_filter=Control.MOUSE_FILTER_IGNORE
-    var local_theme=Theme.new(); local_theme.default_font=ThemeDB.fallback_font; canvas.theme=local_theme
-    for type in ["Label","Button","LineEdit","OptionButton","PopupMenu"]: local_theme.set_font("font",type,ThemeDB.fallback_font)
+    canvas.theme=preload("res://scripts/game_theme.gd").arcade()
     resized.connect(layout_cards); game.safe_area_changed.connect(layout_cards); layout_cards()
-    button(canvas,"‹",30,18,84,84,func(): game.set_mode("menu")).caption_size=34
-    label(canvas,"C H A R T   S T U D I O",136,25,580,23,14,Color("ff7a59"))
-    label(canvas,"Chart library",136,48,580,48,36)
-    search=LineEdit.new(); place(search,canvas,800,18,350,80)
-    search.placeholder_text="Search songs or charts"; search.add_theme_font_size_override("font_size",18)
-    var style=box_style(Color("0e0e0e"),Color("34334e"),14); style.content_margin_left=18
-    search.add_theme_stylebox_override("normal",style)
-    var focused=style.duplicate(); focused.border_color=Color("f3ece1"); search.add_theme_stylebox_override("focus",focused)
-    search.text_changed.connect(func(_value): refresh())
-    button(canvas,"+  IMPORT SONG",1174,18,252,80,game.choose_audio).accent=Color("f3ece1")
-    var strip=card(canvas,30,105,1396,64)
-    var tab_data=[["all","All songs",25,138],["draft","In progress",185,150],["charted","Ready",355,110],["recent","Recent",485,115]]
-    for item in tab_data:
-        var key: String=item[0]
-        var tab=button(strip,item[1],item[2],0,item[3],64,func(): library_filter=key; refresh(),Vector2(1396,64))
-        tab.tab=true; filter_buttons[key]=tab
-    count_label=label(strip,"",1190,0,180,64,13,Color("aaa8c1"),Vector2(1396,64)); count_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
-    scroll=ScrollContainer.new(); place(scroll,canvas,30,181,800,598)
-    scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED; scroll.scroll_deadzone=12
-    var drag=preload("res://scripts/song_list_scroll.gd").new(); drag.name="DragScroll"; drag.scroll=scroll; scroll.add_child(drag)
-    grid=GridContainer.new(); scroll.add_child(grid); grid.columns=1; grid.size_flags_horizontal=Control.SIZE_EXPAND_FILL
-    grid.add_theme_constant_override("v_separation",10)
-    scroll.get_v_scroll_bar().custom_minimum_size.x=4
-    var rail=StyleBoxFlat.new(); rail.bg_color=Color(0,0,0,0)
-    scroll.get_v_scroll_bar().add_theme_stylebox_override("scroll",rail)
-    var grip=StyleBoxFlat.new(); grip.bg_color=Color(.6,.55,.8,.18); grip.set_corner_radius_all(3)
-    for state in ["grabber","grabber_highlight","grabber_pressed"]: scroll.get_v_scroll_bar().add_theme_stylebox_override(state,grip)
-    empty=label(canvas,"No matching songs. Try another filter or import audio.",55,350,745,100,19,Color("aaa8c1"))
-    empty.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART; empty.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-    panel=card(canvas,850,169,576,610)
-    var p=Vector2(576,610)
-    label(panel,"S E L E C T E D   S O N G",24,17,390,23,13,Color("ff7a59"),p)
+    # Same shape as the song list. Left: the song's cover, name and details. Middle: its chart
+    # versions and the selected chart's numbers. Right: filters, search and the songs.
+    # Bottom right: Record and Edit chart.
+    var A=preload("res://scripts/arcade_style.gd")
+    panel=card(canvas,40,28,690,770)
+    var p=Vector2(690,770)
+    button(panel,"‹",4,0,64,64,func(): game.set_mode("menu"),p).caption_size=30
+    label(panel,"Chart library",84,0,400,64,24,A.MUTED,p)
+    cover=TextureRect.new(); place(cover,panel,12,84,388,388,p)
+    cover.anchor_right=cover.anchor_left; cover.anchor_bottom=cover.anchor_top; cover.offset_right=388; cover.offset_bottom=388
+    cover.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; cover.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED; cover.mouse_filter=Control.MOUSE_FILTER_IGNORE
+    title_label=label(panel,"",12,486,660,70,50,A.TEXT,p); title_label.add_theme_font_override("font",A.SERIF)
+    artist_label=label(panel,"",14,556,420,28,16,A.SUBTLE,p)
+    info_label=label(panel,"",14,588,420,28,15,A.MUTED,p)
     # Song details (title, artist, album, track, album art, gameplay background) live here only;
     # the Play browser shows the same saved details.
-    var details=button(panel,"✎  DETAILS",422,8,130,46,func():
+    var details=button(panel,"✎  DETAILS",12,632,170,56,func():
         if not selected_id.is_empty(): game.open_song_details(selected_id),p)
-    details.caption_size=15; details.tooltip_text="Edit song details, album art and gameplay background"
-    cover=TextureRect.new(); place(cover,panel,24,48,118,118,p)
-    cover.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; cover.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED; cover.mouse_filter=Control.MOUSE_FILTER_IGNORE
-    title_label=label(panel,"",164,48,383,44,29,Color("f5f3ff"),p)
-    artist_label=label(panel,"",164,92,383,28,16,Color("c1bbd6"),p)
-    info_label=label(panel,"",164,127,383,28,14,Color("b5c4df"),p)
-    label(panel,"C H A R T   V E R S I O N S",24,188,375,30,13,Color("ff7a59"),p)
-    new_button=button(panel,"+ NEW",433,176,118,64,show_new_version,p); new_button.caption_size=18
-    version_scroll=ScrollContainer.new(); place(version_scroll,panel,24,246,528,140,p)
+    details.caption_size=17; details.tooltip_text="Edit song details, album art and gameplay background"
+    # Saved versions of the selected level: browse and switch.
+    var history=button(panel,"History",192,632,150,56,func():
+        if not selected_id.is_empty(): game.open_chart_history(selected_id,selected_variant),p); history.caption_size=17
+    delete_button=button(panel,"Manage",352,632,150,56,func():
+        var entry=selected_entry()
+        if not entry.is_empty(): ask_delete(entry),p); delete_button.caption_size=17
+    message_label=label(panel,"Continue your draft or record a new take",14,700,660,26,13,A.MUTED,p)
+    label(panel,"Chart versions",440,84,160,26,15,A.MUTED,p)
+    new_button=button(panel,"+ New",600,80,90,36,show_new_version,p); new_button.caption_size=15
+    version_scroll=ScrollContainer.new(); place(version_scroll,panel,432,124,256,288,p)
     version_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+    version_scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_SHOW_NEVER
     version_scroll.scroll_deadzone=12
     var version_drag=preload("res://scripts/song_list_scroll.gd").new();version_drag.name="DragScroll";version_drag.scroll=version_scroll;version_scroll.add_child(version_drag)
     versions=VBoxContainer.new(); version_scroll.add_child(versions); versions.size_flags_horizontal=Control.SIZE_EXPAND_FILL; versions.add_theme_constant_override("separation",8)
-    chart_label=label(panel,"",24,417,262,24,13,Color("ff7a59"),p)
-    # Saved versions of the selected level: browse and switch.
-    var history=button(panel,"HISTORY",298,392,122,64,func():
-        if not selected_id.is_empty(): game.open_chart_history(selected_id,selected_variant),p); history.caption_size=17
-    delete_button=button(panel,"MANAGE",430,392,122,64,func():
-        var entry=selected_entry()
-        if not entry.is_empty(): ask_delete(entry),p); delete_button.caption_size=17
-    stats_label=label(panel,"",24,451,300,43,18,Color("f5f3ff"),p)
-    density=preload("res://scripts/chart_library_density.gd").new(); place(density,panel,336,456,216,41,p)
-    record_button=button(panel,"●  RECORD",24,504,254,82,func(): open_selected("record"),p,true)
-    edit_button=button(panel,"✎  EDIT CHART",294,504,258,82,func(): open_selected("editor"),p,true)
-    record_button.caption_size=28; edit_button.caption_size=28
+    chart_label=label(panel,"",440,424,240,26,15,A.MUTED,p)
+    stats_label=label(panel,"",440,452,250,32,17,A.TEXT,p)
+    density=preload("res://scripts/chart_library_density.gd").new(); place(density,panel,440,492,240,46,p)
+    # Right side.
+    var import_button=button(canvas,"+  Import song",760,28,180,64,game.choose_audio); import_button.caption_size=17
+    search=LineEdit.new(); place(search,canvas,950,30,466,60)
+    search.placeholder_text="Search songs or charts"; search.add_theme_font_size_override("font_size",19)
+    var style=StyleBoxFlat.new(); style.bg_color=Color(1,1,1,.07); style.set_corner_radius_all(30); style.content_margin_left=24; style.content_margin_right=16
+    search.add_theme_stylebox_override("normal",style)
+    var focused=style.duplicate(); focused.bg_color=Color(1,1,1,.12); search.add_theme_stylebox_override("focus",focused)
+    search.text_changed.connect(func(_value): refresh())
+    var tab_data=[["all","All songs",760,124],["draft","In progress",890,144],["charted","Ready",1040,96],["recent","Recent",1142,104]]
+    for item in tab_data:
+        var key: String=item[0]
+        var tab=button(canvas,item[1],item[2],108,item[3],50,func(): library_filter=key; refresh())
+        tab.tab=true; tab.caption_size=19; filter_buttons[key]=tab
+    count_label=label(canvas,"",1270,116,146,34,13,A.MUTED); count_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
+    scroll=ScrollContainer.new(); place(scroll,canvas,752,170,668,520)
+    scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED; scroll.scroll_deadzone=12
+    var drag=preload("res://scripts/song_list_scroll.gd").new(); drag.name="DragScroll"; drag.scroll=scroll; scroll.add_child(drag)
+    grid=GridContainer.new(); scroll.add_child(grid); grid.columns=1; grid.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+    grid.add_theme_constant_override("v_separation",2)
+    scroll.get_v_scroll_bar().custom_minimum_size.x=4
+    var rail=StyleBoxFlat.new(); rail.bg_color=Color(0,0,0,0)
+    scroll.get_v_scroll_bar().add_theme_stylebox_override("scroll",rail)
+    var grip=StyleBoxFlat.new(); grip.bg_color=Color(1,1,1,.25); grip.set_corner_radius_all(3)
+    for state in ["grabber","grabber_highlight","grabber_pressed"]: scroll.get_v_scroll_bar().add_theme_stylebox_override(state,grip)
+    empty=label(canvas,"No matching songs. Try another filter or import audio.",772,320,628,100,19,A.MUTED)
+    empty.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART; empty.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    record_button=button(canvas,"●  Record",752,708,326,96,func(): open_selected("record"),Vector2(1456,819),true)
+    edit_button=button(canvas,"✎  Edit chart",1094,708,326,96,func(): open_selected("editor"),Vector2(1456,819),true)
+    record_button.caption_size=26; edit_button.caption_size=26
     record_button.soft_role="record"
-    message_label=label(panel,"Continue your draft or record a new take",24,584,528,20,13,Color("aaa8c1"),p)
-    message_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     recent=game.prefs.get_value("chart_library","recent",{})
     build_confirm(); build_level_popup(); refresh()
     visibility_changed.connect(func():
@@ -224,7 +226,7 @@ func select_entry(id: String) -> void:
     pending_action=""; selected_id=id
     selected_variant=str(game.prefs.get_value("charts",id,""))
     update_selection()
-    UiMotion.reveal(panel)
+    UiMotion.cascade(panel,0.0,.03)
 func update_selection() -> void:
     if stale or (not is_visible_in_tree() and is_inside_tree() and grid and grid.get_child_count()>0): stale=true; return
     for row in chart_cards: row.set_selected(row.entry.id==selected_id)
@@ -235,8 +237,9 @@ func update_panel() -> void:
     if entry.is_empty(): return
     var data=summary(selected_id); summaries[selected_id]=data
     title_label.text=entry.title; artist_label.text=entry.artist
-    info_label.text="%d BPM    ·    %s" % [roundi(entry.bpm),game.lobby.duration_text(entry.duration)]
-    cover.texture=game.lobby.cover_for(selected_id); game.lobby.style_cover(cover,selected_id,18)
+    info_label.text="%d BPM  ·  %s" % [roundi(entry.bpm),game.lobby.duration_text(entry.duration)]
+    cover.texture=game.lobby.cover_for(selected_id); game.lobby.style_cover(cover,selected_id,10)
+    preload("res://scripts/background_motion.gd").set_palette_from(game.lobby.backdrop_for(selected_id))
     cover_backdrop.set_art(game.lobby.backdrop_for(selected_id))
     var found=data.versions.any(func(v): return v.key==selected_variant)
     if not found:
@@ -245,19 +248,20 @@ func update_panel() -> void:
     var current: Dictionary={}
     for version in data.versions:
         var key: String=version.key
-        var n=ButtonArt.new(); n.menu_motion=true; versions.add_child(n); n.custom_minimum_size=Vector2(0,76)
-        n.text=Levels.label(key)+"   ·   %d notes   ·   " % version.notes.size()+("Unsaved edits" if version.live else ("Draft saved" if version.draft else "Saved"))
-        n.caption_size=19; n.set_selected(key==selected_variant)
+        var n=ButtonArt.new(); n.menu_motion=true; versions.add_child(n); n.custom_minimum_size=Vector2(0,74)
+        n.text=Levels.label(key); n.tab=true
+        n.subtitle="%d note%s  ·  %s" % [version.notes.size(),"" if version.notes.size()==1 else "s",("Unsaved edits" if version.live else ("Draft" if version.draft else "Saved"))]
+        n.caption_size=22; n.set_selected(key==selected_variant)
         n.pressed.connect(func(): if not DragScroll.was_dragged(version_scroll): selected_variant=key; update_panel())
         if key==selected_variant: current=version
     if data.versions.is_empty():
         var hint=Label.new(); versions.add_child(hint); hint.text="No charts yet. Record or edit to begin, and choose its level."; hint.add_theme_font_size_override("font_size",16)
+        hint.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART; hint.custom_minimum_size.x=240; hint.add_theme_color_override("font_color",Color("bcb7ad"))
     var notes: Array=current.get("notes",[])
-    chart_label.text=Levels.label(selected_variant).to_upper()+" CHART" if not current.is_empty() else "NEW CHART"
+    chart_label.text=Levels.label(selected_variant)+" chart" if not current.is_empty() else "New chart"
     var holds=notes.filter(func(n): return n.kind in ["hold","slide"]).size()
     var flicks=notes.filter(func(n): return n.kind=="flick").size()
-    stats_label.text="%d Notes   ·   %d Holds   ·   %d Flicks" % [notes.size(),holds,flicks]
-    stats_label.add_theme_font_size_override("font_size",18)
+    stats_label.text="%d note%s  ·  %d hold%s  ·  %d flick%s" % [notes.size(),"" if notes.size()==1 else "s",holds,"" if holds==1 else "s",flicks,"" if flicks==1 else "s"]
     density.notes=notes; density.duration=maxf(1,entry.duration); density.queue_redraw()
     var busy=not pending_action.is_empty()
     record_button.disabled=busy; edit_button.disabled=busy; new_button.disabled=busy
@@ -309,7 +313,7 @@ func build_level_popup() -> void:
     var style=StyleBoxFlat.new(); style.bg_color=Color(.04,.04,.04,.97); style.border_color=Color(1,1,1,.12)
     style.set_border_width_all(1); style.set_corner_radius_all(24); style.shadow_color=Color(0,0,0,.55); style.shadow_size=24
     card.add_theme_stylebox_override("panel",style)
-    fraction_label(card,"C H A R T   L E V E L",.08,.04,.92,.12,14,Color("ff7a59")).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    fraction_label(card,"Chart level",.08,.04,.92,.12,16,Color("bcb7ad")).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     level_title=fraction_label(card,"",.06,.12,.94,.23,23); level_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     var choices=Control.new();fraction_place(choices,card,.07,.27,.93,.77)
     var gap=.012
@@ -321,7 +325,7 @@ func build_level_popup() -> void:
         fraction_place(choice,choices,left,top,left+width,top+height)
         choice.pressed.connect(Callable(self,"select_level").bind(level))
         level_buttons.append(choice)
-    level_hint=fraction_label(card,"",.06,.78,.94,.84,16,Color("a7aac6")); level_hint.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    level_hint=fraction_label(card,"",.06,.78,.94,.84,16,Color("bcb7ad")); level_hint.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     level_create_button=fraction_button(card,"CREATE LEVEL",.08,.87,.58,.96,confirm_level,"primary")
     fraction_button(card,"CANCEL",.62,.87,.92,.96,func(): level_popup.visible=false,"nav")
     level_popup.visible=false
@@ -358,7 +362,7 @@ func _process(_delta: float) -> void:
 
 func fraction_place(node: Control,parent: Control,l: float,t: float,r: float,b: float) -> void:
     parent.add_child(node); node.anchor_left=l; node.anchor_top=t; node.anchor_right=r; node.anchor_bottom=b
-func fraction_label(parent: Control,value: String,l: float,t: float,r: float,b: float,font_size: int,tint: Color=Color("f5edff")) -> Label:
+func fraction_label(parent: Control,value: String,l: float,t: float,r: float,b: float,font_size: int,tint: Color=Color("f4f1ea")) -> Label:
     return label(parent,value,l*1456,t*819,(r-l)*1456,(b-t)*819,font_size,tint)
 func fraction_button(parent: Control,value: String,l: float,t: float,r: float,b: float,callback: Callable,_variant: String="") -> Button:
     var n=button(parent,value,l*1456,t*819,(r-l)*1456,(b-t)*819,callback)

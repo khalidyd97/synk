@@ -12,8 +12,10 @@ var seeks = 0
 var playback_target = 0.0
 func _ready() -> void :
 	add_child(player)
+# Correct mode is silent: moving or selecting notes no longer plays audio snippets.
+const ENABLED = false
 func request(chart_time: float) -> void :
-	if game.mode != "record" or not game.arranging or game.audio.stream == null: return
+	if not ENABLED or game.mode != "record" or not game.arranging or game.audio.stream == null: return
 	target = clampf(chart_time - game.effective_timing_ms() / 1000.0, 0, maxf(0, game.length() - 0.02))
 	pending = true;remaining = GRAIN_SECONDS
 func stop() -> void :

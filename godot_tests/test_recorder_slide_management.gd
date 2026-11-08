@@ -26,7 +26,7 @@ func run() -> void:
 	var visual=game.field.world.notes["recorder_slide_layer"].node
 	var head: MeshInstance3D=visual.get_child(0)
 	var tail: MeshInstance3D=visual.get_node("SustainEndCap")
-	check(head.material_override.shader==load("res://scripts/recorder_note.gdshader") and tail.material_override.shader==head.material_override.shader,"Recorder slide heads and end caps use opaque alpha compositing")
+	check(head.material_override.shader==load("res://scripts/reference_note.gdshader") and tail.material_override.shader==head.material_override.shader,"Recorder slide heads and end caps use the SSRG slide art")
 	check(head.material_override.render_priority>0 and tail.material_override.render_priority>0,"Recorder note faces draw above the slide trail")
 	var arranger = game.note_arranger
 	check(arranger.visible and arranger.delete_point_button.visible, "Slide management controls appear for a selected slide")
