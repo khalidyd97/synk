@@ -47,6 +47,10 @@ var note_meshes: Array = []
 var materials: Array = []
 var effects: Node3D
 var recorder_guides: Node3D
+var lane_markers: Node3D
+var recorder_channels: MeshInstance3D
+var recorder_channel_material: ShaderMaterial
+var recorder_lit: PackedFloat32Array = PackedFloat32Array()
 var guide_material: ShaderMaterial
 var active_beams: Array = []
 # Light columns that follow each finger touching the highway.
@@ -420,10 +424,18 @@ func build_track() -> void:
 		guide.position = Vector3(lane_x(boundary-.5),.055,(-60+JUDGMENT_DEPTH*.5)*.5)
 	var marker_material = ShaderMaterial.new();marker_material.shader=preload("res://scripts/synk_canvas_color.gdshader")
 	marker_material.set_shader_parameter("color",Color("8be8ffb8"))
+	lane_markers = Node3D.new(); lane_markers.name = "LaneMarkers"; recorder_guides.add_child(lane_markers)
 	for lane in SynkChart.LANES:
 		var marker_mesh = PlaneMesh.new(); marker_mesh.size = Vector2(.22,.62)
-		var marker = mesh_node(marker_mesh,recorder_guides,marker_material)
+		var marker = mesh_node(marker_mesh,lane_markers,marker_material)
 		marker.position = Vector3(lane_x(lane),.052,-.03)
+	# Recorder pad: SSRG's thirteen channels drawn as slots that light under a finger.
+	var channel_mesh = PlaneMesh.new(); channel_mesh.size = Vector2(PAD_HALF_WIDTH*2.0,JUDGMENT_DEPTH)
+	recorder_channel_material = ShaderMaterial.new(); recorder_channel_material.shader = preload("res://scripts/recorder_channels.gdshader")
+	recorder_channel_material.set_shader_parameter("span",SynkChart.LANES*LANE_WIDTH/(PAD_HALF_WIDTH*2.0))
+	recorder_channel_material.render_priority = 1
+	recorder_channels = mesh_node(channel_mesh,self,recorder_channel_material)
+	recorder_channels.name = "RecorderChannels"; recorder_channels.position = Vector3(0,.05,0); recorder_channels.visible = false
 	recorder_guides.visible = false
 	# Gold look: raised glossy rails, each casting a soft shadow onto the lanes beside it.
 	for side in [-1,1]:
@@ -525,9 +537,9 @@ func refresh_highway_look() -> void:
 	if gold:
 		judgment_material.shader = preload("res://scripts/judgment_bar.gdshader")
 		# Adaptive colors pull the band toward the artwork's main color; the theme keeps it golden.
-		var base: Color = Color("989ca4") if game.uses_recorder_colors() else (band if band != null else JUDGMENT_GOLD)
+		var base: Color = Color("1b1c20") if game.uses_recorder_colors() else (band if band != null else JUDGMENT_GOLD)
 		judgment_material.set_shader_parameter("base_color",base)
-		judgment_material.set_shader_parameter("sweep_color",Color("b8bbc1") if game.uses_recorder_colors() else base.lerp(Color.WHITE,.6))
+		judgment_material.set_shader_parameter("sweep_color",Color("2c2d33") if game.uses_recorder_colors() else base.lerp(Color.WHITE,.6))
 		track_materials[0].set_shader_parameter("color",stage_color.darkened(.88) if cover_palette_active else TRACK_COLOR)
 		track_materials[1].set_shader_parameter("color",stage_color.darkened(.85) if cover_palette_active else TRACK_COLOR)
 		track_materials[0].set_shader_parameter("opacity",minf(.95,.30*darkness))
@@ -544,7 +556,7 @@ func refresh_highway_look() -> void:
 		for m in track_materials: m.set_shader_parameter("near_fraction",1.0)
 	for m in judgment_borders:
 		m.render_priority=-5 if uses_projected_highway() else 0
-		m.set_shader_parameter("color",Color(Color("9da1a8") if game.uses_recorder_colors() else (Color("fff1cf") if gold else Color("ead6ff")),.85 if gold else 1.0))
+		m.set_shader_parameter("color",Color(Color("f4f1ea") if game.uses_recorder_colors() else (Color("fff1cf") if gold else Color("ead6ff")),.85 if gold else 1.0))
 	var judgment_color: Color=judgment_material.get_shader_parameter("base_color")
 	highway_shadow_material.set_shader_parameter("tint",judgment_color.darkened(.65))
 	highway_shadow_material.set_shader_parameter("opacity",.2)
@@ -1191,6 +1203,8 @@ func make_flick(parent: Node3D, note: Dictionary, palette: int) -> void:
 	for i in 1:
 		var base = Vector3(note_x(note.lane),2.0*FIT*game.note_size,0)
 		var arrow_mesh = QuadMesh.new(); arrow_mesh.size=Vector2(3.22,1.6)*FIT*game.note_size
+		# The SSRG puck is wide and bright; a larger chevron keeps left, up and right readable on it.
+		if game.uses_ssrg_gameplay(): arrow_mesh.size*=1.7
 		var arrow_material = shared("arrow|%d|%s" % [palette, element_color("arrows",colors[palette])], func():
 			var m = ShaderMaterial.new(); m.shader=preload("res://scripts/flick_arrow.gdshader")
 			if uses_projected_highway() and not game.uses_ssrg_gameplay():
@@ -1687,6 +1701,24 @@ func animate_ssrg_notes() -> void:
 			mat.set_shader_parameter("artwork",ssrg_cap_artwork(palette,bool(mat.get_meta("ssrg_tail")),beat,bool(mat.get_meta("ssrg_old_ui",false))))
 	ssrg_note_materials=alive
 
+# Lights the recorder's channel under each finger that is drawing a note, then fades it.
+func update_recorder_channels(delta: float, recording_now: bool) -> void:
+	if recorder_channels == null: return
+	recorder_channels.visible = recording_now
+	if lane_markers: lane_markers.visible = not recording_now
+	if not recording_now: return
+	if recorder_lit.size() != SynkChart.LANES: recorder_lit.resize(SynkChart.LANES)
+	var held: Dictionary = {}
+	if game.capture:
+		for g in game.capture.gestures.values():
+			var lane = clampf(SynkCapture.lane(g.position.x)+float(g.get("lane_shift",0)),0,SynkChart.MAX_LANE)
+			held[roundi(lane*12.0/SynkChart.MAX_LANE)] = true
+	if game.get("flash") != null and float(game.flash) > .6 and game.get("flash_lane") != null:
+		held[clampi(int(game.flash_lane),0,12)] = true
+	for i in SynkChart.LANES:
+		recorder_lit[i] = 1.0 if held.has(i) else maxf(0.0, recorder_lit[i]-delta*4.0)
+	recorder_channel_material.set_shader_parameter("lit",recorder_lit)
+
 func _process(delta: float) -> void:
 	if game==null: return
 	step_prebuild()
@@ -1696,7 +1728,8 @@ func _process(delta: float) -> void:
 	var in_play = game.mode=="play" or (game.mode=="paused" and game.paused_mode=="play")
 	var recording_now = game.mode=="record" or (game.mode=="paused" and game.paused_mode=="record")
 	recorder_guides.visible = recording_now or (in_play and bool(extras_setting("lane_hints", true)) and not (ssrg_theme and ssrg_theme.active) and not (concept_theme and concept_theme.active))
-	if guide_material: guide_material.set_shader_parameter("color",Color(Color("777bd5"),.38 if recording_now else .3))
+	if guide_material: guide_material.set_shader_parameter("color",Color(Color("f4f1ea"),.10) if recording_now else Color(Color("777bd5"),.3))
+	update_recorder_channels(delta,recording_now)
 	update_play_aids(delta)
 	update_multiplier_wave(delta)
 	animate_miss_shake(delta)
