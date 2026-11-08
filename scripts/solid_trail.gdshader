@@ -10,6 +10,8 @@ uniform bool source_art=false;
 uniform bool old_ssrg_art=false;
 uniform bool joined_source=false;
 uniform bool enhanced_synk=false;
+// Recorder slides: SSRG-style gold ribbon with a cream core and a gentle flowing shimmer.
+uniform bool ssrg_ribbon=false;
 uniform float ssrg_half_width=0.0;
 uniform float ssrg_line_x_scale=1.3;
 uniform vec4 source_tint : source_color=vec4(1.0);
@@ -62,6 +64,9 @@ void vertex(){
     }
     rail_position=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz;
 }
+// Player setting: how bright notes and their trails are (Settings > Visuals > Notes).
+global uniform float synk_note_brightness;
+uniform bool note_brightness_applies = true;
 void fragment(){
     if(outside_rails(INV_VIEW_MATRIX[3].xyz)) discard;
     if(ssrg_warp.x>0.5){
@@ -75,6 +80,16 @@ void fragment(){
         float core=pow(max(0.0,1.0-abs(UV.x*2.0-1.0)),2.0);
         color=mix(tint,vec3(1.0,.98,.78),core*.45);
         opacity=.43+core*.12;
+    }
+    if(ssrg_ribbon && !joint){
+        float across=abs(UV.x*2.0-1.0);
+        float core=pow(max(0.0,1.0-across),2.2);
+        // Soft bands drift toward the judgment line, like light running along the slide.
+        float flow=smoothstep(.55,1.0,sin(world_z*.9-TIME*5.0)*.5+.5);
+        color=mix(tint,vec3(1.0,.98,.82),core*.6+flow*core*.35);
+        opacity=.62+core*.3+flow*.08;
+        // A thin bright rim on both edges, like SSRG's outlined slide bar.
+        color=mix(color,vec3(1.0,.93,.6),smoothstep(.72,.9,across)*.5);
     }
     if(old_ssrg_art && source_art && !joint){
         color=mix(tint,vec3(1.0,.86,.78),.12);
@@ -107,4 +122,5 @@ void fragment(){
     ALBEDO=mix(color,vec3(gray*.6),desaturate)*source_tint.rgb;
     float missed_alpha=source_tint.a;
     ALPHA=(ssrg_warp.x>0.5 && source_tint.a<1.0?missed_alpha:opacity)*ghost_fade*(ssrg_warp.x>0.5?1.0:smoothstep(-60.0,-55.0,world_z));
+	if(note_brightness_applies) ALBEDO*=synk_note_brightness;
 }

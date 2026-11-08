@@ -489,7 +489,7 @@ func run() -> void:
 	game.toggle_arrange()
 	await create_timer(.03).timeout
 	check(game.arranging and game.arrange_button.text=="RECORD","Arrange mode freezes recording for editing")
-	check(game.kind_buttons[0].caption.text=="DELETE","Animated recorder controls update their visible labels")
+	check(game.kind_buttons[0].caption.text.to_upper()=="DELETE","Animated recorder controls update their visible labels")
 	world._process(0); check(world.recorder_guides.visible,"Lane guides stay visible while arranging notes")
 	check(game.outside_highway(Vector2(.03,.2)) and not game.outside_highway(Vector2(.5,.5)),"Arrange scrolling is limited to the outer rail area")
 	game.arrange_pointer_event(5,Vector2(.03,.2),true,false,false)

@@ -34,6 +34,9 @@ vec3 hsv_to_rgb(vec3 c){
     vec3 p=abs(fract(c.xxx+vec3(0.0,2.0/3.0,1.0/3.0))*6.0-3.0);
     return c.z*mix(vec3(1.0),clamp(p-1.0,0.0,1.0),c.y);
 }
+// Player setting: how bright notes and their trails are (Settings > Visuals > Notes).
+global uniform float synk_note_brightness;
+uniform bool note_brightness_applies = true;
 void fragment(){
     if((ssrg_warp.x>0.5?centre_z:world_z)>clip_z) discard;
     vec4 art=texture(artwork,UV);
@@ -64,4 +67,5 @@ void fragment(){
     }
     ALBEDO=mix(color,vec3(gray*0.52),desaturate)*source_tint.rgb;
     ALPHA=alpha*opacity*ghost_fade*source_tint.a*smoothstep(-60.0,-55.0,world_z)*ssrg_reveal(centre_z);
+	if(note_brightness_applies) ALBEDO*=synk_note_brightness;
 }

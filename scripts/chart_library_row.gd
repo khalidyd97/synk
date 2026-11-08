@@ -16,34 +16,36 @@ func text_label(font_size: int,tint: Color) -> Label:
     n.mouse_filter=Control.MOUSE_FILTER_IGNORE; n.clip_text=true; n.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
     return n
 func _ready() -> void:
-    custom_minimum_size=Vector2(0,124); size_flags_horizontal=Control.SIZE_EXPAND_FILL
+    custom_minimum_size=Vector2(0,112); size_flags_horizontal=Control.SIZE_EXPAND_FILL
     mouse_filter=Control.MOUSE_FILTER_PASS; mouse_default_cursor_shape=Control.CURSOR_POINTING_HAND
     for state in ["normal","hover","pressed","focus"]: add_theme_stylebox_override(state,StyleBoxEmpty.new())
-    cover=TextureRect.new(); add_child(cover); cover.position=Vector2(12,16); cover.size=Vector2(92,92)
+    cover=TextureRect.new(); add_child(cover); cover.position=Vector2(26,16); cover.size=Vector2(80,80)
     cover.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; cover.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED; cover.mouse_filter=Control.MOUSE_FILTER_IGNORE
-    title_label=text_label(27,Color("f4f2ff")); subtitle=text_label(18,Color("aaaecb"))
-    status=text_label(14,Color("f3ece1")); status.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-    edited=text_label(14,Color("aaaecb")); edited.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
+    # Same voice as the song list: the name in the serif, everything else in the sans.
+    var A=preload("res://scripts/arcade_style.gd")
+    title_label=text_label(36,Color("f4f1ea")); title_label.add_theme_font_override("font",A.SERIF)
+    subtitle=text_label(17,Color("d9d4ca")); subtitle.add_theme_font_override("font",A.mono())
+    status=text_label(15,Color("f4f1ea")); status.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT; status.add_theme_font_override("font",A.semi())
+    edited=text_label(14,Color("bcb7ad")); edited.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT; edited.add_theme_font_override("font",A.mono())
     resized.connect(layout); layout()
     button_down.connect(func(): preload("res://scripts/ui_sound.gd").play(self,"click"))
     button_down.connect(func(): if not disabled: motion.press=1.0)
 func layout() -> void:
     if not title_label: return
-    title_label.position=Vector2(124,27); title_label.size=Vector2(maxf(40,size.x-302),32)
-    subtitle.position=Vector2(124,65); subtitle.size=Vector2(maxf(40,size.x-302),27)
-    status.position=Vector2(size.x-154,33); status.size=Vector2(135,25)
-    edited.position=Vector2(size.x-175,64); edited.size=Vector2(156,27)
+    title_label.position=Vector2(122,17); title_label.size=Vector2(maxf(40,size.x-320),40)
+    subtitle.position=Vector2(122,59); subtitle.size=Vector2(maxf(40,size.x-320),27)
+    status.position=Vector2(size.x-190,26); status.size=Vector2(170,25)
+    edited.position=Vector2(size.x-210,58); edited.size=Vector2(190,27)
 func update_entry(value: Dictionary,data: Dictionary) -> void:
     entry=value; set_meta("song_id",entry.id)
     title_label.text=entry.title
     var count=data.versions.size()
     subtitle.text=entry.artist+" · "+("No charts yet" if count==0 else "%d chart version%s" % [count,"" if count==1 else "s"])
     cover.texture=library.game.lobby.cover_for(entry.id); library.game.lobby.style_cover(cover,entry.id,13)
-    status.text="DRAFT" if data.draft else ("READY" if data.charted else "NEW")
-    var tint=Color("a9a5c9") if data.draft else (Color("f3ece1") if data.charted else Color("ff7a59"))
+    # A small coloured word instead of a badge box.
+    status.text="●  Draft" if data.draft else ("●  Ready" if data.charted else "●  New")
+    var tint=Color("ffd36a") if data.draft else (Color("9fd8b8") if data.charted else Color("ff8a5b"))
     status.add_theme_color_override("font_color",tint)
-    var style=StyleBoxFlat.new(); style.bg_color=Color(tint,.07); style.border_color=Color(tint,.45)
-    style.set_border_width_all(1); style.set_corner_radius_all(9); status.add_theme_stylebox_override("normal",style)
     edited.text=relative_time(int(data.modified))
     tooltip_text=entry.title+" · Select a chart version"
 func relative_time(at: int) -> String:
@@ -57,16 +59,16 @@ func set_selected(value: bool) -> void: selected=value
 func _process(delta: float) -> void:
     if not is_visible_in_tree(): return
     amount=lerpf(amount,1.0 if selected else 0.0,1-exp(-delta*16)); queue_redraw()
-    hover_amount=lerpf(hover_amount,1.0 if is_hovered() or has_focus() else 0.0,1-exp(-delta*14))
+    hover_amount=lerpf(hover_amount,1.0 if preload("res://scripts/ui_motion.gd").hovered(self) or has_focus() else 0.0,1-exp(-delta*14))
     motion.advance(delta,selected or hover_amount>.01)
 func _draw() -> void:
-    var style=StyleBoxFlat.new(); style.set_corner_radius_all(18); style.set_border_width_all(1)
-    style.bg_color=Color("0e0e0e").lerp(Color("1a1a1a"),amount)
-    style.bg_color=style.bg_color.lightened(hover_amount*.04)
-    style.border_color=Color("2a2830").lerp(Color("f3ece1"),amount*.6)
-    style.shadow_color=Color(.05,.75,.9,.12*amount); style.shadow_size=8
-    draw_style_box(style,Rect2(Vector2.ONE,size-Vector2.ONE*2))
-    motion.paint(self,Color("f3ece1"),maxf(amount*.65,hover_amount),18)
+    # No box: a hairline separates songs; the chosen one sits on a frosted card that breathes.
+    var wash=maxf(amount*(.11+.03*sin(Time.get_ticks_msec()/1000.0*2.0)),hover_amount*.05)
+    if wash>.004:
+        var plate=StyleBoxFlat.new(); plate.set_corner_radius_all(16); plate.bg_color=Color(1,1,1,wash); plate.anti_aliasing=true
+        draw_style_box(plate,Rect2(Vector2(2,3),size-Vector2(4,6)))
+    if amount<.98:
+        draw_line(Vector2(16,size.y-1),Vector2(size.x-16,size.y-1),Color(1,1,1,.08*(1.0-amount)),1.0)
 
 # Hidden widgets stop their per-frame update (screens keep many of them alive offscreen).
 func _notification(what: int) -> void:

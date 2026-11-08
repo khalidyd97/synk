@@ -26,7 +26,7 @@ func _ready() -> void:
 	art_material.set_shader_parameter("press_amount",0.0)
 	art_material.set_shader_parameter("disabled_amount",0.0)
 	art.material = art_material
-	mouse_entered.connect(func(): animate_hover(1.0))
+	mouse_entered.connect(func(): if preload("res://scripts/ui_motion.gd").hover_allowed(): animate_hover(1.0))
 	mouse_exited.connect(func(): animate_hover(0.0))
 	button_down.connect(func(): art_material.set_shader_parameter("press_amount", 1.0))
 	button_up.connect(func(): art_material.set_shader_parameter("press_amount", 0.0))

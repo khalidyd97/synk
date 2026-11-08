@@ -55,6 +55,10 @@ environment/defaults/default_clear_color=Color(0, 0, 0, 1)
 
 [shader_globals]
 
+synk_note_brightness={
+"type": "float",
+"value": 1.0
+}
 synk_time={
 "type": "float",
 "value": 0.0

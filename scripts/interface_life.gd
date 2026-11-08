@@ -52,7 +52,7 @@ func sync_visibility() -> void:
 
 func _process(delta: float) -> void:
     var disabled=target is BaseButton and target.disabled
-    var engaged=target.has_focus() or (target is BaseButton and target.is_hovered())
+    var engaged=target.has_focus() or (target is BaseButton and preload("res://scripts/ui_motion.gd").hovered(target))
     engagement=lerpf(engagement,1.0 if engaged and not disabled else 0.0,1-exp(-delta*12))
     motion.advance(delta,not disabled)
     queue_redraw()

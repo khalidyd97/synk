@@ -25,6 +25,9 @@ void vertex() {
 	world_z = (MODEL_MATRIX * vec4(VERTEX, 1.0)).z;
 }
 
+// Player setting: how bright notes and their trails are (Settings > Visuals > Notes).
+global uniform float synk_note_brightness;
+uniform bool note_brightness_applies = true;
 void fragment() {
 	if(outside_rails(INV_VIEW_MATRIX[3].xyz)) discard;
 	if (world_z > clip_z) discard;
@@ -48,4 +51,5 @@ void fragment() {
 	float gray = dot(final_color, vec3(0.299, 0.587, 0.114));
 	ALBEDO = mix(final_color, vec3(gray * 0.52), desaturate);
 	ALPHA = (disc + halo * 0.12) * opacity * ghost_fade * smoothstep(-60.0, -55.0, world_z);
+	if(note_brightness_applies) ALBEDO*=synk_note_brightness;
 }

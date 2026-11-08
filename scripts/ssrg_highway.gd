@@ -49,6 +49,7 @@ func _ready() -> void:
 		if side > 0: rail.rotation_degrees.y = 180
 	var band_mesh = QuadMesh.new(); band_mesh.size = Vector2(half * 2.0 + 1.2, w.JUDGMENT_DEPTH * 1.25)
 	var band_mat = ShaderMaterial.new(); band_mat.shader = preload("res://scripts/reference_note.gdshader")
+	band_mat.set_shader_parameter("note_brightness_applies", false)
 	band_mat.set_shader_parameter("artwork", preload("res://assets/ssrg/judgment.png")); band_mat.render_priority = -5
 	band = w.mesh_node(band_mesh, self, band_mat); band.position = Vector3(0, .04, 0); band.rotation_degrees.x = -90
 	band.visible = false   # the reference stage has no band; the rings mark the line

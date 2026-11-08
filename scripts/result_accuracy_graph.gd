@@ -29,7 +29,7 @@ func rebuild() -> void:
         mouse_filter=Control.MOUSE_FILTER_PASS
     queue_redraw()
 func tint(x: float) -> Color:
-    return Color("2bdaed").lerp(Color("f12bc6"),x)
+    return Color("2bdaed").lerp(Color("ff8a5b"),x)
 func _draw() -> void:
     if points.is_empty():
         draw_string(get_theme_font("font"),Vector2(0,size.y*.5),"No judgments recorded for this run",HORIZONTAL_ALIGNMENT_LEFT,-1,18,Color("8d85a6")); return

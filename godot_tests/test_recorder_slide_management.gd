@@ -26,7 +26,12 @@ func run() -> void:
 	var visual=game.field.world.notes["recorder_slide_layer"].node
 	var head: MeshInstance3D=visual.get_child(0)
 	var tail: MeshInstance3D=visual.get_node("SustainEndCap")
-	check(head.material_override.shader==load("res://scripts/recorder_note.gdshader") and tail.material_override.shader==head.material_override.shader,"Recorder slide heads and end caps use opaque alpha compositing")
+	check(head.material_override.shader==load("res://scripts/recorder_note.gdshader") and tail.material_override.shader==head.material_override.shader,"Rectangle recorder slide heads and end caps keep the rectangle note art")
+	game.note_shape="circle"
+	game.field.world.build_note_node("recorder_slide_round",slide,true)
+	var round_head: MeshInstance3D=game.field.world.notes["recorder_slide_round"].node.get_child(0)
+	check(round_head.material_override.shader==load("res://scripts/reference_note.gdshader") and round_head.material_override.render_priority>0,"Round recorder slide heads use SSRG's round puck above the ribbon")
+	game.note_shape="rectangle"
 	check(head.material_override.render_priority>0 and tail.material_override.render_priority>0,"Recorder note faces draw above the slide trail")
 	var arranger = game.note_arranger
 	check(arranger.visible and arranger.delete_point_button.visible, "Slide management controls appear for a selected slide")
