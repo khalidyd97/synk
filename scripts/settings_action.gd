@@ -21,7 +21,7 @@ func _draw() -> void:
     var role="primary" if primary else "surface"
     var pressing=1.0 if is_pressed() and not disabled else touch*.6
     Soft.draw_plate(self,size,role,engagement,pressing,amount,disabled)
-    preload("res://scripts/ui_icons.gd").draw_caption(self,Rect2(0,2*pressing-1,size.x,size.y),text,Soft.BOLD,caption_size,Soft.text_color(role,amount,disabled))
+    preload("res://scripts/ui_icons.gd").draw_caption(self,Rect2(0,2*pressing-1,size.x,size.y),text,Soft.font_for(self),maxi(caption_size,16),Soft.text_color(role,amount,disabled))
 func outline(alpha: float) -> StyleBoxFlat:
     var box=StyleBoxFlat.new(); box.set_corner_radius_all(18); box.set_border_width_all(2)
     box.bg_color=Color(0,0,0,0); box.border_color=Color(accent,alpha*.5); return box

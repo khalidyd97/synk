@@ -7,7 +7,7 @@ const ScreenStyle = preload("res://scripts/screen_style.gd")
 const Action = preload("res://scripts/settings_action.gd")
 const SettingsScreen = preload("res://scripts/settings_screen.gd")
 const BACKGROUND = preload("res://assets/lobby/city_background.png")
-const TEXT = Color("eef0ff")
+const TEXT = Color("f4f1ea")
 const MUTED = Color(.8,.82,.95,.6)
 const BPM = 100.0
 const BEATS_PER_LOOP = 4
@@ -121,7 +121,7 @@ func _ready() -> void:
 	action(panel,"+10",.80,.20,.96,.34,func(): delay_input.value += 10)
 
 	var rule = ColorRect.new(); place(rule,panel,.07,.38,.93,.383); rule.color = Color(1,1,1,.08); rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	text(panel,"TAP TO MEASURE",.07,.40,.93,.46,16,Color("9b8cff"))
+	text(panel,"TAP TO MEASURE",.07,.40,.93,.46,16,Color("d9d4ca"))
 	text(panel,"Tap the lane each time you hear a click. After %d taps the helper suggests a delay." % TAPS_NEEDED,.07,.46,.93,.54,15,MUTED)
 	tap_result_label = text(panel,"",.07,.54,.93,.63,20)
 	use_tap_button = action(panel,"USE MEASURED DELAY",.07,.65,.6,.79,use_measurement)
@@ -206,7 +206,7 @@ func draw_lane() -> void:
 	var top_half = size_value.x*.12; var bottom_half = size_value.x*.42; var center = size_value.x*.5
 	var outline = PackedVector2Array([Vector2(center-top_half,0),Vector2(center+top_half,0),Vector2(center+bottom_half,size_value.y),Vector2(center-bottom_half,size_value.y)])
 	lane.draw_colored_polygon(outline,Color(0.077,0.077,0.077,.75))
-	lane.draw_polyline(PackedVector2Array([outline[0],outline[3]]),Color("38baff"),2.0,true)
+	lane.draw_polyline(PackedVector2Array([outline[0],outline[3]]),Color("d9d4ca"),2.0,true)
 	lane.draw_polyline(PackedVector2Array([outline[1],outline[2]]),Color("a36aff"),2.0,true)
 	var half_at = func(y: float) -> float: return lerpf(top_half,bottom_half,y/size_value.y)
 	var bar_half = half_at.call(bar_y)
@@ -224,7 +224,7 @@ func draw_lane() -> void:
 		var half = half_at.call(y)*.55*game.note_size
 		var height = lerpf(6,22,y/size_value.y)*game.note_size
 		var accent = posmod(k,BEATS_PER_LOOP)==0
-		var color = Color("ffd447") if accent else Color("38baff")
+		var color = Color("ffd447") if accent else Color("d9d4ca")
 		var alpha = 1.0 if until >= 0 else maxf(0,1.0+until*4.0)
 		if game.round_notes():
 			lane.draw_set_transform(Vector2(center,y),0,Vector2(1,.38))
@@ -234,7 +234,7 @@ func draw_lane() -> void:
 		else:
 			lane.draw_rect(Rect2(center-half,y-height*.5,half*2,height),Color(color,alpha))
 			lane.draw_rect(Rect2(center-half,y-height*.5,half*2,height),Color(1,1,1,alpha*.8),false,2.0)
-	var font = ThemeDB.fallback_font
+	var font = preload("res://scripts/arcade_style.gd").HEAD
 	var hint = "TAP HERE ON EACH CLICK"
 	var width = font.get_string_size(hint,HORIZONTAL_ALIGNMENT_LEFT,-1,16).x
 	lane.draw_string(font,Vector2(center-width*.5,size_value.y*.94),hint,HORIZONTAL_ALIGNMENT_LEFT,-1,16,Color(1,1,1,.45))

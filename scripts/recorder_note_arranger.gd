@@ -11,10 +11,17 @@ var selected_note_ref: Dictionary = {}
 var delete_point_button: Button
 func _ready() -> void :
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Dark plate behind the hold/slide edit rows so their text never sits on the bright highway.
+	var plate = Panel.new();add_child(plate);plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	plate.anchor_left = 0.132;plate.anchor_right = 0.668;plate.anchor_top = 0.192;plate.anchor_bottom = 0.348
+	var plate_style = StyleBoxFlat.new();plate_style.bg_color = Color(0.05, 0.05, 0.06, 0.9)
+	plate_style.border_color = Color(1, 1, 1, 0.07);plate_style.set_border_width_all(1);plate_style.set_corner_radius_all(22)
+	plate_style.shadow_color = Color(0, 0, 0, 0.45);plate_style.shadow_size = 18
+	plate.add_theme_stylebox_override("panel", plate_style)
 	for i in 3:
 		var key = ["move", "shape", "points"][i]
 		var b = preload("res://scripts/recorder_action.gd").new();b.text = ["MOVE", "SHAPE", "CONNECTOR"][i]
-		b.caption_size = 16;b.compact = true;b.variant = "tool";add_child(b)
+		b.caption_size = 17;b.compact = true;b.variant = "tool";add_child(b)
 		b.anchor_left = 0.14 + i * 0.13;b.anchor_right = 0.26 + i * 0.13;b.anchor_top = 0.202;b.anchor_bottom = 0.266
 		b.pressed.connect( func():
 			edit_mode = "move" if key == "move" else "shape"
@@ -24,17 +31,17 @@ func _ready() -> void :
 	for i in 2:
 		var endpoint = "start" if i == 0 else "end"
 		var b = preload("res://scripts/recorder_action.gd").new();b.text = "GO " + endpoint.to_upper()
-		b.caption_size = 14;b.compact = true;b.variant = "tool";add_child(b)
+		b.caption_size = 17;b.compact = true;b.variant = "tool";add_child(b)
 		b.anchor_left = 0.14 + i * 0.13;b.anchor_right = 0.26 + i * 0.13;b.anchor_top = 0.274;b.anchor_bottom = 0.338
 		b.pressed.connect( func(): focus_endpoint(endpoint))
 	for i in 2:
 		var operation = "smooth" if i == 0 else "straighten"
 		var b = preload("res://scripts/recorder_action.gd").new();b.text = "SIMPLIFY" if operation == "smooth" else "STRAIGHTEN"
-		b.caption_size = 14;b.compact = true;b.variant = "tool";add_child(b)
+		b.caption_size = 17;b.compact = true;b.variant = "tool";add_child(b)
 		b.anchor_left = 0.40 + i * 0.13;b.anchor_right = 0.52 + i * 0.13;b.anchor_top = 0.274;b.anchor_bottom = 0.338
 		b.pressed.connect( func(): reshape(operation));shape_buttons[operation] = b
 	delete_point_button = preload("res://scripts/recorder_action.gd").new()
-	delete_point_button.text = "DELETE POINT";delete_point_button.caption_size = 14
+	delete_point_button.text = "DELETE POINT";delete_point_button.caption_size = 17
 	delete_point_button.compact = true;delete_point_button.variant = "tool";add_child(delete_point_button)
 	delete_point_button.anchor_left = .53;delete_point_button.anchor_right = .66
 	delete_point_button.anchor_top = .202;delete_point_button.anchor_bottom = .266
