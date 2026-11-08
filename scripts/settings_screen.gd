@@ -2,9 +2,9 @@ extends Control
 
 # Full-page settings opened from the lobby gear. BACK returns to the lobby.
 const Action = preload("res://scripts/settings_action.gd")
-const TEXT = Color("eef0ff")
+const TEXT = Color("f4f1ea")
 const MUTED = Color(0.8,0.82,0.95,.78)
-const ACCENT = Color("ff7a59")
+const ACCENT = Color("ff8a5b")
 
 var game: Control
 var note_speed_input: Stepper
@@ -23,8 +23,6 @@ var hit_size_input: Stepper
 var style_tiles: Dictionary = {}
 var old_ssrg_ui_row: PanelContainer
 var old_ssrg_ui_switch: Switch
-var prism_type_row: PanelContainer
-var prism_type_switch: Switch
 # The SSRG highway is a fixed flat view: its style hides the angle row.
 var angle_row: PanelContainer
 var color_pickers: Dictionary = {}
@@ -70,7 +68,7 @@ class Stepper extends Control:
         plus = Action.new(); plus.text = "+"; plus.caption_size = 30
         readout = Label.new(); readout.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; readout.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
         readout.add_theme_font_size_override("font_size",24); readout.add_theme_color_override("font_color",TEXT)
-        var value_style=StyleBoxFlat.new(); value_style.bg_color=Color("121212")
+        var value_style=StyleBoxFlat.new(); value_style.bg_color=Color(1,1,1,.06)
         value_style.set_corner_radius_all(16); value_style.border_color=Color("2d3048"); value_style.set_border_width_all(1)
         readout.add_theme_stylebox_override("normal",value_style)
         for node in [minus,readout,plus]: add_child(node)
@@ -126,7 +124,7 @@ class Switch extends Button:
         var Soft=preload("res://scripts/soft_button.gd")
         Soft.draw_plate(self,size,"quiet",engagement,0.0,0.0,disabled,18.0)
         var caption="ON" if button_pressed else "OFF"
-        draw_string(Soft.BOLD,Vector2(18,size.y*.5+6),caption,HORIZONTAL_ALIGNMENT_LEFT,-1,16,Color("8f8b94").lerp(Soft.TEXT,knob))
+        draw_string(Soft.font_for(self),Vector2(18,size.y*.5+6),caption,HORIZONTAL_ALIGNMENT_LEFT,-1,16,Color("8f8b94").lerp(Soft.TEXT,knob))
         var track=Rect2(size.x-79,(size.y-32)*.5,64,32)
         var pill=StyleBoxFlat.new(); pill.set_corner_radius_all(16); pill.bg_color=Color("3a3840").lerp(Soft.CREAM,knob)
         draw_style_box(pill,track)
@@ -144,9 +142,9 @@ class StyleTile extends Button:
         for state in ["normal","hover","pressed","disabled","focus","hover_pressed"]: add_theme_stylebox_override(state,StyleBoxEmpty.new())
     func _draw() -> void:
         var box = StyleBoxFlat.new(); box.set_corner_radius_all(18)
-        box.bg_color = Color("2a2830") if selected else Color("121212")
-        box.border_color = Color("f3ece1") if selected else Color("30364e")
-        if is_hovered() or has_focus(): box.border_color=Color("a499e8")
+        box.bg_color = Color(1,1,1,.13) if selected else Color(1,1,1,.06)
+        box.border_color = Color("f4f1ea") if selected else Color("34353a")
+        if is_hovered() or has_focus(): box.border_color=Color("d9d4ca")
         box.set_border_width_all(2 if selected else 1)
         draw_style_box(box,Rect2(Vector2.ZERO,size))
         if style_name in ["aurora","solar"]:
@@ -159,7 +157,7 @@ class StyleTile extends Button:
             draw_line(a,d,rail.darkened(.5),5,true);draw_line(b,c,rail.darkened(.5),5,true)
             draw_line(a,d,rail,1.5,true);draw_line(b,c,rail,1.5,true)
             draw_line(a.lerp(d,.87),b.lerp(c,.87),rail,1.5,true)
-            var font=ThemeDB.fallback_font;var title:String=preload("res://scripts/concept_highway.gd").LABELS[style_name]
+            var font=preload("res://scripts/arcade_style.gd").HEAD;var title:String=preload("res://scripts/concept_highway.gd").LABELS[style_name]
             var width=font.get_string_size(title,HORIZONTAL_ALIGNMENT_LEFT,-1,14).x
             draw_string(font,Vector2((size.x-width)*.5,size.y*.88),title,HORIZONTAL_ALIGNMENT_LEFT,-1,14,Color.WHITE)
             return
@@ -173,21 +171,21 @@ class StyleTile extends Button:
             draw_line(pa.lerp(pd,.8),pb.lerp(pc,.8),Color(1,1,1,.85),2,true)
             var note: Texture2D=preload("res://assets/ssrg/tap.png"); var nw=size.x*.26
             draw_texture_rect(note,Rect2(Vector2(size.x*.5-nw*.5,size.y*.36),Vector2(nw,nw*note.get_height()/note.get_width())),false)
-            var font=ThemeDB.fallback_font; var w=font.get_string_size("SSRG",HORIZONTAL_ALIGNMENT_LEFT,-1,18).x
+            var font=preload("res://scripts/arcade_style.gd").HEAD; var w=font.get_string_size("SSRG",HORIZONTAL_ALIGNMENT_LEFT,-1,18).x
             draw_string(font,Vector2((size.x-w)*.5,size.y*.88),"SSRG",HORIZONTAL_ALIGNMENT_LEFT,-1,18,Color.WHITE)
             return
         var top = size.y*.14; var bottom = size.y*.66
         var a = Vector2(size.x*.40,top); var b = Vector2(size.x*.60,top)
         var c = Vector2(size.x*.86,bottom); var d = Vector2(size.x*.14,bottom)
-        draw_colored_polygon(PackedVector2Array([a,b,c,d]),Color("050505") if gold else Color("151515"))
+        draw_colored_polygon(PackedVector2Array([a,b,c,d]),Color("050505") if gold else Color(1,1,1,.07))
         var band_top = lerpf(top,bottom,.72)
         draw_colored_polygon(PackedVector2Array([a.lerp(d,.72),b.lerp(c,.72),c,d]),Color(1.0,.86,.34) if gold else Color(.60,.36,1.0,.85))
-        for rail in [[a,d,Color("38baff")],[b,c,Color("b35cff")]]:
+        for rail in [[a,d,Color("d9d4ca")],[b,c,Color("d9d4ca")]]:
             if gold: draw_line(rail[0],rail[1],Color(1.0,.96,.88),6,true)
             else:
                 draw_line(rail[0],rail[1],Color(rail[2],.3),8,true)
                 draw_line(rail[0],rail[1],rail[2],2,true)
-        var font = ThemeDB.fallback_font; var caption = style_name.to_upper()
+        var font = preload("res://scripts/arcade_style.gd").HEAD; var caption = style_name.to_upper()
         var width = font.get_string_size(caption,HORIZONTAL_ALIGNMENT_LEFT,-1,18).x
         draw_string(font,Vector2((size.x-width)*.5,size.y*.88),caption,HORIZONTAL_ALIGNMENT_LEFT,-1,18,Color.WHITE if selected else Color(1,1,1,.65))
 
@@ -202,23 +200,23 @@ class ModeTile extends Button:
         for state in ["normal","hover","pressed","disabled","focus","hover_pressed"]: add_theme_stylebox_override(state,StyleBoxEmpty.new())
     func _draw() -> void:
         var box = StyleBoxFlat.new(); box.set_corner_radius_all(18)
-        box.bg_color = Color("2a2830") if selected else Color("121212")
-        box.border_color = Color("f3ece1") if selected else Color("30364e")
-        if is_hovered() or has_focus(): box.border_color=Color("a499e8")
+        box.bg_color = Color(1,1,1,.13) if selected else Color(1,1,1,.06)
+        box.border_color = Color("f4f1ea") if selected else Color("34353a")
+        if is_hovered() or has_focus(): box.border_color=Color("d9d4ca")
         box.set_border_width_all(2 if selected else 1)
         draw_style_box(box,Rect2(Vector2.ZERO,size))
         var center = Vector2(size.x*.5,size.y*.38)
         if mode == "theme":
-            var swatches = [Color(1.0,.96,.88),Color(1.0,.86,.34),Color("38baff"),Color("b35cff")]
+            var swatches = [Color(1.0,.96,.88),Color(1.0,.86,.34),Color("d9d4ca"),Color("d9d4ca")]
             for i in swatches.size(): draw_circle(center+Vector2((i-1.5)*30,0),11,swatches[i])
         else:
             # A small "artwork" whose colors flow into the swatches beside it.
             var art = Rect2(center-Vector2(62,20),Vector2(40,40))
             draw_polygon(PackedVector2Array([art.position,art.position+Vector2(art.size.x,0),art.end,art.position+Vector2(0,art.size.y)]),
-                PackedColorArray([Color("ff7a59"),Color("ffd166"),Color("7b2cbf"),Color("e0457b")]))
+                PackedColorArray([Color("ff8a5b"),Color("ffd166"),Color("7b2cbf"),Color("ff8a5b")]))
             draw_line(center+Vector2(-14,0),center+Vector2(2,0),Color(1,1,1,.7),2,true)
-            for i in 3: draw_circle(center+Vector2(18+i*24,0),9,[Color("ff7a59"),Color("ffd166"),Color("e0457b")][i])
-        var font = ThemeDB.fallback_font; var caption = mode.to_upper()
+            for i in 3: draw_circle(center+Vector2(18+i*24,0),9,[Color("ff8a5b"),Color("ffd166"),Color("ff8a5b")][i])
+        var font = preload("res://scripts/arcade_style.gd").HEAD; var caption = mode.to_upper()
         var width = font.get_string_size(caption,HORIZONTAL_ALIGNMENT_LEFT,-1,18).x
         draw_string(font,Vector2((size.x-width)*.5,size.y*.86),caption,HORIZONTAL_ALIGNMENT_LEFT,-1,18,Color.WHITE if selected else Color(1,1,1,.65))
 
@@ -236,13 +234,13 @@ class ShapeTile extends Button:
         for state in ["normal","hover","pressed","disabled","focus","hover_pressed"]: add_theme_stylebox_override(state,StyleBoxEmpty.new())
     func _draw() -> void:
         var style = StyleBoxFlat.new(); style.set_corner_radius_all(18)
-        style.bg_color = Color("121212").lerp(Color("2a2830"),selected_amount)
-        style.border_color = Color("30364e").lerp(Color("f3ece1"),selected_amount)
-        if is_hovered() or has_focus(): style.border_color=Color("a499e8")
+        style.bg_color = Color(1,1,1,.06).lerp(Color(1,1,1,.13),selected_amount)
+        style.border_color = Color("34353a").lerp(Color("f4f1ea"),selected_amount)
+        if is_hovered() or has_focus(): style.border_color=Color("d9d4ca")
         style.set_border_width_all(2 if selected else 1)
         draw_style_box(style,Rect2(Vector2.ZERO,size))
         var center = Vector2(size.x*.5,size.y*.42)
-        var tint = Color("38baff")
+        var tint = Color("d9d4ca")
         # The real highway artwork for each shape.
         if shape == "rectangle":
             var tap: Texture2D = preload("res://assets/neon/Tap_Note_Blue_Preview.png")
@@ -254,7 +252,7 @@ class ShapeTile extends Button:
             var art: Texture2D = preload("res://assets/neon/Circle_Note_Puck_Blue.png") if puck else preload("res://assets/neon/Circle_Note_Reference.png")
             var w = size.x*(.56 if puck else .78); var dim = Vector2(w, w*art.get_height()/art.get_width())
             draw_texture_rect(art, Rect2(center-dim*.5, dim), false)
-        var font = ThemeDB.fallback_font
+        var font = preload("res://scripts/arcade_style.gd").HEAD
         var caption = shape.to_upper()
         var font_size = 18
         var width = font.get_string_size(caption,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x
@@ -283,8 +281,10 @@ const SUBPAGES={"gameplay":{"play":"Play","browsing":"Browsing"},"audio":{"timin
 const SUBPAGE_HINTS={"colors":"Choose Theme in Highway to use custom colors. Adaptive keeps your choices saved.","play":"Tune how notes travel while you play.","browsing":"Choose how the song library behaves.","timing":"Match the judgment timing to your music.","headset":"Compensate for wireless audio delay.","highway":"Choose your rail style and colors. Gameplay uses the SSRG view.","notes":"Choose note shapes, trail styles, and sizes.","hits":"Tune hit feedback and particle intensity.","stage":"Choose your stage atmosphere. Combine effects freely.","recording":"Personal recording aids and playback preferences.","guides":"Listen for the rhythm while you create charts."}
 const PAGE_HINTS={"gameplay":"Tune your highway and browsing experience.","audio":"Match your taps to the music and your headset.","visuals":"Customize the highway, note sizes and stage effects.","editor":"Personal preferences for every chart you create."}
 
-func style(fill: Color=Color("101010"),edge: Color=Color("2c2d44"),radius: int=22) -> StyleBoxFlat:
-    var box=StyleBoxFlat.new(); box.bg_color=fill; box.border_color=edge; box.set_corner_radius_all(radius); box.set_border_width_all(1); return box
+func style(fill: Color=Color(1,1,1,.05),edge: Color=Color("34353a"),radius: int=22) -> StyleBoxFlat:
+    # Album Takeover: dark fills become frosted glass and outlines go away.
+    var box=StyleBoxFlat.new(); box.bg_color=Color(1,1,1,.05) if fill.a>.5 and fill.get_luminance()<.14 else fill
+    box.set_corner_radius_all(radius); box.anti_aliasing=true; return box
 func place(node: Control,parent: Control,x: float,y: float,w: float,h: float) -> void:
     parent.add_child(node); node.position=Vector2(x,y); node.size=Vector2(w,h)
 func label(parent: Node,value: String,font_size: int=20,tint: Color=TEXT) -> Label:
@@ -314,7 +314,7 @@ func row(parent: Node,title: String,hint: String,height: float=132) -> PanelCont
     var captions=VBoxContainer.new(); line.add_child(captions); captions.size_flags_horizontal=Control.SIZE_EXPAND_FILL
     captions.size_flags_vertical=Control.SIZE_SHRINK_CENTER; captions.add_theme_constant_override("separation",6)
     label(captions,title,22)
-    var sub=label(captions,hint,15,Color("a7aac6")); sub.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+    var sub=label(captions,hint,15,Color("bcb7ad")); sub.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
     sub.size_flags_horizontal=Control.SIZE_EXPAND_FILL
     panel.set_meta("control_line",line); return panel
 func add_control(panel: PanelContainer,control: Control,width: float=316) -> void:
@@ -334,7 +334,7 @@ func page(category: String,key: String) -> VBoxContainer:
             subtab_buttons[category][id]=tab; index+=1
     var content=Control.new(); pages[category].root.add_child(content); content.position=Vector2(0,78); content.size=Vector2(1044,464)
     var title=label(content,SUBPAGES[category][key],24); title.position=Vector2.ZERO; title.size=Vector2(1044,34)
-    var hint=label(content,SUBPAGE_HINTS[key],14,Color("a7aac6")); hint.position=Vector2(0,36); hint.size=Vector2(1044,24)
+    var hint=label(content,SUBPAGE_HINTS[key],14,Color("bcb7ad")); hint.position=Vector2(0,36); hint.size=Vector2(1044,24)
     var scroll=ScrollContainer.new(); content.add_child(scroll); scroll.position=Vector2(0,68); scroll.size=Vector2(1044,396)
     scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED; scroll.scroll_deadzone=12
     var drag=preload("res://scripts/song_list_scroll.gd").new(); drag.name="DragScroll"; drag.scroll=scroll; scroll.add_child(drag)
@@ -353,23 +353,22 @@ func _ready() -> void:
     mat.set_shader_parameter("ambience",Color(0.116,0.116,0.116))
     preload("res://scripts/screen_backdrop.gd").video(self,0.17,.5)  # violet stage
     canvas=Control.new(); add_child(canvas); canvas.mouse_filter=Control.MOUSE_FILTER_IGNORE
-    var theme_local=Theme.new(); theme_local.default_font=ThemeDB.fallback_font; canvas.theme=theme_local
-    for type in ["Label","Button","PopupMenu"]: theme_local.set_font("font",type,ThemeDB.fallback_font)
+    canvas.theme=preload("res://scripts/game_theme.gd").arcade()
     resized.connect(layout); game.safe_area_changed.connect(layout); layout()
     back_button=action(canvas,"‹",game.close_lobby_settings); back_button.caption_size=34; back_button.position=Vector2(48,36); back_button.size=Vector2(84,84)
-    var eyebrow=label(canvas,"G A M E   S E T T I N G S",12,ACCENT); eyebrow.position=Vector2(144,33); eyebrow.size=Vector2(600,24)
-    var heading=label(canvas,"Make it your rhythm",36); heading.position=Vector2(144,57); heading.size=Vector2(700,52)
-    var save=label(canvas,"Changes save automatically",15,Color("a7aac6")); save.position=Vector2(1100,53); save.size=Vector2(308,32); save.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
+    var eyebrow=label(canvas,"",12,ACCENT); eyebrow.position=Vector2(144,33); eyebrow.size=Vector2(600,24)
+    var heading=label(canvas,"Settings",50); heading.position=Vector2(144,28); heading.size=Vector2(700,76)
+    var save=label(canvas,"Changes save automatically",15,Color("bcb7ad")); save.position=Vector2(1100,53); save.size=Vector2(308,32); save.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
     var rail=Panel.new(); place(rail,canvas,48,136,232,671); rail.add_theme_stylebox_override("panel",style())
     var y=26
     for key in PAGE_NAMES:
         var n=action(rail,PAGE_NAMES[key],func(): show_page(key)); n.caption_size=21
         n.position=Vector2(14,y); n.size=Vector2(204,84); nav_buttons[key]=n; y+=94
-    var scope=label(rail,"GLOBAL PREFERENCES",13,Color("ff7a59")); scope.position=Vector2(22,572); scope.size=Vector2(194,24)
-    var scope_hint=label(rail,"Applies across all songs\nand chart versions.",14,Color("a7aac6")); scope_hint.position=Vector2(22,601); scope_hint.size=Vector2(194,52)
+    var scope=label(rail,"Global preferences",14,Color("bcb7ad")); scope.position=Vector2(22,572); scope.size=Vector2(194,24)
+    var scope_hint=label(rail,"Applies across all songs\nand chart versions.",14,Color("bcb7ad")); scope_hint.position=Vector2(22,601); scope_hint.size=Vector2(194,52)
     page_host=Panel.new(); place(page_host,canvas,308,136,1100,671); page_host.add_theme_stylebox_override("panel",style())
     page_title=label(page_host,"",28); page_title.position=Vector2(28,23); page_title.size=Vector2(1044,39)
-    page_hint=label(page_host,"",16,Color("a7aac6")); page_hint.position=Vector2(28,66); page_hint.size=Vector2(1044,28)
+    page_hint=label(page_host,"",16,Color("bcb7ad")); page_hint.position=Vector2(28,66); page_hint.size=Vector2(1044,28)
     build_gameplay(page("gameplay","play"),page("gameplay","browsing"))
     build_audio(page("audio","timing"),page("audio","headset"))
     build_highway(page("visuals","highway")); build_notes(page("visuals","notes"))
@@ -402,7 +401,7 @@ func show_section(key: String,animated: bool=true) -> void:
         subtab_buttons[selected_page][name].set_selected(name==key)
     var active=pages[selected_page].sections[key]
     pages[selected_page]["list"]=active.list; pages[selected_page]["scroll"]=active.scroll
-    page_hint.text="SETTINGS / "+PAGE_NAMES[selected_page].to_upper()+" / "+SUBPAGES[selected_page][key].to_upper()
+    page_hint.text=PAGE_NAMES[selected_page]+"  ·  "+SUBPAGES[selected_page][key]
     if animated: animate_page()
 func animate_page() -> void:
     if not pages.has(selected_page) or not selected_sections.has(selected_page): return
@@ -412,6 +411,8 @@ func animate_page() -> void:
     page_tween=create_tween().set_parallel(true)
     page_tween.tween_property(root,"position:x",0,.25).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
     page_tween.tween_property(root,"modulate:a",1,.22)
+    # Each setting row then sweeps in after the one above it.
+    preload("res://scripts/ui_motion.gd").cascade.call_deferred(root,.04,.04)
 func build_gameplay(items: VBoxContainer,browsing: VBoxContainer) -> void:
     note_speed_input=Stepper.new(1,10,.1,game.synk_speed_setting(),"",1)
     add_control(row(items,"Note speed","1.0 to 10.0, like SSRG Playables. 3.0 is the standard speed; hold − or + to move quickly."),note_speed_input)
@@ -521,10 +522,6 @@ func build_highway(items: VBoxContainer) -> void:
     old_ssrg_ui_row=row(items,"OLD UI SSRG","STAYC note sprites, guide rings, judgment bar and thin edge rails.",112)
     old_ssrg_ui_switch=Switch.new();add_control(old_ssrg_ui_row,old_ssrg_ui_switch,152)
     connect_switch(old_ssrg_ui_switch,game.change_old_ssrg_ui)
-    prism_type_row=row(items,"Prism Type","Animated glow for SSRG taps, holds and slides.",112)
-    prism_type_switch=Switch.new()
-    add_control(prism_type_row,prism_type_switch,152)
-    connect_switch(prism_type_switch,game.change_prism_type)
     var modes=row(items,"Colors","Theme keeps the style's colors. Adaptive takes them from the song's artwork.",148)
     var mode_row=HBoxContainer.new(); mode_row.add_theme_constant_override("separation",12)
     add_control(modes,mode_row,440)
@@ -578,7 +575,7 @@ class ColorChip extends Button:
         face.set_border_width_all(1); face.border_color=Color(1,1,1,.2)
         draw_style_box(face,dot)
         var code="#"+color.to_html(false).to_upper()
-        draw_string(Soft.BOLD,Vector2(62,size.y*.5+6),code,HORIZONTAL_ALIGNMENT_LEFT,size.x-68,16,Soft.text_color("quiet",0.0,disabled))
+        draw_string(Soft.font_for(self),Vector2(62,size.y*.5+6),code,HORIZONTAL_ALIGNMENT_LEFT,size.x-68,16,Soft.text_color("quiet",0.0,disabled))
 
 func build_notes(items: VBoxContainer) -> void:
     var shapes=row(items,"Note shape","Choose the note style you see on the highway.",166)
@@ -594,7 +591,7 @@ func build_notes(items: VBoxContainer) -> void:
     trail_style_input=OptionButton.new(); trail_style_input.add_item("Neon trail"); trail_style_input.add_item("Solid ribbon")
     trail_style_input.add_theme_font_size_override("font_size",21); trail_style_input.get_popup().add_theme_font_size_override("font_size",21)
     trail_style_input.get_popup().add_theme_constant_override("v_separation",16)
-    var picker_style=style(Color("121212"),Color("373c55"),14)
+    var picker_style=style(Color(1,1,1,.06),Color("373c55"),14)
     picker_style.content_margin_left=18; picker_style.content_margin_right=18
     trail_style_input.add_theme_stylebox_override("normal",picker_style)
     var focus=picker_style.duplicate(); focus.border_color=ACCENT
@@ -678,9 +675,6 @@ func refresh() -> void:
     if old_ssrg_ui_row:
         old_ssrg_ui_row.visible=game.highway_style=="ssrg"
         old_ssrg_ui_switch.set_pressed_no_signal(bool(game.prefs.get_value("highway","old_ssrg_ui",false)))
-    if prism_type_row:
-        prism_type_row.visible=game.highway_style=="ssrg"
-        prism_type_switch.set_pressed_no_signal(game.prism_type_enabled())
     for kind in color_mode_tiles: color_mode_tiles[kind].selected=kind==game.highway_colors
     if highway_opacity_input: highway_opacity_input.sync_value(game.highway_opacity*100)
     if not song_preview_toggle: return

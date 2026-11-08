@@ -17,6 +17,19 @@ var redo_stack: Array = []
 static func note(time: float, lane: int, kind = "tap") -> Dictionary:
 	return {"time": maxf(0, time), "lane": clampi(lane, 0, MAX_LANE), "kind": kind, "duration": 0.0, "end_lane": clampi(lane, 0, MAX_LANE), "direction": 0, "path": []}
 
+# Every bend point of a slide is a connector: the finger must be there when it reaches
+# the line. Rebuilds "checkpoints" from the path's inner points (kept 0.02 s from the ends).
+static func sync_connectors(n: Dictionary) -> void:
+	if n.get("kind", "") != "slide" or n.get("path", []).size() < 3:
+		n.erase("checkpoints");return
+	var duration = float(n.duration);var checks: Array = []
+	for i in range(1, n.path.size() - 1):
+		var offset = snappedf(float(n.path[i].offset), .001)
+		if offset <= .02 or offset >= duration - .02: continue
+		if checks.is_empty() or offset > float(checks[-1]) + .001: checks.append(offset)
+	if checks.is_empty(): n.erase("checkpoints")
+	else: n.checkpoints = checks
+
 static func lane_at(n: Dictionary, time: float) -> float:
 	if n.kind != "slide": return float(n.lane)
 	var elapsed = clampf(time - float(n.time), 0, float(n.duration))
@@ -30,12 +43,18 @@ static func lane_at(n: Dictionary, time: float) -> float:
 			var span = maxf(.0001, t1 - t0)
 			var t = (elapsed - t0) / span
 			var l0 = float(path[i-1].lane); var l1 = float(path[i].lane)
-			if n.get("ssrg_path",false): return lerpf(l0,l1,t)
+			# Each inner point is a sharp corner or a smooth curve ("curve" key). SSRG paths
+			# default to corners, older SYNK paths to curves. A segment between two corners
+			# is a straight line; a curved end rounds that side of the segment.
+			var ssrg = bool(n.get("ssrg_path",false))
+			var c0 = i - 1 > 0 and bool(path[i-1].get("curve", not ssrg))
+			var c1 = i < path.size() - 1 and bool(path[i].get("curve", not ssrg))
+			if not c0 and not c1: return lerpf(l0,l1,t)
 			var d1 = (l1 - l0) / span
 			var d0 = (l0 - float(path[i-2].lane)) / maxf(.0001, t0 - float(path[i-2].offset)) if i >= 2 else d1
 			var d2 = (float(path[i+1].lane) - l1) / maxf(.0001, float(path[i+1].offset) - t1) if i + 1 < path.size() else d1
-			var m0 = 0.0 if d0 * d1 <= 0.0 else 2.0 * d0 * d1 / (d0 + d1)
-			var m1 = 0.0 if d1 * d2 <= 0.0 else 2.0 * d1 * d2 / (d1 + d2)
+			var m0 = (0.0 if d0 * d1 <= 0.0 else 2.0 * d0 * d1 / (d0 + d1)) if c0 else d1
+			var m1 = (0.0 if d1 * d2 <= 0.0 else 2.0 * d1 * d2 / (d1 + d2)) if c1 else d1
 			var t2 = t * t; var t3 = t2 * t
 			var lane = (2*t3 - 3*t2 + 1) * l0 + (t3 - 2*t2 + t) * m0 * span + (-2*t3 + 3*t2) * l1 + (t3 - t2) * m1 * span
 			return clampf(lane, 0.0, float(MAX_LANE))

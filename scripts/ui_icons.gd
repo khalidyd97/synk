@@ -79,8 +79,18 @@ static func draw(canvas: CanvasItem, kind: String, center: Vector2, size: float,
 			canvas.draw_polyline(PackedVector2Array([c+Vector2(-r*.8,r*.6),c+Vector2(-r*.8,-r*.55),c+Vector2(-r*.25,-r*.55),c+Vector2(-r*.05,-r*.3),c+Vector2(r*.8,-r*.3),c+Vector2(r*.8,r*.6),c+Vector2(-r*.8,r*.6)]),color,w,true)
 
 # Draws an optional icon and caption centred together in rect; returns nothing.
+# Album Takeover menus speak in sentence case: "EDIT CHART" is drawn as "Edit chart".
+# Short codes such as BPM stay as they are; gameplay (other fonts) is left alone.
+static func menu_case(text: String) -> String:
+	if text.length() <= 3 or text != text.to_upper() or text == text.to_lower(): return text
+	var lower = text.to_lower()
+	for i in lower.length():
+		if lower[i] != lower[i].to_upper():
+			return lower.substr(0, i) + lower[i].to_upper() + lower.substr(i + 1)
+	return lower
 static func draw_caption(canvas: CanvasItem, rect: Rect2, caption: String, font: Font, font_size: int, color: Color) -> void:
 	var parts=split(caption); var icon: String=parts[0]; var text: String=parts[1]; var trailing: String=parts[2]
+	if font is FontVariation and font.base_font == preload("res://assets/fonts/InterTight-Variable.ttf"): text=menu_case(text)
 	var icon_size=float(font_size)*1.05; var gap=float(font_size)*.45
 	var text_width=font.get_string_size(text,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x if text!="" else 0.0
 	var total=text_width+(icon_size+(gap if text!="" else 0.0) if icon!="" else 0.0)+(gap+icon_size if trailing!="" else 0.0)

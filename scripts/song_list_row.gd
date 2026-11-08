@@ -1,5 +1,6 @@
 extends Button
 const Favorite=preload("res://scripts/song_favorite.gd")
+const Arcade=preload("res://scripts/arcade_style.gd")
 var lobby: Control
 var entry: Dictionary={}
 var selected=false
@@ -22,15 +23,15 @@ func _ready() -> void:
     text=""; custom_minimum_size=Vector2(0,112); size_flags_horizontal=Control.SIZE_EXPAND_FILL
     mouse_filter=Control.MOUSE_FILTER_PASS; mouse_default_cursor_shape=Control.CURSOR_POINTING_HAND
     for state in ["normal","hover","pressed","focus"]: add_theme_stylebox_override(state,StyleBoxEmpty.new())
-    cover_rect=TextureRect.new(); add_child(cover_rect); cover_rect.position=Vector2(12,16); cover_rect.size=Vector2(80,80)
+    cover_rect=TextureRect.new(); add_child(cover_rect); cover_rect.position=Vector2(26,16); cover_rect.size=Vector2(80,80)
     cover_rect.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; cover_rect.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED
     cover_rect.mouse_filter=Control.MOUSE_FILTER_IGNORE
-    preload("res://scripts/screen_style.gd").round_cover(cover_rect,12)
-    title_label=label("",25); artist_label=label("",18); artist_label.add_theme_color_override("font_color",Color("aca6c3"))
-    var medium=FontVariation.new(); medium.base_font=ThemeDB.fallback_font; medium.variation_embolden=.35
-    title_label.add_theme_font_override("font",medium)
-    duration_label=label("",17); duration_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
-    duration_label.add_theme_color_override("font_color",Color("d5cee9"))
+    preload("res://scripts/screen_style.gd").round_cover(cover_rect,4)
+    title_label=label("",31); artist_label=label("",15); artist_label.add_theme_color_override("font_color",Arcade.SUBTLE)
+    title_label.add_theme_font_override("font",Arcade.SERIF)
+    artist_label.add_theme_font_override("font",Arcade.mono())
+    duration_label=label("",14); duration_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
+    duration_label.add_theme_color_override("font_color",Arcade.MUTED); duration_label.add_theme_font_override("font",Arcade.mono())
     heart=Favorite.new(); add_child(heart)
     heart.pressed.connect(func():
         if not preload("res://scripts/drag_scroll.gd").was_dragged(lobby.track_scroll): lobby.toggle_favorite_id(str(entry.id)))
@@ -38,8 +39,8 @@ func _ready() -> void:
     button_down.connect(func(): if not disabled: motion.press=1.0)
 func layout() -> void:
     if title_label==null: return
-    title_label.position=Vector2(110,21); title_label.size=Vector2(maxf(40,size.x-350),29)
-    artist_label.position=Vector2(110,59); artist_label.size=Vector2(maxf(40,size.x-350),27)
+    title_label.position=Vector2(122,19); title_label.size=Vector2(maxf(40,size.x-350),29)
+    artist_label.position=Vector2(122,59); artist_label.size=Vector2(maxf(40,size.x-350),27)
     duration_label.position=Vector2(size.x-144,40); duration_label.size=Vector2(60,32)
     heart.position=Vector2(size.x-76,20); heart.size=Vector2(72,72)
 func update_entry(value: Dictionary) -> void:
@@ -58,29 +59,27 @@ func _process(delta: float) -> void:
     hover_amount=lerpf(hover_amount,1.0 if is_hovered() or has_focus() else 0.0,1-exp(-delta*14))
     motion.advance(delta,selected or hover_amount>.01)
 func _draw() -> void:
-    var style=StyleBoxFlat.new(); style.set_corner_radius_all(18)
-    style.bg_color=Color("1a191e").lerp(Color("2a2830"),selection_amount)
-    style.bg_color=style.bg_color.lightened(hover_amount*.035)
-    # The selected song takes its own accent colour for the edge, glow and side stripe.
-    style.border_color=Color(1,1,1,.06).lerp(Color(Color("f3ece1"),.45),selection_amount)
-    style.set_border_width_all(1)
-    if selection_amount>.01: style.shadow_color=Color(0,0,0,.35*selection_amount); style.shadow_size=12; style.shadow_offset=Vector2(0,5)
-    draw_style_box(style,Rect2(Vector2.ONE,size-Vector2.ONE*2))
-    motion.paint(self,accent,maxf(selection_amount*.65,hover_amount),18)
-    if selection_amount>.01:
-        var stripe=StyleBoxFlat.new(); stripe.bg_color=Color(accent,selection_amount); stripe.set_corner_radius_all(2)
-        draw_style_box(stripe,Rect2(3,size.y*.22,4,size.y*.56))
+    # Album Takeover row: no box. A hairline separates songs; the chosen one sits on a
+    # frosted card that breathes softly, and hovering lifts a faint wash.
+    var rect=Rect2(Vector2(2,3),size-Vector2(4,6)); var radius=16
+    var wash=maxf(selection_amount*(.11+.03*sin(Time.get_ticks_msec()/1000.0*2.0)),hover_amount*.05)
+    if wash>.004:
+        var plate=StyleBoxFlat.new(); plate.set_corner_radius_all(radius); plate.bg_color=Color(1,1,1,wash); plate.anti_aliasing=true
+        draw_style_box(plate,rect)
+    if selection_amount<.98:
+        draw_line(Vector2(16,size.y-1),Vector2(size.x-16,size.y-1),Color(1,1,1,.08*(1.0-selection_amount)),1.0)
     # A small equaliser beside the title while this song's preview plays.
     if selected and lobby and lobby.preview_player.playing:
         var t=Time.get_ticks_msec()/1000.0
         var font=title_label.get_theme_font("font"); var fs=title_label.get_theme_font_size("font_size")
-        var x=110+minf(font.get_string_size(title_label.text,HORIZONTAL_ALIGNMENT_LEFT,-1,fs).x,title_label.size.x)+14
-        for i in 3:
-            var h=6+10*absf(sin(t*(5.0+i*1.7)+i*1.3))
-            draw_style_box(bar_style(accent),Rect2(x+i*7,46-h,4,h))
+        var x=title_label.position.x+minf(font.get_string_size(title_label.text,HORIZONTAL_ALIGNMENT_LEFT,-1,fs).x,title_label.size.x)+14
+        for i in 4:
+            var h=6+12*absf(sin(t*(5.0+i*1.7)+i*1.3))
+            draw_rect(Rect2(x+i*7,46-h,4,h),Color(Arcade.TEXT,.8))
+    # Difficulty pips.
     for i in 5:
-        var h=8+i*3
-        draw_style_box(bar_style(accent if i<intensity else Color("343040")),Rect2(size.x-238+i*12,66-h,8,h))
+        var lit=i<intensity
+        draw_circle(Vector2(size.x-234+i*12,56),4.5,Color(Arcade.TEXT,.85) if lit else Color(1,1,1,.14),true,-1.0,true)
 func bar_style(tint: Color) -> StyleBoxFlat:
     var style=StyleBoxFlat.new(); style.bg_color=tint; style.set_corner_radius_all(2); return style
 

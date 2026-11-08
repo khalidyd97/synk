@@ -4,7 +4,7 @@ on:
   push:
     branches: [codex/unsigned-ios]
 permissions:
-  contents: read
+  contents: write
 jobs:
   build:
     runs-on: macos-15
@@ -80,7 +80,12 @@ jobs:
           cd builds/ipa
           ditto -c -k --sequesterRsrc --keepParent Payload SYNK-unsigned.ipa
           unzip -t SYNK-unsigned.ipa
-      - uses: actions/upload-artifact@v4
-        with:
-          name: SYNK-unsigned-IPA
-          path: builds/ipa/SYNK-unsigned.ipa
+      # Artifact storage is full this cycle: attach the IPA to a private draft release instead.
+      - name: Attach IPA to a draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "ios-build-album-20261108e" builds/ipa/SYNK-unsigned.ipa \
+            --draft --target "${{ github.sha }}" --repo "${{ github.repository }}" \
+            --title "SYNK iOS build (overlap tools, note shapes) - draft" \
+            --notes "Unsigned IPA for testing. Draft only; not published."
