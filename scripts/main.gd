@@ -103,6 +103,7 @@ var judgement = ""
 var judgement_kind = "tap"
 var countdown = 0.0
 var gameplay_start_lead = 0.0
+var audio_handoff = 0.0   # seconds after the music starts in which notes ease onto its clock
 var resume_countdown = 0.0
 var resume_start_audio = false
 var ssrg_resume_position=-1.0
@@ -370,8 +371,20 @@ func change_frame_rate(value: int) -> void:
 	prefs.set_value("gameplay","frame_rate",value); prefs.save("user://preferences.cfg")
 	apply_frame_rate()
 
+# Smallest text size any menu label, field or button may use (1600x900 design units).
+# Anything smaller is hard to read on a phone, so new controls are raised to this.
+const MIN_TEXT_SIZE = 17
+func _floor_text_size(node: Node) -> void:
+	if not (node is Label or node is Button or node is LineEdit or node is RichTextLabel): return
+	(func():
+		if not is_instance_valid(node) or not node is Control: return
+		var key = "normal_font_size" if node is RichTextLabel else "font_size"
+		if node.has_theme_font_size_override(key) and node.get_theme_font_size(key) < MIN_TEXT_SIZE:
+			node.add_theme_font_size_override(key, MIN_TEXT_SIZE)
+	).call_deferred()
 func _ready() -> void:
 	mouse_filter=Control.MOUSE_FILTER_IGNORE
+	get_tree().node_added.connect(_floor_text_size)
 	process_priority=-10
 	apply_frame_rate()
 	if OS.get_name()=="iOS": NativeFilePicker.defer_system_gestures.call_deferred()
@@ -388,6 +401,8 @@ func _ready() -> void:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	prefs.load("user://preferences.cfg"); timing_ms = float(prefs.get_value("audio","offset_ms",0))
 	bluetooth_mode=bool(prefs.get_value("audio","bluetooth_mode",false))
+	slide_snap=str(prefs.get_value("editor","slide_snap","free"))
+	if slide_snap not in ["free","lanes","beats"]: slide_snap="free"
 	bluetooth_latency_ms=clampf(float(prefs.get_value("audio","bluetooth_latency_ms",180)),0,600)
 	note_lines=bool(prefs.get_value("editor","note_lines",true))
 	ghost_recording=bool(prefs.get_value("editor","ghost_recording",true))
@@ -441,30 +456,30 @@ func _ready() -> void:
 	safe_poll.timeout.connect(apply_safe_area); add_child(safe_poll)
 	build_combo_digit_textures()
 	build_ui()
-	lobby=Control.new(); lobby.set_script(load("res://scripts/lobby.gd")); lobby.game=self
+	lobby=Control.new(); lobby.set_script(load("res://scripts/lobby.gd")); lobby.game=self; lobby.theme=preload("res://scripts/game_theme.gd").arcade()
 	ui.add_child(lobby); lobby.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.move_child(lobby,0)
 	arrange_preview=preload("res://scripts/arrange_audio_preview.gd").new(); arrange_preview.game=self; add_child(arrange_preview)
 	build_studio()
 	note_arranger=preload("res://scripts/recorder_note_arranger.gd").new(); note_arranger.game=self
 	record_tools.add_child(note_arranger); note_arranger.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	chart_library=Control.new(); chart_library.set_script(load("res://scripts/chart_library.gd")); chart_library.game=self
+	chart_library=Control.new(); chart_library.set_script(load("res://scripts/chart_library.gd")); chart_library.game=self; chart_library.theme=preload("res://scripts/game_theme.gd").arcade()
 	ui.add_child(chart_library); chart_library.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.move_child(chart_library,1)
 	extras=preload("res://scripts/gameplay_extras.gd").new(); extras.game=self; add_child(extras)
-	settings_panel=Control.new(); settings_panel.set_script(load("res://scripts/settings_screen.gd")); settings_panel.game=self
+	settings_panel=Control.new(); settings_panel.set_script(load("res://scripts/settings_screen.gd")); settings_panel.game=self; settings_panel.theme=preload("res://scripts/game_theme.gd").arcade()
 	ui.add_child(settings_panel); settings_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.move_child(settings_panel,2); settings_panel.visible=false
-	song_details=Control.new(); song_details.set_script(load("res://scripts/song_details.gd")); song_details.game=self
+	song_details=Control.new(); song_details.set_script(load("res://scripts/song_details.gd")); song_details.game=self; song_details.theme=preload("res://scripts/game_theme.gd").arcade()
 	ui.add_child(song_details); song_details.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.move_child(song_details,3); song_details.visible=false
 	bluetooth_toggle=settings_panel.bluetooth_toggle; bluetooth_latency_input=settings_panel.bluetooth_latency_input
-	sync_helper=Control.new(); sync_helper.set_script(load("res://scripts/sync_helper.gd")); sync_helper.game=self
+	sync_helper=Control.new(); sync_helper.set_script(load("res://scripts/sync_helper.gd")); sync_helper.game=self; sync_helper.theme=preload("res://scripts/game_theme.gd").arcade()
 	ui.add_child(sync_helper); sync_helper.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.move_child(sync_helper,3); sync_helper.visible=false
-	song_sync=Control.new(); song_sync.set_script(load("res://scripts/song_sync.gd")); song_sync.game=self
+	song_sync=Control.new(); song_sync.set_script(load("res://scripts/song_sync.gd")); song_sync.game=self; song_sync.theme=preload("res://scripts/game_theme.gd").arcade()
 	ui.add_child(song_sync); song_sync.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	ssrg_playables=Control.new(); ssrg_playables.set_script(load("res://scripts/ssrg_playables.gd")); ssrg_playables.game=self
+	ssrg_playables=Control.new(); ssrg_playables.set_script(load("res://scripts/ssrg_playables.gd")); ssrg_playables.game=self; ssrg_playables.theme=preload("res://scripts/game_theme.gd").arcade()
 	ui.add_child(ssrg_playables); ssrg_playables.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.move_child(ssrg_playables,3); ssrg_playables.visible=false
 	saved_notes = library.load_chart("eclipse")
@@ -676,7 +691,7 @@ func build_ui() -> void:
 	stage_intro=StageIntro.new(); stage_intro.game=self; ui.add_child(stage_intro)
 	var play_cover=preload("res://scripts/play_cover.gd").new(); play_cover.game=self
 	safe_parent("SafePlayCover").add_child(play_cover); stage_intro.play_cover=play_cover
-	results_screen=ResultsScreen.new(); results_screen.game=self; ui.add_child(results_screen)
+	results_screen=ResultsScreen.new(); results_screen.game=self; results_screen.theme=preload("res://scripts/game_theme.gd").arcade(); ui.add_child(results_screen)
 	# Pause uses a solid full-screen background and an opaque card.
 	pause_layer=CanvasLayer.new();pause_layer.name="PauseOverlay";pause_layer.layer=1000;add_child(pause_layer)
 	var pause_root=Control.new();pause_root.name="PauseRoot";pause_layer.add_child(pause_root)
@@ -687,7 +702,7 @@ func build_ui() -> void:
 	preload("res://scripts/modal_input.gd").register(modal)
 	var pause_panel=StyleBoxFlat.new();pause_panel.bg_color=Color("1b1b1b");pause_panel.set_corner_radius_all(28)
 	modal.add_theme_stylebox_override("panel",pause_panel)
-	modal_title=label(modal,"S Y N K",.04,.025,.96,.17,48); modal_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	modal_title=label(modal,"synk",.04,.025,.96,.17,48); modal_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	modal_title.add_theme_font_override("font",preload("res://assets/fonts/FiraSans-Bold.ttf"))
 	modal_body=label(modal,"",.06,.17,.94,.43,22); modal_body.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; modal_body.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	primary=pause_action(modal,"PLAY",.23,.88,.77,.97,primary_action,"primary")
@@ -706,13 +721,13 @@ func build_ui() -> void:
 	button(actions,"PLAY SAVED",.22,.91,.39,.98,func(): start_game(saved_notes),"primary")
 	button(actions,"AUTO PLAY",.41,.91,.58,.98,start_autoplay)
 	button(actions,"CHART STUDIO / IMPORT AUDIO",.60,.91,.98,.98,open_editor)
-	record_tools = Control.new();rect(record_tools, safe_parent("SafeRecorderControls"), 0, 0, 1, 1);record_tools.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	record_tools = Control.new();record_tools.theme=preload("res://scripts/game_theme.gd").arcade();rect(record_tools, safe_parent("SafeRecorderControls"), 0, 0, 1, 1);record_tools.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	record_tools.set_meta("keep_caption_size", true)
 
 
 
 	recorder_plate(Rect2(0.012, 0.135, 0.105, 0.5))
-	recorder_plate(Rect2(0.883, 0.135, 0.105, 0.405))
+	record_right_plate = recorder_plate(Rect2(0.883, 0.135, 0.105, 0.405))
 	var kinds = ["all", "tap", "hold", "slide", "flick"]
 	for i in kinds.size():
 		var kind = kinds[i]
@@ -725,7 +740,7 @@ func build_ui() -> void:
 				else:toggle_record_type(kind), "tool"))
 		kind_buttons[-1].tooltip_text = {"all": "Enable every note type for gesture detection", "tap": "Detect taps", "hold": "Detect holds", "slide": "Detect slides", "flick": "Detect flicks"}[kind]
 	button(record_tools, "STOP & REVIEW", 0.84, 0.022, 0.988, 0.105, stop_take, "record")
-	label(record_tools, "ANGLE", 0.12, 0.035, 0.19, 0.095, 14)
+	recorder_angle_caption = label(record_tools, "Angle", 0.12, 0.035, 0.19, 0.095, 16);recorder_angle_caption.add_theme_color_override("font_color", Color("bcb7ad"))
 	recorder_angle_slider=HSlider.new();rect(recorder_angle_slider,record_tools,0.20,0.047,0.40,0.087)
 	recorder_angle_slider.min_value=18;recorder_angle_slider.max_value=90;recorder_angle_slider.step=1
 	recorder_angle_slider.value=highway_angle
@@ -740,24 +755,26 @@ func build_ui() -> void:
 	b = side.call(2);take_undo_button = button(record_tools, "UNDO", b[0], b[1], b[2], b[3], undo_record_note, "tool")
 	b = side.call(3);take_redo_button = button(record_tools, "REDO", b[0], b[1], b[2], b[3], redo_record_note, "tool")
 
-	record_info = label(record_tools, "", 0.55, 0.03, 0.83, 0.1, 15);record_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	record_info = label(record_tools, "", 0.55, 0.03, 0.83, 0.1, 17);record_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	record_info.add_theme_font_override("font", preload("res://scripts/arcade_style.gd").semi())
 	recorder.progress = ProgressBar.new();rect(recorder.progress, record_tools, 0.12, 0.111, 0.67, 0.116)
 	recorder.progress.show_percentage = false;recorder.progress.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var track = StyleBoxFlat.new();track.bg_color = Color(1, 1, 1, 0.08);track.set_corner_radius_all(2)
-	var fill = track.duplicate();fill.bg_color = Color("ff6489")
+	var fill = track.duplicate();fill.bg_color = Color("ff8a5b")
 	recorder.progress.add_theme_stylebox_override("background", track);recorder.progress.add_theme_stylebox_override("fill", fill)
 	record_overview=preload("res://scripts/song_overview.gd").new()
 	record_overview.game=self;record_overview.horizontal=true;record_overview.recorder_mode=true
 	rect(record_overview,record_tools,0.12,0.126,0.67,0.186)
 	record_overview.rebuild()
 
-	record_help = label(record_tools, "", 0.2, 0.925, 0.8, 0.985, 15);record_help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	record_help.add_theme_color_override("font_color", Color(1, 1, 1, 0.72))
+	record_help = label(record_tools, "", 0.2, 0.925, 0.8, 0.985, 17);record_help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	record_help.add_theme_color_override("font_color", Color("e6e1d7"))
+	record_help.add_theme_color_override("font_shadow_color", Color(0, 0, 0, .85)); record_help.add_theme_constant_override("shadow_outline_size", 6)
 
 	record_sidebar = recorder_plate(Rect2(0.685, 0.135, 0.19, 0.775))
 	aids_drawer = Control.new();rect(aids_drawer, record_tools, 0, 0, 1, 1);aids_drawer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	record_sidebar.reparent(aids_drawer)
-	label(aids_drawer, "RECORDING AIDS", 0.7, 0.145, 0.87, 0.18, 13).add_theme_color_override("font_color", Color("7fd7e7"))
+	label(aids_drawer, "Recording aids", 0.7, 0.145, 0.87, 0.18, 16).add_theme_color_override("font_color", Color("bcb7ad"))
 	var row = func(i: int) -> Array: return [0.695, 0.19 + i * 0.078, 0.865, 0.255 + i * 0.078]
 	var r = row.call(0);note_lines_button = button(aids_drawer, "", r[0], r[1], r[2], r[3], toggle_note_lines, "tool");update_note_lines_button()
 
@@ -777,6 +794,23 @@ func build_ui() -> void:
 	aids_drawer.visible = false
 
 var aids_drawer: Control
+var record_right_plate: Panel
+var recorder_angle_caption: Label
+# While a take is running (not correcting, aids closed) the recorder shows only what you need
+# to play: note types, Correct, Stop & review, status and the lanes. Setup-only controls
+# (angle, seek strip, empty Undo/Redo) come back when you correct or open the aids.
+func update_recorder_focus() -> void:
+	if record_tools == null or aids_drawer == null: return
+	var focus = mode == "record" and not arranging and not aids_drawer.visible
+	for node in [recorder_angle_caption, recorder_angle_slider, recorder_angle_label, record_overview]:
+		if node: node.visible = not focus
+	var history = not take_undo.is_empty() or not take_redo.is_empty()
+	var show_history = not focus or history
+	take_undo_button.visible = show_history;take_redo_button.visible = show_history
+	var plate_bottom = 0.135 + (0.405 if show_history else 0.213)
+	if not is_equal_approx(record_right_plate.anchor_bottom, plate_bottom): record_right_plate.anchor_bottom = plate_bottom
+	# Guidance until the first note lands; after that the lanes speak for themselves.
+	record_help.visible = not focus or capture.notes.is_empty()
 
 var record_aids_enabled = false
 var record_aids_button: Button
@@ -794,8 +828,8 @@ func toggle_record_aids() -> void :
 func recorder_plate(bounds: Rect2) -> Panel:
 	var panel=Panel.new(); rect(panel,record_tools,bounds.position.x,bounds.position.y,bounds.end.x,bounds.end.y)
 	panel.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	var plate=StyleBoxFlat.new(); plate.bg_color=Color(0.037,0.037,0.037,.94)
-	plate.border_color=Color("303349"); plate.set_border_width_all(1); plate.set_corner_radius_all(16)
+	var plate=StyleBoxFlat.new(); plate.bg_color=Color(0.05,0.05,0.06,.82)
+	plate.border_color=Color(1,1,1,.07); plate.set_border_width_all(1); plate.set_corner_radius_all(24)
 	panel.add_theme_stylebox_override("panel",plate); return panel
 
 func set_mode(value: String,animate_transition:bool=true) -> void:
@@ -1184,7 +1218,7 @@ func uses_recorder_colors() -> bool:
 func authoring_lane_gap() -> float:
 	# The outer part of the sprite is a soft glow. Separate the visible bodies,
 	# keeping near-simultaneous notes close without forcing their centers together.
-	return (field.world.NOTE_WIDTH*note_size*.55+.08)/field.world.LANE_WIDTH
+	return (field.world.NOTE_WIDTH*note_size*.55+.08)/field.world.lane_step()
 
 func space_authored_notes(incoming: Array,fixed: Array) -> bool:
 	var resolved=true
@@ -1370,6 +1404,7 @@ func start_game(notes: Array,automated: bool = false,section: String = "",is_pra
 	set_mode("play")
 	if ssrg_playable_run and ssrg_presentation:ssrg_presentation.reset(total_judgements(),song.get("ssrg_presentation",{}))
 	gameplay_start_lead=maxf(2.0,note_travel_seconds()-(first_note_time-start_position))
+	audio_handoff=0.0
 	song_time=start_position-gameplay_start_lead-countdown
 	apply_stage_cover()
 	# Build every note of the chart now (behind the loading card); play only shows and hides them.
@@ -1654,7 +1689,9 @@ func refresh_arrange_controls() -> void :
 	ghost_button.visible = not arranging;ghost_button.set_selected(ghost_recording)
 	dots_button.text = "●  CONNECTOR: ON" if dots_mode else "●  CONNECTOR: OFF"
 	dots_button.set_selected(dots_mode)
-	if arranging and dots_mode:
+	if arranging and note_arranger and note_arranger.edit_mode == "draw" and not arrange_selection.is_empty():
+		record_help.text = "Draw: trace the slide along the highway with one finger. Lift to apply; the trace sets its start, end and every bend."
+	elif arranging and dots_mode:
 		var dots_note: Dictionary = arrange_selection.get("note", {})
 		if dots_note.is_empty() or dots_note.kind not in ["hold", "slide"]: record_help.text = "CONNECTOR: select a hold or slide, then tap its trail to add a playable connector."
 		else: record_help.text = "CONNECTOR: tap the trail to add or remove one (%d). SHAPE drags its handle; DELETE POINT removes the selected anchor." % dots_note.get("checkpoints", []).size()
@@ -1666,7 +1703,7 @@ func refresh_arrange_controls() -> void :
 				record_help.text = "%s · %.2f–%.2f s | SHAPE: drag trail to bend or stretch · CONNECTOR: tap trail · DELETE POINT: select a handle" % [str(n.kind).to_upper(), float(n.time), float(n.time) + float(n.duration)]
 			else: record_help.text = "SELECTED  %s  •  LANE %d  •  %.2f s\nDrag to move. Use the type buttons or DELETE above; scroll outside the highway." % [str(n.kind).to_upper(), int(n.lane) + 1, float(n.time)]
 	else:
-		record_help.text = "DETECT: %s · Tap or gesture; enabled types are classified automatically." % ", ".join(record_types.map(func(kind):return str(kind).to_upper()))
+		record_help.text = "Detecting %s · tap or swipe on the 13 lanes; each gesture becomes the matching note." % ", ".join(record_types.map(func(kind):return str(kind)))
 
 func select_all_record_types() -> void:
 	record_types=["tap","hold","slide","flick"].filter(func(kind):return kind not in recorder.locks())
@@ -1791,7 +1828,7 @@ func add_point_at(p: Vector2) -> void :
 func arrange_lane_at(p: Vector2) -> float:
 	var world=field.world; var point=p*Vector2(field.viewport.size)
 	var hit=Plane(Vector3.UP,world.trail_height()).intersects_ray(world.camera.project_ray_origin(point),world.camera.project_ray_normal(point))
-	return hit.x/world.LANE_WIDTH+world.CENTER_LANE if hit!=null else world.CENTER_LANE
+	return hit.x/world.lane_step()+world.CENTER_LANE if hit!=null else world.CENTER_LANE
 
 func arrange_note_distance(n: Dictionary, p: Vector2) -> float:
 	var start = float(n.time); var finish = start + float(n.duration)
@@ -1886,10 +1923,12 @@ func arrange_pointer_event(id: int, p: Vector2, began: bool, ended: bool, cancel
 		if touch.gesture == "bend":
 			var lane = clampf(float(touch.bend_lane) + arrange_lane_at(p) - float(touch.touch_lane), 0, SynkChart.MAX_LANE)
 			var point: Dictionary = n.path[int(touch.bend_index)]
-			point.lane = snappedf(lane, 0.05)
+			point.lane = snap_slide_lane(lane)
 			var old_offset=float(point.offset)
 			var bend_index=int(touch.bend_index)
-			point.offset=clampf(float(touch.bend_offset)+stage_time_at(p)-float(touch.touch_time),float(n.path[bend_index-1].offset)+.005,float(n.path[bend_index+1].offset)-.005)
+			var raw_offset=float(touch.bend_offset)+stage_time_at(p)-float(touch.touch_time)
+			raw_offset=snap_slide_time(float(n.time)+raw_offset)-float(n.time)
+			point.offset=clampf(raw_offset,float(n.path[bend_index-1].offset)+.005,float(n.path[bend_index+1].offset)-.005)
 			if n.has("checkpoints"):
 				for check_index in n.checkpoints.size():
 					if absf(float(n.checkpoints[check_index])-old_offset)<.01:n.checkpoints[check_index]=float(point.offset)
@@ -1956,12 +1995,30 @@ func _process(delta: float) -> void:
 		elif mode=="play" and gameplay_start_lead>0:
 			gameplay_start_lead=maxf(0,gameplay_start_lead-delta)
 			song_time=start_position-gameplay_start_lead
+			# Start the music early by the device's output delay, from the matching point, so
+			# the first heard sample lands exactly as the silent approach ends. Starting it at
+			# the end instead leaves the audio clock behind the notes, and they would stop
+			# for that delay (about 0.15 s on iPhone) before moving on with the music.
+			var head=output_latency()
+			if not audio.playing and head>0 and gameplay_start_lead<=head:
+				audio.stream_paused=false;audio.play(maxf(0,start_position+head-gameplay_start_lead))
 			smooth_visual_time(song_time,delta)
 			if auto_play:update_autoplay()
 			else:update_game()
-			if gameplay_start_lead==0:audio.stream_paused=false;audio.play(start_position)
+			if gameplay_start_lead==0:
+				if not audio.playing:audio.stream_paused=false;audio.play(start_position)
+				audio_handoff=1.0
 		else:
-			song_time=maxf(song_time,chart_time())
+			var heard=chart_time()
+			if mode=="play" and audio_handoff>0 and heard<song_time:
+				# The music has started but still reports a slightly earlier spot (device output
+				# delay). Keep the notes moving, a little slower, until it catches up, instead
+				# of freezing them in place.
+				audio_handoff=maxf(0,audio_handoff-delta)
+				song_time+=maxf(0,delta)*maxf(0,audio.pitch_scale)*.6
+			else:
+				audio_handoff=0.0
+				song_time=maxf(song_time,heard)
 			smooth_visual_time(song_time,delta)
 			update_section_volume()
 			if mode=="play":
@@ -2037,10 +2094,12 @@ func _process(delta: float) -> void:
 	if auto_play_hud.visible and mode=="play": auto_play_hud.modulate.a=.78+.22*sin(hud_motion_time*2.2)
 	else: auto_play_hud.modulate.a=1.0
 	if combo_art_value!=combo or combo_art_size!=combo_hud.size: update_combo_art()
-	record_info.text=("PAUSED · CORRECT %.1f s\n%d NOTES" if arranging else "● RECORDING  %.1f s\n%d NOTES / %s") % ([maxf(0,song_time),capture.notes.size()] if arranging else [maxf(0,song_time),capture.notes.size(),tool.to_upper()])
+	var note_word="note" if capture.notes.size()==1 else "notes"
+	record_info.text=("Paused · correcting  %.1f s\n%d %s" if arranging else "●  Recording  %.1f s\n%d %s · %s") % ([maxf(0,song_time),capture.notes.size(),note_word] if arranging else [maxf(0,song_time),capture.notes.size(),note_word,tool.capitalize()])
+	update_recorder_focus()
 	if mode=="record" and recorder.active:
-		if song_time<recorder.region.x and countdown==0: record_info.text="PRE-ROLL · LISTEN\nREC AT %.2f s" % recorder.region.x
-		elif recorder.looping(): record_info.text+=" · TAKE %d" % (recorder.takes.size()+1)
+		if song_time<recorder.region.x and countdown==0: record_info.text="Pre-roll · listen\nRecording starts at %.2f s" % recorder.region.x
+		elif recorder.looping(): record_info.text+=" · Take %d" % (recorder.takes.size()+1)
 	var show_hit_art=false
 	hit_art.visible=show_hit_art
 	if show_hit_art:
@@ -2446,6 +2505,8 @@ func process_ssrg_press_events() -> void:
 		if best.is_empty():continue
 		best.started=true;best.pointer=int(press.id);best.error=best_error;best.timing_error=float(press.at)-float(best.note.time)
 		ssrg_touch_router.consume(channel)
+		# A flick is judged once the finger swipes the arrow's way (update_game), not on the press.
+		if best.note.kind=="flick": continue
 		judge(best,best_error,best.note.kind not in ["hold","slide"])
 
 func update_game() -> void:
@@ -2502,7 +2563,7 @@ func update_game() -> void:
 			var displacement: Vector2=p.position-p.start
 			var direction: Vector2=[Vector2.UP,Vector2.RIGHT,Vector2.DOWN,Vector2.LEFT][int(n.direction)]
 			if displacement.dot(direction)>.035 and displacement.dot(direction)>absf(displacement.dot(direction.orthogonal())): judge(entry,float(entry.error))
-			elif song_time>float(n.time)+extras.good_window(): judge(entry,-1)
+			elif song_time>float(n.time)+(hit_good_window("flick") if ssrg_playable_run else extras.good_window()) or (ssrg_playable_run and p.get("ssrg_ended",false)): judge(entry,-1)
 		elif n.kind in ["hold","slide"] and not process_checkpoints(entry,SynkCapture.lane(p.position.x),false):
 			continue
 		elif n.kind=="slide":
@@ -2650,7 +2711,7 @@ func show_pending_results() -> void:
 
 
 func build_studio() -> void:
-	studio=Panel.new(); studio.set_script(load("res://scripts/chart_editor.gd")); studio.game=self
+	studio=Panel.new(); studio.set_script(load("res://scripts/chart_editor.gd")); studio.game=self; studio.theme=preload("res://scripts/game_theme.gd").arcade()
 	rect(studio,ui,0,0,1,1)
 	picker=FileDialog.new(); add_child(picker); picker.file_mode=FileDialog.FILE_MODE_OPEN_FILE; picker.access=FileDialog.ACCESS_FILESYSTEM; picker.use_native_dialog=true
 	picker.filters=PackedStringArray(["*.mp3,*.wav,*.ogg;Audio;audio/mpeg,audio/wav,audio/ogg"]); picker.file_selected.connect(import_audio)
@@ -3056,6 +3117,20 @@ var take_redo_button: Button
 
 var ready_point = -1.0
 
+# Slide design snapping: "free" (0.05-lane steps), "lanes" (whole lanes) or "beats"
+# (whole lanes and sixteenth-note timing). Remembered between sessions.
+var slide_snap = "free"
+func cycle_slide_snap() -> void:
+	var order = ["free", "lanes", "beats"]
+	slide_snap = order[(order.find(slide_snap) + 1) % order.size()]
+	prefs.set_value("editor", "slide_snap", slide_snap);prefs.save("user://preferences.cfg")
+	refresh_arrange_controls()
+func snap_slide_lane(lane: float) -> float:
+	return clampf(roundf(lane) if slide_snap != "free" else snappedf(lane, 0.05), 0, SynkChart.MAX_LANE)
+func snap_slide_time(at: float) -> float:
+	if slide_snap != "beats": return at
+	var step = 60.0 / maxf(1.0, chart_bpm()) / 4.0
+	return chart_offset() + snappedf(at - chart_offset(), step)
 func begin_trail_bend(touch: Dictionary, n: Dictionary, offset: float) -> void :
 	if touch.document: document.checkpoint()
 	if n.kind == "hold": n.kind = "slide";n.path = [];n.end_lane = n.lane

@@ -30,12 +30,18 @@ static func lane_at(n: Dictionary, time: float) -> float:
 			var span = maxf(.0001, t1 - t0)
 			var t = (elapsed - t0) / span
 			var l0 = float(path[i-1].lane); var l1 = float(path[i].lane)
-			if n.get("ssrg_path",false): return lerpf(l0,l1,t)
+			# Each inner point is a sharp corner or a smooth curve ("curve" key). SSRG paths
+			# default to corners, older SYNK paths to curves. A segment between two corners
+			# is a straight line; a curved end rounds that side of the segment.
+			var ssrg = bool(n.get("ssrg_path",false))
+			var c0 = i - 1 > 0 and bool(path[i-1].get("curve", not ssrg))
+			var c1 = i < path.size() - 1 and bool(path[i].get("curve", not ssrg))
+			if not c0 and not c1: return lerpf(l0,l1,t)
 			var d1 = (l1 - l0) / span
 			var d0 = (l0 - float(path[i-2].lane)) / maxf(.0001, t0 - float(path[i-2].offset)) if i >= 2 else d1
 			var d2 = (float(path[i+1].lane) - l1) / maxf(.0001, float(path[i+1].offset) - t1) if i + 1 < path.size() else d1
-			var m0 = 0.0 if d0 * d1 <= 0.0 else 2.0 * d0 * d1 / (d0 + d1)
-			var m1 = 0.0 if d1 * d2 <= 0.0 else 2.0 * d1 * d2 / (d1 + d2)
+			var m0 = (0.0 if d0 * d1 <= 0.0 else 2.0 * d0 * d1 / (d0 + d1)) if c0 else d1
+			var m1 = (0.0 if d1 * d2 <= 0.0 else 2.0 * d1 * d2 / (d1 + d2)) if c1 else d1
 			var t2 = t * t; var t3 = t2 * t
 			var lane = (2*t3 - 3*t2 + 1) * l0 + (t3 - 2*t2 + t) * m0 * span + (-2*t3 + 3*t2) * l1 + (t3 - t2) * m1 * span
 			return clampf(lane, 0.0, float(MAX_LANE))

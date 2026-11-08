@@ -3,6 +3,13 @@ extends Node
 const Motion = preload("res://scripts/ui_motion.gd")
 const Action = preload("res://scripts/recorder_action.gd")
 const Audit = preload("res://scripts/chart_audit.gd")
+const Icons = preload("res://scripts/ui_icons.gd")
+# Solid sheet and inner cards for recorder dialogs (readable over the chart editor).
+const SHEET = Color("17181b")
+const CARD = Color("212226")
+static func sheet_title(label: Label) -> void:
+	label.add_theme_font_override("font", preload("res://scripts/arcade_style.gd").SERIF)
+	label.add_theme_color_override("font_color", Color("f4f1ea"))
 var progress: ProgressBar
 var game: Control
 var region = Vector2.ZERO
@@ -277,16 +284,14 @@ func toggle(parent: Node, title: String, value: bool, callback: Callable) -> voi
 func shell(title: String, narrow: bool = false) -> Dictionary:
 	var root = Control.new();game.ui.add_child(root);root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	preload("res://scripts/modal_input.gd").register(root)
-	var dim = ColorRect.new();root.add_child(dim);dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);dim.color = Color(0.007, 0.007, 0.007, 0.55)
+	var dim = ColorRect.new();root.add_child(dim);dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);dim.color = Color(0.0, 0.0, 0.0, 0.74)
 	var safe_content = game.safe_parent("SafeDialogControls", root)
 	var panel = Panel.new();game.rect(panel, safe_content, 0.55 if narrow else 0.14, 0.05, 0.98 if narrow else 0.86, 0.95)
 	var style = StyleBoxFlat.new();style.bg_color = Color(0.035, 0.035, 0.035, 0.96);style.border_color = Color(1, 1, 1, 0.1);style.set_border_width_all(1)
 	style.set_corner_radius_all(26);style.shadow_color = Color(0, 0, 0, 0.5);style.shadow_size = 24;panel.add_theme_stylebox_override("panel", style)
 	panel.set_meta("keep_caption_size", true)
-	var plate = StyleBoxFlat.new();plate.bg_color = Color("121212");plate.border_color = Color("3e4663")
-	plate.set_border_width_all(1);plate.set_corner_radius_all(20)
-	panel.add_theme_stylebox_override("panel", plate)
-	game.label(panel, title, 0.04, 0.02, 0.76, 0.105, 26)
+	style.bg_color = SHEET; style.border_color = Color(1, 1, 1, 0.07)
+	sheet_title(game.label(panel, title, 0.04, 0.015, 0.76, 0.11, 40))
 	var done = Action.new();done.text = "KEEP" if narrow else "DONE";done.variant = "primary";done.caption_size = 21
 	game.rect(done, panel, 0.79, 0.025, 0.96, 0.1)
 	done.pressed.connect( func():
@@ -304,19 +309,18 @@ func persist(name: String, value: Variant) -> void :
 
 func setup_group(parent: Node, title: String) -> VBoxContainer:
 	var card = PanelContainer.new();parent.add_child(card)
-	var plate = StyleBoxFlat.new();plate.bg_color = Color("171717");plate.border_color = Color("2e354d")
-	plate.set_corner_radius_all(16);plate.set_border_width_all(1)
-	for edge in ["left", "right", "top", "bottom"]: plate.set("content_margin_" + edge, 18)
+	var plate = StyleBoxFlat.new();plate.bg_color = CARD;plate.set_corner_radius_all(18)
+	for edge in ["left", "right", "top", "bottom"]: plate.set("content_margin_" + edge, 20)
 	card.add_theme_stylebox_override("panel", plate)
 	var contents = VBoxContainer.new();card.add_child(contents);contents.add_theme_constant_override("separation", 12)
-	var heading = text(contents, title, 15);heading.add_theme_color_override("font_color", Color("7fd7e7"))
+	var heading = text(contents, Icons.menu_case(title), 17);heading.add_theme_color_override("font_color", Color("bcb7ad"))
 	return contents
 
 func show_setup(global_only: bool = false) -> void :
 	if setup: return
 	if game.mode == "record": game.toggle_pause()
 	if reviewing_audio: game.stop_audition();reviewing_audio = false
-	var s = shell("RECORDING SETUP");setup = s.root; var box: VBoxContainer = s.box
+	var s = shell("Recording setup");setup = s.root; var box: VBoxContainer = s.box
 	text(box, "Global recorder preferences" if global_only else "Applies to your next new session. For punch-in, select a range in the editor or set A / B. Types and locks remain fixed across loop takes.")
 	if not global_only:
 		var session = setup_group(box, "SESSION RANGE")
@@ -354,10 +358,12 @@ func show_review() -> void :
 	review_dim.color = Color(0.007, 0.007, 0.007, 0.72)
 	var safe = game.safe_parent("SafeTakeReview", review)
 	review_panel = Panel.new();game.rect(review_panel, safe, 0.1, 0.07, 0.9, 0.95);review_panel.set_meta("keep_caption_size", true)
-	var plate = StyleBoxFlat.new();plate.bg_color = Color("121212");plate.border_color = Color("3e4663")
-	plate.set_border_width_all(1);plate.set_corner_radius_all(22);review_panel.add_theme_stylebox_override("panel", plate)
-	game.label(review_panel, "TAKE REVIEW", 0.035, 0.025, 0.8, 0.1, 30)
-	game.label(review_panel, "%.2f–%.2f s · %s · %s" % [region.x, region.y, "REPLACE" if bool(config.get("replace", replace)) else "LAYER", current_pass().to_upper()], 0.035, 0.105, 0.965, 0.16, 17)
+	var plate = StyleBoxFlat.new();plate.bg_color = SHEET;plate.border_color = Color(1, 1, 1, 0.07)
+	plate.set_border_width_all(1);plate.set_corner_radius_all(26);plate.shadow_color = Color(0, 0, 0, 0.5);plate.shadow_size = 24
+	review_panel.add_theme_stylebox_override("panel", plate)
+	sheet_title(game.label(review_panel, "Take review", 0.035, 0.015, 0.8, 0.105, 42))
+	var where = game.label(review_panel, "%.2f–%.2f s  ·  %s  ·  %s" % [region.x, region.y, "Replace" if bool(config.get("replace", replace)) else "Layer", current_pass().capitalize()], 0.035, 0.105, 0.965, 0.16, 17)
+	where.add_theme_color_override("font_color", Color("bcb7ad"))
 	var left = review_column(review_panel, Rect2(0.035, 0.2, 0.445, 0.58), "TAKE SUMMARY")
 	var right = review_column(review_panel, Rect2(0.51, 0.2, 0.455, 0.58), "TAKE SELECTION")
 	compare_label = text(left, "", 20)
@@ -377,7 +383,7 @@ func show_review() -> void :
 	else:
 		text(right, "Replay to check your timing. Retry to record another attempt in the same section.", 18)
 		text(right, "Keep Take returns to the editor. Save there when you are ready to publish your chart.", 18)
-	game.label(review_panel, "Your take stays in the draft until you SAVE the chart.", 0.035, 0.795, 0.965, 0.835, 16)
+	game.label(review_panel, "Your take stays in the draft until you save the chart.", 0.035, 0.795, 0.965, 0.835, 17).add_theme_color_override("font_color", Color("bcb7ad"))
 	review_action("UNDO TAKE", 0.035, 0.255, func(): undo_take();close_review();game.tell("Take undone. Earlier chart notes restored."), "danger")
 	review_action("RETRY SECTION", 0.275, 0.495, retry, "record")
 	review_action("REPLAY TAKE", 0.515, 0.735, preview, "secondary")
@@ -394,12 +400,12 @@ func review_action(title: String, left: float, right: float, callback: Callable,
 
 func review_column(parent: Control, bounds: Rect2, title: String) -> VBoxContainer:
 	var panel = Panel.new();game.rect(panel, parent, bounds.position.x, bounds.position.y, bounds.end.x, bounds.end.y)
-	var plate = StyleBoxFlat.new();plate.bg_color = Color("171717");plate.border_color = Color("2e354d")
-	plate.set_border_width_all(1);plate.set_corner_radius_all(16);panel.add_theme_stylebox_override("panel", plate)
+	var plate = StyleBoxFlat.new();plate.bg_color = CARD
+	plate.set_corner_radius_all(18);panel.add_theme_stylebox_override("panel", plate)
 	var scroll = ScrollContainer.new();game.rect(scroll, panel, 0.045, 0.04, 0.955, 0.96);scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	var drag = preload("res://scripts/song_list_scroll.gd").new();drag.scroll = scroll;scroll.add_child(drag)
 	var box = VBoxContainer.new();scroll.add_child(box);box.size_flags_horizontal = Control.SIZE_EXPAND_FILL;box.add_theme_constant_override("separation", 16)
-	var heading = text(box, title, 15);heading.add_theme_color_override("font_color", Color("7fd7e7"))
+	var heading = text(box, Icons.menu_case(title), 17);heading.add_theme_color_override("font_color", Color("bcb7ad"))
 	return box
 
 func update_review() -> void :

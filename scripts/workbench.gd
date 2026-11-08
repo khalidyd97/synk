@@ -36,7 +36,12 @@ func set_effect(key: String,value: float) -> void:
     effects[key]=clampf(value,0,1)
     game.prefs.set_value("effects",key,effects[key]); game.prefs.save("user://preferences.cfg")
 
-func effect(key: String) -> float: return float(effects.get(key,effect_default(key)))
+# Stage atmosphere stays off in the recorder so nothing distracts from the lanes.
+const RECORDING_OFF_EFFECTS=["Lasers","Flowing edge energy","Soft fading glow","Background brightness"]
+func recording_now() -> bool: return game.mode=="record" or (game.mode=="paused" and str(game.get("paused_mode"))=="record")
+func effect(key: String) -> float:
+    if key in RECORDING_OFF_EFFECTS and recording_now(): return 0.0
+    return float(effects.get(key,effect_default(key)))
 func chart_path(variant: String="") -> String:
     var name=current_variant if variant.is_empty() else variant
     return "user://charts/"+str(game.song.id)+("" if name=="original" else "_"+name)+".json"
