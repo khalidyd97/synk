@@ -76,6 +76,7 @@ func begin_shape(point: Vector2, allow_insert: bool = true) -> bool:
     var insert_at=1
     while insert_at<n.path.size() and float(n.path[insert_at].offset)<offset: insert_at+=1
     n.path.insert(insert_at,{"offset":offset,"lane":SynkChart.lane_at(n,at)})
+    SynkChart.sync_connectors(n)
     shape_point=insert_at
     return true
 func move_shape(point: Vector2) -> void:
@@ -85,6 +86,7 @@ func move_shape(point: Vector2) -> void:
     var at=SynkChart.snap(point_time(point),game.chart_bpm(),game.snap_division,game.chart_offset())
     n.path[shape_point].offset=clampf(at-float(n.time),float(n.path[shape_point-1].offset)+.01,float(n.path[shape_point+1].offset)-.01)
     n.path[shape_point].lane=free_lane(point.x)
+    SynkChart.sync_connectors(n)
     game.document.dirty=true; game.refresh_editor()
 func _process(delta: float) -> void:
     if not is_visible_in_tree(): return

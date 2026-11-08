@@ -34,7 +34,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if not is_visible_in_tree(): return
 	elapsed += delta
-	hover = lerpf(hover,1.0 if is_hovered() or has_focus() else 0.0,1-exp(-delta*10))
+	hover = lerpf(hover,1.0 if preload("res://scripts/ui_motion.gd").hovered(self) or has_focus() else 0.0,1-exp(-delta*10))
 	press = move_toward(press,1.0 if is_pressed() else 0.0,delta*8)
 	spin += delta*(.7+3.6*hover)
 	queue_redraw()

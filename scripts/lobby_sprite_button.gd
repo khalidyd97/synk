@@ -10,7 +10,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if not is_visible_in_tree(): return
-	engagement = lerpf(engagement, 1.0 if is_hovered() or has_focus() else 0.0, 1.0 - exp(-delta * 12.0))
+	engagement = lerpf(engagement, 1.0 if preload("res://scripts/ui_motion.gd").hovered(self) or has_focus() else 0.0, 1.0 - exp(-delta * 12.0))
 	queue_redraw()
 
 func _draw() -> void:

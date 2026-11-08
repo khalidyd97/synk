@@ -4,7 +4,7 @@ extends Control
 # outside the card) restores the colour it opened with, Done keeps the new one.
 const Soft = preload("res://scripts/soft_button.gd")
 const Action = preload("res://scripts/settings_action.gd")
-const PRESETS = ["f3ece1","ffd257","ff9a3c","ff7a59","ff4d6a","ff5fd2","a36aff","5b7cff","38baff","3ce0c0","59e36b","ffffff"]
+const PRESETS = ["f3ece1","ffd257","ff9a3c","ff7a59","ff4d6a","ff5fd2","a36aff","5b7cff","d9d4ca","3ce0c0","59e36b","ffffff"]
 const RECENT_LIMIT=24
 var palette_game:Control
 var recent_codes:Array[String]=[]
@@ -60,7 +60,7 @@ func _init() -> void:
 	plate.set_border_width_all(1); plate.border_color = Color(1,1,1,.07)
 	plate.shadow_color = Color(0,0,0,.5); plate.shadow_size = 30; plate.shadow_offset = Vector2(0,12)
 	card.add_theme_stylebox_override("panel",plate)
-	title = Label.new(); card.add_child(title); title.add_theme_font_override("font",Soft.BOLD)
+	title = Label.new(); card.add_child(title); title.add_theme_font_override("font",preload("res://scripts/arcade_style.gd").semi())
 	title.add_theme_font_size_override("font_size",26); title.add_theme_color_override("font_color",Soft.TEXT)
 	# Each area: an input Control, its shader fill, then a marker layer drawn on top.
 	square = Control.new(); card.add_child(square); square.gui_input.connect(func(event): drag_input(event,"square"))

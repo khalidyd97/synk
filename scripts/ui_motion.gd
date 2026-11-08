@@ -10,10 +10,10 @@ static func bind_button(target: BaseButton) -> void:
 	target.resized.connect(func(): target.pivot_offset=target.size*.5)
 	target.pivot_offset=target.size*.5
 	target.mouse_entered.connect(func():
-		if not target.disabled: _scale(target,1.035,.16))
+		if not target.disabled and hover_allowed(): _scale(target,1.035,.16))
 	target.mouse_exited.connect(func(): _scale(target,1.0,.16))
 	target.button_down.connect(func(): _scale(target,.94,.085); _flash(target); UiSound.play(target,UiSound.sound_for(target)))
-	target.button_up.connect(func(): _scale(target,1.035 if target.get_global_rect().has_point(target.get_global_mouse_position()) else 1.0,.20))
+	target.button_up.connect(func(): _scale(target,1.035 if hover_allowed() and target.get_global_rect().has_point(target.get_global_mouse_position()) else 1.0,.20))
 	target.focus_entered.connect(func(): _scale(target,1.035,.16))
 	target.focus_exited.connect(func(): _scale(target,1.0,.16))
 	target.visibility_changed.connect(func():
@@ -21,6 +21,13 @@ static func bind_button(target: BaseButton) -> void:
 			var running: Variant=target.get_meta("motion_tween") if target.has_meta("motion_tween") else null
 			if running is Tween: running.kill()
 			target.scale=Vector2.ONE)
+
+# Touch: a finger held down and slid across the screen must not light up the buttons it passes.
+# Hover only counts while no press is held (a held press shows its own pressed state instead).
+static func hover_allowed() -> bool:
+	return Input.get_mouse_button_mask()==0
+static func hovered(target: Control) -> bool:
+	return target is BaseButton and target.is_hovered() and hover_allowed()
 
 static func style_button(target: Button, accent: Color = Color("a765ff"), strong: bool = false) -> void:
 	var normal=StyleBoxFlat.new()
@@ -147,8 +154,89 @@ static func page(tabs: TabContainer) -> void:
 
 static func screen(target: Control) -> void:
 	reveal(target)
+	cascade(target)
+
+# Staggered entrance: every card, row, button and field on a screen fades in and settles,
+# top to bottom, one after another. Only the visual transform moves; layout stays put.
+static func cascade(root: Control, start_delay: float = .05, step: float = .05, max_items: int = 40) -> void:
+	if not is_instance_valid(root) or not root.is_visible_in_tree(): return
+	# Let freshly shown or refilled lists lay themselves out first, so each piece knows its slot.
+	await root.get_tree().process_frame
+	if not is_instance_valid(root) or not root.is_visible_in_tree(): return
+	var items: Array[Control] = []
+	_collect(root, items, 0)
+	items.sort_custom(func(a, b): return a.global_position.y < b.global_position.y - 4 or (absf(a.global_position.y - b.global_position.y) <= 4 and a.global_position.x < b.global_position.x))
+	var view=root.get_viewport_rect()
 	var index=0
-	for child in target.get_children():
-		if child is Panel and child.visible:
-			pop(child,minf(index*.045,.18))
-			index+=1
+	for item in items:
+		if index>=max_items: break
+		# Off-screen items (far down a scroll list) appear without waiting their turn.
+		if not view.intersects(item.get_global_rect()): continue
+		enter(item, start_delay + minf(index * step, .7))
+		if is_main_action(item): shimmer(item)
+		index+=1
+
+static func _collect(node: Node, items: Array[Control], depth: int) -> void:
+	for child in node.get_children():
+		if not (child is Control) or not child.visible or child.has_meta("interface_life_decoration"): continue
+		var c: Control = child
+		var leaf = c is BaseButton or c is LineEdit or c is TextEdit or c is Range or c is TextureRect
+		var card = (c is PanelContainer or c is Panel) and c.size.y < 260
+		if leaf or card or (c is Label and depth > 0):
+			if c.size.x > 4 and c.size.y > 4: items.append(c)
+			continue
+		if depth < 8: _collect(c, items, depth + 1)
+
+# One element's entrance: fades in and grows from 94 % with a soft overshoot. Free-standing
+# pieces also travel a short way into place; anything a container lays out (rows, chips,
+# settings lines) only fades and grows, so its slot is never fought over.
+static func enter(target: Control, delay: float = 0.0) -> void:
+	if not is_instance_valid(target): return
+	var previous: Variant=target.get_meta("enter_tween") if target.has_meta("enter_tween") else null
+	var running: bool=previous is Tween and previous.is_running()
+	if previous is Tween: previous.kill()
+	var free=not (target.get_parent() is Container)
+	var home: Vector2=target.get_meta("enter_home") if running and free and target.has_meta("enter_home") else target.position
+	target.position=home if free else target.position
+	target.pivot_offset=target.size*.5
+	target.modulate.a=0.0
+	# Buttons with their own press motion keep their size; only their light and place change.
+	var grow=not ("menu_motion" in target and bool(target.get("menu_motion")))
+	if grow: target.scale=Vector2.ONE*.94
+	target.self_modulate=Color.WHITE
+	var tween=target.create_tween().set_parallel(true)
+	tween.tween_property(target,"modulate:a",1.0,.32).set_delay(delay).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	if grow: tween.tween_property(target,"scale",Vector2.ONE,.48).set_delay(delay).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	if free and grow:
+		var offset=Vector2(-40,0) if target.size.x>360 else Vector2(0,22)
+		var resting=[target.offset_left,target.offset_top,target.offset_right,target.offset_bottom]
+		target.position=home+offset
+		tween.tween_property(target,"position",home,.46).set_delay(delay).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+		target.set_meta("enter_home",home)
+		# If the layout changes mid-entrance (rotation, safe area), finish at the new layout
+		# instead of gliding back to the old position.
+		var parent_control=target.get_parent() as Control
+		if parent_control:
+			parent_control.resized.connect(func():
+				if not is_instance_valid(target) or not tween.is_valid() or not tween.is_running(): return
+				tween.kill()
+				target.offset_left=resting[0];target.offset_top=resting[1];target.offset_right=resting[2];target.offset_bottom=resting[3]
+				target.modulate.a=1.0;target.scale=Vector2.ONE
+				target.remove_meta("enter_home"),CONNECT_ONE_SHOT)
+	target.set_meta("enter_tween",tween)
+
+# The screen's main action (Play, Save, Add…) keeps a light sweep running across it.
+static func is_main_action(node: Control) -> bool:
+	if not node is BaseButton: return false
+	for property in node.get_property_list():
+		match property.name:
+			"primary", "hot":
+				if bool(node.get(property.name)): return true
+			"variant":
+				if str(node.get("variant")) in ["primary", "record"]: return true
+	return false
+
+static func shimmer(target: Control) -> void:
+	if not is_instance_valid(target) or target.has_node("Shimmer") or "fill_color" in target: return
+	var sweep=preload("res://scripts/arcade_shimmer.gd").new(); sweep.name="Shimmer"
+	target.add_child(sweep)

@@ -25,7 +25,7 @@ func run() -> void:
 	var near=SynkChart.note(6,2); game.capture.notes.append(near)
 	check(is_equal_approx(game.snap_recorder_move(6.03,10,game.capture.notes[0]),6),"Moved note aligns to nearby note time")
 	game.arrange_preview.request(4); game.arrange_preview._process(.05)
-	check(game.arrange_preview.seeks>0,"Arrange preview starts audio playback")
+	check(game.arrange_preview.seeks==0 and not game.arrange_preview.player.playing,"Correct mode stays silent while notes are moved")
 	game.arrange_preview.stop()
 	var corrected_at=game.song_time
 	game.toggle_arrange()

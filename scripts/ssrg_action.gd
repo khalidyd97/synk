@@ -8,7 +8,7 @@ func _ready() -> void:
 	mouse_default_cursor_shape=Control.CURSOR_POINTING_HAND
 func _process(delta:float) -> void:
 	if not is_visible_in_tree():return
-	engagement=lerpf(engagement,1.0 if not disabled and (is_hovered() or has_focus()) else 0.0,1.0-exp(-delta*16.0))
+	engagement=lerpf(engagement,1.0 if not disabled and (preload("res://scripts/ui_motion.gd").hovered(self) or has_focus()) else 0.0,1.0-exp(-delta*16.0))
 	press_amount=lerpf(press_amount,1.0 if is_pressed() and not disabled else 0.0,1.0-exp(-delta*22.0))
 	queue_redraw()
 func _draw() -> void:

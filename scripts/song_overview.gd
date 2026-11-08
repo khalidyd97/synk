@@ -40,22 +40,22 @@ func _draw() -> void:
     if game==null or bins.is_empty(): return
     if horizontal:
         draw_horizontal(); return
-    draw_rect(Rect2(Vector2.ZERO,size),Color("151515"))
-    var font=ThemeDB.fallback_font
-    draw_string(font,Vector2(4,16),"ALL",HORIZONTAL_ALIGNMENT_LEFT,-1,12,Color("a5cde8"))
+    draw_rect(Rect2(Vector2.ZERO,size),Color(1,1,1,.07))
+    var font=preload("res://scripts/arcade_style.gd").HEAD
+    draw_string(font,Vector2(4,16),"ALL",HORIZONTAL_ALIGNMENT_LEFT,-1,12,Color("d9d4ca"))
     var h=maxf(1,size.y-30); var length=maxf(.001,game.length()); var peak=1
     for count in bins: peak=maxi(peak,count)
     for i in bins.size():
         var width=sqrt(float(bins[i])/peak)*(size.x-8)
-        draw_rect(Rect2(4,24+float(i)/128*h,width,maxf(1,h/128-1)),Color("658cef"))
+        draw_rect(Rect2(4,24+float(i)/128*h,width,maxf(1,h/128-1)),Color("d9d4ca"))
     var top=24+game.timeline.view_start/length*h
     var bottom=minf(size.y-6,top+game.zoom_seconds/length*h)
     draw_rect(Rect2(1,top,size.x-2,maxf(3,bottom-top)),Color(.5,.8,1,.12))
-    draw_rect(Rect2(1,top,size.x-2,maxf(3,bottom-top)),Color("8cceff"),false,1)
+    draw_rect(Rect2(1,top,size.x-2,maxf(3,bottom-top)),Color("d9d4ca"),false,1)
     for section in ["verse2","bridge"]:
         var at=game.section_mark(section)
         if at>=0:
-            var y=24+at/length*h; draw_line(Vector2(0,y),Vector2(size.x,y),Color("6affdf"),2)
+            var y=24+at/length*h; draw_line(Vector2(0,y),Vector2(size.x,y),Color("d9d4ca"),2)
     for bookmark in game.features.bookmarks():
         var mark_y=24+float(bookmark.start)/length*h
         draw_line(Vector2(0,mark_y),Vector2(size.x,mark_y),Color("ffcd73"),2)
@@ -63,25 +63,25 @@ func _draw() -> void:
     draw_line(Vector2(0,y),Vector2(size.x,y),Color("ffe699"),2)
 
 func draw_horizontal() -> void:
-    draw_rect(Rect2(Vector2.ZERO,size),Color("151515"))
-    var font=ThemeDB.fallback_font
-    draw_string(font,Vector2(5,size.y*.5+4),"ALL",HORIZONTAL_ALIGNMENT_LEFT,-1,12,Color("a5cde8"))
+    draw_rect(Rect2(Vector2.ZERO,size),Color(1,1,1,.07))
+    var font=preload("res://scripts/arcade_style.gd").HEAD
+    draw_string(font,Vector2(5,size.y*.5+4),"ALL",HORIZONTAL_ALIGNMENT_LEFT,-1,12,Color("d9d4ca"))
     var left=34.0;var span=maxf(1.0,size.x-42.0);var duration=maxf(.001,game.length())
     var peak=1
     for count in bins:peak=maxi(peak,count)
     for i in bins.size():
         var x=left+float(i)/128.0*span
         var height=sqrt(float(bins[i])/peak)*maxf(2.0,size.y-12.0)
-        draw_rect(Rect2(x,size.y*.5-height*.5,maxf(1.0,span/128.0-1.0),height),Color("658cef"))
+        draw_rect(Rect2(x,size.y*.5-height*.5,maxf(1.0,span/128.0-1.0),height),Color("d9d4ca"))
     if recorder_mode and game.recorder.active:
         var from=left+game.recorder.region.x/duration*span
         var to=left+game.recorder.region.y/duration*span
         draw_rect(Rect2(from,1,maxf(2.0,to-from),size.y-2),Color(.5,.8,1,.12))
-        draw_rect(Rect2(from,1,maxf(2.0,to-from),size.y-2),Color("8cceff"),false,1)
+        draw_rect(Rect2(from,1,maxf(2.0,to-from),size.y-2),Color("d9d4ca"),false,1)
     for section in ["verse2","bridge"]:
         var at=game.section_mark(section)
         if at>=0:
-            var x=left+at/duration*span;draw_line(Vector2(x,0),Vector2(x,size.y),Color("6affdf"),2)
+            var x=left+at/duration*span;draw_line(Vector2(x,0),Vector2(x,size.y),Color("d9d4ca"),2)
     for bookmark in game.features.bookmarks():
         var x=left+float(bookmark.start)/duration*span
         draw_line(Vector2(x,0),Vector2(x,size.y),Color("ffcd73"),2)
