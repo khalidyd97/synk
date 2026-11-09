@@ -5,7 +5,7 @@ const ScreenStyle=preload("res://scripts/screen_style.gd")
 # buttons with a cyan focus edge, gradient primary actions and small cyan section labels.
 const Action=preload("res://scripts/settings_action.gd")
 const CYAN=Color("50daec")
-const MUTED=Color("a7aac6")
+const MUTED=Color("bcb7ad")
 var game: Control
 var safe_content: Control
 var inspector: Control
@@ -39,7 +39,7 @@ func caption(parent: Node,value: String,l: float,t: float,r: float,b: float,fs: 
 # variant: "primary" and "record" are gradient buttons; "danger" uses a red edge; others are plain.
 func action(parent: Node,value: String,l: float,t: float,r: float,b: float,callback: Callable,variant: String="tool") -> Button:
     var n=Action.new(); n.text=value; n.primary=variant in ["primary","record"]
-    n.caption_size=17 if n.primary else 15
+    n.caption_size=19 if n.primary else 17
     if variant=="danger": n.accent=Color("ff5f7e")
     place(n,parent,l,t,r,b)
     if variant=="record" and n.material:
@@ -49,14 +49,14 @@ func action(parent: Node,value: String,l: float,t: float,r: float,b: float,callb
     return n
 func card(parent: Node,l: float,t: float,r: float,b: float) -> Panel:
     var n=Panel.new(); place(n,parent,l,t,r,b); n.mouse_filter=Control.MOUSE_FILTER_IGNORE
-    var box=StyleBoxFlat.new(); box.bg_color=Color(0.041,0.041,0.041,.88); box.border_color=Color("2b263b")
+    var box=StyleBoxFlat.new(); box.bg_color=Color(0.041,0.041,0.041,.88); box.border_color=Color("34353a")
     box.set_corner_radius_all(20); box.set_border_width_all(1); n.add_theme_stylebox_override("panel",box)
     return n
 func eyebrow(parent: Node,value: String,l: float,t: float,r: float,b: float) -> Label:
     var n=caption(parent," ".join(value.split("")),l,t,r,b,12); n.add_theme_color_override("font_color",CYAN)
     return n
 func field_style(n: Control) -> void:
-    var box=StyleBoxFlat.new(); box.bg_color=Color("0d0d0d"); box.border_color=Color("302a42")
+    var box=StyleBoxFlat.new(); box.bg_color=Color(1,1,1,.05); box.border_color=Color("34353a")
     box.set_corner_radius_all(14); box.set_border_width_all(1); box.content_margin_left=14; box.content_margin_right=10
     var focus=box.duplicate(); focus.border_color=CYAN
     for state in ["normal","read_only"]: n.add_theme_stylebox_override(state,box)

@@ -14,6 +14,9 @@ float segment_distance(vec2 p, vec2 a, vec2 b) {
 varying float centre_z;
 void vertex(){centre_z=MODEL_MATRIX[3].z; VERTEX=ssrg_warp_rigid(VERTEX,MODEL_MATRIX); rail_position=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz;}
 
+// Player setting: how bright notes and their trails are (Settings > Visuals > Notes).
+global uniform float synk_note_brightness;
+uniform bool note_brightness_applies = true;
 void fragment() {
 	if(outside_rails(INV_VIEW_MATRIX[3].xyz)) discard;
     vec2 p = (UV-vec2(0.5))*vec2(3.22,1.6);
@@ -26,4 +29,5 @@ void fragment() {
     float gray = dot(color,vec3(0.299,0.587,0.114));
     ALBEDO = mix(color,vec3(gray*0.52),desaturate);
     ALPHA = clamp(rim+glow,0.0,1.0)*ghost_fade*ssrg_reveal(centre_z);
+	if(note_brightness_applies) ALBEDO*=synk_note_brightness;
 }

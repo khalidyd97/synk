@@ -10,10 +10,14 @@ void vertex(){
     world_z=(MODEL_MATRIX*vec4(VERTEX,1.0)).z;
     VERTEX=ssrg_warp_rigid(VERTEX,MODEL_MATRIX);
 }
+// Player setting: how bright notes and their trails are (Settings > Visuals > Notes).
+global uniform float synk_note_brightness;
+uniform bool note_brightness_applies = true;
 void fragment(){
     if(world_z>clip_z)discard;
     float radius=length((UV-.5)*2.0);
     float glow=pow(max(0.0,1.0-radius),2.2);
     ALBEDO=tint*source_tint.rgb;
     ALPHA=glow*.34*ghost_fade*source_tint.a;
+	if(note_brightness_applies) ALBEDO*=synk_note_brightness;
 }

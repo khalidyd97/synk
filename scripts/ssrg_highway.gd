@@ -49,6 +49,7 @@ func _ready() -> void:
 		if side > 0: rail.rotation_degrees.y = 180
 	var band_mesh = QuadMesh.new(); band_mesh.size = Vector2(half * 2.0 + 1.2, w.JUDGMENT_DEPTH * 1.25)
 	var band_mat = ShaderMaterial.new(); band_mat.shader = preload("res://scripts/reference_note.gdshader")
+	band_mat.set_shader_parameter("note_brightness_applies", false)
 	band_mat.set_shader_parameter("artwork", preload("res://assets/ssrg/judgment.png")); band_mat.render_priority = -5
 	band = w.mesh_node(band_mesh, self, band_mat); band.position = Vector3(0, .04, 0); band.rotation_degrees.x = -90
 	band.visible = false   # the reference stage has no band; the rings mark the line
@@ -129,6 +130,14 @@ func release(h: Dictionary) -> void:
 	h.node.visible = false; hit_pool.append(h)
 
 func resume_sustain(entry:Dictionary) -> void:
+	# SSRG rules run on every highway; off the SSRG stage (and without the SSRG hit style)
+	# the sustain flash uses the player's own hit style instead of SSRG art.
+	if not world.uses_ssrg_hits():
+		var key=entry.get("key","")
+		for burst in world.bursts+world.blooms:
+			if burst.sustain_entry.get("key","")==key:return
+		world.spawn_hit(SynkChart.lane_at(entry.note,world.game.song_time),str(entry.note.kind),int(entry.note.get("direction",0)),entry,int(entry.get("pointer",-999)))
+		return
 	for hit in hits:
 		if hit.sustain_entry.get("key","")==entry.get("key",""):return
 	spawn(SynkChart.lane_at(entry.note,world.game.song_time),str(entry.note.kind),entry,int(entry.pointer))

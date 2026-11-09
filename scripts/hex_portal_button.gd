@@ -74,7 +74,7 @@ func emit_spark(burst := false) -> void:
 
 func _process(delta: float) -> void:
 	time += delta
-	hover = lerpf(hover, 1.0 if is_hovered() else 0.0, 1.0 - exp(-delta * 12.0))
+	hover = lerpf(hover, 1.0 if preload("res://scripts/ui_motion.gd").hovered(self) else 0.0, 1.0 - exp(-delta * 12.0))
 	press = move_toward(press, 0.0, delta * 3.0)
 	spark_timer -= delta
 	if spark_timer <= 0.0:

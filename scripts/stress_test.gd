@@ -23,16 +23,44 @@ class Marker extends Node:
 		if tag == "first": host.script_start = Time.get_ticks_usec()
 		else: host.script_usec += Time.get_ticks_usec() - host.script_start
 
+# Emulators without run-as (BlueStacks) cannot write user://, so Android also checks the
+# app's shared external folder: /sdcard/Android/data/<package>/files/stress_test.json
+const EXTERNAL_TRIGGER = "/storage/emulated/0/Android/data/com.synkstudio.rhythm/files/stress_test.json"
+static func trigger_path() -> String:
+	if FileAccess.file_exists(TRIGGER): return TRIGGER
+	if OS.get_name() == "Android" and FileAccess.file_exists(EXTERNAL_TRIGGER): return EXTERNAL_TRIGGER
+	return ""
+
 func _ready() -> void:
 	var first = Marker.new(); first.tag = "first"; first.process_priority = -100000
 	var last = Marker.new(); last.tag = "last"; last.process_priority = 100000
 	add_child.call_deferred(first); add_child.call_deferred(last)
-	if not FileAccess.file_exists(TRIGGER): queue_free(); return
-	var text = FileAccess.get_file_as_string(TRIGGER)
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(TRIGGER))
+	get_tree().node_added.connect(note_added)
+	var trigger = trigger_path()
+	if trigger.is_empty(): queue_free(); return
+	var text = FileAccess.get_file_as_string(trigger)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(trigger))
 	var config = JSON.parse_string(text)
 	if not config is Dictionary: config = {}
+	# "fresh_shaders": true drops the on-device shader cache first, so the run sees the
+	# first-launch compile cost (what a new install or an update pays mid-song).
+	if config.get("fresh_shaders", false): clear_shader_cache("user://")
 	run.call_deferred(config.get("levels", [{"nps": 8, "speed": 1.5, "seconds": 20}, {"nps": 16, "speed": 2.5, "seconds": 20}, {"nps": 24, "speed": 3.0, "seconds": 20}]))
+
+func clear_shader_cache(path: String) -> void:
+	var dir = DirAccess.open(path)
+	if dir == null: return
+	for sub in dir.get_directories():
+		var full = path.path_join(sub)
+		if "shader" in sub.to_lower():
+			remove_tree(full); print("SYNK_STRESS cleared ", full)
+		elif path == "user://": clear_shader_cache(full)
+func remove_tree(path: String) -> void:
+	var dir = DirAccess.open(path)
+	if dir == null: return
+	for sub in dir.get_directories(): remove_tree(path.path_join(sub))
+	for file in dir.get_files(): DirAccess.remove_absolute(ProjectSettings.globalize_path(path.path_join(file)))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 func chart(nps: float, seconds: float, seed_value: int) -> Array:
 	var rng = RandomNumberGenerator.new(); rng.seed = seed_value
@@ -79,11 +107,35 @@ func report(label: String) -> void:
 	frames.clear(); proc.clear(); cpu_render.clear(); gpu_render.clear()
 
 var last_usec = 0
+# Hitch log: what was created in the last few frames before a frame over 100 ms, so a
+# first-time shader compile (or other stall) can be traced to the thing that caused it.
+var recent_nodes: Array = []
+func note_added(n: Node) -> void:
+	if not sampling: return
+	var script = n.get_script()
+	recent_nodes.append({"frame": Engine.get_process_frames(), "node": weakref(n), "label": n.get_class() + ((":" + str(script.resource_path).get_file()) if script else "")})
+	if recent_nodes.size() > 40: recent_nodes.pop_front()
+# The shaders a new node draws with, so a stall names the material that compiled.
+func describe(entry: Dictionary) -> String:
+	var n = entry.node.get_ref()
+	var text: String = entry.label
+	if n is GeometryInstance3D:
+		var mat: Material = n.material_override
+		if mat == null and n is MeshInstance3D and n.mesh: mat = n.mesh.surface_get_material(0)
+		if mat is ShaderMaterial and mat.shader: text += "[" + str(mat.shader.resource_path).get_file() + "]"
+		if n.get_parent(): text += " in " + str(n.get_parent().name)
+	return text
 # Real wall-clock time between frames (the engine's delta is smoothed and hides stutters).
 func _process(_delta: float) -> void:
 	var now = Time.get_ticks_usec()
 	if sampling and last_usec > 0:
 		frames.append((now - last_usec) / 1000.0)
+		if now - last_usec > 100000:
+			var frame = Engine.get_process_frames()
+			var made = recent_nodes.filter(func(t): return int(t.frame) >= frame - 3).map(describe)
+			var w = game.field.world
+			var th = w.ssrg_theme
+			print("SYNK_STRESS hitch ms=%.0f song_time=%.2f combo=%d judged=%d bursts=%d animated=%d ssrg_pool=%d ssrg_hits=%d prewarmed=%s new=%s" % [(now - last_usec) / 1000.0, game.song_time, game.combo, game.judged, w.bursts.size(), w.animated_materials.size(), th.hit_pool.size() if th else -1, th.hits.size() if th else -1, w.prewarmed.keys(), made])
 		proc.append(Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0)
 		var vp = get_viewport().get_viewport_rid()
 		cpu_render.append(RenderingServer.viewport_get_measured_render_time_cpu(vp))
@@ -113,7 +165,7 @@ func run(levels: Array) -> void:
 		while game.countdown > 0 or game.resume_countdown > 0 or game.mode != "play":
 			if game.mode == "paused": game.toggle_pause()
 			await get_tree().process_frame
-		print("SYNK_STRESS %s load_ms=%d" % [label, Time.get_ticks_msec() - started])
+		print("SYNK_STRESS %s load_ms=%d ssrg_hits_used=%s ssrg_pool=%d intro=%s" % [label, Time.get_ticks_msec() - started, game.field.world.uses_ssrg_hits(), game.field.world.ssrg_theme.hit_pool.size() if game.field.world.ssrg_theme else -1, game.stage_intro_enabled])
 		var by_script: Dictionary = {}
 		var stack: Array = [get_tree().root]
 		while not stack.is_empty():

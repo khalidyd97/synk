@@ -1,5 +1,7 @@
 extends Control
 const ButtonArt=preload("res://scripts/song_browser_button.gd")
+const Arcade=preload("res://scripts/arcade_style.gd")
+const UiMotion=preload("res://scripts/ui_motion.gd")
 const Row=preload("res://scripts/song_list_row.gd")
 const Motion=preload("res://scripts/ui_motion.gd")
 const PLACEHOLDER=preload("res://assets/brand/song_placeholder.svg")
@@ -24,7 +26,7 @@ var duration: Label
 var genre: Label
 var difficulty: Dictionary={}
 var level_scroll: ScrollContainer
-var level_row: HBoxContainer
+var level_row: BoxContainer
 var level_empty: Label
 var shown_levels: Array=[]
 var sections: OptionButton
@@ -42,130 +44,128 @@ var cover_glow: Panel
 var play_tween: Tween
 
 func box_style(fill: Color,edge: Color,radius: int=20) -> StyleBoxFlat:
-    var s=StyleBoxFlat.new(); s.bg_color=fill; s.border_color=edge; s.set_corner_radius_all(radius); s.set_border_width_all(1); return s
+    # Album Takeover: frosted glass, no outline.
+    var s=StyleBoxFlat.new(); s.bg_color=Color(1,1,1,.07); s.set_corner_radius_all(mini(radius,16)); s.anti_aliasing=true
+    s.content_margin_left=16; s.content_margin_right=16; return s
 func place(node: Control,parent: Control,x: float,y: float,w: float,h: float,base: Vector2=Vector2(1456,819)) -> void:
     parent.add_child(node); node.anchor_left=x/base.x; node.anchor_top=y/base.y
     node.anchor_right=(x+w)/base.x; node.anchor_bottom=(y+h)/base.y
-func label(parent: Control,value: String,x: float,y: float,w: float,h: float,font_size: int,tint: Color=Color("f3f0ff"),base: Vector2=Vector2(1456,819)) -> Label:
+func label(parent: Control,value: String,x: float,y: float,w: float,h: float,font_size: int,tint: Color=Color("f4f1ea"),base: Vector2=Vector2(1456,819)) -> Label:
     var n=Label.new(); place(n,parent,x,y,w,h,base); n.text=value; n.vertical_alignment=VERTICAL_ALIGNMENT_CENTER
     n.add_theme_font_size_override("font_size",roundi(font_size*1.15)); n.add_theme_color_override("font_color",tint)
+    n.add_theme_font_override("font",Arcade.mono())
     n.mouse_filter=Control.MOUSE_FILTER_IGNORE; n.clip_text=true; n.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS; return n
 func button(parent: Control,value: String,x: float,y: float,w: float,h: float,callback: Callable,base: Vector2=Vector2(1456,819),primary: bool=false) -> Button:
     var n=preload("res://scripts/song_play_button.gd").new() if value.begins_with("▶") else ButtonArt.new(); n.menu_motion=true; n.text=value; n.primary=primary; n.caption_size=22; place(n,parent,x,y,w,h,base); n.pressed.connect(callback); return n
+# Kept name: groups now sit straight on the backdrop, without a box.
 func card(parent: Control,x: float,y: float,w: float,h: float,base: Vector2=Vector2(1456,819),radius: int=20) -> Panel:
-    var n=Panel.new(); place(n,parent,x,y,w,h,base)
-    n.add_theme_stylebox_override("panel",box_style(Color(0.041,0.041,0.041,.88),Color("2b263b"),radius)); return n
+    var n=Panel.new(); place(n,parent,x,y,w,h,base); n.add_theme_stylebox_override("panel",StyleBoxEmpty.new())
+    n.mouse_filter=Control.MOUSE_FILTER_IGNORE; return n
 func _ready() -> void:
     mouse_filter=Control.MOUSE_FILTER_IGNORE
     background=ColorRect.new(); add_child(background); background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     background.mouse_filter=Control.MOUSE_FILTER_IGNORE
-    var mat=preload("res://scripts/background_motion.gd").attach(background,preload("res://scripts/song_browser_background.gdshader"))
-    mat.set_shader_parameter("ambience",Color(.12,.08,.28,1))
-    # Stage footage behind the list, recoloured blue for this screen.
-    art_backdrop=preload("res://scripts/screen_backdrop.gd").video(self,0.25,.5)  # blue stage
+    preload("res://scripts/background_motion.gd").attach(background,preload("res://scripts/song_browser_background.gdshader"))
+    # Album Takeover: the selected song's cover, blurred, fills the screen behind everything.
+    art_backdrop=preload("res://scripts/screen_backdrop.gd").album_art(self,.5)
     canvas=Control.new(); add_child(canvas); canvas.mouse_filter=Control.MOUSE_FILTER_IGNORE
-    var local_theme=Theme.new(); local_theme.default_font=ThemeDB.fallback_font; local_theme.default_font_size=16; canvas.theme=local_theme
-    for type in ["Label","Button","LineEdit","OptionButton","PopupMenu"]: local_theme.set_font("font",type,ThemeDB.fallback_font)
+    canvas.theme=preload("res://scripts/game_theme.gd").arcade()
     resized.connect(layout); game.safe_area_changed.connect(layout); layout()
-    button(canvas,"‹",48,23,76,76,lobby.show_gateway).caption_size=32
-    label(canvas,"S E L E C T   A   S O N G",140,28,600,22,14,Color("ff7a59"))
-    var heading=label(canvas,"Choose your track",140,52,700,42,34)
-    var bold=FontVariation.new(); bold.base_font=ThemeDB.fallback_font; bold.variation_embolden=.5
-    heading.add_theme_font_override("font",bold)
-    search=LineEdit.new(); place(search,canvas,1084,23,324,76)
-    search.placeholder_text="⌕   Search songs or artists"; search.add_theme_font_size_override("font_size",19)
-    var s=box_style(Color("0d0d0d"),Color("302a42"),15); s.content_margin_left=18; s.content_margin_right=14
-    search.add_theme_stylebox_override("normal",s)
-    var focus=s.duplicate(); focus.border_color=Color("f3ece1"); search.add_theme_stylebox_override("focus",focus)
-    search.text_changed.connect(func(_text): lobby.refresh_tracks())
-    var gear=preload("res://scripts/gear_button.gd").new(); gear.accent=Color("bcb2d4")
-    place(gear,canvas,996,23,72,76); gear.pressed.connect(func(): game.open_lobby_settings())
-    var auto=preload("res://scripts/autoplay_toggle.gd").new(); place(auto,canvas,884,23,96,76)
-    auto.toggled.connect(func(enabled): lobby.auto_enabled=enabled)
-    lobby.settings_button=gear; lobby.auto_button=auto
-    var tab_data=[["all","All songs",48,120],["favorites","Favorites",184,126],["recent","Recently played",326,184],["new","New",526,82],["daily","★ Daily",624,112]]
-    for item in tab_data:
-        var key: String=item[0]; var n=button(canvas,item[1],item[2],96,item[3],56,func(): lobby.set_filter(key))
-        n.tab=true; n.caption_size=21; tabs[key]=n
-    var rule=ColorRect.new(); place(rule,canvas,48,154,1360,1); rule.color=Color("232323"); rule.mouse_filter=Control.MOUSE_FILTER_IGNORE
-    canvas.move_child(rule,canvas.get_child_count()-tabs.size()-2)
-    count=label(canvas,"",1250,106,158,28,13,Color("aaa2bf")); count.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
-    scroll=ScrollContainer.new(); place(scroll,canvas,48,168,794,615)
-    scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
-    scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO; scroll.scroll_deadzone=12
-    var rail=StyleBoxFlat.new(); rail.bg_color=Color(0,0,0,0)
-    scroll.get_v_scroll_bar().add_theme_stylebox_override("scroll",rail)
-    var grabber=StyleBoxFlat.new(); grabber.bg_color=Color(.6,.55,.8,.14); grabber.set_corner_radius_all(3)
-    for state in ["grabber","grabber_highlight","grabber_pressed"]: scroll.get_v_scroll_bar().add_theme_stylebox_override(state,grabber)
-    scroll.get_v_scroll_bar().custom_minimum_size.x=4
-    var drag=preload("res://scripts/song_list_scroll.gd").new(); drag.scroll=scroll; drag.name="DragScroll"; scroll.add_child(drag)
-    list=GridContainer.new(); scroll.add_child(list); list.columns=1; list.size_flags_horizontal=Control.SIZE_EXPAND_FILL
-    list.add_theme_constant_override("v_separation",9)
-    empty=label(canvas,"",72,320,746,130,20,Color("aaa2bf")); empty.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-    empty.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
-    panel=card(canvas,882,168,526,615,Vector2(1456,819),25)
-    var p=Vector2(526,615)
-    # Soft glow in the song's accent colour behind the cover.
-    cover_glow=Panel.new(); place(cover_glow,panel,35,35,130,130,p); cover_glow.mouse_filter=Control.MOUSE_FILTER_IGNORE
+    # Left: the cover, the song's name and its section.  Middle: levels and best score.
+    # Right: filters, search and the list.  Bottom right: Play, in the song's own colour.
+    panel=card(canvas,40,28,690,770)
+    var p=Vector2(690,770)
+    button(panel,"‹",4,0,64,64,lobby.show_gateway,p).caption_size=30
+    cover_glow=Panel.new(); place(cover_glow,panel,24,92,380,380,p); cover_glow.mouse_filter=Control.MOUSE_FILTER_IGNORE
     cover_glow.anchor_right=cover_glow.anchor_left; cover_glow.anchor_bottom=cover_glow.anchor_top
-    cover_glow.offset_right=130; cover_glow.offset_bottom=130
-    var art_holder=Control.new(); place(art_holder,panel,29,29,142,142,p)
+    cover_glow.offset_right=372; cover_glow.offset_bottom=372
+    var art_holder=Control.new(); place(art_holder,panel,12,84,388,388,p)
     # Keep album art square when the available panel width changes.
     art_holder.anchor_right=art_holder.anchor_left; art_holder.anchor_bottom=art_holder.anchor_top
-    art_holder.offset_right=142; art_holder.offset_bottom=142
+    art_holder.offset_right=388; art_holder.offset_bottom=388
     cover=TextureRect.new(); art_holder.add_child(cover); cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     cover.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; cover.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED
-    cover.mouse_filter=Control.MOUSE_FILTER_IGNORE; preload("res://scripts/screen_style.gd").round_cover(cover,22)
-    label(panel,"N O W   S E L E C T E D",192,35,305,22,13,Color("ff7a59"),p)
-    title_label=label(panel,"",192,59,305,43,32,Color("f5f3ff"),p); title_label.add_theme_font_override("font",bold)
-    artist_label=label(panel,"",192,102,305,28,16,Color("c4bcd6"),p)
-    metadata=HBoxContainer.new(); place(metadata,panel,192,135,305,28,p); metadata.add_theme_constant_override("separation",7)
+    cover.mouse_filter=Control.MOUSE_FILTER_IGNORE; preload("res://scripts/screen_style.gd").round_cover(cover,10)
+    title_label=label(panel,"",12,486,660,70,50,Color("f4f1ea"),p); title_label.add_theme_font_override("font",Arcade.SERIF)
+    artist_label=label(panel,"",14,556,420,28,16,Arcade.SUBTLE,p)
+    metadata=HBoxContainer.new(); place(metadata,panel,14,588,420,28,p); metadata.add_theme_constant_override("separation",6)
     bpm=chip(); duration=chip(); genre=chip()
-    label(panel,"L E V E L",29,271,146,22,12,Color("bfb5d5"),p)
-    sections=OptionButton.new(); place(sections,panel,29,191,468,64,p)
+    sections=OptionButton.new(); place(sections,panel,12,632,300,56,p)
     sections.tooltip_text="Choose the full song, a verse, or the bridge"
     for key in ["full","verse1","verse2","bridge"]: sections.add_item(game.SECTION_NAMES[key])
-    sections.add_theme_font_size_override("font_size",21)
+    sections.add_theme_font_size_override("font_size",20)
     sections.get_popup().add_theme_font_size_override("font_size",21)
     sections.get_popup().add_theme_constant_override("v_separation",16)
-    var section_style=box_style(Color("131313"),Color("2b2b2b"),18)
-    section_style.content_margin_left=18; section_style.content_margin_right=18
+    var section_style=box_style(Color(),Color(),28); section_style.set_corner_radius_all(28)
+    section_style.content_margin_left=22; section_style.content_margin_right=18
     sections.add_theme_stylebox_override("normal",section_style)
-    var section_focus=section_style.duplicate(); section_focus.border_color=Color("f3ece1")
+    var section_focus=section_style.duplicate(); section_focus.bg_color=Color(1,1,1,.13)
     for state in ["hover","pressed","focus"]: sections.add_theme_stylebox_override(state,section_focus)
     preload("res://scripts/modal_input.gd").register(sections.get_popup())
     sections.get_popup().about_to_popup.connect(func():
-        var r=sections.get_global_rect(); var k=sections.get_global_transform_with_canvas().get_scale()
+        var k=sections.get_global_transform_with_canvas().get_scale()
         var popup=sections.get_popup()
         popup.position=Vector2i(sections.get_screen_position()+Vector2(0,sections.size.y*k.y+6))
         popup.min_size=Vector2i(roundi(sections.size.x*k.x),0))
     sections.item_selected.connect(func(index): game.set_play_mode(["full","verse1","verse2","bridge"][index]); update_best())
-    # One chip per chart level the song has (Lv 1-30), scrolling sideways when there are many.
-    level_scroll=ScrollContainer.new(); place(level_scroll,panel,29,300,468,86,p)
-    level_scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
-    level_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_SHOW_NEVER
-    level_row=HBoxContainer.new(); level_scroll.add_child(level_row); level_row.add_theme_constant_override("separation",9)
-    level_empty=label(panel,"No charts yet",29,300,468,80,16,Color("8f88a6"),p)
-    var best=card(panel,29,394,468,76,p,18)
-    best_label=label(best,"",17,11,330,23,12,Color("a9a0bd"),Vector2(468,76))
-    best_value=label(best,"0",17,34,330,30,24,Color("f7f3ff"),Vector2(468,76))
-    label(best,"Rank",390,12,60,20,12,Color("aaa2bf"),Vector2(468,76)).horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
-    rank_value=label(best,"—",390,34,60,30,24,Color("51d8ec"),Vector2(468,76)); rank_value.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
-    details_label=label(panel,"",29,472,468,26,13,Color("a9a0bd"),p)
-    play=button(panel,"▶  PLAY",16,502,494,104,lobby.press_play,p,true)
-    create=button(panel,"CREATE CHART",29,508,468,84,func():
+    details_label=label(panel,"",14,700,660,26,13,Arcade.MUTED,p)
+    # Levels stand in a column beside the cover, one chip per chart (Lv 1-30), scrolling when many.
+    label(panel,"Level",440,84,200,26,15,Arcade.MUTED,p)
+    level_scroll=ScrollContainer.new(); place(level_scroll,panel,432,116,240,300,p)
+    level_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+    level_scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_SHOW_NEVER
+    level_row=VBoxContainer.new(); level_scroll.add_child(level_row); level_row.add_theme_constant_override("separation",8)
+    level_empty=label(panel,"No charts yet",440,116,220,40,16,Arcade.DIM,p)
+    var best=card(panel,440,420,240,90,p,18)
+    best_label=label(best,"",0,0,240,24,13,Arcade.MUTED,Vector2(240,90))
+    best_value=label(best,"0",0,26,160,44,30,Color("f4f1ea"),Vector2(240,90)); best_value.add_theme_font_override("font",Arcade.SERIF)
+    rank_value=label(best,"—",160,26,80,44,30,Arcade.MAGENTA,Vector2(240,90)); rank_value.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
+    rank_value.add_theme_font_override("font",Arcade.SERIF_ITALIC)
+    # Right side.
+    var auto=preload("res://scripts/autoplay_toggle.gd").new(); place(auto,canvas,760,28,96,64)
+    auto.toggled.connect(func(enabled): lobby.auto_enabled=enabled)
+    var gear=preload("res://scripts/gear_button.gd").new(); gear.accent=Arcade.CYAN
+    place(gear,canvas,868,28,64,64); gear.pressed.connect(func(): game.open_lobby_settings())
+    lobby.settings_button=gear; lobby.auto_button=auto
+    search=LineEdit.new(); place(search,canvas,950,30,466,60)
+    search.placeholder_text="Search songs or artists"; search.add_theme_font_size_override("font_size",19)
+    var s=box_style(Color(),Color(),30); s.set_corner_radius_all(30); s.content_margin_left=24
+    search.add_theme_stylebox_override("normal",s)
+    var focus=s.duplicate(); focus.bg_color=Color(1,1,1,.12); search.add_theme_stylebox_override("focus",focus)
+    search.text_changed.connect(func(_text): lobby.refresh_tracks())
+    var tab_data=[["all","All",760,72],["favorites","Favorites",838,122],["recent","Recent",966,100],["new","New",1072,76],["daily","Daily",1154,90]]
+    for item in tab_data:
+        var key: String=item[0]; var n=button(canvas,item[1],item[2],108,item[3],50,func(): lobby.set_filter(key))
+        n.tab=true; n.caption_size=19; tabs[key]=n
+    count=label(canvas,"",1270,116,146,34,13,Arcade.MUTED); count.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
+    scroll=ScrollContainer.new(); place(scroll,canvas,752,170,668,520)
+    scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+    scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO; scroll.scroll_deadzone=12
+    var rail=StyleBoxFlat.new(); rail.bg_color=Color(0,0,0,0)
+    scroll.get_v_scroll_bar().add_theme_stylebox_override("scroll",rail)
+    var grabber=StyleBoxFlat.new(); grabber.bg_color=Color(1,1,1,.25); grabber.set_corner_radius_all(3)
+    for state in ["grabber","grabber_highlight","grabber_pressed"]: scroll.get_v_scroll_bar().add_theme_stylebox_override(state,grabber)
+    scroll.get_v_scroll_bar().custom_minimum_size.x=4
+    var drag=preload("res://scripts/song_list_scroll.gd").new(); drag.scroll=scroll; drag.name="DragScroll"; scroll.add_child(drag)
+    list=GridContainer.new(); scroll.add_child(list); list.columns=1; list.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+    list.add_theme_constant_override("v_separation",2)
+    empty=label(canvas,"",772,320,628,130,20,Arcade.MUTED); empty.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    empty.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+    play=button(canvas,"▶  Play",752,708,668,96,lobby.press_play,Vector2(1456,819),true)
+    create=button(canvas,"Create chart",752,714,668,84,func():
         # Opens Chart Studio on this song and asks for the new chart's level (1-30).
         lobby.stop_preview(); game.open_editor()
-        game.chart_library.select_entry(str(game.song.id)); game.chart_library.ask_level("editor"),p,true)
+        game.chart_library.select_entry(str(game.song.id)); game.chart_library.ask_level("editor"),Vector2(1456,819),true)
     play.caption_size=30; create.caption_size=25
     play.pulse=true; create.pulse=true
     create.visible=false
 func chip() -> Label:
-    var n=Label.new(); metadata.add_child(n); n.add_theme_font_size_override("font_size",14)
-    n.add_theme_color_override("font_color",Color("d7d1e5"))
-    var style=box_style(Color("1a1a1a"),Color(0,0,0,0),14)
-    style.content_margin_left=10; style.content_margin_right=10; style.content_margin_top=5; style.content_margin_bottom=5
-    n.add_theme_stylebox_override("normal",style); return n
+    # Plain muted words, joined by a middle dot.
+    if metadata.get_child_count()>0:
+        var dot=Label.new(); metadata.add_child(dot); dot.text="·"; dot.add_theme_color_override("font_color",Arcade.DIM)
+        dot.add_theme_font_size_override("font_size",17)
+    var n=Label.new(); metadata.add_child(n); n.add_theme_font_size_override("font_size",17)
+    n.add_theme_color_override("font_color",Arcade.MUTED); n.add_theme_font_override("font",Arcade.mono()); return n
 func layout() -> void:
     if not canvas: return
     var available=game.safe_rect_for(self)
@@ -200,10 +200,13 @@ func set_details(entry: Dictionary,loading: bool,has_chart: bool) -> void:
     play.visible=has_chart; play.disabled=loading
     create.visible=not has_chart; create.disabled=loading
     panel.modulate.a=1
+    # A new song deals the detail card's pieces in again.
+    if changed and panel.is_visible_in_tree(): UiMotion.cascade.call_deferred(panel,0.0,.035)
     var texture=lobby.cover_for(entry.id)
-    if art_backdrop: art_backdrop.set_art(texture)
+    # The blurred backdrop uses the real cover, or the song's own colour wash when it has none.
+    if art_backdrop: art_backdrop.set_art(lobby.backdrop_for(str(entry.id)))
     tint_play_button(entry)
-    var glow=box_style(Color(entry.accent,.35),Color(0,0,0,0),24); glow.shadow_color=Color(entry.accent,.45); glow.shadow_size=26
+    var glow=StyleBoxFlat.new(); glow.bg_color=Color(0,0,0,.2); glow.set_corner_radius_all(10); glow.shadow_color=Color(0,0,0,.5); glow.shadow_size=34; glow.shadow_offset=Vector2(0,20)
     cover_glow.add_theme_stylebox_override("panel",glow)
     if cover_texture!=texture or changed:
         if cover_tween: cover_tween.kill()
@@ -239,6 +242,10 @@ func play_colors(entry: Dictionary) -> Array:
     return out
 func tint_play_button(entry: Dictionary) -> void:
     var target=play_colors(entry)
+    # The Play pill takes the same cover colour that lights the backdrop.
+    if "fill_color" in play:
+        var c: Color=preload("res://scripts/background_motion.gd").palette_a
+        play.fill_color=Color.from_hsv(c.h,clampf(c.s,.35,.8),clampf(c.v,.75,.95))
     var keys=["start_color","middle_color","end_color"]
     for button in [play,create]:
         var mat: ShaderMaterial=button.material
@@ -264,15 +271,15 @@ func refresh_difficulties(loading: bool=false) -> void:
         difficulty.clear()
         for variant in levels:
             var key: String=variant
-            var chip=ButtonArt.new(); chip.menu_motion=true; chip.text=Levels.label(key); chip.caption_size=22
-            chip.custom_minimum_size=Vector2(104,80); level_row.add_child(chip)
+            var chip=ButtonArt.new(); chip.menu_motion=true; chip.text=Levels.label(key); chip.caption_size=24; chip.tab=true
+            chip.custom_minimum_size=Vector2(200,62); level_row.add_child(chip)
             chip.pressed.connect(func(): lobby.choose_difficulty(key)); difficulty[key]=chip
     level_empty.visible=levels.is_empty()
     for key in difficulty:
         difficulty[key].disabled=loading
         difficulty[key].set_selected(game.features.current_variant==key and not loading)
     # The play button names the level it will start.
-    play.text="▶  PLAY  ·  "+Levels.label(game.features.current_variant).to_upper()
+    play.text="▶  Play "+Levels.label(game.features.current_variant)
     play.caption_size=30
     for i in 4: sections.get_popup().set_item_disabled(i,not game.section_available(["full","verse1","verse2","bridge"][i]) or loading)
     sections.select(["full","verse1","verse2","bridge"].find(game.play_mode))

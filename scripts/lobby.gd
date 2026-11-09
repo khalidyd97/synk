@@ -1,5 +1,6 @@
 extends Control
 const UiMotion=preload("res://scripts/ui_motion.gd")
+const UiSound=preload("res://scripts/ui_sound.gd")
 const LobbyWordmark=preload("res://scripts/lobby_wordmark.gd")
 const LobbyCard=preload("res://scripts/lobby_card.gd")
 const SongBrowser=preload("res://scripts/song_browser.gd")
@@ -36,7 +37,7 @@ var preview_enabled=true
 var preview_start=0.0
 func place(node: Control,parent: Node,left: float,top: float,right: float,bottom: float) -> void:
     parent.add_child(node); node.anchor_left=left; node.anchor_top=top; node.anchor_right=right; node.anchor_bottom=bottom
-func text(parent: Node,value: String,left: float,top: float,right: float,bottom: float,font_size: int,color: Color=Color("f3edff")) -> Label:
+func text(parent: Node,value: String,left: float,top: float,right: float,bottom: float,font_size: int,color: Color=Color("f4f1ea")) -> Label:
     var n=Label.new(); place(n,parent,left,top,right,bottom); n.text=value
     n.vertical_alignment=VERTICAL_ALIGNMENT_CENTER; n.add_theme_font_size_override("font_size",font_size)
     n.add_theme_color_override("font_color",color); n.mouse_filter=Control.MOUSE_FILTER_IGNORE; return n
@@ -67,6 +68,18 @@ func _process(delta: float) -> void:
         if preview_remaining<=0: stop_preview()
 func play_entrance() -> void:
     UiMotion.reveal(browser)
+    animate_browser.call_deferred()
+# Rows, the detail card and the header fly in one after another.
+func animate_browser() -> void:
+    if browser and browser.is_visible_in_tree(): UiMotion.cascade(browser)
+# A new filter or search deals the song rows in again.
+func animate_rows() -> void:
+    if not track_list or not track_list.is_visible_in_tree(): return
+    await get_tree().process_frame
+    var i=0
+    for row in track_list.get_children():
+        if row is Control and row.visible:
+            UiMotion.enter(row,minf(i*.04,.4)); i+=1
 func refresh() -> void:
     if browser and title_label: refresh_tracks()
 static func display_title(raw: String) -> String:
@@ -173,6 +186,7 @@ func set_filter(value: String) -> void:
     # The daily challenge sets today's modifier as it opens.
     if value=="daily" and game.extras: game.extras.start_daily()
     refresh_tracks()
+    animate_rows.call_deferred()
 func refresh_tracks() -> void:
     if not browser: return
     var was_empty=filtered_entries.is_empty()
@@ -201,6 +215,8 @@ func refresh_song_details() -> void:
     var loading=game.loading_song_index>0
     var source: Dictionary=game.library.songs[game.loading_song_index-1] if loading else game.song
     var entry=entry_for(source,game.loading_song_index if loading else 0)
+    # Album Takeover: the chosen song's cover colours re-light every menu backdrop.
+    if not (gateway and gateway.visible): preload("res://scripts/background_motion.gd").set_palette_from(backdrop_for(str(source.id)))
     if not loading: entry.bpm=game.chart_bpm()
     var available=not game.baseline_notes().is_empty() if not loading else has_variant(str(source.id),game.features.current_variant)
     browser.sections.disabled=loading
@@ -276,7 +292,8 @@ func lobby_card(parent: Control,x: float,y: float,w: float,h: float,icon: String
     design_rect(card,parent,x,y,w,h)
     return card
 
-var resume_label: Label
+var home_record: Control
+var resume_label: Button
 var play_home_card: Button
 func home_label(parent: Control,value: String,x: float,y: float,w: float,h: float,font_size: int,color: Color,bold: bool) -> Label:
     var result=Label.new(); design_rect(result,parent,x,y,w,h); result.text=value
@@ -298,43 +315,55 @@ func refresh_home() -> void:
     play_home_card.covers=covers
     play_home_card.subtitle="%d song%s to play" % [songs.size(),"" if songs.size()==1 else "s"]
     var last: Dictionary=order[0] if not order.is_empty() and recent.has(str(order[0].id)) else {}
-    resume_label.text=("Pick up where you left off: "+display_title(str(last.get("title","")))) if not last.is_empty() else "Pick a song and play, or record your own chart."
+    var hero: Dictionary=last if not last.is_empty() else (order[0] if not order.is_empty() else {})
+    if last.is_empty():
+        resume_label.label="Start with"
+    else:
+        resume_label.label="Pick up where you left off"
+    resume_label.song=display_title(str(hero.get("title","SYNK")))
+    resume_label.detail=str(hero.get("artist",""))
+    if home_record and not hero.is_empty():
+        var cover=backdrop_for(str(hero.id))
+        home_record.cover=cover
+        var Motion=preload("res://scripts/background_motion.gd")
+        Motion.set_palette_from(cover); home_record.label_color=Motion.palette_a
 
 func build_gateway() -> void:
     gateway=Control.new(); place(gateway,self,0,0,1,1)
-    # A living concert stage: depth-cut photo planes, beams, haze and a backlit crowd, all on one tempo.
-    var stage=preload("res://scripts/lobby_stage.gd").new(); stage.name="LobbyStage"
+    # Album Takeover home: the last song's cover lights the room, its name is set big,
+    # and the record turns beside it. Play is a disc; everything else is a text link.
+    # Two columns fill the safe area top to bottom: title and Play on the left; the record
+    # with Create charts and Games under its sleeve on the right, Settings over its edge.
+    var stage=ColorRect.new(); stage.name="ArcadeStage"; stage.color=Color.WHITE; stage.mouse_filter=Control.MOUSE_FILTER_IGNORE
     place(stage,gateway,0,0,1,1)
-    # Home: a quiet concert-poster layout with two tactile, equal actions.
+    preload("res://scripts/background_motion.gd").attach(stage,preload("res://scripts/song_browser_background.gdshader"))
     var safe_buttons=game.safe_parent("SafeLobbyButtons",gateway)
-    var eyebrow=home_label(safe_buttons,"CHOOSE YOUR RHYTHM",630,245,660,42,22,Color("e8d9c5"),true)
-    eyebrow.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-    var logo=home_label(safe_buttons,"SYNK",530,52,860,190,172,Color("f5ecdf"),true)
-    logo.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-    logo.name="LobbyWordmark"
-    resume_label=home_label(safe_buttons,"",560,786,800,48,19,Color("d7c9b8"),false)
-    resume_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-    resume_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART; resume_label.vertical_alignment=VERTICAL_ALIGNMENT_TOP
-    var ssrg=preload("res://scripts/lobby_sprite_button.gd").new()
-    design_rect(ssrg,safe_buttons,820,695,280,66); ssrg.name="SsrgPlayablesButton"
+    var logo=preload("res://scripts/arcade_wordmark.gd").new(); logo.name="LobbyWordmark"
+    design_rect(logo,safe_buttons,110,44,320,64)
+    home_record=preload("res://scripts/arcade_record.gd").new(); home_record.name="HomeRecord"
+    design_rect(home_record,safe_buttons,1020,120,800,600)
+    resume_label=preload("res://scripts/arcade_resume_chip.gd").new(); resume_label.name="ResumeChip"
+    design_rect(resume_label,safe_buttons,110,150,820,440)
+    resume_label.pressed.connect(func(): UiSound.play(self,"confirm"); show_play_browser(true))
+    var Note=preload("res://scripts/arcade_note_button.gd")
+    var play=Note.new(); play.title="Play"; play.hot=true; play.title_size=110; play.subtitle="Songs ready"
+    design_rect(play,safe_buttons,100,640,560,200); play.name="PlayCard"; play.tooltip_text="Choose a song and play"
+    play.pressed.connect(func(): UiSound.play(self,"confirm"); show_play_browser(true))
+    var create=Note.new(); create.title="Create charts"; create.title_size=72; create.subtitle="Write, record and edit notes"
+    design_rect(create,safe_buttons,1020,738,390,112); create.name="CreateCard"; create.tooltip_text="Edit charts, import music, and record notes"
+    create.pressed.connect(func(): UiSound.play(self,"confirm"); game.open_editor())
+    var ssrg=Note.new(); ssrg.title="Games"; ssrg.title_size=72; ssrg.subtitle="Songs from your game files"
+    design_rect(ssrg,safe_buttons,1430,738,390,112); ssrg.name="SsrgPlayablesButton"
     ssrg.tooltip_text="Import and play SSRG songs from your own game files"
-    ssrg.pressed.connect(func(): game.open_ssrg_playables())
-    var settings=preload("res://scripts/settings_action.gd").new(); settings.text="⚙"; settings.caption_size=30
-    design_rect(settings,safe_buttons,1740,44,100,80); settings.name="SettingsButton"
+    ssrg.pressed.connect(func(): UiSound.play(self,"confirm"); game.open_ssrg_playables())
+    var settings=preload("res://scripts/settings_action.gd").new(); settings.text="Settings"; settings.caption_size=22
+    design_rect(settings,safe_buttons,1634,44,170,64); settings.name="SettingsButton"
     settings.pressed.connect(func(): game.open_lobby_settings())
-    var HomeCard=preload("res://scripts/lobby_home_card.gd")
-    var play=HomeCard.new(); play.kind="play"; play.title="PLAY"; design_rect(play,safe_buttons,190,330,740,290)
-    play.name="PlayCard"; play.tooltip_text="Choose a song and play"
-    play.pressed.connect(func(): show_play_browser(true))
-    var create=HomeCard.new(); create.kind="create"; create.title="CREATE CHARTS"; create.subtitle="Build the rhythm. Make it yours."
-    design_rect(create,safe_buttons,990,330,740,290)
-    create.name="CreateCard"; create.tooltip_text="Edit charts, import music, and record notes"
-    create.pressed.connect(func(): game.open_editor())
     play_home_card=play
     # Launch entrance (after the start-up intro): node, offset it arrives from, delay, bounce.
-    launch_items=[[eyebrow,Vector2(0,-30),0.0,false],[logo,Vector2(0,-60),.04,true],[resume_label,Vector2(0,24),.18,false],
-        [play,Vector2(0,80),.12,false],[create,Vector2(0,80),.2,false],[ssrg,Vector2(0,40),.3,false],[settings,Vector2(0,40),.36,false]]
-    gateway_entrance_items=[{"node":logo,"delay":.02},{"node":play,"delay":.08},{"node":create,"delay":.14},{"node":ssrg,"delay":.2},{"node":settings,"delay":.24}]
+    launch_items=[[logo,Vector2(0,-30),.04,false],[resume_label,Vector2(-80,0),.12,false],[home_record,Vector2(140,0),.2,false],
+        [play,Vector2(0,60),.3,true],[create,Vector2(0,50),.38,false],[ssrg,Vector2(0,50),.44,false],[settings,Vector2(0,-30),.5,false]]
+    gateway_entrance_items=[{"node":logo,"delay":.02},{"node":resume_label,"delay":.08},{"node":home_record,"delay":.14},{"node":play,"delay":.22},{"node":create,"delay":.28},{"node":ssrg,"delay":.32},{"node":settings,"delay":.36}]
     refresh_home()
     gateway.visible=false
 
@@ -343,19 +372,10 @@ func build_gateway() -> void:
 # settings and footer follow.
 func play_launch_entrance() -> void:
     if not gateway or not gateway.visible: return
+    # Same motion as every other entrance, so two animations never fight over one piece.
     for item in launch_items:
-        var node: Control=item[0]; var from: Vector2=item[1]; var delay: float=item[2]; var bounce: bool=item[3]
-        if not is_instance_valid(node): continue
-        var previous: Variant=node.get_meta("reveal_tween") if node.has_meta("reveal_tween") else null
-        if previous is Tween and previous.is_running(): previous.kill()
-        var home=node.position
-        node.position=home+from; node.modulate.a=0.0
-        node.pivot_offset=node.size*.5; node.scale=Vector2.ONE*(.86 if not bounce else 1.0)
-        var tween=node.create_tween().set_parallel(true)
-        tween.tween_property(node,"position",home,.62 if bounce else .55).set_delay(delay).set_trans(Tween.TRANS_BACK if bounce else Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-        tween.tween_property(node,"modulate:a",1.0,.35).set_delay(delay)
-        tween.tween_property(node,"scale",Vector2.ONE,.5).set_delay(delay).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-        node.set_meta("reveal_tween",tween)
+        if is_instance_valid(item[0]): UiMotion.enter(item[0],item[2])
+    if home_record: home_record.pull_out(.3)
 func show_gateway() -> void:
     if not gateway or gateway.visible: return
     if is_visible_in_tree(): UiMotion.back(self)
@@ -372,7 +392,8 @@ func show_gateway() -> void:
         if home_video.is_playing(): home_video.paused=false
         else: home_video.play()
     UiMotion.reveal(gateway)
-    for item in gateway_entrance_items: UiMotion.reveal(item.node,item.delay)
+    for item in gateway_entrance_items: UiMotion.enter(item.node,item.delay)
+    if home_record: home_record.pull_out(.25)
 
 func show_play_browser(slide: bool=true) -> void:
     if slide: UiMotion.transition(self,.36)
@@ -383,4 +404,5 @@ func show_play_browser(slide: bool=true) -> void:
         if is_instance_valid(item.node): item.node.visible=item.visible
     refresh()
     schedule_preview()
+    animate_browser.call_deferred()
     play_entrance()

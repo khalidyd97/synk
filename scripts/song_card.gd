@@ -44,7 +44,7 @@ func _init(title: String, details: String, chip: String, art: Texture2D, tint: C
 	chip_label.add_theme_stylebox_override("normal",chip_style)
 	chip_label.add_theme_font_override("font",semibold)
 	button_down.connect(func(): UiSound.play(self,"click"))
-	mouse_entered.connect(func(): hovered = true; queue_redraw())
+	mouse_entered.connect(func(): hovered = preload("res://scripts/ui_motion.gd").hover_allowed(); queue_redraw())
 	mouse_exited.connect(func(): hovered = false; queue_redraw())
 	resized.connect(layout)
 

@@ -14,7 +14,7 @@ func _ready() -> void:
 	tooltip_text = "Settings"
 	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
 		add_theme_stylebox_override(state, StyleBoxEmpty.new())
-	mouse_entered.connect(func(): animate_hover(1.0))
+	mouse_entered.connect(func(): if preload("res://scripts/ui_motion.gd").hover_allowed(): animate_hover(1.0))
 	mouse_exited.connect(func(): animate_hover(0.0))
 	UiMotion.bind_button(self)
 

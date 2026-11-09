@@ -34,6 +34,9 @@ void vertex() {
 	rail_position=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz;
 }
 
+// Player setting: how bright notes and their trails are (Settings > Visuals > Notes).
+global uniform float synk_note_brightness;
+uniform bool note_brightness_applies = true;
 void fragment() {
 	if(outside_rails(INV_VIEW_MATRIX[3].xyz)) discard;
 	if(ssrg_warp.x>0.5){
@@ -74,4 +77,5 @@ void fragment() {
 	ALBEDO/=max(halo_alpha,0.001);
 	ALPHA*=halo_alpha;
 #endif
+	if(note_brightness_applies) ALBEDO*=synk_note_brightness;
 }

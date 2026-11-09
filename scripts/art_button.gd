@@ -69,7 +69,7 @@ func art_fit() -> Rect2:
 
 func _process(delta: float) -> void:
     if not is_visible_in_tree(): return
-    hover=move_toward(hover,1.0 if not disabled and (is_hovered() or has_focus()) else 0.0,delta*5.0)
+    hover=move_toward(hover,1.0 if not disabled and (preload("res://scripts/ui_motion.gd").hovered(self) or has_focus()) else 0.0,delta*5.0)
     press=move_toward(press,0.0,delta*3.5)
     idle_phase+=delta
     gear_angle+=delta*(.07+hover*.7)
