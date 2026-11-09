@@ -694,25 +694,26 @@ func build_ui() -> void:
 	# Pause uses a solid full-screen background and an opaque card.
 	pause_layer=CanvasLayer.new();pause_layer.name="PauseOverlay";pause_layer.layer=1000;add_child(pause_layer)
 	var pause_root=Control.new();pause_root.name="PauseRoot";pause_layer.add_child(pause_root)
-	pause_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);pause_root.theme=ui.theme
+	pause_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# The pause card uses the menus' look (Inter Tight, sentence case, frosted card), not the gameplay theme.
+	pause_root.theme=preload("res://scripts/game_theme.gd").arcade()
 	pause_backdrop=ColorRect.new(); rect(pause_backdrop,pause_root,0,0,1,1); pause_backdrop.color=Color("101010")
 	pause_backdrop.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	modal=Panel.new(); rect(modal,safe_parent("SafeModal",pause_root),.19,.11,.81,.89)
 	preload("res://scripts/modal_input.gd").register(modal)
-	var pause_panel=StyleBoxFlat.new();pause_panel.bg_color=Color("1b1b1b");pause_panel.set_corner_radius_all(28)
+	var pause_panel=StyleBoxFlat.new();pause_panel.bg_color=Color(1,1,1,.055);pause_panel.set_corner_radius_all(28);pause_panel.anti_aliasing=true
 	modal.add_theme_stylebox_override("panel",pause_panel)
 	modal_title=label(modal,"synk",.04,.025,.96,.17,48); modal_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-	modal_title.add_theme_font_override("font",preload("res://assets/fonts/FiraSans-Bold.ttf"))
+	modal_title.add_theme_font_override("font",preload("res://scripts/arcade_style.gd").mono_bold()); modal_title.add_theme_color_override("font_color",Color("f4f1ea"))
 	modal_body=label(modal,"",.06,.17,.94,.43,22); modal_body.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; modal_body.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	primary=pause_action(modal,"PLAY",.23,.88,.77,.97,primary_action,"primary")
 	pause_restart=pause_action(modal,"RESTART",.36,.88,.64,.97,restart_from_pause,"secondary")
 	pause_home=pause_action(modal,"HOME",.66,.88,.94,.97,return_home,"nav")
-	pause_info=label(modal,"",.06,.20,.94,.30,22); pause_info.add_theme_color_override("font_color",Color("a29ea6"))
+	pause_info=label(modal,"",.06,.20,.94,.30,22); pause_info.add_theme_color_override("font_color",Color("bcb7ad"))
 	pause_info.clip_text=true
 	pause_progress=Control.new(); rect(pause_progress,modal,.06,.31,.94,.335); pause_progress.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	pause_progress.draw.connect(draw_pause_progress)
-	pause_speed_label=label(modal,"NOTE SPEED",.06,.78,.40,.92,20); pause_speed_label.add_theme_color_override("font_color",Color("ff7a59"))
-	pause_speed_label.add_theme_font_override("font",preload("res://assets/fonts/FiraSans-Bold.ttf"))
+	pause_speed_label=label(modal,"Note speed",.06,.78,.40,.92,24); pause_speed_label.add_theme_color_override("font_color",Color("f4f1ea"))
 	pause_speed=preload("res://scripts/settings_screen.gd").Stepper.new(1,10,.1,3,"",1); rect(pause_speed,modal,.50,.78,.94,.92)
 	pause_speed.value_changed.connect(change_pause_speed)
 	actions=Control.new(); rect(actions,safe_parent("SafeActions"),0,0,1,1); actions.mouse_filter=Control.MOUSE_FILTER_IGNORE
@@ -885,25 +886,30 @@ func set_mode(value: String,animate_transition:bool=true) -> void:
 	pause_home.visible=mode=="paused"; pause_restart.visible=mode=="paused"
 	settings_panel.visible=false; sync_helper.visible=false
 	var large_pause=mode=="paused" and paused_mode!="record"
-	# Recorder controls retain their compact layout; enlarge only gameplay pause UI.
+	var record_pause=mode=="paused" and paused_mode=="record"
+	# Recorder controls retain their compact layout; the recorder pause card matches the gameplay one minus note speed.
 	pause_button.anchor_right=.095 if mode=="play" or large_pause else .08
 	pause_button.anchor_bottom=.125 if mode=="play" or large_pause else .105
 	pause_button.caption_size=22 if mode=="play" or large_pause else 17
-	modal.anchor_top=(.14 if large_pause else .36) if mode=="paused" else .11
-	modal.anchor_bottom=(.86 if large_pause else .64) if mode=="paused" else .89
-	modal_title.anchor_top=(.05 if large_pause else .10) if mode=="paused" else .025
-	modal_title.anchor_bottom=(.20 if large_pause else .40) if mode=="paused" else .17
-	modal_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_LEFT if large_pause else HORIZONTAL_ALIGNMENT_CENTER
-	modal_title.anchor_left=.06 if large_pause else .04
-	for part in [pause_info,pause_progress,pause_speed,pause_speed_label]: part.visible=large_pause
+	modal.anchor_top=(.14 if large_pause else .22) if mode=="paused" else .11
+	modal.anchor_bottom=(.86 if large_pause else .78) if mode=="paused" else .89
+	modal_title.anchor_top=(.05 if large_pause else .07) if mode=="paused" else .025
+	modal_title.anchor_bottom=(.20 if large_pause else .25) if mode=="paused" else .17
+	modal_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_LEFT if mode=="paused" else HORIZONTAL_ALIGNMENT_CENTER
+	modal_title.anchor_left=.06 if mode=="paused" else .04
+	for part in [pause_speed,pause_speed_label]: part.visible=large_pause
+	for part in [pause_info,pause_progress]: part.visible=mode=="paused"
+	pause_info.anchor_top=.20 if large_pause else .26; pause_info.anchor_bottom=.30 if large_pause else .38
+	pause_progress.anchor_top=.31 if large_pause else .40; pause_progress.anchor_bottom=.335 if large_pause else .432
+	if record_pause: pause_info.text=str(song.get("title",""))+"   ·   Recording"
 	if large_pause:
 		pause_info.text=str(song.get("title",""))+"   ·   "+preload("res://scripts/chart_levels.gd").label(features.current_variant)
 		pause_speed.sync_value(pause_speed_setting())
-	var button_top=(.40 if large_pause else .58) if mode=="paused" else .88
-	var button_bottom=(.72 if large_pause else .88) if mode=="paused" else .97
+	var button_top=(.40 if large_pause else .50) if mode=="paused" else .88
+	var button_bottom=(.72 if large_pause else .90) if mode=="paused" else .97
 	for action_button in [primary,pause_restart,pause_home]:
 		action_button.anchor_top=button_top; action_button.anchor_bottom=button_bottom
-		action_button.caption_size=23 if large_pause else (19 if action_button==primary else 17)
+		action_button.caption_size=23 if mode=="paused" else (19 if action_button==primary else 17)
 	modal_body.anchor_bottom=.65 if mode=="paused" else .43
 	primary.anchor_left=.06 if mode=="paused" else .23
 	primary.anchor_right=.34 if mode=="paused" else .77

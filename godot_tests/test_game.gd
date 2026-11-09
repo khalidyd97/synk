@@ -142,7 +142,7 @@ func run() -> void:
 	game.toggle_pause()
 	await create_timer(.03).timeout
 	check(game.pause_home.visible and game.pause_restart.visible and game.primary.text=="RESUME","Pause offers Resume, Restart and Home")
-	check(game.primary.caption.text=="RESUME","Animated pause button updates its visible label")
+	check(game.primary.caption.text=="Resume","Animated pause button updates its visible label")
 	check(not game.settings_panel.visible,"Pause menu contains no settings controls")
 	check(game.modal.scale.x<1.0 and game.pause_backdrop.visible,"Pause menu begins its entrance animation")
 	game.primary.pressed.emit()

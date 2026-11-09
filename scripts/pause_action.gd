@@ -2,7 +2,6 @@ extends "res://scripts/neon_action.gd"
 # Pause menu button in the app's card style: a rounded tile with a drawn icon above its label.
 # The icon follows the label, so recorder pauses (RESUME REC / RETRY TAKE / REVIEW TAKE) and
 # practice (‹ EDITOR) get matching symbols without extra wiring.
-const BOLD = preload("res://assets/fonts/FiraSans-Bold.ttf")
 const CYAN = Color("50daec")
 var hover_amount = 0.0
 var press_amount = 0.0
@@ -12,7 +11,6 @@ func _ready() -> void:
 	backdrop.visible = false
 	caption.anchor_top = .60; caption.anchor_bottom = .92
 	caption.add_theme_constant_override("outline_size", 0)
-	caption.add_theme_font_override("font", BOLD)
 	button_down.connect(func(): press_amount = 1.0)
 
 func keeps_caption_size() -> bool: return true
@@ -24,8 +22,14 @@ func _process(delta: float) -> void:
 	press_amount = move_toward(press_amount, 0.0, delta * 4)
 	queue_redraw()
 
+# Captions match the Settings look: Inter Tight in sentence case.
+const NAMES = {"RESUME REC": "Resume recording", "RETRY TAKE": "Retry take", "REVIEW TAKE": "Review take"}
+func shown_caption(value: String) -> String:
+	var shown = super.shown_caption(value)
+	return NAMES.get(value, preload("res://scripts/ui_icons.gd").menu_case(shown))
+
 func icon_kind() -> String:
-	var label = caption.text if caption else text
+	var label = text.to_upper()
 	if "REC" in label: return "record"
 	if "RESUME" in label or "PLAY" in label: return "play"
 	if "RESTART" in label or "RETRY" in label: return "restart"
