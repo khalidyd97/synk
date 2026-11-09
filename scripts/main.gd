@@ -641,7 +641,8 @@ func build_ui() -> void:
 	# Song details sit top right, leaving the left side for energy and score.
 	song_hud=label(ui,"",.62,.015,.91,.105,25); song_hud.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
 	difficulty_hud=label(ui,"EXPERT   Lv. 12",.62,.105,.91,.15,18); difficulty_hud.add_theme_color_override("font_color",Color(1,1,1,.62)); difficulty_hud.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
-	auto_play_hud=label(ui,"AUTO PLAY  •  PREVIEW",.39,.13,.61,.19,22); auto_play_hud.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	# Under the score, clear of the album cover tile that sits at the top centre of the stage.
+	auto_play_hud=label(safe_parent("SafeAutoPlayHud"),"AUTO PLAY  •  PREVIEW",.1,.215,.34,.26,19); auto_play_hud.horizontal_alignment=HORIZONTAL_ALIGNMENT_LEFT
 	auto_play_hud.add_theme_color_override("font_color",Color("38baff"))
 	# A soft dark shadow keeps the pause button, energy and score readable over any cover.
 	hud_shadow=TextureRect.new(); rect(hud_shadow,ui,-.04,-.06,.40,.28); hud_shadow.mouse_filter=Control.MOUSE_FILTER_IGNORE
