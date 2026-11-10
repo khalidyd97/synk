@@ -540,7 +540,7 @@ func refresh_highway_look() -> void:
 	if gold:
 		judgment_material.shader = preload("res://scripts/judgment_bar.gdshader")
 		# Adaptive colors pull the band toward the artwork's main color; the theme keeps it golden.
-		var base: Color = Color("1b1c20") if game.uses_recorder_colors() else (band if band != null else JUDGMENT_GOLD)
+		var base: Color = Color("1b1c20") if game.uses_recorder_colors() else (Color8(255,220,65,149) if game.uses_ssrg_gameplay() else (band if band != null else JUDGMENT_GOLD))
 		judgment_material.set_shader_parameter("base_color",base)
 		judgment_material.set_shader_parameter("sweep_color",Color("2c2d33") if game.uses_recorder_colors() else base.lerp(Color.WHITE,.6))
 		track_materials[0].set_shader_parameter("color",stage_color.darkened(.88) if cover_palette_active else TRACK_COLOR)

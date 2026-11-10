@@ -10,6 +10,7 @@ var game: Control
 var note_speed_input: Stepper
 var highway_angle_input: Stepper
 var timing_input: Stepper
+var ssrg_touch_sync_input: Stepper
 var bluetooth_toggle: Switch
 var bluetooth_latency_input: Stepper
 var song_preview_toggle: Switch
@@ -457,6 +458,9 @@ func build_audio(items: VBoxContainer,headset: VBoxContainer) -> void:
     timing_input=Stepper.new(-200,200,5,game.timing_ms," ms",0)
     add_control(row(items,"Timing offset","Positive: notes earlier. Negative: notes later. Match their arrival to the music."),timing_input)
     timing_input.value_changed.connect(game.change_audio_offset)
+    ssrg_touch_sync_input=Stepper.new(-200,200,5,game.ssrg_touch_sync_ms," ms",0)
+    add_control(row(items,"SSRG touch sync","Positive compensates touches delivered late. SSRG only; judgment windows stay unchanged."),ssrg_touch_sync_input)
+    ssrg_touch_sync_input.value_changed.connect(game.change_ssrg_touch_sync)
     bluetooth_toggle=Switch.new(); add_control(row(headset,"Bluetooth headset mode","Compensate for wireless audio delay."),bluetooth_toggle,152)
     bluetooth_toggle.button_pressed=game.bluetooth_mode; connect_switch(bluetooth_toggle,game.change_bluetooth_mode)
     bluetooth_latency_input=Stepper.new(0,600,5,game.bluetooth_latency_ms," ms",0)
@@ -686,7 +690,7 @@ func refresh() -> void:
     metronome_toggle.set_pressed_no_signal(game.beat_clock.enabled)
     bluetooth_toggle.set_pressed_no_signal(game.bluetooth_mode); bluetooth_latency_input.editable=game.bluetooth_mode
     note_speed_input.sync_value(game.synk_speed_setting()); highway_angle_input.sync_value(game.highway_angle)
-    timing_input.sync_value(game.timing_ms); bluetooth_latency_input.sync_value(game.bluetooth_latency_ms)
+    timing_input.sync_value(game.timing_ms); ssrg_touch_sync_input.sync_value(game.ssrg_touch_sync_ms); bluetooth_latency_input.sync_value(game.bluetooth_latency_ms)
     for key in sizing_inputs: sizing_inputs[key].sync_value(game.note_size*100)
     for key in effect_inputs: effect_inputs[key].sync_value(game.features.effect(key)*100)
     for key in stage_effect_switches: stage_effect_switches[key].set_pressed_no_signal(game.features.effect(key)>0)

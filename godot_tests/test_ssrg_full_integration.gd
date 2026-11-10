@@ -13,21 +13,22 @@ func run():
 	var game=load("res://scenes/main.tscn").instantiate();root.add_child(game)
 	await process_frame;await process_frame
 	freeze(game);game.ssrg_playable_run=true;game.ssrg_lane_count=13;game.set_mode("play");game.countdown=0;game.auto_play=false
+	game.audio.stop()
 	game.field.sync_projection_style()
 	var world=game.field.world;world.apply_camera();world.update_ssrg_warp()
 	var bar=world.ssrg_theme.original_stage.press
 	check(bar.material_override.get_shader_parameter("artwork").resource_path.ends_with("judgment_Main_black_BG3.png"),"Judgment bar uses source slanted artwork")
-	check(bar.material_override.get_shader_parameter("base_color")==Color8(255,220,65,149),"Judgment bar stays the exact fixed source gold")
+	check(bar.material_override.get_shader_parameter("base_color").is_equal_approx(Color8(255,220,65,149)),"Judgment bar stays the exact fixed source gold")
 	check(bar.material_override.render_priority>world.ssrg_theme.original_stage.rails[0].material_override.render_priority,"Gold bar draws above the rail's dark road shading")
 	game.song_time=5.0;game.visual_clock_ready=false
 	var point=world.camera.unproject_position(Vector3(0,.035,0))/Vector2(game.field.viewport.size)
-	var tap=SynkChart.note(5.12,4);tap.lane=4.5
+	var tap=SynkChart.note(5.12,6);tap.lane=6.0
 	var hit=entry(tap,"tap");game.live=[hit];game.live_cursor=0
 	game.pointer_event(1,point,true,false,false)
 	game.update_game() # Flush the source-style per-frame touch batch.
 	check(hit.done and game.judgement=="GREAT","Imported tap uses packaged 210ms ordinary-perfect threshold")
 	game.pointers.clear();game.ssrg_touch_router.reset();world.clear_hit_effects()
-	tap=SynkChart.note(5.25,4);tap.lane=4.5;hit=entry(tap,"early");game.live=[hit];game.live_cursor=0
+	tap=SynkChart.note(5.25,6);tap.lane=6.0;hit=entry(tap,"early");game.live=[hit];game.live_cursor=0
 	game.pointer_event(1,point,true,false,false)
 	game.update_game() # Flush the source-style per-frame touch batch.
 	check(hit.done and game.judgement=="GOOD","Imported tap accepts the full packaged 300ms good window")
@@ -38,8 +39,8 @@ func run():
 	game.update_game() # Flush the source-style per-frame touch batch.
 	check(not hit.started,"Touch outside the recovered head autoaim rectangle cannot hit a puck")
 	game.pointers.clear();game.ssrg_touch_router.reset();world.clear_hit_effects()
-	var slide=SynkChart.note(5,4,"slide");slide.lane=4.5;slide.end_lane=4.5;slide.duration=1
-	slide.path=[{"offset":0.0,"lane":4.5},{"offset":1.0,"lane":4.5}];slide.ssrg_path=true
+	var slide=SynkChart.note(5,6,"slide");slide.lane=6.0;slide.end_lane=6.0;slide.duration=1
+	slide.path=[{"offset":0.0,"lane":6.0},{"offset":1.0,"lane":6.0}];slide.ssrg_path=true
 	hit=entry(slide,"slide");game.live=[hit];game.live_cursor=0;game.judged=0;game.judgement_total_size=-1
 	game.pointer_event(1,point,true,false,false)
 	game.update_game() # Flush the source-style per-frame touch batch.
@@ -60,7 +61,7 @@ func run():
 	game.mode="play";world.update_finger_beams(.051)
 	check(not released.visible,"Released beam disappears after 100ms")
 	world.clear_hit_effects();game.pointers.clear()
-	var hold=SynkChart.note(8,4,"hold");hold.duration=1;hold.lane=4.5;hold.ssrg_order=40;hold.ssrg_orders=[{"offset":1.0,"order":44}]
+	var hold=SynkChart.note(8,6,"hold");hold.duration=1;hold.lane=6.0;hold.ssrg_order=40;hold.ssrg_orders=[{"offset":1.0,"order":44}]
 	world.build_note_node("miss",hold);world.notes.miss.head_hit=true
 	world.fade_missed_slide("miss",0)
 	var head=world.notes.miss.node.get_child(0)

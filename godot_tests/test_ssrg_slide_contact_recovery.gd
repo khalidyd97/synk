@@ -12,8 +12,8 @@ func point(y:float=-234.0) -> Vector2:
 func fixture(flush:bool=true) -> Dictionary:
 	game.pointers.clear();game.ssrg_touch_router.reset();game.live_cursor=0;game.song_time=1.0
 	game.judged=0;game.judgment_counts={"PERFECT":0,"GREAT":0,"GOOD":0,"MISS":0}
-	var note=SynkChart.note(1,4,"slide");note.lane=4.5;note.end_lane=4.5;note.duration=2.0;note.checkpoints=[1.0];note.ssrg_path=true
-	note.path=[{"offset":0.0,"lane":4.5},{"offset":2.0,"lane":4.5}]
+	var note=SynkChart.note(1,6,"slide");note.lane=6.0;note.end_lane=6.0;note.duration=2.0;note.checkpoints=[1.0];note.ssrg_path=true
+	note.path=[{"offset":0.0,"lane":6.0},{"offset":2.0,"lane":6.0}]
 	var entry={"key":"contact","note":note,"started":false,"done":false,"pointer":-999,"error":0.0}
 	game.live=[entry];game.pointer_event(1,point(),true,false,false)
 	if flush:game.update_game()
@@ -40,8 +40,8 @@ func run():
 	game.song_time=2.201;game.update_game()
 	check(entry.done and game.judgment_counts.MISS==2,"Remaining outside the valid contact region still misses at the real deadline")
 	entry=fixture();entry.note.duration=.1;entry.note.checkpoints=[];entry.note.end_lane=6.75
-	entry.note.path=[{"offset":0.0,"lane":4.5},{"offset":.1,"lane":6.75}]
-	var tap=SynkChart.note(1.11,4);tap.lane=4.5
+	entry.note.path=[{"offset":0.0,"lane":6.0},{"offset":.1,"lane":6.75}]
+	var tap=SynkChart.note(1.11,6);tap.lane=6.0
 	var next={"key":"following_tap","note":tap,"started":false,"done":false,"pointer":-999,"error":0.0}
 	game.live.append(next)
 	var world=game.field.world
@@ -53,7 +53,7 @@ func run():
 	game.song_time=1.5;game.update_game()
 	check(game.judgment_counts.MISS==0,"Previous slide does not expire after its released finger ID was reused")
 	entry=fixture(false);entry.note.duration=.1;entry.note.checkpoints=[];entry.note.end_lane=6.75
-	entry.note.path=[{"offset":0.0,"lane":4.5},{"offset":.1,"lane":6.75}]
+	entry.note.path=[{"offset":0.0,"lane":6.0},{"offset":.1,"lane":6.75}]
 	tap=SynkChart.note(1.11,0);tap.lane=6.75
 	next={"key":"same_lane_next","note":tap,"started":false,"done":false,"pointer":-999,"error":0.0};game.live.append(next)
 	game.song_time=1.1;game.pointer_event(1,end_point,false,true,false)

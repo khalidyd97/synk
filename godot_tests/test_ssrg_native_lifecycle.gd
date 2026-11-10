@@ -15,12 +15,22 @@ func run():
 	check(model.add("GOOD",2)==750,"GOOD scores half the base, no combo multiplier")
 	check(model.settle()==810 and model.pending_bonus==0,"Rave settlement pays exactly once")
 	check(model.settle()==810,"Repeated settlement cannot duplicate a bonus")
+	model.reset(7,13)
+	check(model.add("GOOD",0)==2143,"Public score uses positive half-up rounding")
+	model.add("PERFECT",2)
+	var snapshot=model.result_snapshot()
+	check(snapshot.plain_score==10714 and snapshot.score==11143 and snapshot.rave_bonus==429,"Result rave bonus is total minus independently rounded plain score")
 	model.reset(100,13,{"card_points":7});check(model.add("PERFECT",0)==2000,"Explicit numeric card points affect source base")
 	game=load("res://scenes/main.tscn").instantiate();root.add_child(game)
 	await process_frame;await process_frame;freeze(game)
 	game.stage_intro_enabled=false;game.ssrg_playable_run=true;game.ssrg_lane_count=13
 	game.start_game([SynkChart.note(5,4)],false);game.countdown=0;game.gameplay_start_lead=0
 	while game.field.world.prebuilding:game.field.world.step_prebuild()
+	var timeout_note=SynkChart.note(5,4)
+	var timeout_entry={"note":timeout_note,"key":"timeout","started":false,"done":false,"pointer":-999,"error":0.0}
+	game.live=[timeout_entry];game.live_cursor=0;game.song_time=5.029999
+	game.update_game();check(not timeout_entry.done,"Ordinary head remains hittable immediately before the 30 ms timeout")
+	game.song_time=5.03;game.update_game();check(timeout_entry.done and game.judgement=="MISS","Ordinary head auto-misses at the inclusive 30 ms boundary")
 	var state=game.ssrg_presentation
 	state.reset(100)
 	check(state.state==5,"Source run starts in Ultra Rave")
@@ -70,5 +80,15 @@ func run():
 		results.append([game.combo,game.score])
 		check(game.judged==0,"Held ticks never inflate judgment statistics")
 	check(results[0]==results[1] and results[1]==results[2] and results[0][0]>0,"Held tick combo and score remain identical at 30/60/120 FPS")
+	state.reset(100,{},0);game.combo=5;game.judgment_counts={"PERFECT":0,"GREAT":0,"GOOD":0,"MISS":0}
+	var seek_note=SynkChart.note(2,4);var seek_entry={"note":seek_note,"key":"seek-miss","pointer":-999,"started":false,"done":false,"error":0.0}
+	game.song_time=2.1;game.judge(seek_entry,-1,true,"",false)
+	check(seek_entry.done and game.combo==0 and game.judgment_counts.MISS==1,"Effect-suppressed seek Miss still records logical failure and resets combo")
+	check(state.life==100 and not game.ssrg_failed,"Effect-suppressed seek Miss does not damage life or enter game over")
+	state.life=30;game.set_mode("play");game.judge({"note":SynkChart.note(3,4),"key":"fatal","pointer":-999,"started":false,"done":false,"error":0.0},-1)
+	check(game.ssrg_failed and game.mode=="paused" and state.life==0,"Normal offline play fails once at exact zero life")
+	game.ssrg_failed=false;game.set_mode("play");game.finishing=false
+	game.begin_finish({"final_rave_delay":3.0,"ssrg":true})
+	check(game.finishing and is_equal_approx(game.finish_elapsed,-3.0),"Positive final rave delays result handoff by the recovered three seconds")
 	game.queue_free();await process_frame
 	print("SSRG native lifecycle failures: ",failures);quit(failures)

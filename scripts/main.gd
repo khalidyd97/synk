@@ -109,6 +109,7 @@ var resume_start_audio = false
 var ssrg_resume_position=-1.0
 var start_position = 0.0
 var timing_ms = 0.0
+var ssrg_touch_sync_ms = 0.0
 var bluetooth_mode = false
 var bluetooth_latency_ms = 180.0
 var note_speed = 1.0
@@ -254,6 +255,7 @@ var finish_overlay: Control
 var finishing = false
 var finish_elapsed = 0.0
 var pending_results: Dictionary = {}
+var ssrg_failed = false
 var slide_tools: Control
 var sync_helper: Control
 var song_sync: Control
@@ -394,6 +396,7 @@ func _ready() -> void:
 	if OS.has_feature("android"):
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	prefs.load("user://preferences.cfg"); timing_ms = float(prefs.get_value("audio","offset_ms",0))
+	ssrg_touch_sync_ms=clampf(float(prefs.get_value("ssrg","touch_sync_ms",0)), -200, 200)
 	bluetooth_mode=bool(prefs.get_value("audio","bluetooth_mode",false))
 	slide_snap=str(prefs.get_value("editor","slide_snap","free"))
 	if slide_snap not in ["free","lanes","beats"]: slide_snap="free"
@@ -1152,11 +1155,14 @@ func restart_from_pause() -> void:
 		cursor=start_position
 		record_here()
 	else:
+		ssrg_failed=false
 		start_game(last_play_notes,auto_play,last_section)
 
 func primary_action() -> void:
 	if mode=="menu" and menu_settings_open: close_lobby_settings()
-	elif mode=="paused": toggle_pause()
+	elif mode=="paused":
+		if ssrg_failed:restart_from_pause()
+		else:toggle_pause()
 	elif mode=="results":
 		if practice.active: practice.restart()
 		else: start_game(last_play_notes,auto_play,last_section)
@@ -1182,6 +1188,11 @@ func output_latency() -> float:
 	return cached_output_latency
 func effective_timing_ms() -> float: return timing_ms-(bluetooth_latency_ms if bluetooth_mode else 0.0)
 func chart_time() -> float: return maxf(0,audio_time()+effective_timing_ms()/1000.0)
+func ssrg_touch_time(sampled_clock:float) -> float:
+	# SKD keeps device/user touch calibration separate from chart/audio sync.
+	# Positive values compensate late touch delivery by moving its judgment
+	# timestamp earlier; judgment windows themselves never change.
+	return sampled_clock-ssrg_touch_sync_ms/1000.0
 func apply_timing_change(previous_ms: float) -> void:
 	if mode in ["play","paused","record"] and countdown==0 and (audio.playing or (mode=="paused" and pause_had_audio)):
 		song_time=maxf(0,song_time+(effective_timing_ms()-previous_ms)/1000.0)
@@ -1193,6 +1204,10 @@ func change_audio_offset(value: float) -> void:
 	timing_ms=value
 	apply_timing_change(previous)
 	prefs.set_value("audio","offset_ms",value); prefs.save("user://preferences.cfg")
+
+func change_ssrg_touch_sync(value:float) -> void:
+	ssrg_touch_sync_ms=clampf(snappedf(value,5.0),-200,200)
+	prefs.set_value("ssrg","touch_sync_ms",ssrg_touch_sync_ms);prefs.save("user://preferences.cfg")
 
 func toggle_note_lines() -> void:
 	note_lines=not note_lines; update_note_lines_button()
@@ -1408,7 +1423,7 @@ func start_game(notes: Array,automated: bool = false,section: String = "",is_pra
 	# through a silent approach so even a note at time zero travels in fully.
 	start_position=play_range.x-lead_in
 	var first_note_time=float(sorted[0].time) if not sorted.is_empty() else start_position
-	score=0; displayed_score=0; combo=0; combo_pulse=0; rank_pulse=0; shown_rank="SS"; hold_pulse_time=0; max_combo=0; earned=0; judged=0; score_panel.energy=.5; score_panel.shown_energy=.5; judgment_counts={"PERFECT":0,"GREAT":0,"GOOD":0,"MISS":0}; countdown=3; start_position=play_range.x-lead_in; song_time=start_position-3; judgement="READY"; flash=1
+	score=0; displayed_score=0; combo=0; combo_pulse=0; rank_pulse=0; shown_rank="SS"; hold_pulse_time=0; max_combo=0; earned=0; judged=0; ssrg_failed=false; score_panel.energy=.5; score_panel.shown_energy=.5; judgment_counts={"PERFECT":0,"GREAT":0,"GOOD":0,"MISS":0}; countdown=3; start_position=play_range.x-lead_in; song_time=start_position-3; judgement="READY"; flash=1
 	update_section_volume()
 	# A restart only replays the stage entrance; coming from a menu shows the loading card first.
 	var restarting=mode in ["play","paused"]
@@ -1637,6 +1652,7 @@ func cycle_record_speed() -> void:
 
 func toggle_pause(animate_transition:bool=true) -> void:
 	if finishing: return
+	if mode=="paused" and ssrg_failed:return
 	# Song sync has no pause menu: BACK leaves it without saving.
 	if song_sync and song_sync.active and mode=="play": song_sync.finish(false); return
 	if mode in ["play","record"]:
@@ -2139,6 +2155,7 @@ func _process(delta: float) -> void:
 
 func has_active_hold() -> bool:
 	for live_index in range(first_live_index(),live.size()):
+		if ssrg_failed:break
 		var entry: Dictionary=live[live_index]
 		if float(entry.note.time)>song_time+.23: break
 		if entry.done or not entry.started or entry.note.kind!="hold": continue
@@ -2224,6 +2241,7 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 	# During a replay, real touches are ignored; the recorded ones arrive with from_replay.
 	if mode=="play" and extras and extras.replaying and not from_replay: return
 	var input_time=chart_time() if mode=="play" and audio.playing and not audio.stream_paused and not from_replay else song_time
+	if ssrg_playable_run:input_time=ssrg_touch_time(input_time)
 	if extras and not from_replay: extras.record_input(id,p,began,ended,canceled,input_time if ssrg_playable_run else song_time)
 	if mode=="record" and arranging:
 		arrange_pointer_event(id,p,began,ended,canceled)
@@ -2462,7 +2480,7 @@ func update_ssrg_sustain(entry: Dictionary) -> void:
 	var grade=SsrgSustain.node_grade(absf(judged_at-float(next.time)),bool(next.is_end),str(entry.get("sustain_grade","GOOD")),released,history)
 	entry.sustain_rate=SsrgSustain.node_rate(float(entry.get("sustain_rate",.1)),released,history)
 	if released:entry.sustain_released=true
-	entry.pointer=chosen
+	entry.pointer=-999 if state==SsrgSustain.TrackState.LOST else chosen
 	if pointers.has(chosen):remember_ssrg_contact(entry,chosen)
 	if next.is_end:
 		judge(entry,absf(judged_at-float(next.time)),true,grade)
@@ -2479,6 +2497,10 @@ func advance_ssrg_sustain(entry:Dictionary) -> void:
 		var previous=int(entry.get("checks_done",0))
 		update_ssrg_sustain(entry)
 		if entry.done or int(entry.get("checks_done",0))==previous:break
+		# Source UpdateViewNotes immediately exposes the next linked node after
+		# a successful crossing. Re-route the same physical contacts without
+		# clearing this frame's consumed-channel gates.
+		prepare_ssrg_input()
 
 func update_ssrg_held_ticks(entry:Dictionary) -> void:
 	if entry.note.has("ssrg_special"):return
@@ -2565,7 +2587,10 @@ func update_game() -> void:
 					entry.started=true;entry.pointer=int(track.pointer);entry.error=error;entry.timing_error=judged_at-float(n.time)
 					judge(entry,error,n.kind not in ["hold","slide"])
 					continue
-			if song_time>float(n.time)+hit_good_window(str(n.kind)):
+			# Source auto-miss is inclusive at rear-window * 0.1: 30 ms for
+			# ordinary heads. Holds/slides keep their recovered node windows.
+			var auto_miss_delay=SsrgRules.HEAD_WINDOW*.1 if ssrg_playable_run and n.kind in ["tap","flick"] else hit_good_window(str(n.kind))
+			if song_time>=float(n.time)+auto_miss_delay:
 				judge(entry,-1)
 				count_unstarted_tail(entry)
 			continue
@@ -2605,7 +2630,7 @@ func update_game() -> void:
 				pointers.erase(id)
 			else:touch.ssrg_phase=2;touch.ssrg_pending_begin=false
 
-func judge(entry: Dictionary,error: float,complete: bool = true,source_grade: String = "") -> void:
+func judge(entry: Dictionary,error: float,complete: bool = true,source_grade: String = "",effects:bool = true) -> void:
 	var grade=source_grade if not source_grade.is_empty() else (SsrgRules.grade(error) if ssrg_playable_run else ("MISS" if error<0 else ("PERFECT" if error<=extras.perfect_window() else ("GREAT" if error<=extras.great_window() else "GOOD"))))
 	if grade=="MISS": error=-1
 	if OS.is_debug_build() and ssrg_playable_run and error<0 and entry.note.kind=="slide":
@@ -2630,11 +2655,11 @@ func judge(entry: Dictionary,error: float,complete: bool = true,source_grade: St
 		entry.ssrg_effect_until=end_at
 	# An early lift completes a slide before its end reaches the line; flashing then would land
 	# on the head's flash, so the end flashes on its own puck when it gets there.
-	if ssrg_playable_run and error>=0 and complete and entry.note.kind in ["hold","slide"] and not entry.note.has("ssrg_special"):
+	if effects and ssrg_playable_run and error>=0 and complete and entry.note.kind in ["hold","slide"] and not entry.note.has("ssrg_special"):
 		field.world.ssrg_theme.resume_sustain(entry)
-	elif error>=0 and complete and entry.note.kind=="slide" and song_time<end_at: pending_end_hits.append({"at":end_at,"note":entry.note})
-	elif error>=0: field.world.spawn_hit(SynkChart.lane_at(entry.note,song_time),("special" if ssrg_playable_run and entry.note.has("ssrg_special") else str(entry.note.kind)),int(entry.note.direction),entry if entry.note.kind in ["hold","slide"] and not complete else {},int(entry.get("pointer",-999)))
-	else: field.world.shake_on_miss()
+	elif effects and error>=0 and complete and entry.note.kind=="slide" and song_time<end_at: pending_end_hits.append({"at":end_at,"note":entry.note})
+	elif effects and error>=0: field.world.spawn_hit(SynkChart.lane_at(entry.note,song_time),("special" if ssrg_playable_run and entry.note.has("ssrg_special") else str(entry.note.kind)),int(entry.note.direction),entry if entry.note.kind in ["hold","slide"] and not complete else {},int(entry.get("pointer",-999)))
+	elif effects: field.world.shake_on_miss()
 	if error<0 and entry.note.kind in ["slide","hold"]:
 		entry.missed_at=song_time
 		entry.missed_visual_time=field.world.render_time()
@@ -2654,19 +2679,35 @@ func judge(entry: Dictionary,error: float,complete: bool = true,source_grade: St
 	if error>=0:
 		add_points(judgement)
 		if stage_intro and stage_intro.play_cover:stage_intro.play_cover.on_note_hit(judgement)
-	if ssrg_playable_run and ssrg_presentation:ssrg_presentation.judged(judgement,entry.note)
-	if extras: extras.on_judged(entry,judgement,combo)
+	if ssrg_playable_run and ssrg_presentation and (effects or judgement!="MISS"):ssrg_presentation.judged(judgement,entry.note)
+	if effects and extras: extras.on_judged(entry,judgement,combo)
+	if effects and ssrg_playable_run and ssrg_presentation and judgement=="MISS" and ssrg_presentation.life<=0 and not practice.active:ssrg_game_over()
+
+func ssrg_game_over() -> void:
+	if ssrg_failed or finishing or mode!="play":return
+	ssrg_failed=true;audio.stream_paused=true;pointers.clear();ssrg_touch_router.reset();ssrg_contact_ids.clear()
+	paused_mode="play";set_mode("paused",false)
+	modal_title.text="FAILED";modal_body.text="Life reached zero. Retry the song or return to the song list."
+	primary.text="RETRY";pause_restart.text="RETRY";pause_home.text="SONG LIST"
+	pause_info.text=str(song.get("title",""))+"   ·   FAILED"
 
 func _audio_finished() -> void:
 	if mode=="record": stop_take()
 	elif mode=="play":
 		if song_sync and song_sync.active: song_sync.restart(); return
 		if practice.finish_round(): return
+		# Resolve an eligible final hold/slide tail at terminal chart time before
+		# unresolved notes are converted to misses and the result is frozen.
+		if ssrg_playable_run and not ssrg_failed:update_game()
 		for entry in live:
 			if not entry.done:
 				judge(entry,-1)
 				if not entry.started: count_unstarted_tail(entry)
-		if ssrg_playable_run and ssrg_presentation:score=ssrg_presentation.score_rules.settle()
+		var ssrg_result:Dictionary={};var final_rave_delay=0.0
+		if ssrg_playable_run and ssrg_presentation:
+			if ssrg_presentation.score_rules.current_pending_bonus()>0:final_rave_delay=3.0
+			score=ssrg_presentation.score_rules.settle()
+			ssrg_result=ssrg_presentation.score_rules.result_snapshot()
 		var chart_key=(str(song.id)+JSON.stringify(live.map(func(e):return e.note))).sha256_text()
 		if ssrg_playable_run:chart_key+="|ssrg-score-v2"
 		var previous_best=int(prefs.get_value("scores",chart_key,0))
@@ -2685,7 +2726,8 @@ func _audio_finished() -> void:
 			"title":str(song.title),"details":intro_details(),"rank":rank_name(),"score":score,"accuracy":accuracy(),"max_combo":max_combo,
 			"counts":judgment_counts.duplicate(),"best":best,"previous_best":previous_best,"new_best":not auto_play and not practice.active and score>previous_best,"auto_play":auto_play,"practice":practice.active,"timing":timing_samples.duplicate(true),
 			"song_id":str(song.id),"artist":str(song.artist) if str(song.get("artist","")).strip_edges()!="" else album_name(song),"difficulty":preload("res://scripts/chart_levels.gd").label(features.current_variant),"bpm":chart_bpm(),"notes_total":live.size(),"notes_hit":live.filter(func(e): return bool(e.get("note_hit",false))).size(),
-			"performance":performance_samples.duplicate(true),"range_start":play_range.x,"range_end":minf(length(),play_range.y)})
+			"performance":performance_samples.duplicate(true),"range_start":play_range.x,"range_end":minf(length(),play_range.y),
+			"plain_score":int(ssrg_result.get("plain_score",score)),"rave_bonus":int(ssrg_result.get("rave_bonus",0)),"final_life":float(ssrg_presentation.life) if ssrg_playable_run and ssrg_presentation else 100.0,"final_fever":int(ssrg_presentation.state) if ssrg_playable_run and ssrg_presentation else 0,"final_rave_delay":final_rave_delay})
 	elif mode=="editor":
 		if recorder.reviewing_audio: recorder.stop_preview(); refresh_transport()
 		elif loop_enabled and loop_b>loop_a+.1: audio.play(loop_a); cursor=loop_a
@@ -2700,7 +2742,7 @@ func begin_finish(results: Dictionary) -> void:
 	results["ssrg_lane_count"]=ssrg_lane_count
 	results["ssrg_style"]=ssrg_playable_previous_style
 	pending_results=results
-	finishing=true; finish_elapsed=0.0
+	finishing=true; finish_elapsed=-float(results.get("final_rave_delay",0.0))
 	audio.stop(); pointers.clear()
 	field.world.clear_notes(); field.world.clear_hit_effects()
 	var from_global=combo_hud.get_global_rect()

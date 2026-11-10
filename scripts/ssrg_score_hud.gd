@@ -77,7 +77,7 @@ func draw_source_extras(presentation:Node,origin:Vector2,unit:float,color:Color)
 		words("%s / %s" % [game.format_score(game.score),game.format_score(mission)],origin+Vector2(84,174)*unit,maxi(12,roundi(16*unit)),color)
 	if presentation.collected>0:
 		words("COLLECTED  %d" % presentation.collected,Vector2(right-20*unit,320*unit),maxi(12,roundi(18*unit)),color)
-	var bonus=int(presentation.score_rules.pending_bonus)
+	var bonus=presentation.score_rules.current_pending_bonus()
 	if bonus>0:
 		draw_rave_bonus(bonus,int(presentation.state),origin,unit,color)
 	if presentation.event_age<1.0:

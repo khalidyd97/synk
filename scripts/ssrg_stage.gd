@@ -239,7 +239,7 @@ func configure(world: Node3D) -> void :
 	for mark in feedback_marks:mark.material_override.set_shader_parameter("artwork",preload("res://assets/ssrg/old_ui/track/note_guide 01.png") if old_ui else preload("res://assets/ssrg/imported/guide_original.png"))
 	# Source gold tier, unless the player picked a judgment band color.
 	var band = world.custom_color("band_color")
-	press.material_override.set_shader_parameter("base_color",Color(band,.82 if old_ui else 149/255.0) if band != null else (Color8(255,75,91,210) if old_ui else Color8(255,220,65,149)))
+	press.material_override.set_shader_parameter("base_color",(Color(band,.82) if band != null else Color8(255,75,91,210)) if old_ui else Color8(255,220,65,149))
 	var rail_tint = world.custom_color("rail_color")
 	if rail_tint == null: rail_tint = Color.WHITE
 	for rail in rails:

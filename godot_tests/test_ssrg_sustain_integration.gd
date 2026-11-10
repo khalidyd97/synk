@@ -15,9 +15,9 @@ func fixture(checkpoints:Array=[],kind:String="hold") -> Dictionary:
 	game.song_time=1.0;game.live_cursor=0;game.judged=0;game.earned=0;game.combo=0
 	game.judgment_counts={"PERFECT":0,"GREAT":0,"GOOD":0,"MISS":0}
 	game.pending_end_hits.clear();game.judgement_total_size=-1
-	var note=SynkChart.note(1.0,4,kind)
-	note.lane=4.5;note.end_lane=4.5;note.duration=2.0;note.checkpoints=checkpoints
-	if kind=="slide":note.path=[{"offset":0.0,"lane":4.5},{"offset":2.0,"lane":4.5}];note.ssrg_path=true
+	var note=SynkChart.note(1.0,6,kind)
+	note.lane=6.0;note.end_lane=6.0;note.duration=2.0;note.checkpoints=checkpoints
+	if kind=="slide":note.path=[{"offset":0.0,"lane":6.0},{"offset":2.0,"lane":6.0}];note.ssrg_path=true
 	var entry={"note":note,"key":"sustain_test","started":false,"done":false,"pointer":-999,"error":0.0}
 	game.live=[entry]
 	game.pointer_event(1,point,true,false,false)
@@ -33,6 +33,7 @@ func run() -> void:
 	await process_frame;await process_frame
 	freeze(game);game.ssrg_playable_run=true;game.ssrg_lane_count=13
 	game.set_mode("play");game.countdown=0;game.resume_countdown=0;game.resume_grace=0;game.auto_play=false
+	game.audio.stop()
 	game.field.sync_projection_style();game.field.world.apply_camera();game.field.world.update_ssrg_warp()
 	point=game.field.world.camera.unproject_position(Vector3(0,.035,0))/Vector2(game.field.viewport.size)
 	var entry=fixture([1.0])
