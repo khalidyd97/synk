@@ -8,6 +8,7 @@ This is the living implementation map for applying the recovered Android SSRG ga
 
 - Notes are positioned from absolute chart/audio time, so pause, seek, tempo changes, and frame stalls do not accumulate visual drift.
 - The recovered 4-, 7-, and 13-lane highway geometry, rails, target line, note families, long-note strips, HUD art, fever layers, effects, and popup art live under `assets/ssrg/imported` and are drawn by the existing SSRG stage.
+- SYNK's chart recorder now uses the recovered SKD playable surface: orthographic source projection, source lane spacing, original rails/judgment art, source note faces and source finger beams. Capture, correction, take review, undo/redo and chart persistence remain recorder behavior because the shipped SKD game contains no chart-authoring mode. The SYNK lane grid returns only while correcting a take.
 - Touches use stable ordering, one consumed channel per update, retained physical-owner identity for long chains, and source-compatible lane auto-aim.
 - Tap and flick heads use the recovered 300 ms acceptance window, while an untouched ordinary head automatically misses at the inclusive 30 ms late boundary after input processing.
 - SSRG touch sync is stored separately from the shared chart/audio offset. It calibrates the gameplay-clock sample attached to press and release events; positive milliseconds compensate late touch delivery, and judgment windows are never widened.

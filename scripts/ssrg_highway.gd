@@ -4,7 +4,8 @@ extends Node3D
 #   - grey target rings on the chart's lanes that turn white as a note arrives
 #   - a thin light line up each lane while a finger holds it
 #   - ordinary hits use the original 11-frame A sequence at 33 frames per second
-# Only in play; the recorder keeps its own look.
+# Play and the recorder share this visual surface; the recorder still owns its
+# capture, correction, take, and history behavior.
 # Packaged NoteCoolbomb / NoteCoolbomb_Star: Current 0..11 at 33 frames/s.
 # Frame 11 is the terminal hide boundary, not a twelfth image.
 const HIT_FPS = 33.0
@@ -73,7 +74,7 @@ func shaded_plane(size: Vector2, shader: Shader, at: Vector3, priority: int) -> 
 	return node
 
 func refresh() -> void:
-	active = world.game.uses_ssrg_gameplay() and not world.game.uses_recorder_colors()
+	active = world.game.uses_skd_stage()
 	visible = active
 	if original_stage:
 		original_stage.configure(world)

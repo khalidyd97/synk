@@ -144,7 +144,7 @@ func lane_x(lane: float) -> float: return (lane-CENTER_LANE)*lane_step()
 # Taps are judged on the note itself, not its lane: a touch counts when it lands within the
 # note's drawn half-width at the judgement bar (plus a little grace).
 func note_reach() -> float:
-	if game.uses_ssrg_gameplay(): return SSRG_NOTE_SIZE.x * .5 * game.note_size * 1.1
+	if game.uses_skd_stage(): return SSRG_NOTE_SIZE.x * .5 * game.note_size * 1.1
 	return NOTE_WIDTH * .5 * game.note_size * 1.1
 # SSRG Playables use SSRG's own layout, in its 2D units scaled so its rail edge at the
 # judgement line (512 units from centre) meets the rails at x = 9.75: 13 positions 62.7 units
@@ -164,9 +164,9 @@ const SSRG_NOTE_SIZE = Vector2(212.0,116.0)*SSRG_UNIT
 func ssrg_x(lane: float) -> float: return (lane*12.0/SynkChart.MAX_LANE-6.0)*SSRG_STEP
 # Lane <-> world x for touches. SSRG Playables use the SSRG spacing above, so a finger is
 # measured in the same lane units as the notes it is judged against.
-func lane_world_x(lane: float) -> float: return ssrg_x(lane) if game.uses_ssrg_gameplay() else lane_x(lane)
+func lane_world_x(lane: float) -> float: return ssrg_x(lane) if game.uses_skd_stage() else lane_x(lane)
 func world_lane(x: float) -> float:
-	if game.uses_ssrg_gameplay(): return clampf((x/SSRG_STEP+6.0)*SynkChart.MAX_LANE/12.0,0.0,float(SynkChart.MAX_LANE))
+	if game.uses_skd_stage(): return clampf((x/SSRG_STEP+6.0)*SynkChart.MAX_LANE/12.0,0.0,float(SynkChart.MAX_LANE))
 	return x/lane_step()+CENTER_LANE
 func note_x(lane: float) -> float:
 	# Thirteen distinct centres, with the same spacing as SSRG. Never clamp adjacent
@@ -174,7 +174,7 @@ func note_x(lane: float) -> float:
 	return lane_world_x(lane)
 # Notes travel the whole 60-unit track, from the far end to the judgement bar.
 func uses_projected_highway() -> bool:
-	return game != null and not game.uses_recorder_colors() and (game.mode in ["play","paused"] or game.highway_preview)
+	return game != null and (game.uses_skd_recorder_surface() or (not game.uses_recorder_colors() and (game.mode in ["play","paused"] or game.highway_preview)))
 func source_long_visuals() -> bool:
 	return uses_projected_highway()
 func enhanced_synk_long_visuals() -> bool:
@@ -199,7 +199,7 @@ func ssrg_canvas_height() -> float:
 	# Keep the reference canvas on phones. Narrow landscape screens/tablets
 	# must still fit the full outer note sprites and their touch rectangles.
 	var playable_width=12.0*62.71392+212.0*game.note_size+32.0
-	if not game.uses_ssrg_gameplay():playable_width=(FRAME_HALF_WIDTH*2.0+NOTE_WIDTH*game.note_size)/SSRG_UNIT+32.0
+	if not game.uses_skd_stage():playable_width=(FRAME_HALF_WIDTH*2.0+NOTE_WIDTH*game.note_size)/SSRG_UNIT+32.0
 	return maxf(SSRG_UI_HEIGHT,playable_width/aspect)
 func ssrg_approach(z: float) -> float:
 	return pow(maxf(1.0+z/TRACK_LENGTH,0.0),SSRG_APPROACH_POWER)
@@ -218,7 +218,7 @@ func note_position(lane: float, chart_time: float) -> Vector3:
 func apply_camera(shake: Vector3 = Vector3.ZERO) -> void:
 	camera.projection = Camera3D.PROJECTION_PERSPECTIVE; camera.fov = GAMEPLAY_FOV
 	# SSRG Playables draw their track out to 1500 units (ssrg_stage.gd); other views stop at 260.
-	camera.far = 1600.0 if game != null and game.uses_ssrg_gameplay() else 260.0
+	camera.far = 1600.0 if game != null and game.uses_skd_stage() else 260.0
 	camera.position = camera_rest_position() + shake; camera.rotation_degrees = Vector3(-highway_angle(), 0, 0)
 	# Place the SSRG judgment area near the bottom while preserving the camera's
 	# projection for note rendering and touch raycasts together.
@@ -232,7 +232,7 @@ func apply_camera(shake: Vector3 = Vector3.ZERO) -> void:
 		var center_ui=canvas_height*.5-320.0
 		camera.position = Vector3(0,30,-(234.0+center_ui)*SSRG_UNIT)+shake
 		camera.rotation_degrees = Vector3(-90,0,0)
-	if game != null and game.mode == "record": orient_recorder_notes()
+	if game != null and game.mode == "record" and not uses_projected_highway(): orient_recorder_notes()
 
 func orient_recorder_notes() -> void:
 	# Recorder artwork lies on the track; perspective foreshortens it as the camera tilts.
@@ -348,7 +348,7 @@ func update_cover_backdrop() -> void:
 	for side in [-1,1]:
 		var far_world=Vector3(side*FRAME_HALF_WIDTH,0,-50)
 		var near_world=Vector3(side*FRAME_HALF_WIDTH,0,0)
-		if game.uses_ssrg_gameplay():
+		if game.uses_skd_stage():
 			far_world=Vector3(side*27.0*SSRG_UNIT,0,-492.0*SSRG_UNIT)
 			near_world=Vector3(side*607.5*SSRG_UNIT,0,86.0*SSRG_UNIT)
 		elif uses_projected_highway():
@@ -518,8 +518,8 @@ func rail_glow_colors() -> Array:
 func refresh_highway_look() -> void:
 	if judgment_material == null or track_materials.size() < 2: return
 	var concept=game.highway_style in preload("res://scripts/concept_highway.gd").STYLES and not game.uses_recorder_colors() and not game.uses_ssrg_gameplay()
-	var prism = game != null and game.uses_ssrg_gameplay() and not game.uses_recorder_colors()
-	var gold = game == null or game.uses_recorder_colors() or (game.highway_style=="gold" and not game.uses_ssrg_gameplay())
+	var prism = game != null and game.uses_skd_stage()
+	var gold = game == null or (game.highway_style=="gold" and not game.uses_skd_stage())
 	var darkness = clampf(float(game.get("highway_opacity")),.3,1.6) if game != null and game.get("highway_opacity") != null else 1.0
 	judgment_material.render_priority=-6 if uses_projected_highway() else 0
 	if game.uses_recorder_colors(): darkness=1.0
@@ -567,7 +567,7 @@ func refresh_highway_look() -> void:
 		m.set_shader_parameter("color",element_color("track",m.get_shader_parameter("color")))
 	# The source rail sprites already contain the translucent black road. Old
 	# rectangular 3D floor passes otherwise tint the whole orthographic canvas blue.
-	var original_stage=game.uses_ssrg_gameplay() and not game.uses_recorder_colors()
+	var original_stage=game.uses_skd_stage()
 	for node in track_nodes: node.visible=not original_stage and not concept
 	if original_stage:
 		for m in track_materials: m.set_shader_parameter("opacity",0.0)
@@ -1106,6 +1106,12 @@ func make_cap(parent: Node3D, lane: float, offset: float, palette: int, recordin
 	# Holds and slides follow the chosen note shape like taps: round shapes use SSRG's
 	# round long-note puck, rectangles keep the rectangle head in the ribbon's gold.
 	var long_puck=palette in [1,3] and game.round_notes()
+	if recording and game.uses_skd_recorder_surface():
+		var source_cap=make_ssrg_cap(parent,position_value,palette,size)
+		var source_material: ShaderMaterial=source_cap.material_override
+		source_cap.material_override=shared("skd_rec|%s" % source_material.get_instance_id(), func():
+			var m: ShaderMaterial=source_material.duplicate();m.render_priority=3;return m)
+		return source_cap
 	if (not recording and (ssrg_theme and ssrg_theme.active or source_long_visuals() and long_puck)) or (recording and long_puck):
 		var cap=make_ssrg_cap(parent,position_value,palette,size)
 		if recording:
@@ -1508,7 +1514,7 @@ func build_note_node(key: String, note: Dictionary, recording = false) -> void:
 	var keep_shared = animated_materials.slice(first_material).filter(func(ref): return ref.get_ref() != null and ref.get_ref().has_meta("shared"))
 	animated_materials.resize(first_material); animated_materials.append_array(keep_shared)
 	notes[key] = {"node":node,"signature":signature,"lines":lines,"held":false,"prebuilt":false,"materials":own_materials}
-	if game.mode=="record": orient_recorder_note(node)
+	if game.mode=="record" and not uses_projected_highway(): orient_recorder_note(node)
 
 func ssrg_note_order(note: Dictionary, offset: float = 0.0) -> float:
 	for point in note.get("ssrg_orders",[]):
@@ -1586,8 +1592,8 @@ func ssrg_beam_width() -> float:
 	return 295.0*(520.0/606.0)*SSRG_UNIT
 var ssrg_beam_release: Dictionary={}
 func update_finger_beams(delta: float = 0.0) -> void:
-	var touches: Array = game.pointers.values() if game.mode=="play" else []
-	var ssrg=game.uses_ssrg_gameplay()
+	var touches: Array = game.pointers.values() if game.mode=="play" else (game.capture.gestures.values() if game.mode=="record" and game.capture else [])
+	var ssrg=game.uses_skd_stage()
 	if ssrg and game.mode=="paused": return
 	var pressed:Dictionary={}
 	if ssrg and game.countdown<=0:
@@ -1617,7 +1623,7 @@ func update_finger_beams(delta: float = 0.0) -> void:
 				age=0.0;beam.position.x=ssrg_beam_center(pressed[i])
 			else: age+=delta
 			ssrg_beam_release[i]=age
-			var alpha=SsrgCurves.beam_alpha(age) if game.mode=="play" and game.countdown<=0 else 0.0
+			var alpha=SsrgCurves.beam_alpha(age) if game.mode in ["play","record"] and game.countdown<=0 else 0.0
 			beam.material_override.set_shader_parameter("release_alpha",alpha)
 			for parameter in ["tint","intensity"]: beam.material_override.set_shader_parameter(parameter,ssrg_finger_beam_material.get_shader_parameter(parameter))
 			beam.visible=alpha>0.0
@@ -1757,9 +1763,10 @@ func _process(delta: float) -> void:
 		else: rail_atmosphere.update(delta)
 	var in_play = game.mode=="play" or (game.mode=="paused" and game.paused_mode=="play")
 	var recording_now = game.mode=="record" or (game.mode=="paused" and game.paused_mode=="record")
-	recorder_guides.visible = recording_now or (in_play and bool(extras_setting("lane_hints", true)) and not (ssrg_theme and ssrg_theme.active) and not (concept_theme and concept_theme.active))
+	# SKD has no editor grid. Show SYNK's guides only while correcting a take.
+	recorder_guides.visible = (recording_now and game.arranging) or (in_play and bool(extras_setting("lane_hints", true)) and not (ssrg_theme and ssrg_theme.active) and not (concept_theme and concept_theme.active))
 	if guide_material: guide_material.set_shader_parameter("color",Color(Color("f4f1ea"),.10) if recording_now else Color(Color("777bd5"),.3))
-	update_recorder_channels(delta,recording_now)
+	update_recorder_channels(delta,recording_now and not game.uses_skd_recorder_surface())
 	update_play_aids(delta)
 	update_multiplier_wave(delta)
 	animate_miss_shake(delta)

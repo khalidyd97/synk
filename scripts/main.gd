@@ -139,6 +139,12 @@ func forces_ssrg_mode() -> bool:
 # SSRG judging and scoring rules follow ssrg_playable_run, so other styles keep their own look.
 func uses_ssrg_gameplay() -> bool:
 	return ((ssrg_playable_run and not ssrg_forced_run) or (highway_style=="ssrg" and (mode in ["play","paused"] or highway_preview))) and not uses_recorder_colors()
+# The chart recorder borrows SKD's recovered visual stage without enabling SKD
+# scoring, judgment, combo, health, or gameplay input rules.
+func uses_skd_recorder_surface() -> bool:
+	return uses_recorder_colors()
+func uses_skd_stage() -> bool:
+	return uses_ssrg_gameplay() or uses_skd_recorder_surface()
 func old_ssrg_ui() -> bool:
 	return uses_ssrg_gameplay() and bool(prefs.get_value("highway","old_ssrg_ui",false))
 func change_old_ssrg_ui(on: bool) -> void:
@@ -805,8 +811,11 @@ var recorder_angle_caption: Label
 func update_recorder_focus() -> void:
 	if record_tools == null or aids_drawer == null: return
 	var focus = mode == "record" and not arranging and not aids_drawer.visible
-	for node in [recorder_angle_caption, recorder_angle_slider, recorder_angle_label, record_overview]:
-		if node: node.visible = not focus
+	# SKD's recovered camera is fixed. The old angle slider no longer maps to
+	# this surface; the seek overview remains available while correcting.
+	for node in [recorder_angle_caption, recorder_angle_slider, recorder_angle_label]:
+		if node:node.visible=false
+	if record_overview:record_overview.visible=not focus
 	var history = not take_undo.is_empty() or not take_redo.is_empty()
 	var show_history = not focus or history
 	take_undo_button.visible = show_history;take_redo_button.visible = show_history
@@ -1256,7 +1265,7 @@ func space_authored_notes(incoming: Array,fixed: Array) -> bool:
 func note_travel_seconds() -> float:
 	# APK default basicTime=3.5; normalized 1x corresponds to original UI speed 3.
 	if ssrg_playable_run: return 3.5/ssrg_note_speed()
-	if uses_recorder_colors(): return 2.6/recorder_note_speed
+	if uses_recorder_colors(): return 3.5/recorder_note_speed
 	return 3.5/note_speed
 
 func cycle_recorder_note_speed() -> void:
