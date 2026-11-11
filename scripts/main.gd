@@ -766,6 +766,13 @@ func build_ui() -> void:
 	arrange_button.tooltip_text = "Pause the music to move or correct notes, then resume recording"
 	b = side.call(2);take_undo_button = button(record_tools, "UNDO", b[0], b[1], b[2], b[3], undo_record_note, "tool")
 	b = side.call(3);take_redo_button = button(record_tools, "REDO", b[0], b[1], b[2], b[3], redo_record_note, "tool")
+	# Correct mode: type letters or numbers and they are inserted as slides drawn in that shape.
+	b = side.call(4);text_slides_button = button(record_tools, "TEXT", b[0], b[1], b[2], b[3], open_text_slides, "tool")
+	text_slides_button.tooltip_text = "Insert letters or numbers as slides shaped like them"
+	text_slides_field = LineEdit.new(); rect(text_slides_field, record_tools, b[0], b[1], b[0] + .001, b[1] + .001)
+	text_slides_field.modulate.a = 0.0; text_slides_field.mouse_filter = Control.MOUSE_FILTER_IGNORE; text_slides_field.max_length = 24
+	text_slides_field.placeholder_text = "Letters or numbers to draw as slides"
+	text_slides_field.text_submitted.connect(func(value: String): insert_text_slides(value); text_slides_field.text = "")
 
 	record_info = label(record_tools, "", 0.55, 0.03, 0.83, 0.1, 17);record_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	record_info.add_theme_font_override("font", preload("res://scripts/arcade_style.gd").semi())
@@ -806,6 +813,37 @@ func build_ui() -> void:
 	aids_drawer.visible = false
 
 var aids_drawer: Control
+var text_slides_button: Button
+var text_slides_field: LineEdit
+func open_text_slides() -> void:
+	if not arranging: return
+	text_slides_field.text = ""
+	floating_text_input.open_for(text_slides_field)
+
+# Inserts the text as letter/number shaped slides into the take, ending just before the
+# current position so the new slides are on screen. Each character is three beats tall and
+# eight lanes wide, with a beat between characters.
+func insert_text_slides(text: String) -> int:
+	var Glyphs = preload("res://scripts/slide_glyphs.gd")
+	var cleaned = Glyphs.clean(text)
+	if cleaned.is_empty() or not arranging: return 0
+	if "slide" in recorder.locks():
+		judgement = "SLIDES LOCKED"; flash = 1; return 0
+	var beat = 60.0 / maxf(30.0, float(chart_bpm()))
+	var notes = Glyphs.build(cleaned, 0.0, beat * 3.0, 6.0, 8.0, beat)
+	if notes.is_empty(): return 0
+	var span = 0.0
+	for n in notes: span = maxf(span, float(n.time) + float(n.duration))
+	var start = maxf(0.0, song_time - span - .15)
+	if recorder.use_range and recorder.region.y > recorder.region.x:
+		start = clampf(start, recorder.region.x, maxf(recorder.region.x, recorder.region.y - span))
+	start = minf(start, maxf(0.0, length() - span - .02))
+	for n in notes: n.time = float(n.time) + start
+	capture.notes.append_array(notes)
+	arrange_selection.clear()
+	commit_take_history(); refresh_arrange_controls()
+	judgement = "TEXT · %d SLIDES" % notes.size(); flash = 1
+	return notes.size()
 var record_right_plate: Panel
 var recorder_angle_caption: Label
 # While a take is running (not correcting, aids closed) the recorder shows only what you need
@@ -822,7 +860,8 @@ func update_recorder_focus() -> void:
 	var history = not take_undo.is_empty() or not take_redo.is_empty()
 	var show_history = not focus or history
 	take_undo_button.visible = show_history;take_redo_button.visible = show_history
-	var plate_bottom = 0.135 + (0.405 if show_history else 0.213)
+	text_slides_button.visible = arranging and show_history; text_slides_field.visible = text_slides_button.visible
+	var plate_bottom = 0.135 + (0.501 if text_slides_button.visible else (0.405 if show_history else 0.213))
 	if not is_equal_approx(record_right_plate.anchor_bottom, plate_bottom): record_right_plate.anchor_bottom = plate_bottom
 	# Guidance until the first note lands; after that the lanes speak for themselves.
 	record_help.visible = not focus or capture.notes.is_empty()
