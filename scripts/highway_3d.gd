@@ -1033,7 +1033,7 @@ func build_chords() -> void:
 		var key = roundi(float(game.live[i].note.time) * 1000.0)
 		if not by_time.has(key): by_time[key] = []
 		by_time[key].append(i)
-	var line_material = material(Color("f2ecff"), .55); line_material.render_priority = 1
+	var line_material = canvas_line_material(Color("f2ecff"), .55); line_material.render_priority = 1
 	for key in by_time:
 		var indices: Array = by_time[key]
 		if indices.size() < 2: continue
@@ -1041,9 +1041,9 @@ func build_chords() -> void:
 		for i in indices:
 			low = minf(low, float(game.live[i].note.lane)); high = maxf(high, float(game.live[i].note.lane))
 		if high - low < 1.0: continue
-		var mesh = BoxMesh.new(); mesh.size = Vector3((high - low) * lane_step(), .04, .14)
+		var mesh = PlaneMesh.new(); mesh.size = Vector2(lane_world_x(high) - lane_world_x(low), .14)
 		var node = mesh_node(mesh, self, line_material)
-		node.position = Vector3((lane_x(low) + lane_x(high)) * .5, .16, 0); node.visible = false
+		node.position = Vector3((lane_world_x(low) + lane_world_x(high)) * .5, .16, 0); node.visible = false
 		chords.append({"time": key / 1000.0, "indices": indices, "node": node})
 
 # Hidden: notes vanish as they approach the line. Sudden: notes appear late, partway down.
@@ -1500,10 +1500,14 @@ func make_solid_trail_joints(parent: Node3D,note: Dictionary,palette: int,record
 		joint.set_meta("solid_trail_joint",true); joint.set_meta("checkpoint_offset",offset)
 		joint.position=Vector3(note_x(SynkChart.lane_at(note,float(note.time)+offset)),trail_height()+.015,offset*travel_speed()*(1 if recording else -1))
 
+# Flat lines on the highway that follow the SKD projection (position and rail taper).
+func canvas_line_material(color: Color, alpha: float) -> ShaderMaterial:
+	var m=ShaderMaterial.new(); m.shader=preload("res://scripts/synk_canvas_color.gdshader")
+	m.set_shader_parameter("color",Color(color,alpha)); return m
 func make_alignment_lines(parent: Node3D, note: Dictionary, palette: int) -> Array:
 	# Recording-only rows across the highway at each note's head (and tail) for lining notes up.
 	var result: Array = []
-	var line_material = material(colors[palette].lightened(.35),.55)
+	var line_material = canvas_line_material(colors[palette].lightened(.35),.55)
 	var offsets = [0.0]
 	if note.kind in ["hold","slide"]: offsets.append(float(note.duration))
 	for offset in offsets:
