@@ -23,6 +23,8 @@ func run()->void:
 		var mat=head.material_override as ShaderMaterial
 		var art=mat.get_shader_parameter("artwork") if mat else null
 		check(art!=null and str(art.resource_path).contains("ssrg"),"Recorder note faces use recovered SKD artwork")
+	check(is_equal_approx(world.approach_power(),world.SSRG_APPROACH_POWER),"Live recording keeps SKD's p^6 approach")
+	check(absf(pow(world.reveal_progress(),world.approach_power())-world.RECORDER_REVEAL_SCALE)<.001,"Live recording also stops notes at the rail top")
 	game.arranging=true;world._process(0.0)
 	check(world.recorder_guides.visible,"Correction mode restores authoring guides")
 	# Correction grid lines sit between the SKD note lanes, not the old SYNK spacing.
@@ -33,7 +35,9 @@ func run()->void:
 			guide_ok=guide_ok and is_equal_approx(guide.position.x,(world.note_x(boundary-1)+world.note_x(boundary))*.5)
 	check(guide_ok,"Correction lane grid follows SKD lane spacing")
 	# Notes stop where the rails begin: the recorder has no cover tile hiding the far end.
-	check(world.reveal_progress()>.5,"Recorder reveals notes below SKD's covered far end")
+	check(is_equal_approx(world.approach_power(),world.CORRECT_APPROACH_POWER),"Correct mode spreads notes evenly up the SKD surface")
+	check(absf(pow(world.reveal_progress(),world.approach_power())-world.RECORDER_REVEAL_SCALE)<.001,"Notes stop at the rail top in Correct mode")
+	check(1.0-world.reveal_progress()>.85,"Most of the travel window stays editable in Correct mode")
 	var probe=Vector3(world.note_x(9.0),world.trail_height(),-12.0)
 	check(world.unwarp_point(world.warp_point(probe)).distance_to(probe)<.001,"SKD projection round-trips for picking")
 	var screen=world.camera.unproject_position(world.warp_point(probe))/Vector2(game.field.viewport.size)

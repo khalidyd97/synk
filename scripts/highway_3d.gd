@@ -186,6 +186,11 @@ func travel_speed() -> float: return TRACK_LENGTH / game.note_travel_seconds()
 # Gameplay is drawn directly in the original 2D UI coordinate system on X/Z.
 # An orthographic camera adds no further perspective to the recovered curve.
 const SSRG_APPROACH_POWER = 6.0
+# Correct mode spreads recorded notes evenly up the SKD surface (screen spacing follows
+# time), so older notes stay visible and editable. Live recording keeps SKD's p^6.
+const CORRECT_APPROACH_POWER = 1.0
+func approach_power() -> float:
+	return CORRECT_APPROACH_POWER if game != null and game.arranging and game.uses_skd_recorder_surface() else SSRG_APPROACH_POWER
 const SSRG_STAGE_DISTANCE = 514.0*SSRG_UNIT
 const SSRG_UI_HEIGHT = 640.0
 # Paired 3.6-speed recordings: source note footprints are about 80% of
@@ -202,19 +207,20 @@ func ssrg_canvas_height() -> float:
 	if not game.uses_skd_stage():playable_width=(FRAME_HALF_WIDTH*2.0+NOTE_WIDTH*game.note_size)/SSRG_UNIT+32.0
 	return maxf(SSRG_UI_HEIGHT,playable_width/aspect)
 func ssrg_approach(z: float) -> float:
-	return pow(maxf(1.0+z/TRACK_LENGTH,0.0),SSRG_APPROACH_POWER)
+	return pow(maxf(1.0+z/TRACK_LENGTH,0.0),approach_power())
 # Mirrors ssrg_warp_z() in ssrg_warp.gdshaderinc.
 func ssrg_warped_z(z: float) -> float:
 	if not uses_projected_highway(): return z
 	return SSRG_STAGE_DISTANCE*(ssrg_approach(z)-1.0)
 func update_ssrg_warp() -> void:
 	var on = 1.0 if uses_projected_highway() else 0.0
-	RenderingServer.global_shader_parameter_set("ssrg_warp",Vector4(on,SSRG_APPROACH_POWER,SSRG_STAGE_DISTANCE,TRACK_LENGTH))
+	RenderingServer.global_shader_parameter_set("ssrg_warp",Vector4(on,approach_power(),SSRG_STAGE_DISTANCE,TRACK_LENGTH))
 	RenderingServer.global_shader_parameter_set("ssrg_reveal_from",reveal_progress())
 # Chart progress (0 far end .. 1 judgment) where notes become visible. SKD gameplay
 # reveals at 0.5 behind its album cover; the recorder has no cover, so notes stop
 # where the recovered rail art begins instead of drifting above it.
-const RECORDER_REVEAL = .66
+# Kept as an on-screen size (q = progress^power) so the cut-off stays at the rail top for any curve.
+const RECORDER_REVEAL_SCALE = 0.0827  # pow(.66, 6)
 # Lane grid lines sit between the lanes the current surface draws notes on.
 var guides_spacing_skd = false
 func layout_recorder_guides() -> void:
@@ -228,7 +234,8 @@ func layout_recorder_guides() -> void:
 	for marker in lane_markers.get_children():
 		if marker.has_meta("lane"): marker.position.x = lane_world_x(int(marker.get_meta("lane"))) if skd else lane_x(int(marker.get_meta("lane")))
 func reveal_progress() -> float:
-	return RECORDER_REVEAL if game != null and game.uses_skd_recorder_surface() else .5
+	if game != null and game.uses_skd_recorder_surface(): return pow(RECORDER_REVEAL_SCALE,1.0/approach_power())
+	return .5
 # Forward and inverse of the SKD projection (ssrg_warp.gdshaderinc) for picking and
 # screen markers, so taps land where notes are drawn.
 func warp_point(p: Vector3) -> Vector3:
@@ -238,7 +245,7 @@ func warp_point(p: Vector3) -> Vector3:
 func unwarp_point(p: Vector3) -> Vector3:
 	if not uses_projected_highway(): return p
 	var q=maxf(1.0+p.z/SSRG_STAGE_DISTANCE,0.0)
-	return Vector3(p.x/maxf(q,.0001),p.y,TRACK_LENGTH*(pow(q,1.0/SSRG_APPROACH_POWER)-1.0))
+	return Vector3(p.x/maxf(q,.0001),p.y,TRACK_LENGTH*(pow(q,1.0/approach_power())-1.0))
 # Whether an unwarped depth is on the visible part of the highway.
 func depth_visible(z: float) -> bool:
 	return z>=-TRACK_LENGTH*(1.0-reveal_progress()) if uses_projected_highway() else z>=-TRACK_LENGTH
