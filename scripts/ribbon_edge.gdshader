@@ -22,7 +22,7 @@ void vertex() {
 
 void fragment() {
 	if(outside_rails(INV_VIEW_MATRIX[3].xyz)) discard;
-	if(ssrg_warp.x>0.5){if(rail_position.z>ssrg_warp_z(clip_z) || rail_position.z<ssrg_warp_z(-30.0))discard;}
+	if(ssrg_warp.x>0.5){if(rail_position.z>ssrg_warp_z(clip_z) || rail_position.z<ssrg_reveal_z())discard;}
 	else if(world_z>clip_z)discard;
 	float gray = dot(color, vec3(0.299, 0.587, 0.114));
 	ALBEDO = mix(color, vec3(gray * 0.6), desaturate);

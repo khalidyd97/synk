@@ -5,7 +5,7 @@ func check(ok: bool,message: String) -> void:
 func _initialize() -> void: run.call_deferred()
 func point(g: Control,n: Dictionary,at: float,side: float=0) -> Vector2:
     var w=g.field.world
-    return w.camera.unproject_position(Vector3(w.lane_x(SynkChart.lane_at(n,at))+side,w.trail_height(),(at-g.song_time)*w.travel_speed()))/Vector2(g.field.viewport.size)
+    return w.camera.unproject_position(w.warp_point(Vector3(w.note_x(SynkChart.lane_at(n,at))+side,w.trail_height(),(at-g.song_time)*w.travel_speed())))/Vector2(g.field.viewport.size)
 func run() -> void:
     AudioServer.set_bus_mute(0,true)
     var g=load("res://scenes/main.tscn").instantiate(); root.add_child(g); await process_frame
@@ -29,11 +29,11 @@ func run() -> void:
         var edge=point(g,note,at,g.field.world.TRAIL_HALF*.65*.8)
         check(g.arrange_note_distance(note,edge)<.09,"Selectable ribbon follows fixed width")
     g.note_arranger.edit_mode="move"
-    g.capture.notes=[]; g.document.notes=[slide]; var at=9.5; var p=point(g,slide,at)
+    g.capture.notes=[]; g.document.notes=[slide]; var at=9.85; var p=point(g,slide,at)
     g.arrange_pointer_event(2,p,true,false,false)
     check(g.arrange_selection.get("document",false),"Existing chart trails can also be selected")
     var initial_lane=slide.lane; var original=slide.duplicate(true)
-    var moved=point(g,slide,at,g.field.world.LANE_WIDTH)
+    var moved=point(g,slide,at,g.field.world.lane_world_x(1.0)-g.field.world.lane_world_x(0.0))
     g.arrange_pointer_event(2,moved,false,false,false)
     check(slide.lane==initial_lane+1,"Dragging from slide body shifts by the grabbed lane delta")
     check(is_equal_approx(slide.time,original.time),"Horizontal body drag preserves timing")

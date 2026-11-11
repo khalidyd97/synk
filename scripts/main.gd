@@ -1253,7 +1253,11 @@ func uses_recorder_colors() -> bool:
 func authoring_lane_gap() -> float:
 	# The outer part of the sprite is a soft glow. Separate the visible bodies,
 	# keeping near-simultaneous notes close without forcing their centers together.
-	return (field.world.NOTE_WIDTH*note_size*.55+.08)/field.world.lane_step()
+	# Measured on the surface the notes are drawn on (SKD sprites and spacing in the recorder).
+	var world=field.world
+	var width=world.SSRG_NOTE_SIZE.x if uses_skd_stage() else world.NOTE_WIDTH
+	var step=absf(world.lane_world_x(1.0)-world.lane_world_x(0.0)) if uses_skd_stage() else world.lane_step()
+	return (width*note_size*.55+.08)/step
 
 func space_authored_notes(incoming: Array,fixed: Array) -> bool:
 	var resolved=true
@@ -1801,6 +1805,7 @@ func stage_time_at(p: Vector2) -> float:
 	var origin=field.world.camera.project_ray_origin(point)
 	var direction=field.world.camera.project_ray_normal(point)
 	var hit=Plane(Vector3.UP,0).intersects_ray(origin,direction)
+	if hit!=null: hit=field.world.unwarp_point(hit)
 	return song_time+hit.z/field.world.travel_speed() if hit!=null else song_time
 
 func outside_highway(p: Vector2) -> bool:
@@ -1870,7 +1875,8 @@ func add_point_at(p: Vector2) -> void :
 func arrange_lane_at(p: Vector2) -> float:
 	var world=field.world; var point=p*Vector2(field.viewport.size)
 	var hit=Plane(Vector3.UP,world.trail_height()).intersects_ray(world.camera.project_ray_origin(point),world.camera.project_ray_normal(point))
-	return hit.x/world.lane_step()+world.CENTER_LANE if hit!=null else world.CENTER_LANE
+	# Undo the SKD projection, then use the surface's own lane spacing.
+	return world.world_lane(world.unwarp_point(hit).x) if hit!=null else world.CENTER_LANE
 
 func arrange_note_distance(n: Dictionary, p: Vector2) -> float:
 	var start = float(n.time); var finish = start + float(n.duration)
@@ -1879,8 +1885,8 @@ func arrange_note_distance(n: Dictionary, p: Vector2) -> float:
 	var origin = Vector3(0, 0, (start - song_time) * world.travel_speed())
 	var best = INF
 	if song_time - start <= note_travel_seconds():
-		var head = Vector3(world.lane_x(float(n.lane)), 0.2, origin.z)
-		if not camera.is_position_behind(head): best = p.distance_to(camera.unproject_position(head) / viewport_size)
+		var head = Vector3(world.note_x(float(n.lane)), 0.2, origin.z)
+		if world.depth_visible(head.z) and not camera.is_position_behind(head): best = p.distance_to(camera.unproject_position(world.warp_point(head)) / viewport_size)
 	if n.kind not in ["hold", "slide"] or float(n.duration) <= 0: return best
 
 	var centers = world.trail_centers(n, clampi(ceili(float(n.duration) * 32), 16, 256), true)
@@ -1889,10 +1895,11 @@ func arrange_note_distance(n: Dictionary, p: Vector2) -> float:
 	var pointer = p * viewport_size
 	for i in centers.size() - 1:
 		var a: Vector3 = centers[i] + origin; var b: Vector3 = centers[i + 1] + origin
-		if maxf(a.z, b.z) < - world.TRACK_LENGTH or minf(a.z, b.z) > world.JUDGMENT_DEPTH: continue
+		if not world.depth_visible(maxf(a.z, b.z)) or minf(a.z, b.z) > world.JUDGMENT_DEPTH: continue
 		if camera.is_position_behind(a) or camera.is_position_behind(b): continue
-		var screen_a = camera.unproject_position(a); var screen_b = camera.unproject_position(b)
-		var polygon = PackedVector2Array([camera.unproject_position(a - sides[i] * half_width), camera.unproject_position(b - sides[i + 1] * half_width), camera.unproject_position(b + sides[i + 1] * half_width), camera.unproject_position(a + sides[i] * half_width)])
+		# Measure on screen where the SKD projection actually draws the ribbon.
+		var screen_a = camera.unproject_position(world.warp_point(a)); var screen_b = camera.unproject_position(world.warp_point(b))
+		var polygon = PackedVector2Array([camera.unproject_position(world.warp_point(a - sides[i] * half_width)), camera.unproject_position(world.warp_point(b - sides[i + 1] * half_width)), camera.unproject_position(world.warp_point(b + sides[i + 1] * half_width)), camera.unproject_position(world.warp_point(a + sides[i] * half_width))])
 		var distance = pointer.distance_to(Geometry2D.get_closest_point_to_segment(pointer, screen_a, screen_b))
 		var inside = Geometry2D.is_point_in_polygon(pointer, polygon)
 		var edge_distance = INF
@@ -1901,11 +1908,12 @@ func arrange_note_distance(n: Dictionary, p: Vector2) -> float:
 	if trail_style == "solid":
 		var hit = Plane(Vector3.UP, world.trail_height() + 0.015).intersects_ray(camera.project_ray_origin(pointer), camera.project_ray_normal(pointer))
 		if hit != null:
+			hit = world.unwarp_point(hit)
 			for offset in world.solid_trail_offsets(n):
-				var center = Vector3(world.lane_x(SynkChart.lane_at(n, start + offset)), world.trail_height() + 0.015, (start + offset - song_time) * world.travel_speed())
-				if camera.is_position_behind(center) or center.z < - world.TRACK_LENGTH or center.z > world.JUDGMENT_DEPTH: continue
+				var center = Vector3(world.note_x(SynkChart.lane_at(n, start + offset)), world.trail_height() + 0.015, (start + offset - song_time) * world.travel_speed())
+				if camera.is_position_behind(center) or not world.depth_visible(center.z) or center.z > world.JUDGMENT_DEPTH: continue
 				if Vector2(hit.x - center.x, hit.z - center.z).length() <= half_width * 1.5:
-					best = minf(best, minf(0.085, p.distance_to(camera.unproject_position(center) / viewport_size)))
+					best = minf(best, minf(0.085, p.distance_to(camera.unproject_position(world.warp_point(center)) / viewport_size)))
 	return best
 
 func arrange_pointer_event(id: int, p: Vector2, began: bool, ended: bool, canceled: bool) -> void :

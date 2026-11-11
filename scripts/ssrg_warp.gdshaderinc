@@ -1,6 +1,10 @@
 // Original 2D chart projection. x enabled, y exponent, z source stage height,
 // w linear timing track length. The orthographic camera adds no scaling.
 global uniform vec4 ssrg_warp;
+// Chart progress where notes appear. SKD gameplay uses 0.5 (its cover tile hides the far end);
+// the recorder has no cover, so it starts notes where the rails begin.
+global uniform float ssrg_reveal_from;
+float ssrg_reveal_z(){ return ssrg_warp.z*(pow(ssrg_reveal_from,ssrg_warp.y)-1.0); }
 float ssrg_progress(float z){ return max(1.0+z/ssrg_warp.w,0.0); }
 float ssrg_scale(float z){ return pow(ssrg_progress(z),ssrg_warp.y); }
 float ssrg_warp_z(float z){
@@ -9,7 +13,7 @@ float ssrg_warp_z(float z){
 }
 float ssrg_reveal(float z){
     if(ssrg_warp.x<0.5) return 1.0;
-    return step(0.5,ssrg_progress(z));
+    return step(ssrg_reveal_from,ssrg_progress(z));
 }
 // Position and full sprite dimensions share q=p^6, as IngameRenderer does.
 vec3 ssrg_warp_rigid(vec3 vertex, mat4 model){

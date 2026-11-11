@@ -72,7 +72,7 @@ void fragment(){
     if(ssrg_warp.x>0.5){
         // Clip on the drawn judgment plane, not interpolated obsolete timing Z.
         if(rail_position.z>ssrg_warp_z(clip_z)) discard;
-        if(rail_position.z<ssrg_warp.z*(pow(0.5,ssrg_warp.y)-1.0)) discard;
+        if(rail_position.z<ssrg_reveal_z()) discard;
     }else if(world_z>clip_z) discard;
     vec3 color=source_art?source_chip:tint*.87;
     float opacity=source_art?.2:.8;

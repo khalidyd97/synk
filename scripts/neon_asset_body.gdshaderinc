@@ -40,7 +40,7 @@ uniform bool note_brightness_applies = true;
 void fragment() {
 	if(outside_rails(INV_VIEW_MATRIX[3].xyz)) discard;
 	if(ssrg_warp.x>0.5){
-		if(projected_ribbon && (rail_position.z>ssrg_warp_z(clip_z) || rail_position.z<ssrg_warp_z(-30.0)))discard;
+		if(projected_ribbon && (rail_position.z>ssrg_warp_z(clip_z) || rail_position.z<ssrg_reveal_z()))discard;
 		if(!projected_ribbon && (centre_z>clip_z || ssrg_reveal(centre_z)<0.5))discard;
 	}else if(world_z>clip_z)discard;
 	vec2 artwork_uv = UV;

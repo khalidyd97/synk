@@ -41,7 +41,7 @@ func run() -> void:
                 check(g.live[0].done and g.judgment_counts.PERFECT==1,"Gameplay judges taps throughout each entire pad")
     g.set_mode("editor"); g.document.load_notes([]); g.cursor=0; g.record_here()
     g.countdown=0; g.song_time=1; g.audio.stop()
-    var p=screen_point(g,w.lane_x(4),0)
+    var p=screen_point(g,w.lane_world_x(4),0)
     g.pointer_event(7,p,true,false,false)
     var initial=g.capture.gestures[7].note.duplicate(true)
     for seconds in [2.0,8.0,30.0,60.0]:
@@ -60,7 +60,7 @@ func run() -> void:
     check(g.capture.notes.size()==1 and g.capture.notes[0].kind=="hold" and is_equal_approx(g.capture.notes[0].duration,60),"Release preserves the full recorded hold duration")
     g.song_time=62
     g.tool="slide"; g.pointer_event(8,p,true,false,false)
-    g.song_time=63; g.pointer_event(8,screen_point(g,w.lane_x(6),0),false,false,false)
+    g.song_time=63; g.pointer_event(8,screen_point(g,w.lane_world_x(6),0),false,false,false)
     g.song_time=75
     var slide=w.recording_preview(g.capture.gestures[8])
     check(slide.kind=="slide" and is_equal_approx(float(slide.time)+float(slide.duration),75),"Paused slide finger keeps extending the live trail")

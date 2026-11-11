@@ -210,6 +210,38 @@ func ssrg_warped_z(z: float) -> float:
 func update_ssrg_warp() -> void:
 	var on = 1.0 if uses_projected_highway() else 0.0
 	RenderingServer.global_shader_parameter_set("ssrg_warp",Vector4(on,SSRG_APPROACH_POWER,SSRG_STAGE_DISTANCE,TRACK_LENGTH))
+	RenderingServer.global_shader_parameter_set("ssrg_reveal_from",reveal_progress())
+# Chart progress (0 far end .. 1 judgment) where notes become visible. SKD gameplay
+# reveals at 0.5 behind its album cover; the recorder has no cover, so notes stop
+# where the recovered rail art begins instead of drifting above it.
+const RECORDER_REVEAL = .66
+# Lane grid lines sit between the lanes the current surface draws notes on.
+var guides_spacing_skd = false
+func layout_recorder_guides() -> void:
+	var skd = game.uses_skd_stage()
+	if skd == guides_spacing_skd: return
+	guides_spacing_skd = skd
+	for guide in recorder_guides.get_children():
+		if guide.has_meta("boundary"):
+			var boundary = int(guide.get_meta("boundary"))
+			guide.position.x = (lane_world_x(boundary-1)+lane_world_x(boundary))*.5 if skd else (boundary-.5-CENTER_LANE)*RECORD_LANE_WIDTH
+	for marker in lane_markers.get_children():
+		if marker.has_meta("lane"): marker.position.x = lane_world_x(int(marker.get_meta("lane"))) if skd else lane_x(int(marker.get_meta("lane")))
+func reveal_progress() -> float:
+	return RECORDER_REVEAL if game != null and game.uses_skd_recorder_surface() else .5
+# Forward and inverse of the SKD projection (ssrg_warp.gdshaderinc) for picking and
+# screen markers, so taps land where notes are drawn.
+func warp_point(p: Vector3) -> Vector3:
+	if not uses_projected_highway(): return p
+	var q=ssrg_approach(p.z)
+	return Vector3(p.x*q,p.y,ssrg_warped_z(p.z))
+func unwarp_point(p: Vector3) -> Vector3:
+	if not uses_projected_highway(): return p
+	var q=maxf(1.0+p.z/SSRG_STAGE_DISTANCE,0.0)
+	return Vector3(p.x/maxf(q,.0001),p.y,TRACK_LENGTH*(pow(q,1.0/SSRG_APPROACH_POWER)-1.0))
+# Whether an unwarped depth is on the visible part of the highway.
+func depth_visible(z: float) -> bool:
+	return z>=-TRACK_LENGTH*(1.0-reveal_progress()) if uses_projected_highway() else z>=-TRACK_LENGTH
 func render_time() -> float:
 	if uses_projected_highway() and game.mode=="paused" and game.visual_clock_ready: return game.visual_song_time
 	return game.visual_song_time if game.audio.playing and game.mode in ["play","record"] and game.countdown<=0 and game.resume_countdown<=0 else game.song_time
@@ -426,6 +458,7 @@ func build_track() -> void:
 		var guide_mesh = PlaneMesh.new(); guide_mesh.size = Vector2(.035,60+JUDGMENT_DEPTH*.5)
 		var guide = mesh_node(guide_mesh,recorder_guides,guide_material)
 		guide.position = Vector3((boundary-.5-CENTER_LANE)*RECORD_LANE_WIDTH,.055,(-60+JUDGMENT_DEPTH*.5)*.5)
+		guide.set_meta("boundary",boundary)
 	var marker_material = ShaderMaterial.new();marker_material.shader=preload("res://scripts/synk_canvas_color.gdshader")
 	marker_material.set_shader_parameter("color",Color("8be8ffb8"))
 	lane_markers = Node3D.new(); lane_markers.name = "LaneMarkers"; recorder_guides.add_child(lane_markers)
@@ -433,6 +466,7 @@ func build_track() -> void:
 		var marker_mesh = PlaneMesh.new(); marker_mesh.size = Vector2(.22,.62)
 		var marker = mesh_node(marker_mesh,lane_markers,marker_material)
 		marker.position = Vector3(lane_x(lane),.052,-.03)
+		marker.set_meta("lane",lane)
 	# Recorder pad: SSRG's thirteen channels drawn as slots that light under a finger.
 	var channel_mesh = PlaneMesh.new(); channel_mesh.size = Vector2(PAD_HALF_WIDTH*2.0,JUDGMENT_DEPTH)
 	recorder_channel_material = ShaderMaterial.new(); recorder_channel_material.shader = preload("res://scripts/recorder_channels.gdshader")
@@ -1766,6 +1800,7 @@ func _process(delta: float) -> void:
 	# SKD has no editor grid. Show SYNK's guides only while correcting a take.
 	recorder_guides.visible = (recording_now and game.arranging) or (in_play and bool(extras_setting("lane_hints", true)) and not (ssrg_theme and ssrg_theme.active) and not (concept_theme and concept_theme.active))
 	if guide_material: guide_material.set_shader_parameter("color",Color(Color("f4f1ea"),.10) if recording_now else Color(Color("777bd5"),.3))
+	if recorder_guides.visible: layout_recorder_guides()
 	update_recorder_channels(delta,recording_now and not game.uses_skd_recorder_surface())
 	update_play_aids(delta)
 	update_multiplier_wave(delta)

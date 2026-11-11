@@ -25,5 +25,21 @@ func run()->void:
 		check(art!=null and str(art.resource_path).contains("ssrg"),"Recorder note faces use recovered SKD artwork")
 	game.arranging=true;world._process(0.0)
 	check(world.recorder_guides.visible,"Correction mode restores authoring guides")
+	# Correction grid lines sit between the SKD note lanes, not the old SYNK spacing.
+	var guide_ok=true
+	for guide in world.recorder_guides.get_children():
+		if guide.has_meta("boundary"):
+			var boundary=int(guide.get_meta("boundary"))
+			guide_ok=guide_ok and is_equal_approx(guide.position.x,(world.note_x(boundary-1)+world.note_x(boundary))*.5)
+	check(guide_ok,"Correction lane grid follows SKD lane spacing")
+	# Notes stop where the rails begin: the recorder has no cover tile hiding the far end.
+	check(world.reveal_progress()>.5,"Recorder reveals notes below SKD's covered far end")
+	var probe=Vector3(world.note_x(9.0),world.trail_height(),-12.0)
+	check(world.unwarp_point(world.warp_point(probe)).distance_to(probe)<.001,"SKD projection round-trips for picking")
+	var screen=world.camera.unproject_position(world.warp_point(probe))/Vector2(game.field.viewport.size)
+	check(absf(game.arrange_lane_at(screen)-9.0)<.05,"Correct mode reads the lane under a drawn note")
+	var drawn=SynkChart.note(game.song_time-.25,9,"tap"); game.capture.notes=[drawn]
+	var at=world.camera.unproject_position(world.warp_point(Vector3(world.note_x(9.0),.2,-.25*world.travel_speed())))/Vector2(game.field.viewport.size)
+	check(game.arrange_note_distance(drawn,at)<.02,"Tapping a drawn recorded note selects it")
 	print("SKD recorder surface failures: ",failures)
 	game.queue_free();await process_frame;quit(failures)

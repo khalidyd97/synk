@@ -26,7 +26,7 @@ func run() -> void:
 	var visual=game.field.world.notes["recorder_slide_layer"].node
 	var head: MeshInstance3D=visual.get_child(0)
 	var tail: MeshInstance3D=visual.get_node("SustainEndCap")
-	check(head.material_override.shader==load("res://scripts/recorder_note.gdshader") and tail.material_override.shader==head.material_override.shader,"Rectangle recorder slide heads and end caps keep the rectangle note art")
+	check(head.material_override.shader==load("res://scripts/reference_note.gdshader") and tail.material_override.shader==head.material_override.shader,"Recorder slide heads and end caps use the recovered SKD note art")
 	game.note_shape="circle"
 	game.field.world.build_note_node("recorder_slide_round",slide,true)
 	var round_head: MeshInstance3D=game.field.world.notes["recorder_slide_round"].node.get_child(0)

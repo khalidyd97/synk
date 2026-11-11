@@ -37,6 +37,6 @@ func run():
 			game.align_gameplay_hud()
 			check(game.countdown_label.get_global_rect().get_center().y>0 and game.countdown_label.get_global_rect().get_center().y<dimensions.y,"Countdown remains on screen")
 	game.set_mode("record");game.field.sync_projection_style();game.field.world.apply_camera()
-	check(game.field.world.camera.projection==Camera3D.PROJECTION_PERSPECTIVE,"Recorder retains its original camera")
+	check(game.field.world.camera.projection==Camera3D.PROJECTION_ORTHOGONAL,"Recorder uses the SKD orthographic camera")
 	game.queue_free();await process_frame
 	print("SSRG screen fitting failures: ",failures);quit(failures)

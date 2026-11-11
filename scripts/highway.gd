@@ -144,7 +144,7 @@ func input_position(p: Vector2) -> Vector2:
 	if hit!=null and game.uses_ssrg_gameplay():hit.x+=world.ssrg_shake_x
 	# SYNK's band now follows the road taper. Resolve its cross-section back
 	# to the centerline so a lane keeps the same hit area across the full band.
-	if on_pad and world.uses_projected_highway() and not game.uses_ssrg_gameplay():
+	if on_pad and world.uses_projected_highway() and not game.uses_skd_stage():
 		hit.x/=maxf(.001,1.0+hit.z/world.SSRG_STAGE_DISTANCE)
 	if hit != null: p.x = .07 + (world.world_lane(hit.x)+.5)/SynkChart.LANES*.86
 	if on_pad and absf(hit.x)<=world.PAD_HALF_WIDTH+.001:
@@ -165,15 +165,16 @@ func draw_overlay(overlay: Control) -> void:
 			var width=world.TRAIL_HALF*.65
 			for i in centers.size()-1:
 				var a: Vector3=centers[i]+shift; var b: Vector3=centers[i+1]+shift
-				if maxf(a.z,b.z)<-world.TRACK_LENGTH or minf(a.z,b.z)>world.JUDGMENT_DEPTH: continue
+				if not world.depth_visible(maxf(a.z,b.z)) or minf(a.z,b.z)>world.JUDGMENT_DEPTH: continue
 				if world.camera.is_position_behind(a) or world.camera.is_position_behind(b): continue
+				# Outline the ribbon where the SKD projection draws it.
 				for side in [-1,1]:
-					var start=world.camera.unproject_position(a+sides[i]*width*side)
-					var finish=world.camera.unproject_position(b+sides[i+1]*width*side)
+					var start=world.camera.unproject_position(world.warp_point(a+sides[i]*width*side))
+					var finish=world.camera.unproject_position(world.warp_point(b+sides[i+1]*width*side))
 					overlay.draw_line(start,finish,Color("7beaff",.8),2,true)
-		var note_position=Vector3(world.lane_x(float(note.lane)),.2,(float(note.time)-game.song_time)*world.travel_speed())
-		var center=world.camera.unproject_position(note_position)
-		if Rect2(Vector2.ZERO,size).has_point(center):
+		var note_position=Vector3(world.note_x(float(note.lane)),.2,(float(note.time)-game.song_time)*world.travel_speed())
+		var center=world.camera.unproject_position(world.warp_point(note_position))
+		if world.depth_visible(note_position.z) and Rect2(Vector2.ZERO,size).has_point(center):
 			var pulse=.5+.5*sin(Time.get_ticks_msec()/1000.0*4.0)
 			overlay.draw_arc(center,31+pulse*3,0,TAU,48,Color("45d5ff",.6+pulse*.3),3.0,true)
 

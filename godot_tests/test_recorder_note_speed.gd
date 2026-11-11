@@ -24,7 +24,7 @@ func run() -> void:
 	check(is_equal_approx(game.recorder_note_speed, 5.0) and game.recorder_note_speed_button.text.contains("5.0×"), "Recorder speed reaches 5.0 in 0.1 steps")
 	game.cycle_recorder_note_speed()
 	check(is_equal_approx(game.recorder_note_speed, .1), "Recorder speed wraps to 0.1")
-	check(is_equal_approx(game.note_travel_seconds(), 26.0), "Lowest recorder speed updates note travel")
+	check(is_equal_approx(game.note_travel_seconds(), 35.0), "Lowest recorder speed updates note travel (SKD 3.5 s base)")
 	check(game.audio.pitch_scale == music_speed and game.note_speed == play_speed, "Recorder note speed does not change song or play speed")
 	check(is_equal_approx(float(game.prefs.get_value("editor", "note_speed", 0)), .1), "Recorder note speed persists")
 	game.recorder_note_speed = original_speed

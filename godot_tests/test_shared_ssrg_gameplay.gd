@@ -81,8 +81,8 @@ func run() -> void:
 	game.paused_mode="play"; game.set_mode("paused")
 	check(game.uses_ssrg_gameplay(),"Pause keeps the shared stage")
 	game.set_mode("record")
-	check(not game.uses_ssrg_gameplay() and not world.ssrg_theme.active,"Recorder remains separate")
-	check(is_equal_approx(game.note_travel_seconds(),2.6),"Recorder travel remains unchanged")
+	check(not game.uses_ssrg_gameplay() and game.uses_skd_recorder_surface(),"Recorder draws on the SKD surface without SKD gameplay rules")
+	check(is_equal_approx(game.note_travel_seconds(),3.5/game.recorder_note_speed),"Recorder uses SKD's 3.5 s base travel")
 	game.set_mode("menu")
 	check(not game.uses_ssrg_gameplay(),"Menu does not inherit gameplay presentation")
 	# The "ssrg" highway style: SYNK songs draw on the SSRG stage with SSRG rules.

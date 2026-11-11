@@ -98,10 +98,10 @@ func _process(_delta: float) -> void :
 func marker_point(note: Dictionary, at: float) -> Variant:
 	var w = game.field.world
 	var z = (at - game.song_time) * w.travel_speed()
-	if z < - w.TRACK_LENGTH or z > 1.5: return null
+	if not w.depth_visible(z) or z > 1.5: return null
 	var point = Vector3(w.note_x(SynkChart.lane_at(note, at)), w.trail_height() + 0.07, z)
 	if w.camera.is_position_behind(point): return null
-	var normalized = w.camera.unproject_position(point) / Vector2(game.field.viewport.size)
+	var normalized = w.camera.unproject_position(w.warp_point(point)) / Vector2(game.field.viewport.size)
 	var screen = game.field.get_global_transform_with_canvas() * (normalized * game.field.size)
 	return get_global_transform_with_canvas().affine_inverse() * screen
 func handles() -> Array:
@@ -125,10 +125,10 @@ var draw_touches: Dictionary = {}
 func screen_point(at: float, lane: float) -> Variant:
 	var w = game.field.world
 	var z = (at - game.song_time) * w.travel_speed()
-	if z < - w.TRACK_LENGTH or z > 1.5: return null
+	if not w.depth_visible(z) or z > 1.5: return null
 	var point = Vector3(w.note_x(lane), w.trail_height() + 0.07, z)
 	if w.camera.is_position_behind(point): return null
-	var normalized = w.camera.unproject_position(point) / Vector2(game.field.viewport.size)
+	var normalized = w.camera.unproject_position(w.warp_point(point)) / Vector2(game.field.viewport.size)
 	var screen = game.field.get_global_transform_with_canvas() * (normalized * game.field.size)
 	return get_global_transform_with_canvas().affine_inverse() * screen
 func _draw() -> void :
