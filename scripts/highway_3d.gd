@@ -186,11 +186,8 @@ func travel_speed() -> float: return TRACK_LENGTH / game.note_travel_seconds()
 # Gameplay is drawn directly in the original 2D UI coordinate system on X/Z.
 # An orthographic camera adds no further perspective to the recovered curve.
 const SSRG_APPROACH_POWER = 6.0
-# Correct mode spreads recorded notes evenly up the SKD surface (screen spacing follows
-# time), so older notes stay visible and editable. Live recording keeps SKD's p^6.
-const CORRECT_APPROACH_POWER = 1.0
 func approach_power() -> float:
-	return CORRECT_APPROACH_POWER if game != null and game.arranging and game.uses_skd_recorder_surface() else SSRG_APPROACH_POWER
+	return SSRG_APPROACH_POWER
 const SSRG_STAGE_DISTANCE = 514.0*SSRG_UNIT
 const SSRG_UI_HEIGHT = 640.0
 # Paired 3.6-speed recordings: source note footprints are about 80% of
@@ -206,16 +203,22 @@ func ssrg_canvas_height() -> float:
 	var playable_width=12.0*62.71392+212.0*game.note_size+32.0
 	if not game.uses_skd_stage():playable_width=(FRAME_HALF_WIDTH*2.0+NOTE_WIDTH*game.note_size)/SSRG_UNIT+32.0
 	return maxf(SSRG_UI_HEIGHT,playable_width/aspect)
+# Flat Correct-mode view: time maps linearly to canvas height with no taper.
+func flat_view() -> bool: return game != null and game.uses_flat_correct_view()
+# Width/size scale at a depth (ssrg_scale in ssrg_warp.gdshaderinc).
 func ssrg_approach(z: float) -> float:
+	if flat_view(): return 1.0
 	return pow(maxf(1.0+z/TRACK_LENGTH,0.0),approach_power())
 # Mirrors ssrg_warp_z() in ssrg_warp.gdshaderinc.
 func ssrg_warped_z(z: float) -> float:
 	if not uses_projected_highway(): return z
-	return SSRG_STAGE_DISTANCE*(ssrg_approach(z)-1.0)
+	var progress=maxf(1.0+z/TRACK_LENGTH,0.0)
+	return SSRG_STAGE_DISTANCE*((progress if flat_view() else pow(progress,approach_power()))-1.0)
 func update_ssrg_warp() -> void:
 	var on = 1.0 if uses_projected_highway() else 0.0
 	RenderingServer.global_shader_parameter_set("ssrg_warp",Vector4(on,approach_power(),SSRG_STAGE_DISTANCE,TRACK_LENGTH))
 	RenderingServer.global_shader_parameter_set("ssrg_reveal_from",reveal_progress())
+	RenderingServer.global_shader_parameter_set("ssrg_flat",1.0 if flat_view() and uses_projected_highway() else 0.0)
 # Chart progress (0 far end .. 1 judgment) where notes become visible. SKD gameplay
 # reveals at 0.5 behind its album cover; the recorder has no cover, so notes stop
 # where the recovered rail art begins instead of drifting above it.
@@ -223,6 +226,22 @@ func update_ssrg_warp() -> void:
 const RECORDER_REVEAL_SCALE = 0.0827  # pow(.66, 6)
 # Lane grid lines sit between the lanes the current surface draws notes on.
 var guides_spacing_skd = false
+var flat_frame: Node3D
+# Straight edges and a judgment line for the flat Correct-mode view (the SKD rail art is hidden there).
+func update_flat_frame() -> void:
+	var show = flat_view() and uses_projected_highway()
+	if flat_frame == null:
+		if not show: return
+		flat_frame = Node3D.new(); flat_frame.name = "FlatCorrectFrame"; add_child(flat_frame)
+		var half = absf(ssrg_x(SynkChart.MAX_LANE)) + SSRG_NOTE_SIZE.x*.5
+		var edge_material = canvas_line_material(Color("f4f1ea"), .35)
+		for side in [-1, 1]:
+			var edge_mesh = PlaneMesh.new(); edge_mesh.size = Vector2(.06, TRACK_LENGTH + JUDGMENT_DEPTH*.5)
+			mesh_node(edge_mesh, flat_frame, edge_material).position = Vector3(side*half, .05, (-TRACK_LENGTH + JUDGMENT_DEPTH*.5)*.5)
+		var bar_mesh = PlaneMesh.new(); bar_mesh.size = Vector2(half*2.0, .5)
+		var bar_material = canvas_line_material(Color("ffdc41"), .55)
+		mesh_node(bar_mesh, flat_frame, bar_material).position = Vector3(0, .05, 0)
+	flat_frame.visible = show
 func layout_recorder_guides() -> void:
 	var skd = game.uses_skd_stage()
 	if skd == guides_spacing_skd: return
@@ -234,6 +253,7 @@ func layout_recorder_guides() -> void:
 	for marker in lane_markers.get_children():
 		if marker.has_meta("lane"): marker.position.x = lane_world_x(int(marker.get_meta("lane"))) if skd else lane_x(int(marker.get_meta("lane")))
 func reveal_progress() -> float:
+	if flat_view(): return 0.0  # the flat view shows the whole travel window
 	if game != null and game.uses_skd_recorder_surface(): return pow(RECORDER_REVEAL_SCALE,1.0/approach_power())
 	return .5
 # Forward and inverse of the SKD projection (ssrg_warp.gdshaderinc) for picking and
@@ -245,6 +265,7 @@ func warp_point(p: Vector3) -> Vector3:
 func unwarp_point(p: Vector3) -> Vector3:
 	if not uses_projected_highway(): return p
 	var q=maxf(1.0+p.z/SSRG_STAGE_DISTANCE,0.0)
+	if flat_view(): return Vector3(p.x,p.y,TRACK_LENGTH*(q-1.0))
 	return Vector3(p.x/maxf(q,.0001),p.y,TRACK_LENGTH*(pow(q,1.0/approach_power())-1.0))
 # Whether an unwarped depth is on the visible part of the highway.
 func depth_visible(z: float) -> bool:
@@ -1544,7 +1565,7 @@ func build_note_node(key: String, note: Dictionary, recording = false) -> void:
 		mat.set_shader_parameter("artwork",game.ssrg_presentation.special_art(int(note.ssrg_special),int(note.get("ssrg_item",0)),0.0))
 	var lines: Array = []
 	if recording: lines = make_alignment_lines(node,note,palette)
-	var signature = (hash(note) if recording or game.mode=="record" else 0)^hash([game.note_speed,game.ssrg_speed_setting() if game.ssrg_playable_run else 0,game.note_shape,game.note_size,game.trail_style,game.uses_ssrg_gameplay(),game.old_ssrg_ui()])
+	var signature = (hash(note) if recording or game.mode=="record" else 0)^hash([game.note_speed,game.ssrg_speed_setting() if game.ssrg_playable_run else 0,game.note_shape,game.note_size,game.trail_style,game.uses_ssrg_gameplay(),game.old_ssrg_ui(),game.uses_skd_recorder_surface(),game.uses_flat_correct_view()])
 	if uses_projected_highway() and not recording:
 		for child in node.get_children():
 			if child is GeometryInstance3D:
@@ -1602,7 +1623,7 @@ func sync_note(key: String, note: Dictionary, visible_keys: Dictionary, recordin
 	visible_keys[key] = true
 	if look_signature_frame != Engine.get_process_frames():
 		look_signature_frame = Engine.get_process_frames()
-		look_signature = hash([game.note_speed,game.ssrg_speed_setting() if game.ssrg_playable_run else 0,game.note_shape,game.note_size,game.trail_style,game.uses_ssrg_gameplay(),game.old_ssrg_ui()])
+		look_signature = hash([game.note_speed,game.ssrg_speed_setting() if game.ssrg_playable_run else 0,game.note_shape,game.note_size,game.trail_style,game.uses_ssrg_gameplay(),game.old_ssrg_ui(),game.uses_skd_recorder_surface(),game.uses_flat_correct_view()])
 	var signature = (hash(note) if recording or game.mode=="record" else 0)^look_signature
 	if notes.has(key) and notes[key].signature != signature:
 		notes[key].node.queue_free(); notes.erase(key)
@@ -1812,6 +1833,7 @@ func _process(delta: float) -> void:
 	recorder_guides.visible = (recording_now and game.arranging) or (in_play and bool(extras_setting("lane_hints", true)) and not (ssrg_theme and ssrg_theme.active) and not (concept_theme and concept_theme.active))
 	if guide_material: guide_material.set_shader_parameter("color",Color(Color("f4f1ea"),.10) if recording_now else Color(Color("777bd5"),.3))
 	if recorder_guides.visible: layout_recorder_guides()
+	update_flat_frame()
 	update_recorder_channels(delta,recording_now and not game.uses_skd_recorder_surface())
 	update_play_aids(delta)
 	update_multiplier_wave(delta)

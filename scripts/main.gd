@@ -143,6 +143,9 @@ func uses_ssrg_gameplay() -> bool:
 # scoring, judgment, combo, health, or gameplay input rules.
 func uses_skd_recorder_surface() -> bool:
 	return uses_recorder_colors()
+# Correct mode flattens that surface into a straight-lane timeline (see ssrg_flat).
+func uses_flat_correct_view() -> bool:
+	return uses_recorder_colors() and arranging
 func uses_skd_stage() -> bool:
 	return uses_ssrg_gameplay() or uses_skd_recorder_surface()
 func old_ssrg_ui() -> bool:
@@ -1706,6 +1709,7 @@ func toggle_arrange() -> void :
 	arrange_preview.stop();recorder_beam_touches.clear()
 	arranging = not arranging;arrange_touches.clear();arrange_selection.clear();capture.gestures.clear()
 	arrange_button.text = "RECORD" if arranging else "CORRECT"
+	refresh_correct_view()
 	refresh_arrange_controls()
 	if arranging:
 		countdown = 0;audio.stream_paused = true
@@ -1716,6 +1720,11 @@ func toggle_arrange() -> void :
 		var playback_time = clampf(song_time - effective_timing_ms() / 1000.0, 0, maxf(0, length() - 0.02))
 		if audio.playing: audio.seek(playback_time);audio.stream_paused = false
 		else: audio.play(playback_time)
+
+# Swaps between the SKD recording surface and the flat Correct-mode view.
+func refresh_correct_view() -> void:
+	if field == null or field.world == null: return
+	field.sync_projection_style(); field.world.apply_camera(); field.world.refresh_highway_look()
 
 func refresh_arrange_controls() -> void :
 	kind_buttons[0].text = "DELETE" if arranging else "ALL"

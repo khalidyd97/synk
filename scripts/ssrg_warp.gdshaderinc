@@ -4,12 +4,18 @@ global uniform vec4 ssrg_warp;
 // Chart progress where notes appear. SKD gameplay uses 0.5 (its cover tile hides the far end);
 // the recorder has no cover, so it starts notes where the rails begin.
 global uniform float ssrg_reveal_from;
-float ssrg_reveal_z(){ return ssrg_warp.z*(pow(ssrg_reveal_from,ssrg_warp.y)-1.0); }
+// 1 in the recorder's Correct mode: a flat timeline on the same canvas. Time maps
+// linearly to height, and x and sprite sizes are not tapered, so lanes run straight.
+global uniform float ssrg_flat;
 float ssrg_progress(float z){ return max(1.0+z/ssrg_warp.w,0.0); }
-float ssrg_scale(float z){ return pow(ssrg_progress(z),ssrg_warp.y); }
+// Height on the canvas for a chart progress p.
+float ssrg_depth_of(float p){ return ssrg_flat>0.5?p:pow(p,ssrg_warp.y); }
+float ssrg_reveal_z(){ return ssrg_warp.z*(ssrg_depth_of(ssrg_reveal_from)-1.0); }
+// Width and size scale (q=p^6 in SKD; none in the flat view).
+float ssrg_scale(float z){ return ssrg_flat>0.5?1.0:pow(ssrg_progress(z),ssrg_warp.y); }
 float ssrg_warp_z(float z){
     if(ssrg_warp.x<0.5) return z;
-    return ssrg_warp.z*(ssrg_scale(z)-1.0);
+    return ssrg_warp.z*(ssrg_depth_of(ssrg_progress(z))-1.0);
 }
 float ssrg_reveal(float z){
     if(ssrg_warp.x<0.5) return 1.0;

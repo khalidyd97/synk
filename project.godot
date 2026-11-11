@@ -63,6 +63,10 @@ synk_time={
 "type": "float",
 "value": 0.0
 }
+ssrg_flat={
+"type": "float",
+"value": 0.0
+}
 ssrg_reveal_from={
 "type": "float",
 "value": 0.5

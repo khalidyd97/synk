@@ -77,6 +77,8 @@ func refresh() -> void:
 	active = world.game.uses_skd_stage()
 	visible = active
 	if original_stage:
+		# The recorder's flat Correct-mode view draws its own straight frame instead of the rail art.
+		original_stage.visible = not world.game.uses_flat_correct_view()
 		original_stage.configure(world)
 		for child in get_children():
 			if child != original_stage and child != source_background: child.visible=false
