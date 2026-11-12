@@ -803,27 +803,28 @@ func build_ui() -> void:
 	record_help.add_theme_color_override("font_color", Color("e6e1d7"))
 	record_help.add_theme_color_override("font_shadow_color", Color(0, 0, 0, .85)); record_help.add_theme_constant_override("shadow_outline_size", 6)
 
-	record_sidebar = recorder_plate(Rect2(0.685, 0.135, 0.19, 0.775))
+	# Two columns of large buttons: every recording aid is a full-size touch target.
+	record_sidebar = recorder_plate(Rect2(0.5, 0.135, 0.375, 0.695))
 	aids_drawer = Control.new();rect(aids_drawer, record_tools, 0, 0, 1, 1);aids_drawer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	record_sidebar.reparent(aids_drawer)
-	label(aids_drawer, "Recording aids", 0.7, 0.145, 0.87, 0.18, 16).add_theme_color_override("font_color", Color("bcb7ad"))
-	var row = func(i: int) -> Array: return [0.695, 0.19 + i * 0.062, 0.865, 0.245 + i * 0.062]
-	var r = row.call(0);note_lines_button = button(aids_drawer, "", r[0], r[1], r[2], r[3], toggle_note_lines, "tool");update_note_lines_button()
+	label(aids_drawer, "Recording aids", 0.515, 0.145, 0.87, 0.18, 16).add_theme_color_override("font_color", Color("bcb7ad"))
+	var row = func(i: int) -> Array: return [0.51 + (i % 2) * 0.18, 0.19 + (i / 2) * 0.125, 0.685 + (i % 2) * 0.18, 0.298 + (i / 2) * 0.125]
+	var r = row.call(0);note_lines_button = button(aids_drawer, "", r[0], r[1], r[2], r[3], toggle_note_lines);update_note_lines_button()
 
-	r = row.call(1);record_mark_buttons["verse2"] = button(aids_drawer, "", r[0], r[1], r[2], r[3], func(): mark_section("verse2", song_time), "tool")
-	r = row.call(2);record_mark_buttons["bridge"] = button(aids_drawer, "", r[0], r[1], r[2], r[3], func(): mark_section("bridge", song_time), "tool")
-	r = row.call(3);dots_button = button(aids_drawer, "", r[0], r[1], r[2], r[3], toggle_dots_mode, "tool")
-	ghost_button = button(aids_drawer, "GHOST ON" if ghost_recording else "GHOST OFF", r[0], r[1], r[2], r[3], toggle_ghost_recording, "tool")
+	r = row.call(1);record_mark_buttons["verse2"] = button(aids_drawer, "", r[0], r[1], r[2], r[3], func(): mark_section("verse2", song_time))
+	r = row.call(2);record_mark_buttons["bridge"] = button(aids_drawer, "", r[0], r[1], r[2], r[3], func(): mark_section("bridge", song_time))
+	r = row.call(3);dots_button = button(aids_drawer, "", r[0], r[1], r[2], r[3], toggle_dots_mode)
+	ghost_button = button(aids_drawer, "GHOST ON" if ghost_recording else "GHOST OFF", r[0], r[1], r[2], r[3], toggle_ghost_recording)
 	ghost_button.tooltip_text = "Show faded existing chart notes approaching the judgment line while recording a new layer."
-	r = row.call(4);button(aids_drawer, "TAKE SETUP", r[0], r[1], r[2], r[3], recorder.show_setup, "tool")
-	r = row.call(5);recorder_note_speed_button = button(aids_drawer, "NOTES  %.1f×" % recorder_note_speed, r[0], r[1], r[2], r[3], cycle_recorder_note_speed, "tool")
+	r = row.call(4);button(aids_drawer, "TAKE SETUP", r[0], r[1], r[2], r[3], recorder.show_setup)
+	r = row.call(5);recorder_note_speed_button = button(aids_drawer, "NOTES  %.1f×" % recorder_note_speed, r[0], r[1], r[2], r[3], cycle_recorder_note_speed)
 	recorder_note_speed_button.tooltip_text = "Note travel speed only. Music playback speed stays unchanged."
-	r = row.call(6);record_speed_button = button(aids_drawer, str(record_speed) + "× SPEED", r[0], r[1], r[2], r[3], cycle_record_speed, "tool")
+	r = row.call(6);record_speed_button = button(aids_drawer, str(record_speed) + "× SPEED", r[0], r[1], r[2], r[3], cycle_record_speed)
 	record_speed_button.tooltip_text = "Recording playback speed: 1×, 0.75×, 0.5×, 0.25×, 1.25×, 1.5×"
-	r = row.call(7);mr.register_button(button(aids_drawer, "MR OFF", r[0], r[1], r[2], r[3], mr.toggle, "tool"))
-	r = row.call(8);record_aids_button = button(aids_drawer, "", r[0], r[1], r[2], r[3], toggle_record_aids_display, "tool")
+	r = row.call(7);mr.register_button(button(aids_drawer, "MR OFF", r[0], r[1], r[2], r[3], mr.toggle))
+	r = row.call(8);record_aids_button = button(aids_drawer, "", r[0], r[1], r[2], r[3], toggle_record_aids_display)
 	update_record_aids_button()
-	r = row.call(9);recorder_skd_button = button(aids_drawer, "", r[0], r[1], r[2], r[3], toggle_recorder_skd_view, "tool")
+	r = row.call(9);recorder_skd_button = button(aids_drawer, "", r[0], r[1], r[2], r[3], toggle_recorder_skd_view)
 	recorder_skd_button.tooltip_text = "Show the take on the SKD gameplay highway instead of the classic recorder."
 	update_recorder_skd_button()
 	aids_drawer.visible = false

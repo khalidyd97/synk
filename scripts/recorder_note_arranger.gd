@@ -61,7 +61,7 @@ func tool_button(text: String, row: int, column: int) -> Button:
 	var b = preload("res://scripts/recorder_action.gd").new();b.text = text
 	b.caption_size = 17;b.compact = true;b.variant = "tool";add_child(b)
 	b.anchor_left = COLUMN_LEFT + column * COLUMN_STEP;b.anchor_right = b.anchor_left + COLUMN_STEP - 0.006
-	b.anchor_top = 0.202 + row * 0.064;b.anchor_bottom = b.anchor_top + 0.056
+	b.anchor_top = 0.202 + row * 0.083;b.anchor_bottom = b.anchor_top + 0.075
 	if row > 0: extra_buttons.append(b)
 	return b
 func focus_endpoint(kind: String) -> void :
@@ -74,7 +74,8 @@ func focus_endpoint(kind: String) -> void :
 func selected_note() -> Dictionary: return game.arrange_selection.get("note", {})
 func _process(_delta: float) -> void :
 	var note = selected_note()
-	visible = game.mode == "record" and game.arranging and not note.is_empty() and note.kind in ["hold", "slide"]
+	# The aids menu opens over this panel, so step aside while it is up.
+	visible = game.mode == "record" and game.arranging and not note.is_empty() and note.kind in ["hold", "slide"] and not (game.aids_drawer and game.aids_drawer.visible)
 	if not visible:
 		for id in drags: game.arrange_touches.erase(id)
 		for id in draw_touches: game.arrange_touches.erase(id)
@@ -85,7 +86,7 @@ func _process(_delta: float) -> void :
 	if selected_point_index >= note.path.size() - 1: selected_point_index = -1
 	var writable = game.recorder.writable(note) and drags.is_empty() and draw_touches.is_empty()
 	var slide = note.kind == "slide"
-	plate.anchor_bottom = 0.396 if expanded else 0.268
+	plate.anchor_bottom = 0.453 if expanded else 0.287
 	more_button.text = "LESS" if expanded else "MORE";more_button.set_selected(expanded)
 	for b in extra_buttons: b.visible = expanded
 	delete_point_button.visible = slide
