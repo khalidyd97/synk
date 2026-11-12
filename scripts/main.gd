@@ -817,9 +817,18 @@ func build_ui() -> void:
 	ghost_button = button(aids_drawer, "GHOST ON" if ghost_recording else "GHOST OFF", r[0], r[1], r[2], r[3], toggle_ghost_recording)
 	ghost_button.tooltip_text = "Show faded existing chart notes approaching the judgment line while recording a new layer."
 	r = row.call(4);button(aids_drawer, "TAKE SETUP", r[0], r[1], r[2], r[3], recorder.show_setup)
-	r = row.call(5);recorder_note_speed_button = button(aids_drawer, "NOTES  %.1f×" % recorder_note_speed, r[0], r[1], r[2], r[3], cycle_recorder_note_speed)
+	# Both speeds are steppers: minus and plus either side of the value (tapping the value still cycles).
+	var stepper = func(cell: Array, down: Callable, up: Callable) -> Array:
+		var minus = button(aids_drawer, "−", cell[0], cell[1], cell[0] + 0.045, cell[3], down)
+		var plus = button(aids_drawer, "+", cell[2] - 0.045, cell[1], cell[2], cell[3], up)
+		minus.caption_size = 26; plus.caption_size = 26
+		return [minus, plus]
+	r = row.call(5);recorder_note_speed_button = button(aids_drawer, "NOTES  %.1f×" % recorder_note_speed, r[0] + 0.05, r[1], r[2] - 0.05, r[3], cycle_recorder_note_speed)
+	note_speed_steps = stepper.call(r, func(): step_recorder_note_speed(-1), func(): step_recorder_note_speed(1))
 	recorder_note_speed_button.tooltip_text = "Note travel speed only. Music playback speed stays unchanged."
-	r = row.call(6);record_speed_button = button(aids_drawer, str(record_speed) + "× SPEED", r[0], r[1], r[2], r[3], cycle_record_speed)
+	r = row.call(6);record_speed_button = button(aids_drawer, str(record_speed) + "× SPEED", r[0] + 0.05, r[1], r[2] - 0.05, r[3], cycle_record_speed)
+	record_speed_steps = stepper.call(r, func(): step_record_speed(-1), func(): step_record_speed(1))
+	refresh_speed_steppers()
 	record_speed_button.tooltip_text = "Recording playback speed: 1×, 0.75×, 0.5×, 0.25×, 1.25×, 1.5×"
 	r = row.call(7);mr.register_button(button(aids_drawer, "MR OFF", r[0], r[1], r[2], r[3], mr.toggle))
 	r = row.call(8);record_aids_button = button(aids_drawer, "", r[0], r[1], r[2], r[3], toggle_record_aids_display)
@@ -1333,9 +1342,27 @@ func note_travel_seconds() -> float:
 func cycle_recorder_note_speed() -> void:
 	recorder_note_speed=snappedf(recorder_note_speed+.1,.1)
 	if recorder_note_speed>5.0: recorder_note_speed=.1
+	apply_recorder_note_speed()
+# The minus and plus buttons beside each speed: one step at a time, stopping at the ends.
+var note_speed_steps: Array = []
+var record_speed_steps: Array = []
+func step_recorder_note_speed(direction: int) -> void:
+	recorder_note_speed=clampf(snappedf(recorder_note_speed+.1*direction,.1),.1,5.0)
+	apply_recorder_note_speed()
+func apply_recorder_note_speed() -> void:
 	recorder_note_speed_button.text="NOTES  %.1f×" % recorder_note_speed
 	prefs.set_value("editor","note_speed",recorder_note_speed); prefs.save("user://preferences.cfg")
 	field.world.clear_notes()
+	refresh_speed_steppers()
+func step_record_speed(direction: int) -> void:
+	var ordered=RECORD_SPEEDS.duplicate(); ordered.sort()
+	record_speed=float(ordered[clampi(ordered.find(record_speed)+direction,0,ordered.size()-1)])
+	apply_record_speed()
+func refresh_speed_steppers() -> void:
+	if note_speed_steps.size()==2:
+		note_speed_steps[0].disabled=recorder_note_speed<=.1+.001; note_speed_steps[1].disabled=recorder_note_speed>=5.0-.001
+	if record_speed_steps.size()==2:
+		record_speed_steps[0].disabled=record_speed<=RECORD_SPEEDS.min()+.001; record_speed_steps[1].disabled=record_speed>=RECORD_SPEEDS.max()-.001
 func length() -> float: return audio.stream.get_length()
 # Score: fixed points per judgement, not divided by the chart's note count, times a combo
 # multiplier that rises 0.1x for every full 100 combo (x1.1 at 100, x1.2 at 200, ...),
@@ -1715,11 +1742,14 @@ func stop_take() -> void :
 
 func cycle_record_speed() -> void:
 	record_speed=float(RECORD_SPEEDS[(RECORD_SPEEDS.find(record_speed)+1)%RECORD_SPEEDS.size()])
+	apply_record_speed()
+func apply_record_speed() -> void:
 	if mode=="record" or (mode=="paused" and paused_mode=="record"): audio.pitch_scale=record_speed
 	record_speed_button.caption_text=str(record_speed)+"× SPEED"
 	record_speed_button.text=record_speed_button.caption_text
 	record_speed_button.caption.text=record_speed_button.caption_text
 	prefs.set_value("editor","record_speed",record_speed); prefs.save("user://preferences.cfg")
+	refresh_speed_steppers()
 
 func toggle_pause(animate_transition:bool=true) -> void:
 	if finishing: return
