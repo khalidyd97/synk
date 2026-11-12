@@ -1760,7 +1760,7 @@ func toggle_arrange() -> void :
 		if audio.playing: audio.seek(playback_time);audio.stream_paused = false
 		else: audio.play(playback_time)
 
-# Swaps between the SKD recording surface and the flat Correct-mode view.
+# Swaps between the SKD recording surface and the even Correct-mode view.
 func refresh_correct_view() -> void:
 	if field == null or field.world == null: return
 	field.sync_projection_style(); field.world.apply_camera(); field.world.refresh_highway_look()
@@ -1789,7 +1789,7 @@ func refresh_arrange_controls() -> void :
 			var n: Dictionary = arrange_selection.note
 			if n.kind in ["hold", "slide"]:
 				record_help.text = "%s · %.2f–%.2f s | SHAPE: drag trail to bend or stretch · CONNECTOR: tap trail · DELETE POINT: select a handle" % [str(n.kind).to_upper(), float(n.time), float(n.time) + float(n.duration)]
-			else: record_help.text = "SELECTED  %s  •  LANE %d  •  %.2f s\nDrag to move. Use the type buttons or DELETE above; scroll outside the highway." % [str(n.kind).to_upper(), int(n.lane) + 1, float(n.time)]
+			else: record_help.text = "%s · LANE %d · %.2f s\nDrag to move. The buttons on the left change its type or delete it." % [str(n.kind).to_upper(), int(n.lane) + 1, float(n.time)]
 	else:
 		record_help.text = "Detecting %s · tap or swipe on the 13 lanes; each gesture becomes the matching note." % ", ".join(record_types.map(func(kind):return str(kind)))
 
@@ -2010,13 +2010,17 @@ func arrange_pointer_event(id: int, p: Vector2, began: bool, ended: bool, cancel
 				if n.kind in recorder.locks(): continue
 				var distance = arrange_note_distance(n, p)
 				if distance < closest: closest = distance;selected = {"note": n, "document": source_index == 1, "index": note_index}
-		arrange_selection = selected
-		refresh_arrange_controls()
-		# Dragging empty highway scrolls the take, the same as dragging beside it.
-		if selected.is_empty(): arrange_touches[id] = {"kind": "scroll", "start_y": p.y, "start_time": song_time}
+		# Dragging empty highway scrolls the take and keeps the selection, so a long slide
+		# can be followed while it is edited; a plain tap on empty highway deselects.
+		if selected.is_empty(): arrange_touches[id] = {"kind": "scroll", "start_y": p.y, "start_time": song_time, "start_p": p, "tap_clears": true}
 		else:
+			arrange_selection = selected
+			refresh_arrange_controls()
 			arrange_touches[id] = {"kind": "note", "note": selected.note, "document": selected.document, "changed": false, "start_time": float(selected.note.time), "start_lane": int(selected.note.lane), "touch_time": stage_time_at(p), "touch_lane": arrange_lane_at(p), "start_p": p, "gesture": ""}
 	if canceled or ended:
+		var finished: Dictionary = arrange_touches.get(id, {})
+		if ended and not canceled and finished.get("tap_clears", false) and p.distance_to(finished.start_p) < 0.012 and not arrange_selection.is_empty():
+			arrange_selection.clear();refresh_arrange_controls()
 		arrange_touches.erase(id);commit_take_history();return
 	if not arrange_touches.has(id): return
 	var touch: Dictionary = arrange_touches[id]
@@ -2054,7 +2058,9 @@ func arrange_pointer_event(id: int, p: Vector2, began: bool, ended: bool, cancel
 		if not touch.changed and (absf(float(n.time) - target_time) > 0.001 or int(n.lane) != new_lane):
 			if touch.document: document.checkpoint()
 			touch.changed = true
-		n.time = clampf(target_time, 0, minf(song_time, maxf(0, length() - float(n.duration))))
+		# A take note dragged out of the punch range would be dropped when the take is stopped.
+		var earliest = recorder.region.x if recorder.active and not touch.document else 0.0
+		n.time = clampf(target_time, earliest, maxf(earliest, minf(song_time, maxf(0, length() - float(n.duration)))))
 		var change = new_lane - int(n.lane)
 		n.lane = new_lane;n.end_lane = clampi(int(n.end_lane) + change, 0, SynkChart.MAX_LANE)
 		for point in n.path: point.lane = clampf(float(point.lane) + change, 0, SynkChart.MAX_LANE)

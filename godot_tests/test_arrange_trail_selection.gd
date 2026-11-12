@@ -38,6 +38,14 @@ func run() -> void:
     check(slide.lane==initial_lane+1,"Dragging from slide body shifts by the grabbed lane delta")
     check(is_equal_approx(slide.time,original.time),"Horizontal body drag preserves timing")
     g.arrange_pointer_event(2,moved,false,true,false)
+    var empty=point(g,slide,at,6.0*(g.field.world.lane_world_x(1.0)-g.field.world.lane_world_x(0.0)))
+    var t0=g.song_time
+    g.arrange_pointer_event(4,empty,true,false,false); g.arrange_pointer_event(4,empty+Vector2(0,-.1),false,false,false)
+    check(not g.arrange_selection.is_empty() and not is_equal_approx(g.song_time,t0),"Dragging empty highway scrolls and keeps the selection")
+    g.arrange_pointer_event(4,empty+Vector2(0,-.1),false,true,false); g.song_time=t0
+    check(not g.arrange_selection.is_empty(),"The selection survives the end of a scroll")
+    g.arrange_pointer_event(5,empty,true,false,false); g.arrange_pointer_event(5,empty,false,true,false)
+    check(g.arrange_selection.is_empty(),"Tapping empty highway deselects")
     g.recorder.config.locked=["slide"]; g.arrange_selection.clear()
     g.arrange_pointer_event(3,point(g,slide,at),true,false,false)
     check(g.arrange_selection.is_empty(),"Locked trails stay protected")

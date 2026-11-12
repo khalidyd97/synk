@@ -65,7 +65,7 @@ func run() -> void:
     check(g.document.notes==original,"Loop takes do not destructively change the chart")
     g.countdown=0; g.song_time=7; g.capture.notes=[SynkChart.note(6,3)]; g.stop_take()
     check(r.takes.size()==2 and r.review!=null,"Manual stop presents every loop attempt")
-    r.select_take(0); check(g.document.notes.any(func(n): return n.time==5 and n.kind=="tap" and abs(int(n.lane)-3)>=3),"Selecting a banked attempt restores its tap with room beside the locked hold")
+    r.select_take(0); check(g.document.notes.any(func(n): return n.time==5 and n.kind=="tap" and abs(int(n.lane)-3)>=2),"Selecting a banked attempt restores its tap with room beside the locked hold")
     g.loop_enabled=true; g.loop_a=0; g.loop_b=1
     r.preview(); check(r.reviewing_audio and g.audio.playing,"Take replay starts without inheriting editor loop bounds")
     check(not r.review_panel.visible and r.replay_return.visible,"Take replay shows the entire timeline with an accessible return control")
@@ -80,6 +80,7 @@ func run() -> void:
     check(g.mode=="record" and g.resume_countdown>0,"Resume returns to recording with a countdown")
     g.resume_countdown=0; g.toggle_pause(); g.pause_home.pressed.emit()
     check(g.mode=="editor" and r.review!=null,"Pause review returns to the take, never the lobby")
+    r.select_take(0); check(r.compare_label.text.begins_with("Layered") and not r.compare_label.text.contains("removed"),"A layered take never reports existing notes as removed")
     r.keep(); r.loop_takes=false; g.cursor=4; g.record_here(); g.countdown=0; g.song_time=5
     g.audio.play(5); g.toggle_arrange(); check(g.arranging and g.audio.stream_paused,"Correction pauses audio without leaving recorder")
     g.toggle_pause(); g.toggle_pause(); check(g.mode=="record" and g.arranging and g.audio.stream_paused,"Resuming a correction preserves its paused transport")

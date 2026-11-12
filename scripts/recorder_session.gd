@@ -411,9 +411,12 @@ func review_column(parent: Control, bounds: Rect2, title: String) -> VBoxContain
 func update_review() -> void :
 	if not review: return
 	var selected: Array = review_notes
-	var prior: Array = takes[selected_take - 1].notes if selected_take > 0 else baseline.filter( func(n): return float(n.time) >= region.x and float(n.time) < region.y)
+	var replacing = bool(config.get("replace", replace))
+	# Against the chart, only notes this take replaces can count as removed or moved; a layered take adds to them.
+	var prior: Array = takes[selected_take - 1].notes if selected_take > 0 else (baseline.filter( func(n): return writable(n) and float(n.time) >= region.x and float(n.time) < region.y) if replacing else [])
 	var diff = comparison(prior, selected)
 	compare_label.text = "Compared with %s\n+%d added · −%d removed\n%d moved · %.1f ms average shift" % ["previous take" if selected_take > 0 else "existing section", diff.added, diff.removed, diff.shifted, diff.ms]
+	if selected_take == 0 and not replacing: compare_label.text = "Layered on the existing section\n+%d added · existing notes kept" % diff.added
 	if selected.is_empty(): compare_label.text = "EMPTY TAKE · Existing chart kept unchanged."
 	var lines = PackedStringArray()
 	for issue in pending_warnings.slice(0, 8): lines.append("%.2f s · %s" % [float(issue.time), str(issue.message)])
