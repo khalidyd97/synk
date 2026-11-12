@@ -12,7 +12,7 @@ func _initialize() -> void:
 
 func run() -> void:
 	var game = load("res://scenes/main.tscn").instantiate()
-	root.add_child(game)
+	root.add_child(game); game.recorder_skd_view=true
 	await process_frame
 	game.set_process(false)
 	game.mode = "record"

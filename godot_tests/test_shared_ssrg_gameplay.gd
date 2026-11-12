@@ -5,7 +5,7 @@ func check(ok: bool,label: String) -> void:
 	if not ok: failures+=1; push_error(label)
 func _initialize() -> void: run.call_deferred()
 func run() -> void:
-	var game=load("res://scenes/main.tscn").instantiate(); root.add_child(game)
+	var game=load("res://scenes/main.tscn").instantiate(); root.add_child(game); game.recorder_skd_view=true
 	await process_frame; await process_frame
 	game.stage_intro_enabled=false; game.note_speed=1; game.note_size=1.0; game.recorder_note_speed=1
 	var slide=SynkChart.note(4,2,"slide"); slide.duration=1; slide.end_lane=7

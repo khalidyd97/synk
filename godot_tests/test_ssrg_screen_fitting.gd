@@ -7,7 +7,7 @@ func freeze(node:Node):
 	for child in node.get_children():freeze(child)
 func _initialize():run.call_deferred()
 func run():
-	var game=load("res://scenes/main.tscn").instantiate();root.add_child(game)
+	var game=load("res://scenes/main.tscn").instantiate();root.add_child(game); game.recorder_skd_view=true
 	await process_frame;await process_frame
 	game.set_mode("play");game.ssrg_playable_run=true;game.countdown=0;freeze(game)
 	for dimensions in [Vector2i(1280,720),Vector2i(2400,1080),Vector2i(2340,1080),Vector2i(2048,1536),Vector2i(1024,768)]:

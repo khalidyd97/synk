@@ -5,7 +5,7 @@ func check(ok:bool,message:String)->void:
 func _initialize()->void:run.call_deferred()
 func run()->void:
 	root.size=Vector2i(1280,720)
-	var game=load("res://scenes/main.tscn").instantiate();root.add_child(game)
+	var game=load("res://scenes/main.tscn").instantiate();root.add_child(game); game.recorder_skd_view=true
 	await process_frame;await process_frame
 	game.stage_intro_enabled=false;game.document.load_notes([]);game.record_here();game.countdown=0;game.song_time=5.0
 	var world=game.field.world;world.apply_camera();world.refresh_highway_look();world._process(0.0)
