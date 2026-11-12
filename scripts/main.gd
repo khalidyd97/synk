@@ -124,7 +124,7 @@ var recorder_seek_target=-1.0
 # Highway look: "gold" or "neon", optional custom rail/band colors ("" follows the style),
 # and how dark the see-through highway surface is (1 = the style's default).
 const HIGHWAY_STYLES=["gold","neon","ssrg","aurora","solar"]
-var highway_style = "gold"
+var highway_style = "ssrg"  # the SKD stage is the stock look for every song
 var ssrg_presentation:Node
 var ssrg_screens:Control
 var ssrg_playable_run = false
@@ -438,8 +438,11 @@ func _ready() -> void:
 	note_shape = str(prefs.get_value("gameplay","note_shape","circle"))
 	if note_shape not in ["rectangle","circle","puck"]: note_shape="rectangle"
 	highway_angle = clampf(float(prefs.get_value("gameplay","highway_angle",35.0)),18.0,90.0)
-	highway_style = str(prefs.get_value("highway","style","gold"))
-	if highway_style not in HIGHWAY_STYLES: highway_style="gold"
+	# One-time move to the SKD look; a style picked afterwards is kept.
+	if not bool(prefs.get_value("highway","skd_default",false)):
+		prefs.set_value("highway","style","ssrg"); prefs.set_value("highway","skd_default",true); prefs.save("user://preferences.cfg")
+	highway_style = str(prefs.get_value("highway","style","ssrg"))
+	if highway_style not in HIGHWAY_STYLES: highway_style="ssrg"
 	rail_color = str(prefs.get_value("highway","rail_color",""))
 	band_color = str(prefs.get_value("highway","band_color",""))
 	highway_opacity = clampf(float(prefs.get_value("highway","opacity",1.0)),.3,1.6)
@@ -1159,7 +1162,7 @@ func reset_gameplay_colors() -> void:
 
 func reset_highway_look() -> void:
 	for key in ["style","rail_color","band_color","opacity","colors"]: prefs.set_value("highway",key,null)
-	highway_style = "gold"; rail_color = ""; band_color = ""; highway_opacity = 1.0; highway_colors = "adaptive"
+	highway_style = "ssrg"; rail_color = ""; band_color = ""; highway_opacity = 1.0; highway_colors = "adaptive"
 	prefs.save("user://preferences.cfg")
 	apply_stage_cover()
 	field.world.refresh_highway_look()

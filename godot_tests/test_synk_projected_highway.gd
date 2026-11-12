@@ -10,7 +10,7 @@ func run():
 	root.size=Vector2i(1440,640)
 	var game=load("res://scenes/main.tscn").instantiate();root.add_child(game)
 	await process_frame;await process_frame
-	game.stage_intro_enabled=false;game.note_speed=1;game.note_size=1.0;game.ssrg_playable_run=false
+	game.highway_style="gold";game.stage_intro_enabled=false;game.note_speed=1;game.note_size=1.0;game.ssrg_playable_run=false
 	game.set_mode("play");game.countdown=0;freeze(game)
 	for child in game.get_children():
 		if child is CanvasLayer:child.hide()

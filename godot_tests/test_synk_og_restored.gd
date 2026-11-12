@@ -10,7 +10,7 @@ func run():
 	root.size=Vector2i(2025,900)
 	var game=load("res://scenes/main.tscn").instantiate();root.add_child(game)
 	await process_frame;await process_frame
-	game.stage_intro_enabled=false;game.ssrg_playable_run=false;game.note_speed=1;game.note_size=1
+	game.highway_style="gold";game.stage_intro_enabled=false;game.ssrg_playable_run=false;game.note_speed=1;game.note_size=1
 	game.start_game([SynkChart.note(3,4.5)],true);game.countdown=0;freeze(game)
 	var w=game.field.world;w.apply_camera();w.update_ssrg_warp();game.field.sync_projection_style()
 	check(w.uses_projected_highway() and not game.uses_ssrg_gameplay(),"SYNK shares SSRG projection while preserving its own judging")
