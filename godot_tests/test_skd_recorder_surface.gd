@@ -35,12 +35,13 @@ func run()->void:
 			guide_ok=guide_ok and is_equal_approx(guide.position.x,(world.note_x(boundary-1)+world.note_x(boundary))*.5)
 	check(guide_ok,"Correction lane grid follows SKD lane spacing")
 	# Notes stop where the rails begin: the recorder has no cover tile hiding the far end.
-	# Correct mode flattens the surface into a straight-lane timeline.
-	check(game.uses_flat_correct_view() and world.flat_view(),"Correct mode uses the flat view")
-	check(is_equal_approx(world.ssrg_approach(-30.0),1.0),"Flat view keeps note size and lane width constant up the track")
-	check(is_equal_approx(world.ssrg_warped_z(-30.0),-world.SSRG_STAGE_DISTANCE*.5),"Flat view spaces time evenly")
-	check(world.reveal_progress()==0.0,"The whole travel window is visible in the flat view")
-	check(not world.ssrg_theme.original_stage.visible and world.flat_frame!=null and world.flat_frame.visible,"Flat view swaps the SKD rail art for a straight frame")
+	# Correct mode keeps the stage but spaces time evenly with a mild taper.
+	check(game.uses_even_correct_view() and world.even_view(),"Correct mode uses the even view")
+	check(is_equal_approx(world.ssrg_approach(-world.TRACK_LENGTH),world.EVEN_FAR_SCALE) and is_equal_approx(world.ssrg_approach(0.0),1.0),"Even view tapers mildly, never to a point")
+	var mid=(world.ssrg_warped_z(-world.TRACK_LENGTH)+world.ssrg_warped_z(0.0))*.5
+	check(is_equal_approx(world.ssrg_warped_z(-world.TRACK_LENGTH*.5),mid),"Even view spaces time evenly")
+	check(world.reveal_progress()==0.0,"The whole travel window is visible in the even view")
+	check(world.ssrg_theme.original_stage.visible,"Even view keeps the SKD rail art")
 	var probe=Vector3(world.note_x(9.0),world.trail_height(),-12.0)
 	check(world.unwarp_point(world.warp_point(probe)).distance_to(probe)<.001,"SKD projection round-trips for picking")
 	var screen=world.camera.unproject_position(world.warp_point(probe))/Vector2(game.field.viewport.size)

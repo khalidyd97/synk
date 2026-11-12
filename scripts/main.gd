@@ -143,8 +143,8 @@ func uses_ssrg_gameplay() -> bool:
 # scoring, judgment, combo, health, or gameplay input rules.
 func uses_skd_recorder_surface() -> bool:
 	return uses_recorder_colors()
-# Correct mode flattens that surface into a straight-lane timeline (see ssrg_flat).
-func uses_flat_correct_view() -> bool:
+# Correct mode spaces that surface evenly with a mild taper (see ssrg_even).
+func uses_even_correct_view() -> bool:
 	return uses_recorder_colors() and arranging
 func uses_skd_stage() -> bool:
 	return uses_ssrg_gameplay() or uses_skd_recorder_surface()

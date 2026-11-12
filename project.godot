@@ -63,7 +63,7 @@ synk_time={
 "type": "float",
 "value": 0.0
 }
-ssrg_flat={
+ssrg_even={
 "type": "float",
 "value": 0.0
 }
