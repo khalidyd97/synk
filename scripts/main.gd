@@ -2726,6 +2726,9 @@ func update_game() -> void:
 			# Source auto-miss is inclusive at rear-window * 0.1: 30 ms for
 			# ordinary heads. Holds/slides keep their recovered node windows.
 			var auto_miss_delay=SsrgRules.HEAD_WINDOW*.1 if ssrg_playable_run and n.kind in ["tap","flick"] else hit_good_window(str(n.kind))
+			# A touch is stamped earlier by the touch sync, so a press made inside the late
+			# window can still be on its way: wait for it on the same calibrated clock.
+			if ssrg_playable_run: auto_miss_delay+=maxf(ssrg_touch_sync_ms,0.0)/1000.0
 			if song_time>=float(n.time)+auto_miss_delay:
 				judge(entry,-1)
 				count_unstarted_tail(entry)

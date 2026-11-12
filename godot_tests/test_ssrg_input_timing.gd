@@ -41,6 +41,13 @@ func run():
 	entry=fixture();game.ssrg_touch_sync_ms=50;game.song_time=1.05
 	game.pointer_event(1,point,true,false,false);game.update_game()
 	assert(entry.done and game.judgement=="PERFECT" and is_zero_approx(entry.timing_error),"Positive SSRG touch sync compensates a late gameplay-clock sample without widening windows")
+	# A frame runs between the 30 ms late boundary and the delayed touch arriving.
+	entry=fixture();game.song_time=1.04;game.update_game()
+	assert(not entry.done,"An on-time press still in transit is not auto-missed before it arrives")
+	game.song_time=1.05;game.pointer_event(1,point,true,false,false);game.update_game()
+	assert(entry.done and game.judgement=="PERFECT" and game.judgment_counts.MISS==0,"The delayed on-time press is judged, not missed")
+	entry=fixture();game.song_time=1.081;game.update_game()
+	assert(entry.done and game.judgment_counts.MISS==1,"The late boundary still closes, on the calibrated clock")
 	game.ssrg_touch_sync_ms=0
 	game.visual_song_time=8.0;game.visual_clock_target=8.0;game.visual_clock_ready=true
 	game.smooth_visual_time(7.99,.016)
