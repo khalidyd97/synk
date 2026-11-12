@@ -876,8 +876,157 @@ func recycle_hit(burst: Dictionary) -> void:
 # While the loading card covers the stage, draw one of every note look, trail, ring and hit
 # effect far down the highway for a few frames so every shader is ready before play starts.
 var prewarmed: Dictionary = {}
+# --- First-draw warm-up ---------------------------------------------------------------
+# The graphics driver prepares a shader the first time something using it is drawn. Drawing
+# the whole stage for the first time in one frame froze the screen when Play was pressed
+# (seconds on a cold start), and pieces that only appear later (lane guides, background
+# particles, touch beams) stalled the song when they first showed. So while the loading
+# card covers the stage, the camera draws nothing but one small stand-in per shader, a
+# frame apiece; the stage itself appears once everything it will draw is ready.
+const WARM_LAYER = 1 << 19
+var warming = false
+var warm_queue: Array = []
+var warm_total = 0
+var warm_seen: Dictionary = {}   # shaders already drawn since launch
+var warm_stand_in: Node3D
+var warm_wait = 0
+var warm_cull_mask = 0
+
+func begin_warmup() -> void:
+	if warming: return
+	warming = true; warm_queue.clear(); warm_total = 0
+	# Nodes added this frame, some of them deferred, exist by the time the scan runs.
+	warm_wait = 2
+	warm_cull_mask = camera.cull_mask
+	camera.cull_mask = WARM_LAYER
+
+func end_warmup() -> void:
+	if not warming: return
+	warming = false; warm_queue.clear()
+	if is_instance_valid(warm_stand_in): warm_stand_in.queue_free()
+	warm_stand_in = null
+	camera.cull_mask = warm_cull_mask
+
+func warmup_progress() -> float:
+	if not warming: return 1.0
+	return float(warm_total - warm_queue.size()) / float(warm_total + 1)
+
+func step_warmup() -> void:
+	if not warming: return
+	if is_instance_valid(warm_stand_in): warm_stand_in.queue_free()
+	warm_stand_in = null
+	# Only while the loading card hides the stage; leaving play or skipping the card ends it.
+	var covered = game.mode in ["play", "paused"] and game.stage_intro != null and game.stage_intro.visible
+	if not covered: end_warmup(); return
+	if warm_wait > 0:
+		warm_wait -= 1
+		if warm_wait == 0: warm_scan()
+		return
+	if warm_queue.is_empty():
+		# Notes are still being built; their shaders are picked up once they all exist.
+		if prebuilding: return
+		warm_scan()
+		if warm_queue.is_empty(): end_warmup(); return
+	warm_stand_in = make_warm_stand_in(warm_queue.pop_front())
+
+func warm_scan() -> void:
+	var found: Array = []
+	# Everything on screen now.
+	var stack: Array = get_children()
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		if node == warm_stand_in or (node is Node3D and not node.visible): continue
+		if node is GeometryInstance3D: found.append(node)
+		stack.append_array(node.get_children())
+	# The chart's notes, built hidden ahead of time.
+	for entry in notes.values():
+		if is_instance_valid(entry.node): found.append_array(entry.node.find_children("*", "GeometryInstance3D", true, false))
+	# Pieces that only show later in the song.
+	for piece in warm_late_pieces():
+		if piece is Material: warm_add(piece, false, 0, false, false)
+		elif is_instance_valid(piece): found.append(piece)
+	for node in found: warm_collect(node)
+
+# Hidden when a song starts, shown during it. Without this their shaders would be prepared
+# mid-song, at the moment they first appear.
+func warm_late_pieces() -> Array:
+	var pieces: Array = []
+	if ssrg_theme and ssrg_theme.visible:
+		pieces.append(ssrg_finger_beam_material)
+		pieces.append_array(ssrg_theme.late_pieces())
+	# Hit effects waiting in their pools, with the parts that only show partway through one.
+	var effects: Array = bursts + hit_pool + blooms + bloom_pool
+	if synk_hits: effects += synk_hits.hits + synk_hits.pool
+	for effect in effects:
+		if not is_instance_valid(effect.node): continue
+		if effect.node is GeometryInstance3D: pieces.append(effect.node)
+		pieces.append_array(effect.node.find_children("*", "GeometryInstance3D", true, false))
+	return pieces
+
+func warm_collect(node: GeometryInstance3D) -> void:
+	var instanced = false; var format = 0; var colors = false; var custom = false
+	var used: Array = []
+	if node is MultiMeshInstance3D:
+		if node.multimesh == null: return
+		instanced = true; format = node.multimesh.transform_format
+		colors = node.multimesh.use_colors; custom = node.multimesh.use_custom_data
+		if node.material_override == null and node.multimesh.mesh:
+			for i in node.multimesh.mesh.get_surface_count(): used.append(node.multimesh.mesh.surface_get_material(i))
+	elif node is CPUParticles3D:
+		# Particles draw as one instanced batch carrying colour and custom data.
+		instanced = true; format = MultiMesh.TRANSFORM_3D; colors = true; custom = true
+		if node.material_override == null and node.mesh:
+			for i in node.mesh.get_surface_count(): used.append(node.mesh.surface_get_material(i))
+	elif node is MeshInstance3D and node.mesh and node.material_override == null:
+		for i in node.mesh.get_surface_count(): used.append(node.get_active_material(i))
+	if node.material_override: used.append(node.material_override)
+	if node.material_overlay: used.append(node.material_overlay)
+	for mat in used: warm_add(mat, instanced, format, colors, custom)
+
+func warm_add(mat: Material, instanced: bool, format: int, colors: bool, custom: bool) -> void:
+	if mat == null: return
+	# Materials sharing a shader share its prepared program; an instanced batch needs its own.
+	var program = warm_program(mat)
+	if program == "": return
+	var key = "%s:%s" % [program, "%d%d%d" % [format, int(colors), int(custom)] if instanced else "-"]
+	if warm_seen.has(key): return
+	warm_seen[key] = true
+	warm_queue.append({"material": mat, "instanced": instanced, "format": format, "colors": colors, "custom": custom})
+	warm_total += 1
+
+# What tells two materials' shaders apart. A written shader is itself; a built-in material
+# generates its shader from its switches and which textures it has, not from its colours.
+func warm_program(mat: Material) -> String:
+	if mat is ShaderMaterial: return str(mat.shader.get_rid().get_id()) if mat.shader else ""
+	if not mat is BaseMaterial3D: return ""
+	var switches: Array = []
+	for property in mat.get_property_list():
+		if not (property.usage & PROPERTY_USAGE_STORAGE) or property.name == "render_priority" or str(property.name).begins_with("resource_"): continue
+		if property.type in [TYPE_BOOL, TYPE_INT]: switches.append(mat.get(property.name))
+		elif property.type == TYPE_OBJECT: switches.append(mat.get(property.name) != null)
+	return "built-in%d" % hash(switches)
+
+func make_warm_stand_in(item: Dictionary) -> Node3D:
+	var quad = QuadMesh.new(); quad.size = Vector2.ONE * .001
+	var node: GeometryInstance3D
+	if item.instanced:
+		var batch = MultiMesh.new()
+		batch.transform_format = item.format; batch.use_colors = item.colors; batch.use_custom_data = item.custom
+		batch.mesh = quad; batch.instance_count = 1
+		if item.format == MultiMesh.TRANSFORM_2D: batch.set_instance_transform_2d(0, Transform2D.IDENTITY)
+		else: batch.set_instance_transform(0, Transform3D.IDENTITY)
+		node = MultiMeshInstance3D.new(); node.multimesh = batch
+	else:
+		node = MeshInstance3D.new(); node.mesh = quad
+	node.material_override = item.material
+	node.layers = WARM_LAYER
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	node.extra_cull_margin = 1000.0
+	camera.add_child(node); node.position = Vector3(0, 0, -2.0)
+	return node
+
 func prewarm() -> void:
-	var key = str(game.note_shape) + str(game.get("trail_style"))
+	var key = str(game.note_shape) + str(game.get("trail_style")) + str(game.hit_style) + str(uses_ssrg_hits())
 	if prewarmed.has(key): return
 	prewarmed[key] = true
 	var group = Node3D.new(); group.name = "ShaderPrewarm"; add_child(group); group.position.z = -30.0
@@ -886,10 +1035,12 @@ func prewarm() -> void:
 	var hold = SynkChart.note(0, 5, "hold"); hold.duration = .5; make_ribbon(group, hold, 1)
 	var slide = SynkChart.note(0, 7, "slide"); slide.duration = .5; slide.end_lane = 9
 	slide.path = [{"offset": 0.0, "lane": 7.0}, {"offset": .5, "lane": 9.0}]; make_ribbon(group, slide, 1)
-	prewarming_hits = true
-	for kind in ["tap", "hold", "flick"]: spawn_hit(5, kind, 1)
-	prewarming_hits = false
-	if game.hit_style == "bloom": spawn_bloom(5, "tap", {}, -999)
+	# SYNK's own hit bursts never show while SSRG hits are in use, so they are not prepared then.
+	if not uses_ssrg_hits():
+		prewarming_hits = true
+		for kind in ["tap", "hold", "flick"]: spawn_hit(5, kind, 1)
+		prewarming_hits = false
+		if game.hit_style == "bloom": spawn_bloom(5, "tap", {}, -999)
 	# SSRG hits are pooled hidden, so their shader would otherwise compile at the first hit
 	# of the song (a ~120 ms freeze on a fresh install). Draw one now, behind the loading card.
 	if uses_ssrg_hits():
@@ -1813,6 +1964,7 @@ func update_recorder_channels(delta: float, recording_now: bool) -> void:
 func _process(delta: float) -> void:
 	if game==null: return
 	step_prebuild()
+	step_warmup()
 	if rail_atmosphere:
 		if uses_projected_highway(): rail_atmosphere.visible = false
 		else: rail_atmosphere.update(delta)

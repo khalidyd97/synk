@@ -154,6 +154,15 @@ func clear_hits() -> void:
 		world.cover_material.set_shader_parameter("ssrg_fever_weights",Vector4.ZERO)
 		world.cover_material.set_shader_parameter("ssrg_fever_dark",0.0)
 
+# Hidden when a song starts and shown during it: lane guides, touch marks, the background
+# particles with their fever versions, and the pooled hit flashes.
+func late_pieces() -> Array:
+	var pieces: Array = []
+	if original_stage: pieces.append_array(original_stage.receptors + original_stage.feedback_marks)
+	for root in [source_background, hit_layer] + background_bank:
+		if is_instance_valid(root): pieces.append_array(root.find_children("*", "GeometryInstance3D", true, false))
+	return pieces
+
 func prefill(count: int = 16) -> void:
 	while hit_pool.size() + hits.size() < count: hit_pool.append(make_hit())
 

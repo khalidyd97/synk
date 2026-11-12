@@ -207,11 +207,12 @@ func vanishing_point() -> Vector2:
 	var far = game.field.get_global_transform_with_canvas() * game.field.project(game.field.world.CENTER_LANE, 1.0)
 	return get_global_transform_with_canvas().affine_inverse() * far
 
-# The bar shows real work: the chart's notes being built. It never runs ahead of them, and
-# the card stays up until they're done (small charts finish well inside the minimum time).
+# The bar shows real work: the chart's notes being built and the stage's shaders being
+# prepared. It never runs ahead of them, and the card stays up until they're done (small
+# charts finish well inside the minimum time).
 func build_progress() -> float:
 	if game == null or game.field == null: return 1.0
-	return game.field.world.prebuild_progress()
+	return minf(game.field.world.prebuild_progress(), game.field.world.warmup_progress())
 func load_progress() -> float:
 	if load_time <= 0.0: return 1.0
 	var t = clampf(elapsed / (load_time * .9), 0.0, 1.0)

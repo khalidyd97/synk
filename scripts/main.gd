@@ -1544,6 +1544,8 @@ func start_game(notes: Array,automated: bool = false,section: String = "",is_pra
 		if not restarting: field.world.prewarm(); warm_hud_text()
 		field.world.prefill_hits()
 		stage_intro.begin(cover,tint,str(song.title),intro_details(),restarting)
+		# Behind the loading card, prepare the stage's shaders a frame at a time.
+		if not restarting: field.world.begin_warmup()
 		judgement=""
 	else:
 		stage_intro.show_gameplay_cover(cover,tint)
