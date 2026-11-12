@@ -193,8 +193,10 @@ const SSRG_UI_HEIGHT = 640.0
 # Paired 3.6-speed recordings: source note footprints are about 80% of
 # SYNK's previous maximum. This is an artwork fit, not a timing change.
 const SSRG_REFERENCE_NOTE_SCALE = .8
+# Correct mode draws notes at half size so dense passages stay separate and easy to pick.
+const CORRECT_NOTE_SCALE = .5
 func ssrg_art_scale() -> float:
-	return game.note_size*(SSRG_REFERENCE_NOTE_SCALE if game.ssrg_playable_run else 1.0)
+	return game.note_size*(SSRG_REFERENCE_NOTE_SCALE if game.ssrg_playable_run else 1.0)*(CORRECT_NOTE_SCALE if even_view() else 1.0)
 func ssrg_canvas_height() -> float:
 	var view=get_viewport().get_visible_rect().size
 	var aspect=maxf(.1,view.x/maxf(1.0,view.y))

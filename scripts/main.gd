@@ -1784,7 +1784,7 @@ func refresh_arrange_controls() -> void :
 		if dots_note.is_empty() or dots_note.kind not in ["hold", "slide"]: record_help.text = "CONNECTOR: select a hold or slide, then tap its trail to add a playable connector."
 		else: record_help.text = "CONNECTOR: tap the trail to add or remove one (%d). SHAPE drags its handle; DELETE POINT removes the selected anchor." % dots_note.get("checkpoints", []).size()
 	elif arranging:
-		if arrange_selection.is_empty(): record_help.text = "Tap a note head or any part of its trail to select and drag it.\nType buttons change the note. Scroll beside the highway."
+		if arrange_selection.is_empty(): record_help.text = "Tap a note head or any part of its trail to select and drag it.\nType buttons change the note. Drag empty space to scroll."
 		else:
 			var n: Dictionary = arrange_selection.note
 			if n.kind in ["hold", "slide"]:
@@ -1926,6 +1926,13 @@ func arrange_lane_at(p: Vector2) -> float:
 	# Undo the SKD projection, then use the surface's own lane spacing.
 	return world.world_lane(world.unwarp_point(hit).x) if hit!=null else world.CENTER_LANE
 
+# Distance between two normalised screen points, in screen heights. Plain normalised
+# distance undercounts sideways gaps on a wide screen, so a neighbour in the next lane
+# could win over the note under the finger.
+func arrange_screen_gap(a: Vector2, b: Vector2) -> float:
+	var size = Vector2(field.viewport.size)
+	return ((a - b) * Vector2(size.x / maxf(1.0, size.y), 1.0)).length()
+
 func arrange_note_distance(n: Dictionary, p: Vector2) -> float:
 	var start = float(n.time); var finish = start + float(n.duration)
 	if start > song_time or song_time - finish > note_travel_seconds(): return INF
@@ -1934,7 +1941,7 @@ func arrange_note_distance(n: Dictionary, p: Vector2) -> float:
 	var best = INF
 	if song_time - start <= note_travel_seconds():
 		var head = Vector3(world.note_x(float(n.lane)), 0.2, origin.z)
-		if world.depth_visible(head.z) and not camera.is_position_behind(head): best = p.distance_to(camera.unproject_position(world.warp_point(head)) / viewport_size)
+		if world.depth_visible(head.z) and not camera.is_position_behind(head): best = arrange_screen_gap(p, camera.unproject_position(world.warp_point(head)) / viewport_size)
 	if n.kind not in ["hold", "slide"] or float(n.duration) <= 0: return best
 
 	var centers = world.trail_centers(n, clampi(ceili(float(n.duration) * 32), 16, 256), true)
@@ -1952,7 +1959,7 @@ func arrange_note_distance(n: Dictionary, p: Vector2) -> float:
 		var inside = Geometry2D.is_point_in_polygon(pointer, polygon)
 		var edge_distance = INF
 		for edge in 4: edge_distance = minf(edge_distance, pointer.distance_to(Geometry2D.get_closest_point_to_segment(pointer, polygon[edge], polygon[(edge + 1) % 4])))
-		if inside or edge_distance <= 12: best = minf(best, minf(0.085, distance / viewport_size.length()))
+		if inside or edge_distance <= 12: best = minf(best, minf(0.085, distance / viewport_size.y))
 	if trail_style == "solid":
 		var hit = Plane(Vector3.UP, world.trail_height() + 0.015).intersects_ray(camera.project_ray_origin(pointer), camera.project_ray_normal(pointer))
 		if hit != null:
@@ -1961,7 +1968,7 @@ func arrange_note_distance(n: Dictionary, p: Vector2) -> float:
 				var center = Vector3(world.note_x(SynkChart.lane_at(n, start + offset)), world.trail_height() + 0.015, (start + offset - song_time) * world.travel_speed())
 				if camera.is_position_behind(center) or not world.depth_visible(center.z) or center.z > world.JUDGMENT_DEPTH: continue
 				if Vector2(hit.x - center.x, hit.z - center.z).length() <= half_width * 1.5:
-					best = minf(best, minf(0.085, p.distance_to(camera.unproject_position(world.warp_point(center)) / viewport_size)))
+					best = minf(best, minf(0.085, arrange_screen_gap(p, camera.unproject_position(world.warp_point(center)) / viewport_size)))
 	return best
 
 func arrange_pointer_event(id: int, p: Vector2, began: bool, ended: bool, canceled: bool) -> void :
@@ -1997,7 +2004,8 @@ func arrange_pointer_event(id: int, p: Vector2, began: bool, ended: bool, cancel
 				if distance < closest: closest = distance;selected = {"note": n, "document": source_index == 1, "index": note_index}
 		arrange_selection = selected
 		refresh_arrange_controls()
-		if selected.is_empty(): arrange_touches[id] = {"kind": "empty"}
+		# Dragging empty highway scrolls the take, the same as dragging beside it.
+		if selected.is_empty(): arrange_touches[id] = {"kind": "scroll", "start_y": p.y, "start_time": song_time}
 		else:
 			arrange_touches[id] = {"kind": "note", "note": selected.note, "document": selected.document, "changed": false, "start_time": float(selected.note.time), "start_lane": int(selected.note.lane), "touch_time": stage_time_at(p), "touch_lane": arrange_lane_at(p), "start_p": p, "gesture": ""}
 	if canceled or ended:
