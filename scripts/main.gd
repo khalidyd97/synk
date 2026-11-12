@@ -1933,6 +1933,14 @@ func arrange_screen_gap(a: Vector2, b: Vector2) -> float:
 	var size = Vector2(field.viewport.size)
 	return ((a - b) * Vector2(size.x / maxf(1.0, size.y), 1.0)).length()
 
+# Seconds to scroll for a drag of dy (normalised screen height), so notes follow the finger.
+func arrange_scroll_seconds(dy: float) -> float:
+	var world = field.world; var height = maxf(1.0, float(field.viewport.size.y))
+	var near = world.camera.unproject_position(world.warp_point(Vector3.ZERO)).y
+	var far = world.camera.unproject_position(world.warp_point(Vector3(0, 0, -world.TRACK_LENGTH))).y
+	var span = absf(near - far) / height
+	return dy * note_travel_seconds() / span if span > .05 else dy * note_travel_seconds() * 1.3
+
 func arrange_note_distance(n: Dictionary, p: Vector2) -> float:
 	var start = float(n.time); var finish = start + float(n.duration)
 	if start > song_time or song_time - finish > note_travel_seconds(): return INF
@@ -1983,7 +1991,7 @@ func arrange_pointer_event(id: int, p: Vector2, began: bool, ended: bool, cancel
 		var points_touch: Dictionary = arrange_touches[id]
 		if not points_touch.moved and p.distance_to(points_touch.start_p) > 0.03: points_touch.moved = true
 		if points_touch.moved:
-			song_time = clampf(float(points_touch.start_time) + (float(points_touch.start_y) - p.y) * note_travel_seconds() * 1.3, 0, length())
+			song_time = clampf(float(points_touch.start_time) + arrange_scroll_seconds(float(points_touch.start_y) - p.y), 0, length())
 		if ended and not canceled and not points_touch.moved and not outside_highway(p): add_point_at(p)
 		if ended or canceled: arrange_touches.erase(id)
 		return
@@ -2013,7 +2021,7 @@ func arrange_pointer_event(id: int, p: Vector2, began: bool, ended: bool, cancel
 	if not arrange_touches.has(id): return
 	var touch: Dictionary = arrange_touches[id]
 	if touch.kind == "scroll":
-		song_time = clampf(float(touch.start_time) + (float(touch.start_y) - p.y) * note_travel_seconds() * 1.3, 0, length())
+		song_time = clampf(float(touch.start_time) + arrange_scroll_seconds(float(touch.start_y) - p.y), 0, length())
 	elif touch.kind == "note":
 		var n: Dictionary = touch.note
 

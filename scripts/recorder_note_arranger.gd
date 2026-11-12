@@ -9,11 +9,16 @@ var shape_buttons: Dictionary = {}
 var selected_point_index = -1
 var selected_note_ref: Dictionary = {}
 var delete_point_button: Button
+# The second and third rows stay folded away until MORE is tapped, so the panel covers less of the track.
+var expanded = false
+var more_button: Button
+var plate: Panel
+var extra_buttons: Array = []
 func _ready() -> void :
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	# Dark plate behind the hold/slide edit rows so their text never sits on the bright highway.
-	var plate = Panel.new();add_child(plate);plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	plate.anchor_left = 0.132;plate.anchor_right = 0.668;plate.anchor_top = 0.192;plate.anchor_bottom = 0.396
+	plate = Panel.new();add_child(plate);plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	plate.anchor_left = 0.132;plate.anchor_right = 0.668 + COLUMN_STEP;plate.anchor_top = 0.192;plate.anchor_bottom = 0.396
 	var plate_style = StyleBoxFlat.new();plate_style.bg_color = Color(0.05, 0.05, 0.06, 0.9)
 	plate_style.border_color = Color(1, 1, 1, 0.07);plate_style.set_border_width_all(1);plate_style.set_corner_radius_all(22)
 	plate_style.shadow_color = Color(0, 0, 0, 0.45);plate_style.shadow_size = 18
@@ -30,6 +35,7 @@ func _ready() -> void :
 		buttons[key] = b
 	snap_button = tool_button("", 0, 4);snap_button.pressed.connect(game.cycle_slide_snap)
 	delete_point_button = tool_button("DELETE POINT", 0, 5);delete_point_button.pressed.connect(delete_selected_point)
+	more_button = tool_button("MORE", 0, 6);more_button.pressed.connect(func(): expanded = not expanded)
 	# Row 2: the selected bend point (or the whole slide), clean-up and endpoints.
 	curve_button = tool_button("CURVE", 1, 0);curve_button.pressed.connect(toggle_curve)
 	for i in 2:
@@ -56,6 +62,7 @@ func tool_button(text: String, row: int, column: int) -> Button:
 	b.caption_size = 17;b.compact = true;b.variant = "tool";add_child(b)
 	b.anchor_left = COLUMN_LEFT + column * COLUMN_STEP;b.anchor_right = b.anchor_left + COLUMN_STEP - 0.006
 	b.anchor_top = 0.202 + row * 0.064;b.anchor_bottom = b.anchor_top + 0.056
+	if row > 0: extra_buttons.append(b)
 	return b
 func focus_endpoint(kind: String) -> void :
 	if not drags.is_empty(): return
@@ -78,17 +85,20 @@ func _process(_delta: float) -> void :
 	if selected_point_index >= note.path.size() - 1: selected_point_index = -1
 	var writable = game.recorder.writable(note) and drags.is_empty() and draw_touches.is_empty()
 	var slide = note.kind == "slide"
+	plate.anchor_bottom = 0.396 if expanded else 0.268
+	more_button.text = "LESS" if expanded else "MORE";more_button.set_selected(expanded)
+	for b in extra_buttons: b.visible = expanded
 	delete_point_button.visible = slide
 	delete_point_button.disabled = selected_point_index <= 0 or not writable
 	for operation in shape_buttons:
-		shape_buttons[operation].visible = slide
+		shape_buttons[operation].visible = slide and expanded
 		shape_buttons[operation].disabled = not writable or (note.path.size() <= 2 if operation == "smooth" else note.path.size() == 2)
 	for key in buttons: buttons[key].set_selected(game.dots_mode if key == "points" else ( not game.dots_mode and edit_mode == key))
 	snap_button.text = {"free": "SNAP · OFF", "lanes": "SNAP · LANES", "beats": "SNAP · BEATS"}[game.slide_snap]
 	snap_button.set_selected(game.slide_snap != "free")
 	# Curve: the selected bend point, or every bend when none is selected.
 	var inner = inner_points(note)
-	curve_button.visible = slide
+	curve_button.visible = slide and expanded
 	curve_button.disabled = not writable or inner.is_empty()
 	curve_button.text = "POINT CURVE" if selected_point_index > 0 else "CURVE ALL"
 	curve_button.set_selected(not inner.is_empty() and curved(note, inner))

@@ -207,8 +207,8 @@ func ssrg_canvas_height() -> float:
 	return maxf(SSRG_UI_HEIGHT,playable_width/aspect)
 # Even Correct-mode view: the same stage, but time maps linearly to height and size, from
 # EVEN_FAR_SCALE at the far end to 1 at the judgment line. Notes stay on the rails, evenly
-# spaced and never smaller than that, and the far end sits clear of the tools panel.
-const EVEN_FAR_SCALE = .42
+# spaced and never smaller than that, and the window runs up to just under the overview bar.
+const EVEN_FAR_SCALE = .25
 func even_view() -> bool: return game != null and game.uses_even_correct_view()
 # Width/size scale at a depth (ssrg_scale in ssrg_warp.gdshaderinc); also the canvas height fraction.
 func ssrg_approach(z: float) -> float:

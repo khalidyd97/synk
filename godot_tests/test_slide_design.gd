@@ -27,7 +27,9 @@ func run() -> void:
 	game.arrange_selection = {"note": note, "document": false}
 	var arranger = game.note_arranger
 	await process_frame;arranger._process(0)
-	check(arranger.visible and arranger.curve_button.visible and arranger.snap_button.visible, "Slide design controls appear for a selected slide")
+	check(arranger.visible and arranger.snap_button.visible and not arranger.curve_button.visible, "A selected slide shows the tool row, with the rest folded away")
+	arranger.expanded = true;arranger._process(0)
+	check(arranger.curve_button.visible and arranger.preset_buttons["wave"].visible, "MORE unfolds the shape rows")
 	for button in arranger.preset_buttons.values() + [arranger.curve_button, arranger.snap_button]:
 		check(not button.get_global_rect().intersects(game.record_overview.get_global_rect()), "Slide design controls leave the seek bar clear")
 	arranger.toggle_curve()
