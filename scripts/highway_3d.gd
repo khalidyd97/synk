@@ -17,7 +17,6 @@ const FRAME_HALF_WIDTH = HIGHWAY_HALF_WIDTH
 const TRAIL_HALF = .8*NOTE_SCALE
 const TAIL_CAP_SIZE = .65
 # How far below the hit flash art its mirrored glow extends, as a fraction of the art height.
-const HIT_MIRROR = .35
 # The glowing band of Hold_Note_Pink.png spans u .225 to .68; using exactly that slice keeps
 # the trail centered on its notes with its bright edges on the trail's outline.
 const TRAIL_REGION = Vector4(.225,.27,.455,.43)
@@ -59,16 +58,12 @@ var finger_beam_material: ShaderMaterial
 var ssrg_finger_beam_material: ShaderMaterial
 var animation_time = 0.0
 var animated_materials: Array = []
-var bursts: Array = []
-var hit_pool: Array = []
 var play_render_cursor = 0
 var reference_note_meshes: Dictionary = {}
-var spark_mesh: SphereMesh
 var miss_shake_remaining = 0.0
 var ssrg_shake_x=0.0
 var cover_backdrop: MeshInstance3D
 var rail_atmosphere: Node3D
-var synk_hits:Node3D
 var concept_theme:Node3D
 var ssrg_theme: Node3D
 var cover_material: ShaderMaterial
@@ -322,7 +317,6 @@ func _ready() -> void:
 	ssrg_theme=preload("res://scripts/ssrg_highway.gd").new(); ssrg_theme.world=self; add_child(ssrg_theme)
 	build_effects()
 	laser_streaks=preload("res://scripts/laser_streaks.gd").new(); add_child(laser_streaks); laser_streaks.build(self)
-	synk_hits=preload("res://scripts/synk_hit_effects.gd").new();synk_hits.world=self;add_child(synk_hits)
 	build_play_aids()
 	build_cover_backdrop()
 	concept_theme=preload("res://scripts/concept_highway.gd").new();concept_theme.world=self;add_child(concept_theme)
@@ -633,7 +627,6 @@ func refresh_highway_look() -> void:
 	if concept_theme:concept_theme.refresh()
 
 func build_effects() -> void:
-	spark_mesh = SphereMesh.new(); spark_mesh.radius = .065; spark_mesh.height = .13
 	finger_beam_material = ShaderMaterial.new(); finger_beam_material.shader = preload("res://scripts/finger_beam.gdshader")
 	# Drawn over the judgment bar so the lit lane reads all the way down to the bar's near edge.
 	finger_beam_material.render_priority = 2
@@ -716,160 +709,13 @@ func touch_hit_position(lane: float,pointer_id: int) -> Vector3:
 	# Follow horizontal touch movement, but never let the burst drift up/down the track.
 	return Vector3(clampf(x,-HIGHWAY_HALF_WIDTH,HIGHWAY_HALF_WIDTH),.035,0)
 
-# --- "Bloom" hit effect style (Settings > Visual effects > Hit effects) -------------------
-# A flat overexposed flash with expanding rings on the judgement line, plus rising sparkles.
-# Two quads per hit, pooled; holds keep re-pulsing while they are held.
-const BLOOM_LIFE = .38
-var prewarming_hits = false
-var bloom_pool: Array = []
-var blooms: Array = []
-func projected_synk_effects() -> bool:
-	return uses_projected_highway() and not game.uses_ssrg_gameplay()
-
-func make_bloom() -> Dictionary:
-	var node = Node3D.new(); add_child(node)
-	var flat_mesh = PlaneMesh.new(); flat_mesh.size = Vector2(10.0, 6.0)
-	var flat_mat = ShaderMaterial.new(); flat_mat.shader = preload("res://scripts/bloom_hit.gdshader"); flat_mat.render_priority = 5
-	var flat = mesh_node(flat_mesh, node, flat_mat); flat.position = Vector3(0, .02, 0)
-	var spark_mesh = QuadMesh.new(); spark_mesh.size = Vector2(6.0, 5.0)
-	var spark_mat = ShaderMaterial.new(); spark_mat.shader = preload("res://scripts/bloom_sparks.gdshader"); spark_mat.render_priority = 6
-	var sparks = mesh_node(spark_mesh, node, spark_mat); sparks.position = Vector3(0, 2.4, 0); sparks.rotation = camera.rotation
-	if projected_synk_effects():sparks.position.z=-spark_mesh.size.y*.5
-	node.visible = false
-	return {"node": node, "flat": flat_mat, "sparks": spark_mat, "age": 0.0, "sustain_entry": {}, "pointer_id": -999, "kind": "tap"}
-func prefill_blooms(count: int = 24) -> void:
-	while bloom_pool.size() + blooms.size() < count: bloom_pool.append(make_bloom())
-func spawn_bloom(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int) -> void:
-	if blooms.size() >= 24: bloom_pool.append(blooms.pop_front())
-	var b: Dictionary = bloom_pool.pop_back() if not bloom_pool.is_empty() else make_bloom()
-	var palette = palette_for_kind("tap" if kind in ["slide","flick"] else kind)
-	var c: Color = element_color("hits", colors[palette])
-	c = Color.from_hsv(c.h, minf(1.0, c.s * 1.15), 1.0)  # full-brightness glow in the note colour
-	b.flat.set_shader_parameter("tint", c); b.sparks.set_shader_parameter("tint", c)
-	b.sparks.set_shader_parameter("seed", randf() * 100.0)
-	b.age = 0.0; b.kind = kind; b.sustain_entry = sustain_entry; b.pointer_id = pointer_id
-	b.node.position = touch_hit_position(lane, pointer_id) + Vector3(0, .06, 0)
-	b.node.scale=Vector3.ONE*(.55*game.note_size if projected_synk_effects() else 1.0)*game.hit_size
-	b.node.get_child(1).position.z=-b.node.get_child(1).mesh.size.y*.5 if projected_synk_effects() else 0.0
-	b.node.visible = true; blooms.append(b)
-func animate_blooms(delta: float, running: bool) -> void:
-	var intensity = game.features.effect("Hit flashes"); var particles = game.features.effect("Particles")
-	for i in range(blooms.size() - 1, -1, -1):
-		var b: Dictionary = blooms[i]
-		var sustained = not b.sustain_entry.is_empty() and not b.sustain_entry.done
-		if running: b.age += delta
-		if sustained:
-			# Held notes re-pulse the bloom and follow the finger or slide head.
-			if b.age >= BLOOM_LIFE * .7: b.age = BLOOM_LIFE * .18
-			if game.pointers.has(int(b.sustain_entry.get("pointer", b.pointer_id))) and game.pointers[int(b.sustain_entry.get("pointer", b.pointer_id))].has("world"):
-				b.node.position = touch_hit_position(0, int(b.sustain_entry.get("pointer", b.pointer_id))) + Vector3(0, .06, 0)
-			elif b.kind == "slide": b.node.position.x = note_x(SynkChart.lane_at(b.sustain_entry.note, game.song_time))
-		elif not b.sustain_entry.is_empty(): b.sustain_entry = {}
-		if (not sustained and b.age >= BLOOM_LIFE) or (game.mode not in ["play","record","paused"] and not game.highway_preview):
-			b.node.visible = false; blooms.remove_at(i); bloom_pool.append(b); continue
-		var t = b.age / BLOOM_LIFE
-		b.flat.set_shader_parameter("age", t); b.flat.set_shader_parameter("strength", intensity*(.42 if projected_synk_effects() else 1.0))
-		b.sparks.set_shader_parameter("age", t); b.sparks.set_shader_parameter("strength", particles*(.65 if projected_synk_effects() else 1.0))
-
-func layout_classic_hit(burst:Dictionary) -> void:
-	burst.node.scale=Vector3.ONE*(.62*game.note_size if projected_synk_effects() else 1.0)*game.hit_size
-	if projected_synk_effects():
-		# Bright centers are low in the original upright sprites. On the flat
-		# canvas, offset in screen space so they land on the timing line.
-		burst.flash.position.z=-(.83/(1.0+HIT_MIRROR)-.5)*burst.flash.mesh.size.y*burst.flash.scale.y
-		burst.fill.position.z=-.18*burst.fill.mesh.size.y*burst.fill.scale.y
-	else:
-		burst.flash.position.z=0.0;burst.fill.position.z=0.0
-
-# SSRG hit art is used on the SSRG stage and whenever the hit style is SSRG.
+# Every hit flash is drawn by the SKD hit pipeline, in the hit style chosen on the Hit
+# effects page (SKD art or Lumen).
 func uses_ssrg_hits() -> bool:
-	return ssrg_theme != null and (ssrg_theme.active or game.hit_style=="ssrg")
+	return ssrg_theme != null
 
 func spawn_hit(lane: float, kind: String, direction: int = 0, sustain_entry: Dictionary = {},pointer_id: int=-999) -> void:
-	if uses_ssrg_hits() and not prewarming_hits:
-		ssrg_theme.spawn(lane, kind, sustain_entry, pointer_id); return
-	if game.hit_style == "bloom" and not prewarming_hits:
-		spawn_bloom(lane, kind, sustain_entry, pointer_id); return
-	if bursts.size() >= 32:
-		recycle_hit(bursts.pop_front())
-	var palette = palette_for_kind("tap" if kind in ["slide","flick"] else kind)
-	var hit_color=element_color("hits",colors[palette])
-	var pool_key=str(palette)+("flick"+str(direction) if kind=="flick" else "normal")
-	for index in hit_pool.size():
-		if hit_pool[index].pool_key!=pool_key: continue
-		var reused: Dictionary=hit_pool.pop_at(index)
-		reused.age=0.0; reused.kind=kind; reused.sustain_entry=sustain_entry; reused.pointer_id=pointer_id
-		reused.node.position=touch_hit_position(lane,pointer_id)+Vector3(0,.065,0)
-		reused.flash.rotation=camera.rotation; reused.fill.rotation=camera.rotation
-		reused.flash.position=Vector3(0,(2.25-4.0*HIT_MIRROR*.5)*FIT,0)
-		reused.fill.position=Vector3(0,2.25*FIT,0)
-		reused.flash.material_override.set_shader_parameter("opacity",0.0)
-		reused.fill.material_override.set_shader_parameter("opacity",0.0)
-		reused.ring.material_override.albedo_color.a=0.0
-		tint_classic_hit(reused,palette,kind)
-		for particle_index in reused.particles.size():
-			var particle=reused.particles[particle_index]
-			particle.node.hide()
-			if kind=="flick":
-				var axis=camera.basis*[Vector3.UP,Vector3.RIGHT,Vector3.DOWN,Vector3.LEFT][clampi(direction,0,3)]
-				var sideways=camera.basis*[Vector3.RIGHT,Vector3.DOWN,Vector3.LEFT,Vector3.UP][clampi(direction,0,3)]
-				particle.velocity=axis*(5.0+float(particle_index%7)*1.4)+sideways*sin(particle_index*TAU/24.0)*4.8
-				particle.node.quaternion=Quaternion(Vector3.BACK,particle.velocity.normalized())
-		layout_classic_hit(reused)
-		reused.node.show()
-		bursts.append(reused)
-		return
-	var node = Node3D.new(); add_child(node); node.position = touch_hit_position(lane,pointer_id)+Vector3(0,.065,0)
-	# Share the regular hit flash across taps, slides and flicks.
-	var flash = artwork(node,"Hit_Effect_Blue" if palette==0 else "Hit_Effect_Pink",palette,Vector3(0,(2.25-4.0*HIT_MIRROR*.5)*FIT,0),Vector2(5.8,4.0*(1.0+HIT_MIRROR))*FIT)
-	own_material(flash)  # each hit fades on its own
-	flash.material_override.set_shader_parameter("mirror_extra",HIT_MIRROR)
-	flash.material_override.set_shader_parameter("tint",hit_color)
-	flash.material_override.set_shader_parameter("recolor",classic_recolor(palette))
-	var fill_mesh = QuadMesh.new(); fill_mesh.size = Vector2(5.9,4.2)*FIT
-	var fill_material = ShaderMaterial.new(); fill_material.shader = preload("res://scripts/hit_fill.gdshader")
-	fill_material.set_shader_parameter("tint",hit_color)
-	var fill = mesh_node(fill_mesh,node,fill_material)
-	fill.position = Vector3(0,2.25*FIT,0); fill.rotation = camera.rotation
-	var flick_axis = camera.basis * [Vector3.UP,Vector3.RIGHT,Vector3.DOWN,Vector3.LEFT][clampi(direction,0,3)]
-	var ring_mesh = TorusMesh.new(); ring_mesh.inner_radius=.9*FIT; ring_mesh.outer_radius=.97*FIT; ring_mesh.rings=32; ring_mesh.ring_segments=6
-	var ring = mesh_node(ring_mesh,node,material(hit_color,.8))
-	var particles: Array = []
-	# Each spark is its own object and draw call; phones get fewer so dense charts stay smooth.
-	var particle_count = (10 if kind=="flick" else 6) if OS.has_feature("mobile") else (24 if kind=="flick" else 12)
-	var particle_material = material(element_color("sparks",colors[palette].lightened(.65) if kind=="flick" else colors[palette]))
-	var streak_mesh = BoxMesh.new(); streak_mesh.size=Vector3(.035,.035,.42)
-	for i in particle_count:
-		var particle=mesh_node(streak_mesh if kind=="flick" else spark_mesh,node,particle_material)
-		var angle=i*TAU/float(particle_count)
-		var velocity=Vector3(cos(angle)*3.5,3.0+float(i%4)*.9,sin(angle)*1.4-.8)
-		if kind=="flick":
-			var sideways = camera.basis * [Vector3.RIGHT,Vector3.DOWN,Vector3.LEFT,Vector3.UP][clampi(direction,0,3)]
-			velocity = flick_axis*(5.0+float(i%7)*1.4)+sideways*sin(angle)*4.8
-			# Align each fine streak with its own flight path in the camera plane.
-			particle.quaternion=Quaternion(Vector3.BACK,velocity.normalized())
-		particles.append({"node":particle,"velocity":velocity})
-	bursts.append({"node":node,"age":0.0,"flash":flash,"fill":fill,"ring":ring,"particles":particles,"kind":kind,"flick_axis":flick_axis,"sustain_entry":sustain_entry,"pointer_id":pointer_id,"pool_key":pool_key})
-	layout_classic_hit(bursts[-1])
-
-# The blue tap art keeps its own gradient unless a hit colour was chosen.
-func classic_recolor(palette: int) -> bool:
-	return palette!=0 or cover_palette_active or (game.highway_colors=="theme" and game.gameplay_colors.has("hits")) or str(game.hit_color)!=""
-func tint_classic_hit(burst: Dictionary,palette: int,kind: String) -> void:
-	var hit_color=element_color("hits",colors[palette])
-	burst.flash.material_override.set_shader_parameter("tint",hit_color)
-	burst.flash.material_override.set_shader_parameter("recolor",classic_recolor(palette))
-	burst.fill.material_override.set_shader_parameter("tint",hit_color)
-	var ring: StandardMaterial3D=burst.ring.material_override
-	ring.albedo_color=Color(hit_color,ring.albedo_color.a); ring.emission=hit_color
-	var spark=element_color("sparks",colors[palette].lightened(.65) if kind=="flick" else colors[palette])
-	for particle in burst.particles:
-		var mat: StandardMaterial3D=particle.node.material_override
-		if mat: mat.albedo_color=Color(spark,mat.albedo_color.a); mat.emission=spark
-func recycle_hit(burst: Dictionary) -> void:
-	burst.node.hide(); burst.sustain_entry={}
-	if hit_pool.size()<HIT_POOL_LIMIT: hit_pool.append(burst)
-	else: burst.node.queue_free()
+	if ssrg_theme: ssrg_theme.spawn(lane, kind, sustain_entry, pointer_id, direction)
 
 # Shader warm-up. The Compatibility renderer compiles a shader the first time a material is
 # drawn, which on phones stalls a frame or more; doing it mid-song reads as random stutter.
@@ -939,16 +785,8 @@ func watch_stage_look() -> void:
 # Things a look builds only when they are first needed: one of each, built out of sight, so
 # the scan knows their shaders. Returns the keys of sample notes for the caller to remove.
 func build_warm_samples() -> Array:
-	# Hit effects of the style in use go into their pools.
-	if uses_ssrg_hits(): ssrg_theme.prefill(1)
-	elif game.hit_style == "bloom": prefill_blooms(1)
-	elif hit_pool.is_empty() and bursts.is_empty():
-		var made: Array = []
-		prewarming_hits = true
-		for kind in ["tap", "hold", "flick"]:
-			spawn_hit(5, kind, 1); made.append(bursts.pop_back())
-		prewarming_hits = false
-		for burst in made: recycle_hit(burst)
+	# A pooled hit flash in the style in use.
+	ssrg_theme.prefill(1)
 	var keys: Array = []
 	if not game.uses_recorder_colors(): return keys
 	# The recorder builds notes as they are captured or scroll in: one of each kind, as a
@@ -1030,13 +868,6 @@ func warm_late_pieces() -> Array:
 		if not is_instance_valid(beam): continue
 		if beam is GeometryInstance3D: pieces.append(beam)
 		pieces.append_array(beam.find_children("*", "GeometryInstance3D", true, false))
-	# Hit effects waiting in their pools, with the parts that only show partway through one.
-	var effects: Array = bursts + hit_pool + blooms + bloom_pool
-	if synk_hits: effects += synk_hits.hits + synk_hits.pool
-	for effect in effects:
-		if not is_instance_valid(effect.node): continue
-		if effect.node is GeometryInstance3D: pieces.append(effect.node)
-		pieces.append_array(effect.node.find_children("*", "GeometryInstance3D", true, false))
 	return pieces
 
 func warm_collect(node: GeometryInstance3D) -> void:
@@ -1102,7 +933,7 @@ func make_warm_stand_in(item: Dictionary) -> Node3D:
 	return node
 
 func prewarm() -> void:
-	var key = str(game.note_shape) + str(game.get("trail_style")) + str(game.hit_style) + str(uses_ssrg_hits())
+	var key = str(game.note_shape) + str(game.get("trail_style")) + str(game.hit_style)
 	if prewarmed.has(key): return
 	prewarmed[key] = true
 	var group = Node3D.new(); group.name = "ShaderPrewarm"; add_child(group); group.position.z = -30.0
@@ -1111,56 +942,20 @@ func prewarm() -> void:
 	var hold = SynkChart.note(0, 5, "hold"); hold.duration = .5; make_ribbon(group, hold, 1)
 	var slide = SynkChart.note(0, 7, "slide"); slide.duration = .5; slide.end_lane = 9
 	slide.path = [{"offset": 0.0, "lane": 7.0}, {"offset": .5, "lane": 9.0}]; make_ribbon(group, slide, 1)
-	# SYNK's own hit bursts never show while SSRG hits are in use, so they are not prepared then.
-	if not uses_ssrg_hits():
-		prewarming_hits = true
-		for kind in ["tap", "hold", "flick"]: spawn_hit(5, kind, 1)
-		prewarming_hits = false
-		if game.hit_style == "bloom": spawn_bloom(5, "tap", {}, -999)
-	# SSRG hits are pooled hidden, so their shader would otherwise compile at the first hit
-	# of the song (a ~120 ms freeze on a fresh install). Draw one now, behind the loading card.
-	if uses_ssrg_hits():
-		ssrg_theme.prefill(); ssrg_theme.spawn(5, "tap", {}, -999)
+	# Hits are pooled hidden, so their shader would otherwise compile at the first hit of the
+	# song (a ~120 ms freeze on a fresh install). Draw one now, behind the loading card.
+	ssrg_theme.prefill(); ssrg_theme.spawn(5, "tap", {}, -999)
 	for beam in finger_beams.slice(0, 1): beam.visible = true
 	for i in 4: await get_tree().process_frame
 	if is_instance_valid(group): group.queue_free()
-	# Keep the warm-up hits: they go back into the pool for the song to reuse.
-	for burst in bursts: recycle_hit(burst)
-	bursts.clear()
-	if synk_hits:
-		for hit in synk_hits.hits:synk_hits.release(hit)
-		synk_hits.hits.clear()
+	# Keep the warm-up hit: it goes back into the pool for the song to reuse.
 	if ssrg_theme:
 		for hit in ssrg_theme.hits: ssrg_theme.release(hit)
 		ssrg_theme.hits.clear()
 
-# Fill the hit-effect pool for the chart before play, so even a dense opening never builds a
-# flash, ring and spark set mid-song. Counts cover the most hits of each kind that can be on
-# screen at once (a hit lasts about 0.65 s); every flick direction the chart uses gets its own.
-const HIT_POOL_LIMIT = 48
+# Fill the hit-flash pool before play, so even a dense opening never builds one mid-song.
 func prefill_hits() -> void:
-	if uses_ssrg_hits(): ssrg_theme.prefill(); return
-	var counts = {"tap": 0, "hold": 0}
-	var flick_dirs = {}
-	for entry in game.live:
-		var kind = str(entry.note.kind)
-		if kind == "flick": flick_dirs[int(entry.note.get("direction", 1))] = true
-		elif kind == "hold": counts.hold += 1
-		else: counts.tap += 1
-	var wanted = {"0normal": mini(10, counts.tap), "1normal": mini(6, counts.hold)}
-	for dir in flick_dirs: wanted["0flick" + str(dir)] = 3
-	var have = {}
-	for burst in hit_pool: have[burst.pool_key] = int(have.get(burst.pool_key, 0)) + 1
-	var made: Array = []
-	if game.hit_style == "bloom": prefill_blooms(); return
-	prewarming_hits = true
-	for pool_key in wanted:
-		var kind = "hold" if pool_key == "1normal" else ("flick" if pool_key.begins_with("0flick") else "tap")
-		var dir = int(pool_key.trim_prefix("0flick")) if kind == "flick" else 0
-		for i in maxi(0, int(wanted[pool_key]) - int(have.get(pool_key, 0))):
-			spawn_hit(5, kind, dir); made.append(bursts.pop_back())
-	prewarming_hits = false
-	for burst in made: recycle_hit(burst)
+	ssrg_theme.prefill()
 
 # --- Play aids -------------------------------------------------------------------------
 # Lane hints, the hit-window preview, combo flares, chord lines,
@@ -1293,12 +1088,7 @@ func modifier_hides(z: float) -> bool:
 func clear_hit_effects() -> void:
 	# Pooled effects for the previous chart are freed; prefill_hits builds the next set.
 	if ssrg_theme: ssrg_theme.clear_hits()
-	if synk_hits:synk_hits.clear()
 	ssrg_beam_release.clear()
-	for burst in bursts+hit_pool: burst.node.queue_free()
-	bursts.clear(); hit_pool.clear()
-	for bloom in blooms+bloom_pool:bloom.node.queue_free()
-	blooms.clear();bloom_pool.clear()
 
 func clear_notes() -> void:
 	clear_shared_materials()
@@ -1308,61 +1098,11 @@ func clear_notes() -> void:
 	notes.clear()
 
 func animate_effects(delta: float) -> void:
-	if synk_hits:synk_hits.advance(delta)
 	var running = game.mode in ["play","record"] or game.highway_preview
 	if running: animation_time += delta
 	# Every highway shader reads this one global clock (project setting shader_globals/synk_time).
 	RenderingServer.global_shader_parameter_set("synk_time",animation_time)
 	update_ssrg_warp()
-	# Settings read once per frame, not once per burst or particle.
-	animate_blooms(delta, running)
-	var hit_intensity=game.features.effect("Hit flashes")
-	var particle_share=game.features.effect("Particles")
-	var hold_wave = .5+.5*sin(animation_time*TAU*2.8)
-	for i in range(bursts.size()-1,-1,-1):
-		var burst: Dictionary = bursts[i]
-		var sustained = not burst.sustain_entry.is_empty() and not burst.sustain_entry.done
-		if not sustained and not burst.sustain_entry.is_empty():
-			burst.sustain_entry={}
-			burst.age=.45
-		if running: burst.age += delta
-		if (not sustained and burst.age>=.65) or (game.mode not in ["play","record","paused"] and not game.highway_preview):
-			recycle_hit(burst); bursts.remove_at(i); continue
-		var t = minf(float(burst.age)/.65,1.0)
-		# A quick, full flash that holds its body before fading out.
-		var fade = pow(1.0-smoothstep(.10,1.0,t),1.5)
-		var attack = minf(1.0,burst.age/.018)
-		var hold_blend = smoothstep(0.0,.18,burst.age) if sustained else 0.0
-		if sustained: burst.pointer_id=int(burst.sustain_entry.get("pointer",burst.pointer_id))
-		if sustained and game.pointers.has(burst.pointer_id) and game.pointers[burst.pointer_id].has("world"):
-			burst.node.position=touch_hit_position(0,burst.pointer_id)+Vector3(0,.065,0)
-		elif sustained and burst.kind=="slide":
-			# Keep the normal hit burst on the moving slide head, with repeated flashes.
-			burst.node.position.x = note_x(SynkChart.lane_at(burst.sustain_entry.note,game.song_time))
-		var flash_opacity = lerpf(attack*fade,.60+hold_wave*.26,hold_blend)
-		var fill_opacity = lerpf(attack*fade,.55+hold_wave*.22,hold_blend)
-		if sustained and burst.kind=="slide":
-			var slide_flash = .18+.82*pow(hold_wave,2.0)
-			flash_opacity = lerpf(attack*fade,slide_flash,hold_blend); fill_opacity = flash_opacity
-		burst.flash.material_override.set_shader_parameter("opacity",flash_opacity*hit_intensity*(.65 if projected_synk_effects() else 1.0))
-		burst.fill.material_override.set_shader_parameter("opacity",fill_opacity*hit_intensity*(.20 if projected_synk_effects() else 1.0))
-		burst.fill.scale = Vector3(1.0+t*.7,1.0+t*.35,1).lerp(Vector3(1.18+hold_wave*.15,1.05+hold_wave*.14,1),hold_blend)
-		burst.flash.scale = Vector3(1.0+t*.6,1.0+t*.25,1).lerp(Vector3(1.14+hold_wave*.12,1.0+hold_wave*.12,1),hold_blend)
-		burst.ring.scale = Vector3.ONE*lerpf(.8+t*.75,1.12+hold_wave*.22,hold_blend)
-		burst.ring.material_override.albedo_color.a = lerpf(fade*.8,.15+hold_wave*.25,hold_blend)*hit_intensity*(.5 if projected_synk_effects() else 1.0)
-		layout_classic_hit(burst)
-		var particle_count=burst.particles.size()
-		for particle_index in particle_count:
-			var particle=burst.particles[particle_index]
-			var shown=float(particle_index)/maxi(1,particle_count)<particle_share
-			particle.node.visible=shown
-			if not shown: continue
-			particle.node.position = particle.velocity*burst.age
-			if burst.kind=="flick": particle.node.position += camera.basis*Vector3(0,1.8,0) if projected_synk_effects() else Vector3(0,1.8,0)
-			else:
-				if projected_synk_effects():particle.node.position=camera.basis*Vector3(particle.velocity.x*burst.age,particle.velocity.y*burst.age,0)
-				particle.node.position += (camera.basis*Vector3.UP if projected_synk_effects() else Vector3.UP)*(-2.5*burst.age*burst.age)
-			particle.node.scale = Vector3.ONE*maxf(.01,1-t)
 
 func artwork(parent: Node3D, name: String, palette: int, position_value: Vector3, dimensions: Vector2, region = Vector4(0,0,1,1), opacity = 1.0) -> MeshInstance3D:
 	var quad = QuadMesh.new(); quad.size = dimensions

@@ -21,17 +21,9 @@ func run():
 	for style in ["gold","neon"]:
 		game.highway_style=style;w.refresh_highway_look()
 		check((w.gold_nodes if style=="gold" else w.neon_nodes).all(func(n):return n.visible),"OG rail design retained: "+style)
-	for style in ["classic","bloom"]:
+	for style in ["ssrg","lumen"]:
 		w.clear_hit_effects();game.hit_style=style;w.spawn_hit(4.5,"tap");w.animate_effects(.1)
-		check(w.synk_hits.hits.is_empty(),"Original hit styles never use the replacement burst")
-		if style=="classic":
-			check(w.bursts.size()==1 and w.blooms.is_empty(),"Classic retains original sprite, fill, ring and sparks")
-			check(w.bursts[0].flash.material_override.get_shader_parameter("artwork")!=null,"Classic uses its original artwork")
-		else:
-			check(w.blooms.size()==1 and w.bursts.is_empty(),"Bloom retains its original halo and spark shaders")
-			check(w.blooms[0].flat.shader.resource_path=="res://scripts/bloom_hit.gdshader","Bloom uses the original halo")
-		w.clear_hit_effects()
-		check(w.bursts.is_empty() and w.blooms.is_empty(),"Switching hit styles clears old effects")
+		check(w.ssrg_theme.hits.size()==1 and w.ssrg_theme.hits[0].style==style,"SYNK's highway flashes in the chosen %s style" % style)
 	game.change_synk_speed(3.6)
 	game.prefs.set_value("ssrg","speed_value",3.6)
 	var regular_travel=game.note_travel_seconds()

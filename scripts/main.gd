@@ -360,9 +360,11 @@ func apply_frame_rate() -> void:
 	var chosen=frame_rate_setting()
 	Engine.max_fps=0 if chosen<=0 else chosen
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
-# Hit effect style (Settings > Visual effects > Hit effects): "classic" bursts or "bloom".
-const HIT_STYLES = ["classic","bloom","ssrg"]
-var hit_style = "classic"
+# Hit effect style (Settings > Visual effects > Hit effects).
+# SKD's own flash art, or Lumen, SYNK's flash drawn the same way. Old saved Classic and
+# Bloom choices open as SKD.
+const HIT_STYLES = ["ssrg","lumen"]
+var hit_style = "ssrg"
 # Hit effect size (0.6-1.6) and an optional colour ("" follows the note colours).
 var hit_size = 1.0
 var hit_color = ""
@@ -373,7 +375,7 @@ func change_hit_look(key: String,value: Variant) -> void:
 	prefs.save("user://preferences.cfg")
 	if settings_panel: settings_panel.refresh()
 func change_hit_style(value: String) -> void:
-	hit_style=value if value in HIT_STYLES else "classic"
+	hit_style=value if value in HIT_STYLES else "ssrg"
 	prefs.set_value("effects","hit_style",hit_style); prefs.save("user://preferences.cfg")
 	if settings_panel: settings_panel.refresh()
 # Highway render resolution (Settings): the 3D highway is drawn at 100%, 85% or 75% of the
@@ -434,8 +436,8 @@ func _ready() -> void:
 	if record_speed not in RECORD_SPEEDS: record_speed=1.0
 	var legacy_speed = clampf(float(prefs.get_value("gameplay","note_speed",1.0)), .5, 3.0)
 	note_speed = clampf(snappedf(float(prefs.get_value("gameplay","speed_value",legacy_speed*3.0)),.1),1.0,10.0)/3.0
-	hit_style = str(prefs.get_value("effects","hit_style","classic"))
-	if hit_style not in HIT_STYLES: hit_style="classic"
+	hit_style = str(prefs.get_value("effects","hit_style","ssrg"))
+	if hit_style not in HIT_STYLES: hit_style="ssrg"
 	hit_size = clampf(float(prefs.get_value("effects","hit_size",1.0)),.6,1.6)
 	hit_color = str(prefs.get_value("effects","hit_color",""))
 	if hit_color!="" and not Color.html_is_valid(hit_color): hit_color=""

@@ -24,7 +24,6 @@ func run() -> void:
 	game.start_game(notes,true)
 	check(world.warming and world.camera.cull_mask==world.WARM_LAYER,"The stage is held back when a song starts from a menu")
 	check(game.stage_intro.visible and game.stage_intro.build_progress()<1.0,"The loading card waits for the shaders")
-	check(world.bursts.is_empty() and world.hit_pool.is_empty(),"SYNK's own hit bursts are not prepared while SSRG hits are in use")
 	var frames=0;var most_at_once=0;var covered=true
 	while world.warming and frames<900:
 		await process_frame;frames+=1
@@ -60,21 +59,14 @@ func run() -> void:
 	check(world.warming,"Held back again for the next song")
 	game.set_mode("menu");await process_frame;await process_frame
 	check(not world.warming and world.camera.cull_mask==normal_mask,"Leaving the loading card restores the camera")
-	# SYNK's own look and hit bursts use built-in materials; those are prepared too.
-	game.highway_style="gold";game.hit_style="classic";world.refresh_highway_look()
+	# The Lumen hit style on SYNK's own look is prepared too.
+	game.highway_style="gold";game.hit_style="lumen";world.refresh_highway_look()
 	game.start_game(notes,true)
-	for i in 3:await process_frame
-	var burst_materials:Array=[]
-	for burst in world.bursts+world.hit_pool:
-		for piece in burst.node.find_children("*","GeometryInstance3D",true,false):
-			for material in [piece.material_override]+([piece.get_active_material(0)] if piece is MeshInstance3D and piece.mesh else []):
-				if material:burst_materials.append(material)
-	check(not burst_materials.is_empty(),"SYNK's hit bursts are built for its own hit style")
 	frames=0
 	while world.warming and frames<900:
 		await process_frame;frames+=1
-	check(not world.warming and world.warm_total>0 and world.camera.cull_mask==normal_mask,"The classic look warms up and finishes (%d shaders)" % world.warm_total)
-	check(burst_materials.all(func(material):return world.warm_seen.has(shader_key(world,material))),"Hit bursts are prepared before the first hit")
+	check(not world.warming and world.camera.cull_mask==normal_mask,"The Lumen look warms up and finishes (%d shaders)" % world.warm_total)
+	check(world.ssrg_theme.hit_pool[0].style=="lumen" and world.warm_seen.has(shader_key(world,world.ssrg_theme.hit_pool[0].material)),"Lumen flashes are prepared before the first hit")
 	var plain=StandardMaterial3D.new();var same=StandardMaterial3D.new();same.albedo_color=Color.RED
 	var other=StandardMaterial3D.new();other.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
 	check(world.warm_program(plain)==world.warm_program(same) and world.warm_program(plain)!=world.warm_program(other),"Built-in materials are told apart by their switches, not their colours")

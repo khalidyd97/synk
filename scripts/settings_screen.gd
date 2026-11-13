@@ -616,18 +616,18 @@ func effect_row(items: VBoxContainer,key: String,hint: String) -> void:
 func build_hit_effects(items: VBoxContainer) -> void:
     # The live highway keeps firing hits here, so every change shows at once.
     var preview=preload("res://scripts/hit_effect_preview.gd").new(); preview.game=game; items.add_child(preview)
-    var style=row(items,"Hit effect style","Classic bursts, Bloom rings, or SSRG's hit art. The SSRG highway always uses SSRG art.")
+    var style=row(items,"Hit effect style","SKD's own flash, or Lumen: a light ring and column with glass shards, coloured by note type. Both follow the lanes the same way.")
     var choices=HBoxContainer.new(); choices.add_theme_constant_override("separation",10); add_control(style,choices,480)
     for value in game.HIT_STYLES:
         var key: String=value
-        var b=action(choices,"SSRG" if key=="ssrg" else key.capitalize(),func(): game.change_hit_style(key))
+        var b=action(choices,"SKD" if key=="ssrg" else key.capitalize(),func(): game.change_hit_style(key))
         b.custom_minimum_size=Vector2(150,72); b.caption_size=21; hit_style_buttons[key]=b
     hit_size_input=Stepper.new(60,160,10,game.hit_size*100,"%",0)
-    add_control(row(items,"Hit size","How big each hit flash and burst is, on every highway style."),hit_size_input)
+    add_control(row(items,"Hit size","How big each hit flash is, on every highway style."),hit_size_input)
     hit_size_input.value_changed.connect(func(v): game.change_hit_look("size",v/100))
     look_color_row(items,"hit_color","Hit color","Choose any color, or follow each note with AUTO.")
     effect_row(items,"Hit flashes","Set the brightness of hit flashes and impact rings.")
-    effect_row(items,"Particles","Set particle density for note-hit sparks.")
+    effect_row(items,"Particles","Set how many glass shards a Lumen hit throws.")
     action(items,"RESET HIT EFFECTS",func():
         for key in ["Hit flashes","Particles"]: effect_inputs[key].value=100
         hit_size_input.value=100; game.change_hit_look("color",""))

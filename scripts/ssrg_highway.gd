@@ -84,8 +84,9 @@ func refresh() -> void:
 	if world.cover_material: world.cover_material.set_shader_parameter("photo", active)
 
 # --- Hit effects ---------------------------------------------------------------------
-func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int) -> void:
+func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int, direction: int = -1) -> void:
 	var h: Dictionary = hit_pool.pop_back() if not hit_pool.is_empty() else make_hit()
+	style_hit(h)
 	# B belongs to source special event/item notes. Ordinary taps and sustains use A.
 	var frames=special_frames if kind=="special" else imported_frames
 	h.frames=frames
@@ -98,11 +99,18 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 	h.node.position = flash_point(h.x)
 	h.node.rotation = world.camera.rotation
 	h.material.set_shader_parameter("opacity", world.game.features.effect("Hit flashes"))
+	h.material.set_shader_parameter("frame", 0.0)
+	if h.style == "lumen":
+		h.material.set_shader_parameter("tint", lumen_tint(kind))
+		h.material.set_shader_parameter("direction", float(direction) if kind == "flick" else -1.0)
+		h.material.set_shader_parameter("seed", randf() * 100.0)
+		h.material.set_shader_parameter("particles", world.game.features.effect("Particles"))
 	# Hit effects page: size, and an optional colour over the source art.
 	h.node.scale = Vector3.ONE * world.game.hit_size * (1.0 if world.game.uses_ssrg_gameplay() else SYNK_HIGHWAY_SCALE)
 	h.node.rotation = world.camera.rotation
-	h.material.set_shader_parameter("tint", Color.from_string(world.game.hit_color, Color.WHITE) if world.game.hit_color != "" else Color.WHITE)
-	h.material.set_shader_parameter("recolor", world.game.hit_color != "")
+	if h.style == "ssrg":
+		h.material.set_shader_parameter("tint", Color.from_string(world.game.hit_color, Color.WHITE) if world.game.hit_color != "" else Color.WHITE)
+		h.material.set_shader_parameter("recolor", world.game.hit_color != "")
 	h.node.visible = true; hits.append(h)
 
 # How fast a flash crosses lanes, and how long it may keep going after its note has ended.
@@ -136,25 +144,39 @@ const SYNK_HIGHWAY_SCALE = 1.25
 func make_hit() -> Dictionary:
 	# Source centered 310x186 sprite under def_c_trans scale (2,2,1).
 	var mesh = QuadMesh.new(); mesh.size = Vector2(620,372)*world.SSRG_UNIT*HIT_SCALE
-	var mat = ShaderMaterial.new(); mat.shader = preload("res://scripts/ssrg_hit.gdshader"); mat.render_priority = 6
+	var mat = ShaderMaterial.new(); mat.render_priority = 6
 	# Hits live on their own layer, so they also show when the SSRG stage itself is hidden.
 	if hit_layer == null:
 		hit_layer = Node3D.new(); hit_layer.name = "SSRGHitLayer"; world.add_child.call_deferred(hit_layer)
 	var node = world.mesh_node(mesh, hit_layer, mat); node.rotation = world.camera.rotation; node.visible = false
-	return {"node": node, "material": mat, "age": 0.0, "sustain_entry": {}, "pointer_id": -999, "kind": "tap"}
+	var h = {"node": node, "material": mat, "age": 0.0, "sustain_entry": {}, "pointer_id": -999, "kind": "tap", "style": ""}
+	style_hit(h)
+	return h
+
+# Two hit styles share everything above: the sprite, its place on the lanes, the 33 fps frame
+# clock, the lifetime and the sustain re-triggers. Only the picture differs.
+#   SKD:   the source flash artwork.
+#   Lumen: SYNK's own flash, drawn by lumen_hit.gdshader, coloured by note type.
+const STYLE_SHADERS = {"ssrg": preload("res://scripts/ssrg_hit.gdshader"), "lumen": preload("res://scripts/lumen_hit.gdshader")}
+func hit_style() -> String:
+	return "lumen" if world.game.hit_style == "lumen" else "ssrg"
+
+func style_hit(h: Dictionary) -> void:
+	var style = hit_style()
+	if h.get("style", "") == style: return
+	h.style = style; h.material.shader = STYLE_SHADERS[style]
+
+# Lumen's colours follow the notes: blue taps, gold holds and slides (their connectors are
+# gold), pink flicks. A colour chosen on the Hit effects page replaces them.
+const LUMEN_COLORS = {"tap": Color("4fd2ff"), "hold": Color("ffc94a"), "slide": Color("ffc94a"), "flick": Color("ff6fb5"), "special": Color("b993ff")}
+func lumen_tint(kind: String) -> Color:
+	if world.game.hit_color != "": return Color.from_string(world.game.hit_color, Color.WHITE)
+	return world.element_color("hits", LUMEN_COLORS.get(kind, LUMEN_COLORS.tap))
 
 func release(h: Dictionary) -> void:
 	h.node.visible = false; hit_pool.append(h)
 
 func resume_sustain(entry:Dictionary) -> void:
-	# SSRG rules run on every highway; off the SSRG stage (and without the SSRG hit style)
-	# the sustain flash uses the player's own hit style instead of SSRG art.
-	if not world.uses_ssrg_hits():
-		var key=entry.get("key","")
-		for burst in world.bursts+world.blooms:
-			if burst.sustain_entry.get("key","")==key:return
-		world.spawn_hit(SynkChart.lane_at(entry.note,world.game.song_time),str(entry.note.kind),int(entry.note.get("direction",0)),entry,int(entry.get("pointer",-999)))
-		return
 	for hit in hits:
 		if hit.sustain_entry.get("key","")==entry.get("key",""):return
 	spawn(SynkChart.lane_at(entry.note,world.game.song_time),str(entry.note.kind),entry,int(entry.pointer))
@@ -181,6 +203,8 @@ func late_pieces() -> Array:
 
 func prefill(count: int = 16) -> void:
 	while hit_pool.size() + hits.size() < count: hit_pool.append(make_hit())
+	# Pooled flashes take the style in use now, so the warm-up prepares the right picture.
+	for h in hit_pool: style_hit(h)
 
 static func sustain_effect_active(entry:Dictionary,at:float,ssrg:bool) -> bool:
 	if entry.is_empty():return false
@@ -261,7 +285,11 @@ func advance_hits(delta: float, playing: bool) -> void:
 				h.placed = true
 				h.node.position = flash_point(h.x)
 		var frames: Array=h.get("frames",imported_frames)
-		if not frames.is_empty(): h.material.set_shader_parameter("atlas",frames[mini(frames.size()-1,int(h.age*HIT_FPS))])
+		var frame_index = int(h.age*HIT_FPS)
+		if h.style == "lumen":
+			h.material.set_shader_parameter("frame", float(mini(10, frame_index)))
+			h.material.set_shader_parameter("particles", game.features.effect("Particles"))
+		elif not frames.is_empty(): h.material.set_shader_parameter("atlas",frames[mini(frames.size()-1,frame_index)])
 		h.material.set_shader_parameter("opacity",game.features.effect("Hit flashes"))
 	return
 	if game.live.size() != used_for_size:

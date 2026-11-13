@@ -103,7 +103,7 @@ func report(label: String) -> void:
 	print("SYNK_STRESS %s scripts_ms=%.2f" % [label, script_usec / 1000.0 / maxf(1, frames.size())])
 	script_usec = 0
 	var w = game.field.world
-	print("SYNK_STRESS %s counts animated=%d bursts=%d notes=%d visible_notes=%d" % [label, w.animated_materials.size(), w.bursts.size(), w.notes.size(), w.notes.values().filter(func(n): return n.node.visible).size()])
+	print("SYNK_STRESS %s counts animated=%d bursts=%d notes=%d visible_notes=%d" % [label, w.animated_materials.size(), w.ssrg_theme.hits.size(), w.notes.size(), w.notes.values().filter(func(n): return n.node.visible).size()])
 	frames.clear(); proc.clear(); cpu_render.clear(); gpu_render.clear()
 
 var last_usec = 0
@@ -135,7 +135,7 @@ func _process(_delta: float) -> void:
 			var made = recent_nodes.filter(func(t): return int(t.frame) >= frame - 3).map(describe)
 			var w = game.field.world
 			var th = w.ssrg_theme
-			print("SYNK_STRESS hitch ms=%.0f song_time=%.2f combo=%d judged=%d bursts=%d animated=%d ssrg_pool=%d ssrg_hits=%d prewarmed=%s new=%s" % [(now - last_usec) / 1000.0, game.song_time, game.combo, game.judged, w.bursts.size(), w.animated_materials.size(), th.hit_pool.size() if th else -1, th.hits.size() if th else -1, w.prewarmed.keys(), made])
+			print("SYNK_STRESS hitch ms=%.0f song_time=%.2f combo=%d judged=%d bursts=%d animated=%d ssrg_pool=%d ssrg_hits=%d prewarmed=%s new=%s" % [(now - last_usec) / 1000.0, game.song_time, game.combo, game.judged, w.ssrg_theme.hits.size(), w.animated_materials.size(), th.hit_pool.size() if th else -1, th.hits.size() if th else -1, w.prewarmed.keys(), made])
 		proc.append(Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0)
 		var vp = get_viewport().get_viewport_rid()
 		cpu_render.append(RenderingServer.viewport_get_measured_render_time_cpu(vp))

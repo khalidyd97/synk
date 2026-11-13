@@ -5,7 +5,7 @@ extends RefCounted
 const GROUPS = {
     "Notes & trails":{"tap":"Tap notes","hold":"Hold notes","slide":"Slide notes","flick":"Flick notes","hold_trail":"Hold trails","slide_trail":"Slide trails","arrows":"Flick arrows"},
     "Highway & atmosphere":{"rail":"Rails","band":"Judgment band","track":"Highway surface","glow":"Rail glow","particles":"Ambient particles","lasers":"Laser streaks"},
-    "Hit feedback":{"hits":"Hit bursts","sparks":"Hit sparks","beams":"Touch beams"},
+    "Hit feedback":{"hits":"Hit flashes","beams":"Touch beams"},
     "Gameplay HUD":{"combo":"Combo counter","judgment":"Judgment text","score":"Score","energy":"Energy gauge","hud":"Song details & labels","countdown":"Countdown"}
 }
 
