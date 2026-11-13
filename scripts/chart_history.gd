@@ -3,8 +3,8 @@ extends Control
 # any version the live chart for that level (the previous live chart is kept as a version).
 const Action = preload("res://scripts/settings_action.gd")
 const UiMotion = preload("res://scripts/ui_motion.gd")
-const BOLD = preload("res://assets/fonts/FiraSans-Bold.ttf")
-const CYAN = Color("ff8a5b")
+const Arcade = preload("res://scripts/arcade_style.gd")
+const CORAL = Color("ff8a5b")
 const MUTED = Color("bcb7ad")
 
 var game: Control
@@ -30,22 +30,24 @@ func action(parent: Control, value: String, callback: Callable, primary: bool = 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	theme = preload("res://scripts/game_theme.gd").arcade()
 	preload("res://scripts/modal_input.gd").register(self)
 	var dim = ColorRect.new(); add_child(dim); dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); dim.color = Color(0.006,0.006,0.006,.78)
 	canvas = Control.new(); add_child(canvas); canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	resized.connect(layout); layout()
 	var card = Panel.new(); canvas.add_child(card); card.position = Vector2(258, 70); card.size = Vector2(940, 680)
-	card.add_theme_stylebox_override("panel", style(Color(0.041,0.041,0.041,.97), Color("34353a"), 26))
-	var eyebrow = label(card, " ".join("VERSION HISTORY".split("")), 36, 24, 600, 24, 14, CYAN)
-	heading = label(card, "", 36, 50, 700, 52, 34); heading.add_theme_font_override("font", BOLD)
+	var frame = style(Color("16151a"), Color(0, 0, 0, 0), 28); frame.set_border_width_all(0); frame.shadow_color = Color(0, 0, 0, .45); frame.shadow_size = 28
+	card.add_theme_stylebox_override("panel", frame)
+	label(card, "Version history", 36, 24, 600, 26, 17, MUTED)
+	heading = label(card, "", 36, 50, 700, 56, 40); heading.add_theme_font_override("font", Arcade.SERIF)
 	label(card, "Every save is kept. Switch makes a version the live chart; the current one stays in this list.", 36, 102, 860, 28, 17, MUTED)
-	var close = action(card, "CLOSE", func(): close_view()); close.position = Vector2(764, 30); close.size = Vector2(140, 62)
+	var close = action(card, "Close", func(): close_view()); close.position = Vector2(764, 30); close.size = Vector2(140, 62)
 	var scroll = ScrollContainer.new(); card.add_child(scroll); scroll.position = Vector2(36, 146); scroll.size = Vector2(868, 506)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	var drag = preload("res://scripts/song_list_scroll.gd").new(); drag.scroll = scroll; scroll.add_child(drag)
 	list = VBoxContainer.new(); scroll.add_child(list); list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	list.add_theme_constant_override("separation", 10)
-	empty = label(card, "No saved versions yet. Each SAVE in Chart Studio adds one.", 36, 300, 868, 60, 20, MUTED)
+	empty = label(card, "No saved versions yet. Each save in Chart studio adds one.", 36, 300, 868, 60, 20, MUTED)
 	empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	refresh()
 	UiMotion.pop(card)
@@ -66,17 +68,21 @@ func refresh() -> void:
 
 func row(version: Dictionary, is_live: bool) -> Control:
 	var panel = PanelContainer.new(); panel.custom_minimum_size = Vector2(0, 92)
-	panel.add_theme_stylebox_override("panel", style(Color("103043") if is_live else Color(1,1,1,.05), CYAN if is_live else Color("34353a"), 18))
+	var plate = style(Color(1,1,1,.10) if is_live else Color(1,1,1,.05), Color(0, 0, 0, 0), 18); plate.set_border_width_all(0)
+	panel.add_theme_stylebox_override("panel", plate)
 	var holder = Control.new(); panel.add_child(holder); holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var number = label(holder, "v%d" % int(version.number), 22, 0, 90, 92, 30); number.add_theme_font_override("font", BOLD)
+	var number = label(holder, "v%d" % int(version.number), 22, 0, 90, 92, 34); number.add_theme_font_override("font", Arcade.SERIF)
 	var when = str(version.saved_at).replace("T", "  ·  ").left(20)
 	label(holder, "%d notes   ·   %s" % [int(version.notes), when], 120, 14, 520, 34, 20)
 	label(holder, str(version.note) if not str(version.note).is_empty() else "Saved from Chart Studio", 120, 46, 520, 30, 16, MUTED)
 	if is_live:
-		label(holder, "LIVE", 724, 0, 120, 92, 18, CYAN).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		# The live version wears a small coral chip, like "Ready" in the chart library.
+		var chip = PanelContainer.new(); holder.add_child(chip); chip.position = Vector2(724, 28); chip.size = Vector2(110, 36)
+		var chip_style = style(Color(CORAL, .18), Color(0, 0, 0, 0), 999); chip_style.set_border_width_all(0); chip.add_theme_stylebox_override("panel", chip_style)
+		var live = label(chip, "Live", 0, 0, 110, 36, 17, CORAL); live.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	else:
 		var path = str(version.path)
-		var b = action(holder, "SWITCH", func(): switch(path, int(version.number)), true); b.position = Vector2(690, 14); b.size = Vector2(150, 64)
+		var b = action(holder, "Switch", func(): switch(path, int(version.number)), true); b.position = Vector2(690, 14); b.size = Vector2(150, 64)
 	return panel
 
 func switch(path: String, number: int) -> void:

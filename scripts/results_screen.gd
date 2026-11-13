@@ -72,6 +72,9 @@ func _ready() -> void:
     canvas=Control.new(); add_child(canvas); canvas.mouse_filter=Control.MOUSE_FILTER_IGNORE
     canvas.theme=preload("res://scripts/game_theme.gd").arcade(); resized.connect(layout); game.safe_area_changed.connect(layout); layout()
     card=Control.new(); place(card,canvas,68,51,137,137)
+    # Settings, top right, like every other screen.
+    var gear=preload("res://scripts/gear_button.gd").new(); gear.accent=Color("f4f1ea"); place(gear,canvas,1916,56,88,88)
+    gear.pressed.connect(func(): game.open_lobby_settings())
     card.anchor_right=card.anchor_left; card.anchor_bottom=card.anchor_top; card.offset_right=137; card.offset_bottom=137
     card_art=TextureRect.new(); card.add_child(card_art); card_art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     card_art.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; card_art.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED

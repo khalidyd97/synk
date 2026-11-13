@@ -263,6 +263,9 @@ var ssrg_playables: Control
 var app_login: CanvasLayer
 var chart_library: Control
 var menu_settings_open = false
+var settings_layer: CanvasLayer
+# Whether opening Settings hid the lobby, so closing it brings the lobby back.
+var settings_hid_lobby = false
 var modal: Panel
 var pause_backdrop: ColorRect
 var pause_layer: CanvasLayer
@@ -288,6 +291,7 @@ var bluetooth_toggle: Button
 var bluetooth_latency_input: Control
 var primary: Button
 var pause_home: Button
+var pause_settings: Button
 var pause_restart: Button
 var countdown_label: Label
 var actions: Control
@@ -500,8 +504,12 @@ func _ready() -> void:
 	ui.move_child(chart_library,1)
 	extras=preload("res://scripts/gameplay_extras.gd").new(); extras.game=self; add_child(extras)
 	settings_panel=Control.new(); settings_panel.set_script(load("res://scripts/settings_screen.gd")); settings_panel.game=self; settings_panel.theme=preload("res://scripts/game_theme.gd").arcade()
-	ui.add_child(settings_panel); settings_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	ui.move_child(settings_panel,2); settings_panel.visible=false
+	# Its own layer, above every screen and the pause card, so it opens from anywhere.
+	settings_layer=CanvasLayer.new(); settings_layer.name="SettingsOverlay"; settings_layer.layer=1005; add_child(settings_layer)
+	var settings_host=Control.new(); settings_layer.add_child(settings_host); settings_host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	settings_host.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	settings_host.add_child(settings_panel); settings_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	settings_panel.visible=false
 	song_details=Control.new(); song_details.set_script(load("res://scripts/song_details.gd")); song_details.game=self; song_details.theme=preload("res://scripts/game_theme.gd").arcade()
 	ui.add_child(song_details); song_details.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.move_child(song_details,3); song_details.visible=false
@@ -665,6 +673,12 @@ func button(parent: Node,text: String,x: float,y: float,right: float,bottom: flo
 	result.pressed.connect(action)
 	return result
 
+# The Settings gear every screen carries. It opens Settings over that screen.
+func settings_gear(parent: Node,x: float,y: float,right: float,bottom: float) -> Button:
+	var gear=preload("res://scripts/gear_button.gd").new(); gear.accent=preload("res://scripts/arcade_style.gd").CYAN
+	rect(gear,parent,x,y,right,bottom); gear.pressed.connect(open_lobby_settings)
+	return gear
+
 func pause_action(parent: Node,text: String,x: float,y: float,right: float,bottom: float,action: Callable,variant: String) -> Button:
 	var result=load("res://scripts/pause_action.gd").new()
 	result.text=text; result.caption_size=19; result.compact=true; result.variant=variant
@@ -740,6 +754,7 @@ func build_ui() -> void:
 	modal_title=label(modal,"synk",.04,.025,.96,.17,48); modal_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	modal_title.add_theme_font_override("font",preload("res://scripts/arcade_style.gd").mono_bold()); modal_title.add_theme_color_override("font_color",Color("f4f1ea"))
 	modal_body=label(modal,"",.06,.17,.94,.43,22); modal_body.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; modal_body.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	pause_settings=settings_gear(modal,.885,.04,.955,.15)
 	primary=pause_action(modal,"PLAY",.23,.88,.77,.97,primary_action,"primary")
 	pause_restart=pause_action(modal,"RESTART",.36,.88,.64,.97,restart_from_pause,"secondary")
 	pause_home=pause_action(modal,"HOME",.66,.88,.94,.97,return_home,"nav")
@@ -937,6 +952,7 @@ func set_mode(value: String,animate_transition:bool=true) -> void:
 	if value!=mode and value in ["menu","library","editor","guide"]: UiSound.play(self,"transition")
 	if value!="record" and arrange_preview: arrange_preview.stop()
 	mode=value; menu_settings_open=false
+	if settings_panel and settings_panel.visible: settings_panel.visible=false
 	# The "ssrg" highway style only applies in gameplay, so entering or leaving it swaps the stage.
 	if uses_ssrg_gameplay()!=was_ssrg_look and field and field.world: field.world.refresh_highway_look()
 	if field and field.world:
@@ -1014,12 +1030,14 @@ func set_mode(value: String,animate_transition:bool=true) -> void:
 		UiMotion.screen(studio)
 	if mr: mr.sync_mode()
 
+# Settings opens from every screen and covers it; BACK returns to that screen.
 func open_lobby_settings() -> void:
-	if mode!="menu": return
+	if settings_panel.visible: return
+	if mode in ["play","record"]: return  # running gameplay pauses first, then Settings opens from the pause card
 	UiMotion.transition(self)
-	# Settings is its own page; BACK returns to the lobby.
 	menu_settings_open=true
-	lobby.visible=false
+	settings_hid_lobby=mode=="menu" and lobby.visible
+	if settings_hid_lobby: lobby.visible=false
 	settings_panel.refresh(); settings_panel.visible=true
 	UiMotion.screen(settings_panel)
 
@@ -1027,7 +1045,8 @@ func close_lobby_settings() -> void:
 	UiMotion.back(self)
 	menu_settings_open=false
 	settings_panel.visible=false
-	if mode=="menu":
+	if mode=="paused": pause_speed.sync_value(pause_speed_setting())
+	if mode=="menu" and settings_hid_lobby and not ssrg_playables.visible and not sync_helper.visible:
 		lobby.visible=true
 		UiMotion.reveal(lobby)
 
@@ -1244,7 +1263,7 @@ func restart_from_pause() -> void:
 		start_game(last_play_notes,auto_play,last_section)
 
 func primary_action() -> void:
-	if mode=="menu" and menu_settings_open: close_lobby_settings()
+	if menu_settings_open and settings_panel.visible: close_lobby_settings()
 	elif mode=="paused":
 		if ssrg_failed:restart_from_pause()
 		else:toggle_pause()
@@ -2209,7 +2228,16 @@ func _process(delta: float) -> void:
 	practice_hud.text="PRACTICE · %s× · %s%d" % [str(practice.speed),"LOOP " if practice.repeat_enabled else "TAKE ",practice.round_number]
 	timing_label.visible=mode=="play" and not auto_play and not counting and flash>0 and not finishing
 	timing_label.modulate.a=clampf(flash,0,1)
-	if mode=="paused":
+	if mode=="paused" and ssrg_failed:
+		# A failed run cannot be resumed: only Retry and Song list, side by side.
+		primary.visible=false
+		pause_restart.text="RETRY"; pause_home.text="SONG LIST"
+		pause_restart.anchor_left=.06; pause_restart.anchor_right=.49
+		pause_home.anchor_left=.51; pause_home.anchor_right=.94
+	elif mode=="paused":
+		primary.visible=true
+		pause_restart.anchor_left=.36; pause_restart.anchor_right=.64
+		pause_home.anchor_left=.66; pause_home.anchor_right=.94
 		pause_home.text="REVIEW TAKE" if paused_mode=="record" else ("EDITOR" if practice.active else "HOME")
 		pause_restart.text="RETRY TAKE" if paused_mode=="record" else "RESTART"
 		primary.text="RESUME REC" if paused_mode=="record" else "RESUME"
@@ -2366,7 +2394,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		if recorder.setup:
 			recorder.setup.queue_free(); recorder.setup=null; return
 		if recorder.review: recorder.keep(); return
-		if mode=="menu" and ssrg_playables.visible:ssrg_playables.back()
+		if menu_settings_open and settings_panel.visible: close_lobby_settings()
+		elif mode=="menu" and ssrg_playables.visible:ssrg_playables.back()
 		elif mode=="menu" and sync_helper.visible: sync_helper.close()
 		elif mode=="menu" and menu_settings_open: close_lobby_settings()
 		elif mode=="guide": set_mode("menu")
@@ -2834,9 +2863,10 @@ func ssrg_game_over() -> void:
 	if ssrg_failed or finishing or mode!="play":return
 	ssrg_failed=true;audio.stream_paused=true;pointers.clear();ssrg_touch_router.reset();ssrg_contact_ids.clear()
 	paused_mode="play";set_mode("paused",false)
-	modal_title.text="FAILED";modal_body.text="Life reached zero. Retry the song or return to the song list."
-	primary.text="RETRY";pause_restart.text="RETRY";pause_home.text="SONG LIST"
-	pause_info.text=str(song.get("title",""))+"   ·   FAILED"
+	# The reason sits on the line under the title, clear of the buttons.
+	modal_title.text="Failed";modal_body.text=""
+	pause_restart.text="RETRY";pause_home.text="SONG LIST"
+	pause_info.text=str(song.get("title",""))+"   ·   Life reached zero"
 
 func _audio_finished() -> void:
 	if mode=="record": stop_take()

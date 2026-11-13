@@ -1,4 +1,5 @@
 extends Node
+const Arcade=preload("res://scripts/arcade_style.gd")
 const UiMotion=preload("res://scripts/ui_motion.gd")
 # Authoring services; saved charts and recoverable drafts stay separate.
 var game: Control
@@ -175,10 +176,30 @@ func import_chart(path: String) -> Error:
     game.document.checkpoint(); game.document.notes=notes.duplicate(true); game.document.settings=config; game.document.selected=-1
     game.refresh_editor(); return OK
 func ui_text(parent: Node,text: String,size: int=18) -> Label:
-    var label=Label.new(); parent.add_child(label); label.text=text
+    var label=Label.new(); parent.add_child(label); label.text=preload("res://scripts/ui_icons.gd").menu_case(text)  # headings in sentence case
     label.add_theme_font_size_override("font_size",size); label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+    # Larger lines lead a page; the rest explain it, quieter, as Settings rows do.
+    label.add_theme_color_override("font_color",Arcade.TEXT if size>=20 else Arcade.MUTED)
+    if size>=20: label.add_theme_font_override("font",Arcade.sans(600))
     label.size_flags_horizontal=Control.SIZE_EXPAND_FILL
     return label
+# Pill tabs like the Settings section tabs: paper white when chosen, frosted otherwise.
+func style_tabs(container: TabContainer) -> void:
+    var bar=container.get_tab_bar()
+    bar.add_theme_font_size_override("font_size",17); bar.add_theme_font_override("font",Arcade.sans(600))
+    bar.add_theme_constant_override("h_separation",8)
+    for state in ["tab_selected","tab_unselected","tab_hovered","tab_focus"]:
+        var pill=StyleBoxFlat.new(); pill.set_corner_radius_all(999); pill.anti_aliasing=true
+        pill.bg_color={"tab_selected":Arcade.CYAN,"tab_hovered":Color(1,1,1,.12),"tab_unselected":Color(1,1,1,.06),"tab_focus":Color(0,0,0,0)}[state]
+        pill.content_margin_left=20; pill.content_margin_right=20; pill.content_margin_top=10; pill.content_margin_bottom=10
+        bar.add_theme_stylebox_override(state,pill)
+    bar.add_theme_color_override("font_selected_color",Arcade.INK)
+    bar.add_theme_color_override("font_unselected_color",Arcade.SUBTLE)
+    bar.add_theme_color_override("font_hovered_color",Color.WHITE)
+    var page_box=StyleBoxFlat.new(); page_box.bg_color=Color(1,1,1,.04); page_box.set_corner_radius_all(20); page_box.anti_aliasing=true
+    page_box.content_margin_left=24; page_box.content_margin_right=24; page_box.content_margin_top=18; page_box.content_margin_bottom=18
+    container.add_theme_stylebox_override("panel",page_box)
+    container.add_theme_constant_override("side_margin",0)
 func ui_button(parent: Node,text: String,callback: Callable,variant: String="tool") -> Button:
     return app_button(parent,text,callback,variant)
 # The app's rounded button (settings_action). Gradient for primary actions, red edge for danger.
@@ -203,36 +224,34 @@ func open_tools(selected_tab: String="Drafts") -> void:
     game.stop_audition()
     if overlay: overlay.queue_free()
     overlay=Control.new(); game.ui.add_child(overlay); overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    overlay.theme=preload("res://scripts/game_theme.gd").arcade()
     preload("res://scripts/modal_input.gd").register(overlay)
     var dim=ColorRect.new(); overlay.add_child(dim); dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); dim.color=Color(0.006,0.006,0.006,.88)
     var safe_content=game.safe_parent("SafeDialogControls",overlay)
     var panel=Panel.new(); game.rect(panel,safe_content,.055,.06,.945,.94)
-    var style=StyleBoxFlat.new(); style.bg_color=Color(.035,.035,.035,.95); style.set_corner_radius_all(26); style.border_color=Color(1,1,1,.1); style.set_border_width_all(1)
-    style.shadow_color=Color(0,0,0,.5); style.shadow_size=24
+    var style=StyleBoxFlat.new(); style.bg_color=Color("16151a"); style.set_corner_radius_all(28); style.anti_aliasing=true
+    style.shadow_color=Color(0,0,0,.45); style.shadow_size=28
     panel.add_theme_stylebox_override("panel",style)
 
     preload("res://scripts/interface_life.gd").mount(panel)
     UiMotion.reveal(dim)
     UiMotion.pop(panel)
     global_settings=selected_tab in ["Effects","Authoring"]
-    game.label(panel,("VISUAL EFFECTS" if selected_tab=="Effects" else "EDITOR PREFERENCES") if global_settings else "CHART TOOLS",.025,.01,.75,.08,28)
-    tools_context=game.label(panel,"",.025,.075,.79,.125,17)
+    var window_title=game.label(panel,("Visual effects" if selected_tab=="Effects" else "Editor preferences") if global_settings else "Chart tools",.03,.015,.75,.09,34)
+    window_title.add_theme_font_override("font",Arcade.sans(650)); window_title.add_theme_color_override("font_color",Arcade.TEXT)
+    tools_context=game.label(panel,"",.03,.085,.79,.13,17)
+    tools_context.add_theme_color_override("font_color",Arcade.MUTED)
     tools_context.clip_text=true; tools_context.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
-    app_button(panel,"CLOSE",close_tools,"nav",Rect2(.82,.02,.155,.065))
+    app_button(panel,"Close",close_tools,"nav",Rect2(.83,.025,.14,.07))
     scope_buttons={}
     scope_refresh={}
     if not global_settings:
         var index=0
         for scope in TOOL_SCOPES:
-            var button=app_button(panel,scope,func(): show_scope(scope),"tool",Rect2(.025+index*.24,.15,.225,.075))
+            var button=app_button(panel,scope,func(): show_scope(scope),"tool",Rect2(.03+index*.237,.15,.222,.075))
             button.caption_size=16; scope_buttons[scope]=button; index+=1
-    tabs=TabContainer.new(); game.rect(tabs,panel,.025,.15 if global_settings else .255,.975,.88)
-    tabs.get_tab_bar().add_theme_font_size_override("font_size",19)
-    for state in ["tab_selected","tab_unselected","tab_hovered"]:
-        var tab_style=preload("res://scripts/game_theme.gd").plate(Color("26335b") if state=="tab_selected" else Color("151515"),Color("65dcff") if state=="tab_selected" else Color("334465"),4 if state=="tab_selected" else 1)
-        tab_style.content_margin_left=22; tab_style.content_margin_right=22
-        tab_style.content_margin_top=12; tab_style.content_margin_bottom=12
-        tabs.get_tab_bar().add_theme_stylebox_override(state,tab_style)
+    tabs=TabContainer.new(); game.rect(tabs,panel,.03,.15 if global_settings else .255,.97,.95)
+    style_tabs(tabs)
     var pages: Dictionary={}
     for name in TOOL_PAGES:
         var scroll=ScrollContainer.new(); tabs.add_child(scroll); scroll.name=name
@@ -247,7 +266,7 @@ func open_tools(selected_tab: String="Drafts") -> void:
     ui_button(pages.Drafts,"RECOVER DRAFT",func(): recovery_checked=""; var recovered=recover(true); game.refresh_editor(); report("Draft recovered. UNDO restores your previous edits." if recovered else "No recoverable draft for this version."))
     ui_text(pages.Charts,"One song, multiple charts. Switching versions stores your current draft first.",21)
     var variant=OptionButton.new(); pages.Charts.add_child(variant); variant.custom_minimum_size.y=48
-    for name in VARIANTS: variant.add_item(Levels.label(name).to_upper())
+    for name in VARIANTS: variant.add_item(Levels.label(name))
     variant.select(VARIANTS.find(current_variant)); variant.item_selected.connect(choose_variant)
     ui_text(pages.Sharing,"Export a chart file to share. Audio is not included; importing requires the matching song.",21)
     ui_button(pages.Sharing,"EXPORT CHART FILE",choose_export)
@@ -388,16 +407,16 @@ func show_scope(scope: String,preferred: String="") -> void:
 
 func refresh_tools_context() -> void:
     if not is_instance_valid(tools_context) or not is_instance_valid(tabs): return
-    if global_settings: tools_context.text="GAME SETTINGS · Applies to every song and chart"; return
+    if global_settings: tools_context.text="Game settings · Applies to every song and chart"; return
     var page=TOOL_PAGES[tabs.current_tab]
     var song_scope=page in ["Song","Charts"]
-    tools_context.text=("SONG · "+str(game.song.title)+" · Shared by all chart versions") if song_scope else ("CHART · "+str(game.song.title)+" / "+Levels.label(current_variant).to_upper()+" · Current draft")
+    tools_context.text=("Song · "+str(game.song.title)+" · Shared by all chart versions") if song_scope else ("Chart · "+str(game.song.title)+" / "+Levels.label(current_variant)+" · Current draft")
     if is_instance_valid(draft_context): draft_context.text="Current chart: "+Levels.label(current_variant)+" · "+str(game.song.title)
     if scope_refresh.has(page): scope_refresh[page].call()
 func populate_analysis(parent: VBoxContainer) -> void:
     for child in parent.get_children(): parent.remove_child(child); child.queue_free()
     var stats=preload("res://scripts/difficulty_analysis.gd").analyze(game.document.notes,game.length())
-    ui_text(parent,"%s · ESTIMATED Lv. %d / 30" % [stats.tier,stats.level],32)
+    var heading=ui_text(parent,"%s · Estimated Lv. %d / 30" % [str(stats.tier).capitalize(),stats.level],32); heading.add_theme_font_override("font",Arcade.sans(650))
     ui_text(parent,"%d notes · %.2f notes/sec in active passage · Peak %.1f notes/sec over 2 seconds" % [stats.notes,stats.average,stats.peak],21)
     ui_text(parent,"%d chord groups · %d taps · %d holds · %d slides · %d flicks" % [stats.chords,stats.types.tap,stats.types.hold,stats.types.slide,stats.types.flick],21)
     ui_text(parent,"%.1f total lanes of slide movement" % stats.movement)

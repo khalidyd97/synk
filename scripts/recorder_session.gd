@@ -283,6 +283,8 @@ func toggle(parent: Node, title: String, value: bool, callback: Callable) -> voi
 	b.toggled.connect( func(on): b.text = title + (" · ON" if on else " · OFF");b.set_selected(on);callback.call(on))
 func shell(title: String, narrow: bool = false) -> Dictionary:
 	var root = Control.new();game.ui.add_child(root);root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# The app's menu look: Inter Tight, sentence-case captions, frosted controls.
+	root.theme = preload("res://scripts/game_theme.gd").arcade()
 	preload("res://scripts/modal_input.gd").register(root)
 	var dim = ColorRect.new();root.add_child(dim);dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);dim.color = Color(0.0, 0.0, 0.0, 0.74)
 	var safe_content = game.safe_parent("SafeDialogControls", root)
@@ -325,25 +327,25 @@ func show_setup(global_only: bool = false) -> void :
 	if not global_only:
 		var session = setup_group(box, "SESSION RANGE")
 		toggle(session, "PUNCH IN · USE SELECTED RANGE / A–B", use_range, func(on): use_range = on)
-		choice(session, "Existing notes in the section", ["LAYER · keep existing notes", "REPLACE · overwrite unlocked pass types"], 1 if replace else 0, func(i): replace = i == 1)
-		toggle(session, "LOOP TAKES · stop to review up to 32 attempts", loop_takes, func(on): loop_takes = on)
+		choice(session, "Existing notes in the section", ["Layer · keep existing notes", "Replace · overwrite unlocked pass types"], 1 if replace else 0, func(i): replace = i == 1)
+		toggle(session, "Loop takes · stop to review up to 32 attempts", loop_takes, func(on): loop_takes = on)
 	var timing = setup_group(box, "TIMING & GRID")
-	choice(timing, "Audible pre-roll · bars of 4 beats", ["OFF", "1 BAR", "2 BARS", "3 BARS", "4 BARS"], pre_roll, func(i): pre_roll = i;persist("pre_roll", i))
-	choice(timing, "Resume lead-in · play-in before the chart runs out", ["1 SECOND", "2 SECONDS", "3 SECONDS"], resume_lead - 1, func(i): resume_lead = i + 1;persist("resume_lead", i + 1))
-	choice(timing, "Recording timing", ["FREE · preserve your timing", "SOFT SNAP · 50% toward grid", "STRICT SNAP · align to grid"], ["free", "soft", "strict"].find(quantize), func(i): quantize = ["free", "soft", "strict"][i];persist("quantize", quantize))
+	choice(timing, "Audible pre-roll · bars of 4 beats", ["Off", "1 bar", "2 bars", "3 bars", "4 bars"], pre_roll, func(i): pre_roll = i;persist("pre_roll", i))
+	choice(timing, "Resume lead-in · play-in before the chart runs out", ["1 second", "2 seconds", "3 seconds"], resume_lead - 1, func(i): resume_lead = i + 1;persist("resume_lead", i + 1))
+	choice(timing, "Recording timing", ["Free · preserve your timing", "Soft snap · 50% toward grid", "Strict snap · align to grid"], ["free", "soft", "strict"].find(quantize), func(i): quantize = ["free", "soft", "strict"][i];persist("quantize", quantize))
 	choice(timing, "Grid subdivision per beat", ["1 · quarter notes", "2 · eighth notes", "4 · sixteenth notes", "8 · thirty-second notes"], [1, 2, 4, 8].find(division), func(i): division = [1, 2, 4, 8][i];persist("division", division))
 	if not global_only:
 		var types = setup_group(box, "NOTE TYPES & PROTECTION")
-		choice(types, "Recording pass", ["ALL TYPES", "TAPS ONLY", "HOLDS ONLY", "SLIDES ONLY", "FLICKS ONLY"], ["all", "tap", "hold", "slide", "flick"].find(pass_kind), func(i): pass_kind = ["all", "tap", "hold", "slide", "flick"][i])
+		choice(types, "Recording pass", ["All types", "Taps only", "Holds only", "Slides only", "Flicks only"], ["all", "tap", "hold", "slide", "flick"].find(pass_kind), func(i): pass_kind = ["all", "tap", "hold", "slide", "flick"][i])
 		text(types, "Lock completed types · protects them from replacement and correction", 16)
 		for kind in SynkChart.TYPES:
-			toggle(types, "LOCK " + str(kind).to_upper(), kind in locked, func(on):
+			toggle(types, "Lock " + str(kind) + "s", kind in locked, func(on):
 				if on and kind not in locked: locked.append(kind)
 				elif not on: locked.erase(kind))
 	var guide = setup_group(box, "RHYTHM GUIDE")
-	toggle(guide, "RHYTHM GUIDE · accented downbeat", game.beat_clock.enabled, func(on):
+	toggle(guide, "Rhythm guide · accented downbeat", game.beat_clock.enabled, func(on):
 		game.beat_clock.enabled = on;game.beat_clock.last_time = -1;game.prefs.set_value("editor", "metronome", on);game.prefs.save("user://preferences.cfg"))
-	choice(guide, "Guide subdivisions", ["BEATS", "EIGHTHS", "SIXTEENTHS"], [1, 2, 4].find(game.beat_clock.subdivision), func(i): game.beat_clock.subdivision = [1, 2, 4][i];persist("guide_subdivision", game.beat_clock.subdivision))
+	choice(guide, "Guide subdivisions", ["Beats", "Eighths", "Sixteenths"], [1, 2, 4].find(game.beat_clock.subdivision), func(i): game.beat_clock.subdivision = [1, 2, 4][i];persist("guide_subdivision", game.beat_clock.subdivision))
 	number(guide, "Guide volume · dB", game.beat_clock.guide_db, -30, 0, 1, func(v): game.beat_clock.guide_db = v;persist("guide_db", v))
 	button(box, "DONE", func(): setup.queue_free();setup = null, "primary")
 
@@ -353,6 +355,7 @@ func show_review() -> void :
 	game.seek_to(region.x)
 	if game.timeline: game.timeline.reveal_time(region.x)
 	review = Control.new();game.ui.add_child(review);review.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	review.theme = preload("res://scripts/game_theme.gd").arcade()
 	preload("res://scripts/modal_input.gd").register(review)
 	review_dim = ColorRect.new();review.add_child(review_dim);review_dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	review_dim.color = Color(0.007, 0.007, 0.007, 0.72)
@@ -369,11 +372,11 @@ func show_review() -> void :
 	compare_label = text(left, "", 20)
 	warnings_label = text(left, "", 17)
 	var titles: Array = []
-	for i in takes.size(): titles.append("TAKE %d · %d notes" % [i + 1, takes[i].notes.size()])
+	for i in takes.size(): titles.append("Take %d · %d notes" % [i + 1, takes[i].notes.size()])
 	take_picker = choice(right, "Choose the attempt to keep", titles, selected_take, select_take)
 	take_picker.disabled = takes.size() < 2
 	if takes.size() > 1:
-		text(right, "COMBINE TWO TAKES", 17)
+		text(right, "Combine two takes", 17)
 		var first = choice(right, "First half", titles, 0, func(_i): pass)
 		var second = choice(right, "Second half", titles, selected_take, func(_i): pass)
 		var split = number(right, "Splice at song time · seconds", (region.x + region.y) * 0.5, region.x, region.y, 0.001, func(_v): pass)
@@ -420,5 +423,5 @@ func update_review() -> void :
 	if selected.is_empty(): compare_label.text = "EMPTY TAKE · Existing chart kept unchanged."
 	var lines = PackedStringArray()
 	for issue in pending_warnings.slice(0, 8): lines.append("%.2f s · %s" % [float(issue.time), str(issue.message)])
-	warnings_label.text = "QUALITY CHECK · " + ("No issues found" if pending_warnings.is_empty() else "%d flags\n" % pending_warnings.size() + "\n".join(lines))
+	warnings_label.text = "Quality check · " + ("No issues found" if pending_warnings.is_empty() else "%d flags\n" % pending_warnings.size() + "\n".join(lines))
 	if pending_warnings.size() > 8: warnings_label.text += "\nMore flags available in Chart Tools → Validate."

@@ -20,7 +20,8 @@ func _ready():
  host.action(self,"‹  Back",.02,.03,.12,.12,host.close,"nav")
  var heading=host.text(self,"Games",.15,.015,.6,.1,46,Color("f4f1ea"));heading.add_theme_font_override("font",preload("res://scripts/arcade_style.gd").SERIF)
  host.text(self,"Select a game to see its songs.",.15,.09,.7,.14,18,Color("bcb7ad"))
- host.action(self,"+ Add game",.78,.035,.98,.12,func():name_input.clear();add_dialog.popup_centered(),"primary")
+ host.action(self,"+ Add game",.72,.035,.9,.12,func():name_input.clear();add_dialog.popup_centered(),"primary")
+ host.game.settings_gear(self,.92,.04,.975,.115)
  search=LineEdit.new();host.place(search,self,.02,.17,.98,.24);search.placeholder_text="Search games";search.clear_button_enabled=true;search.text_changed.connect(func(_value):refresh())
  scroll=ScrollContainer.new();host.place(scroll,self,.02,.28,.98,.92);scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
  preload("res://scripts/drag_scroll.gd").attach(scroll)

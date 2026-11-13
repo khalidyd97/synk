@@ -170,6 +170,7 @@ func _ready() -> void:
 	var tab_drag=preload("res://scripts/drag_scroll.gd").attach(tab_scroll);tab_drag.horizontal=true
 	game_tabs = HBoxContainer.new(); tab_scroll.add_child(game_tabs); game_tabs.add_theme_constant_override("separation",8)
 	logout_button = action(self,"LOG OUT",.87,.135,.98,.2,log_out,"small")
+	game.settings_gear(self,.82,.135,.86,.2)
 
 	# Carousel of song cards.
 	carousel = ScrollContainer.new(); place(carousel,self,.02,.215,.86,.73)

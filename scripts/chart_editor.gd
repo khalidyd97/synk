@@ -4,7 +4,9 @@ const ScreenStyle=preload("res://scripts/screen_style.gd")
 # Same components as the song list, settings and song details: rounded dark cards, rounded
 # buttons with a cyan focus edge, gradient primary actions and small cyan section labels.
 const Action=preload("res://scripts/settings_action.gd")
-const CYAN=Color("50daec")
+const Arcade=preload("res://scripts/arcade_style.gd")
+# The highlight: paper white, as on every menu screen.
+const CYAN=Arcade.CYAN
 const MUTED=Color("bcb7ad")
 var game: Control
 var safe_content: Control
@@ -49,14 +51,16 @@ func action(parent: Node,value: String,l: float,t: float,r: float,b: float,callb
     return n
 func card(parent: Node,l: float,t: float,r: float,b: float) -> Panel:
     var n=Panel.new(); place(n,parent,l,t,r,b); n.mouse_filter=Control.MOUSE_FILTER_IGNORE
-    var box=StyleBoxFlat.new(); box.bg_color=Color(0.041,0.041,0.041,.88); box.border_color=Color("34353a")
-    box.set_corner_radius_all(20); box.set_border_width_all(1); n.add_theme_stylebox_override("panel",box)
+    # Frosted glass without outlines, like the Settings cards.
+    var box=StyleBoxFlat.new(); box.bg_color=Color(1,1,1,.05); box.anti_aliasing=true
+    box.set_corner_radius_all(20); n.add_theme_stylebox_override("panel",box)
     return n
 func eyebrow(parent: Node,value: String,l: float,t: float,r: float,b: float) -> Label:
-    var n=caption(parent," ".join(value.split("")),l,t,r,b,12); n.add_theme_color_override("font_color",CYAN)
+    # A quiet sentence-case label above a section, as on the other menu screens.
+    var n=caption(parent,value,l,t,r,b,15); n.add_theme_color_override("font_color",MUTED)
     return n
 func field_style(n: Control) -> void:
-    var box=StyleBoxFlat.new(); box.bg_color=Color(1,1,1,.05); box.border_color=Color("34353a")
+    var box=StyleBoxFlat.new(); box.bg_color=Color(1,1,1,.06); box.border_color=Color(0,0,0,0)
     box.set_corner_radius_all(14); box.set_border_width_all(1); box.content_margin_left=14; box.content_margin_right=10
     var focus=box.duplicate(); focus.border_color=CYAN
     for state in ["normal","read_only"]: n.add_theme_stylebox_override(state,box)
@@ -78,14 +82,15 @@ func _ready() -> void:
     mat.set_shader_parameter("ambience",Color(0.116,0.116,0.116))
     card(self,.115,.095,.985,.172)
     card(self,.012,.18,.11,.92)
-    eyebrow(self,"CHART STUDIO",.025,.012,.32,.04)
-    game.title_label=caption(self,"",.025,.035,.32,.085,28)
-    var bold=FontVariation.new(); bold.base_font=preload("res://assets/fonts/FiraSans-Bold.ttf")
-    game.title_label.add_theme_font_override("font",bold)
+    eyebrow(self,"Chart studio",.025,.008,.32,.04)
+    game.title_label=caption(self,"",.025,.032,.32,.09,32)
+    game.title_label.add_theme_font_override("font",Arcade.SERIF)
     action(self,"CHART TOOLS",.325,.02,.45,.075,func(): game.features.open_tools(),"nav")
     game.title_label.clip_text=true; game.title_label.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
     record_button=action(self,"● RECORD",.46,.02,.56,.075,game.record_here,"record")
     action(self,"SETUP",.565,.02,.635,.075,game.recorder.show_setup,"tool")
+    var gear=preload("res://scripts/gear_button.gd").new(); gear.accent=Arcade.CYAN; place(gear,self,.69,.015,.735,.08)
+    gear.pressed.connect(func(): game.open_lobby_settings())
     action(self,"SAVE",.75,.02,.85,.075,game.save_editor,"primary")
     action(self,"‹ LIBRARY",.87,.02,.98,.075,game.close_editor,"nav")
     game.play_button=action(self,"PLAY",.12,.103,.205,.16,game.toggle_audition,"secondary")
@@ -99,7 +104,7 @@ func _ready() -> void:
     action(self,"SET A",.84,.103,.905,.16,func(): game.loop_a=game.cursor; game.loop_b=maxf(game.loop_b,minf(game.length(),game.loop_a+4)); game.refresh_editor())
     action(self,"SET B",.915,.103,.98,.16,func(): if game.cursor>game.loop_a+.1: game.loop_b=game.cursor; game.refresh_editor())
     var rail=Control.new(); place(rail,self,.02,.19,.105,.91)
-    eyebrow(rail,"TOOLS",0,0,1,.055).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    eyebrow(rail,"Tools",0,0,1,.055).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     var names=[["select","SELECT"],["range","RANGE"],["tap","TAP"],["hold","HOLD"],["slide","SLIDE"],["flick","FLICK"]]
     for i in names.size():
         var kind: String=names[i][0]
@@ -118,7 +123,7 @@ func _ready() -> void:
     paste_button=action(self,"PASTE",.61,.955,.765,.995,paste_range)
     var panel=card(self,.785,.19,.98,.91); panel.mouse_filter=Control.MOUSE_FILTER_PASS
     inspector=Control.new(); place(inspector,panel,0,0,1,1)
-    eyebrow(inspector,"INSPECTOR",.06,.02,.94,.055)
+    eyebrow(inspector,"Inspector",.06,.02,.94,.055)
     note_title=caption(inspector,"Note inspector",.06,.05,.94,.1,22)
     help_label=caption(inspector,"",.06,.115,.94,.28,16); help_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
     help_label.add_theme_color_override("font_color",MUTED)
@@ -189,16 +194,16 @@ func refresh_inspector() -> void:
     range_panel.visible=is_range
     if is_range:
         game.timeline.collect_range()
-        note_title.text="RANGE SELECTION"
-        range_info.text="%d NOTES\n%.3f → %.3f s\n%s" % [game.timeline.range_indices.size(),game.timeline.range_start,game.timeline.range_end,"DRAG: X lanes / Y time" if game.timeline.group_mode else "Select MOVE GROUP to drag"]
+        note_title.text="Range selection"
+        range_info.text="%d NOTES\n%.3f → %.3f s\n%s" % [game.timeline.range_indices.size(),game.timeline.range_start,game.timeline.range_end,"Drag: across for lanes, up and down for time" if game.timeline.group_mode else "Select MOVE GROUP to drag"]
         group_move_button.set_selected(game.timeline.group_mode)
         group_move_button.disabled=game.timeline.range_indices.is_empty()
         updating=false; return
     if n.is_empty():
-        note_title.text="NOTE INSPECTOR"
+        note_title.text="Note inspector"
         help_label.text=("Drag from the beginning to the end of a passage to select notes across every lane." if game.editor_tool=="range" else ("Tap a note to edit it.\n\n"+("Drag empty space to scroll. Tap to move the playhead." if game.editor_tool=="select" else "Tap a lane to place a %s note. Drag to extend holds and slides." % game.editor_tool)))+"\n\nPinch to zoom.\nTwo fingers to pan."
     else:
-        note_title.text=str(n.kind).to_upper()+" NOTE"
+        note_title.text=str(n.kind).capitalize()+" note"
         type_input.select(SynkChart.TYPES.find(str(n.kind)))
         time_input.max_value=game.length(); time_input.set_value_no_signal(float(n.time))
         lane_input.set_value_no_signal(float(n.lane)+1)

@@ -114,7 +114,9 @@ func _ready() -> void:
     density=preload("res://scripts/chart_library_density.gd").new(); place(density,panel,440,492,240,46,p)
     # Right side.
     var import_button=button(canvas,"+  Import song",760,28,180,64,game.choose_audio); import_button.caption_size=17
-    search=LineEdit.new(); place(search,canvas,950,30,466,60)
+    var gear=preload("res://scripts/gear_button.gd").new(); gear.accent=A.CYAN; place(gear,canvas,950,28,64,64)
+    gear.pressed.connect(func(): game.open_lobby_settings())
+    search=LineEdit.new(); place(search,canvas,1026,30,390,60)
     search.placeholder_text="Search songs or charts"; search.add_theme_font_size_override("font_size",19)
     var style=StyleBoxFlat.new(); style.bg_color=Color(1,1,1,.07); style.set_corner_radius_all(30); style.content_margin_left=24; style.content_margin_right=16
     search.add_theme_stylebox_override("normal",style)
