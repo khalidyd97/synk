@@ -3,7 +3,7 @@ var notes: Array=[]
 var duration=1.0
 func _ready() -> void: mouse_filter=Control.MOUSE_FILTER_IGNORE
 func _draw() -> void:
-    var font=ThemeDB.fallback_font
+    var font=preload("res://scripts/arcade_style.gd").sans(500)
     draw_string(font,Vector2(0,13),"Note density",HORIZONTAL_ALIGNMENT_LEFT,-1,14,Color("bcb7ad"))
     var bins: Array=[]; bins.resize(32); bins.fill(0)
     for note in notes:

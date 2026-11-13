@@ -125,7 +125,7 @@ func cover_initials(rect: TextureRect,id: String,shown: bool) -> void:
         label=Label.new(); label.name="CoverInitials"; rect.add_child(label); label.mouse_filter=Control.MOUSE_FILTER_IGNORE
         label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
         label.vertical_alignment=VERTICAL_ALIGNMENT_BOTTOM
-        label.add_theme_font_override("font",preload("res://assets/fonts/FiraSans-Bold.ttf"))
+        label.add_theme_font_override("font",preload("res://scripts/arcade_style.gd").sans(650))
         label.add_theme_color_override("font_color",Color(1,1,1,.92))
         label.add_theme_color_override("font_shadow_color",Color(0,0,0,.25)); label.add_theme_constant_override("shadow_offset_y",1)
         rect.resized.connect(func(): fit_initials(label,rect))
@@ -298,7 +298,7 @@ var play_home_card: Button
 func home_label(parent: Control,value: String,x: float,y: float,w: float,h: float,font_size: int,color: Color,bold: bool) -> Label:
     var result=Label.new(); design_rect(result,parent,x,y,w,h); result.text=value
     result.add_theme_font_size_override("font_size",font_size); result.add_theme_color_override("font_color",color)
-    if bold: result.add_theme_font_override("font",preload("res://assets/fonts/FiraSans-Bold.ttf"))
+    if bold: result.add_theme_font_override("font",preload("res://scripts/arcade_style.gd").sans(650))
     result.vertical_alignment=VERTICAL_ALIGNMENT_CENTER; result.mouse_filter=Control.MOUSE_FILTER_IGNORE
     return result
 

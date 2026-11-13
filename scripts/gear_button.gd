@@ -4,7 +4,7 @@ extends Button
 const UiMotion = preload("res://scripts/ui_motion.gd")
 const TEETH = 8
 
-var accent = Color("cbbcff")
+var accent = Color("f4f1ea")
 var hover_amount = 0.0
 var hover_tween: Tween
 
@@ -34,19 +34,16 @@ func gear_outline(center: Vector2, outer: float, inner: float) -> PackedVector2A
 			points.append(center + Vector2(cos(angle), sin(angle)) * corner[1])
 	return points
 
-# A rounded square button like the other screens' back buttons: dark card, light border that
-# turns cyan on hover, and a solid gear icon with a punched-out centre.
+# Album Takeover: a round frosted button, like the back buttons, with a paper-white gear.
+# Hover lifts the glass a little; nothing glows.
 func _draw() -> void:
 	var side = minf(size.x, size.y)
-	var rect = Rect2((size - Vector2(side, side)) * .5, Vector2(side, side)).grow(-side * .04)
-	var box = StyleBoxFlat.new(); box.set_corner_radius_all(roundi(side * .22)); box.set_border_width_all(1)
-	box.bg_color = Color(0.041,0.041,0.041,.86).lerp(Color("143443"), hover_amount * .45)
-	box.border_color = Color("302a42").lerp(Color("50daec"), hover_amount * .8)
-	box.shadow_color = Color(Color("50daec"), hover_amount * .14); box.shadow_size = roundi(side * .08)
-	draw_style_box(box, rect)
-	var center = rect.get_center()
-	var radius = side * .25
-	var color = Color("e8e6f6").lerp(Color.WHITE, hover_amount)
-	draw_colored_polygon(gear_outline(center, radius, radius * .78), color)
-	draw_circle(center, radius * .78, color)
-	draw_circle(center, radius * .36, box.bg_color.lerp(Color("0f0f0f"), .3))
+	var center = size * .5
+	var radius = side * .48
+	draw_circle(center, radius, Color(1, 1, 1, .08 + .06 * hover_amount))
+	var gear = side * .22
+	var color = Color("f4f1ea").lerp(Color.WHITE, hover_amount)
+	draw_colored_polygon(gear_outline(center, gear, gear * .78), color)
+	draw_circle(center, gear * .78, color)
+	# The punched-out centre shows the glass behind it.
+	draw_circle(center, gear * .34, Color("1d1c20"))

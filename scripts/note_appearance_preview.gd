@@ -83,6 +83,6 @@ func _draw() -> void:
         for point in [Vector2(note_positions[1],24),slide_points[0],slide_points[1]]:
             draw_circle(point,trail*.85,slide_color); draw_circle(point,trail*.45,Color("f4eaff"))
     for i in 4:
-        var font=ThemeDB.fallback_font; var caption=["TAP","HOLD","SLIDE","FLICK"][i]
+        var font=preload("res://scripts/soft_button.gd").font_for(self); var caption=["Tap","Hold","Slide","Flick"][i]
         var width=font.get_string_size(caption,HORIZONTAL_ALIGNMENT_LEFT,-1,14).x
         draw_string(font,Vector2(note_positions[i]-width*.5,size.y-8),caption,HORIZONTAL_ALIGNMENT_LEFT,-1,14,Color("c6d6ef"))

@@ -15,18 +15,15 @@ func _ready() -> void:
 func _process(delta: float) -> void:
     if not is_visible_in_tree(): return
     amount=lerpf(amount,1.0 if button_pressed else 0.0,1-exp(-delta*16)); queue_redraw()
+# Album Takeover: the same switch as in Settings. A grey track that turns paper white when on,
+# its knob sliding across, and a small sentence-case caption underneath.
 func _draw() -> void:
-    var accent=Color("aaa1c9").lerp(Color("49e4ff"),amount)
-    var track=Rect2(size.x*.12,size.y*.08,size.x*.76,size.y*.54)
-    var style=StyleBoxFlat.new()
-    style.bg_color=Color("212121").lerp(Color("124c68"),amount)
-    style.border_color=accent; style.set_border_width_all(2)
-    style.set_corner_radius_all(int(track.size.y*.5))
-    draw_style_box(style,track)
-    var radius=track.size.y*.32
+    var Soft=preload("res://scripts/soft_button.gd")
+    var track=Rect2(size.x*.5-34,size.y*.08,68,size.y*.5)
+    var pill=StyleBoxFlat.new(); pill.set_corner_radius_all(int(track.size.y*.5)); pill.anti_aliasing=true
+    pill.bg_color=Color("3a3840").lerp(Soft.CREAM,amount)
+    draw_style_box(pill,track)
+    var knob_radius=track.size.y*.34
     var knob=Vector2(lerpf(track.position.x+track.size.y*.5,track.end.x-track.size.y*.5,amount),track.get_center().y)
-    draw_circle(knob,radius,accent)
-    var play_center=Vector2(lerpf(track.end.x-track.size.y*.5,track.position.x+track.size.y*.5,amount),track.get_center().y)
-    draw_colored_polygon(PackedVector2Array([play_center+Vector2(-4,-6),play_center+Vector2(6,0),play_center+Vector2(-4,6)]),accent)
-    var font=ThemeDB.fallback_font
-    draw_string(font,Vector2(0,size.y*.92),"AUTO",HORIZONTAL_ALIGNMENT_CENTER,size.x,15,accent)
+    draw_circle(knob,knob_radius,Color("cfcbd2").lerp(Soft.INK,amount))
+    draw_string(Soft.font_for(self),Vector2(0,size.y*.95),"Auto",HORIZONTAL_ALIGNMENT_CENTER,size.x,15,Color("8f8b94").lerp(Soft.TEXT,amount))

@@ -298,7 +298,7 @@ func finish_group_drag() -> void:
 func _draw() -> void:
     draw_rect(Rect2(Vector2.ZERO,size),Color("121212"))
     if game==null: return
-    var area=grid(); var font=ThemeDB.fallback_font
+    var area=grid(); var font=preload("res://scripts/arcade_style.gd").sans(500)
     var beat=60.0/float(game.chart_bpm())
     var step=beat/maxi(1,game.snap_division)
     if game.zoom_seconds/step>300: step=beat

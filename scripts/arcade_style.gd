@@ -38,11 +38,15 @@ static var _sans: FontVariation
 static var _sans_semi: FontVariation
 static var _sans_bold: FontVariation
 static var _head_semi: FontVariation
+# One font per weight, shared: controls that draw text every frame ask for it each time.
+static var _sans_cache: Dictionary = {}
 static func sans(weight: int = 500) -> Font:
+	if _sans_cache.has(weight): return _sans_cache[weight]
 	# Godot only applies a variable-font axis keyed by its OpenType tag number; a "wght"
 	# string key is ignored and every weight falls back to the thin default.
 	var f = FontVariation.new(); f.base_font = SANS_FILE
 	f.variation_opentype = {TextServerManager.get_primary_interface().name_to_tag("wght"): weight}
+	_sans_cache[weight] = f
 	return f
 static func mono() -> Font:
 	if _sans == null: _sans = sans(500)

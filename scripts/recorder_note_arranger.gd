@@ -162,7 +162,7 @@ func _draw() -> void :
 		draw_circle(point, radius + 4, Color(0, 0, 0, 0.75))
 		draw_arc(point, radius, 0, TAU, 32, color, 3, true)
 		draw_circle(point, 4, color)
-		if handle.kind != "point": draw_string(ThemeDB.fallback_font, point + Vector2(-25, - radius - 10), handle.kind.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 14, color)
+		if handle.kind != "point": draw_string(preload("res://scripts/arcade_style.gd").sans(600), point + Vector2(-25, - radius - 10), handle.kind.capitalize(), HORIZONTAL_ALIGNMENT_LEFT, -1, 14, color)
 func handle_event(id: int, p: Vector2, began: bool, ended: bool, canceled: bool) -> bool:
 	if draw_touches.has(id):
 		if canceled: draw_touches.erase(id);game.arrange_touches.erase(id)

@@ -64,7 +64,11 @@ static func arcade() -> Theme:
 		var texture = ImageTexture.create_from_image(image)
 		t.set_icon("grabber", type, texture); t.set_icon("grabber_highlight", type, texture)
 	for type in ["VScrollBar", "HScrollBar"]:
-		var track = StyleBoxFlat.new(); track.bg_color = Color(0, 0, 0, 0); track.content_margin_left = 3; track.content_margin_right = 3
+		# A clear strip on the content side of the bar: lists stop short of their scrollbar, so the
+		# bar never sits on top of a row's edge or its buttons.
+		var track = StyleBoxFlat.new(); track.bg_color = Color(0, 0, 0, 0)
+		if type == "VScrollBar": track.content_margin_left = 14; track.content_margin_right = 3
+		else: track.content_margin_top = 12; track.content_margin_bottom = 3
 		t.set_stylebox("scroll", type, track)
 		var grab = StyleBoxFlat.new(); grab.bg_color = Color(1, 1, 1, .22); grab.set_corner_radius_all(4)
 		t.set_stylebox("grabber", type, grab)

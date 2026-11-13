@@ -178,7 +178,7 @@ func draw_meter() -> void:
 	var middle=size_value.y*.5
 	meter.draw_rect(Rect2(0,middle-3,size_value.x,6),Color(1,1,1,.12))
 	meter.draw_rect(Rect2(size_value.x*.5-1.5,middle-size_value.y*.38,3,size_value.y*.76),Color(1,1,1,.7))
-	var font=ThemeDB.fallback_font
+	var font=preload("res://scripts/arcade_style.gd").sans(600)
 	meter.draw_string(font,Vector2(0,size_value.y-2),"EARLY",HORIZONTAL_ALIGNMENT_LEFT,-1,12,EARLY)
 	meter.draw_string(font,Vector2(size_value.x-34,size_value.y-2),"LATE",HORIZONTAL_ALIGNMENT_LEFT,-1,12,LATE)
 	var x_for=func(error: float) -> float: return size_value.x*(.5+clampf(error/TAP_WINDOW,-1,1)*.5)
