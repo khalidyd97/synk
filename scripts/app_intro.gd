@@ -1,114 +1,120 @@
 extends Control
-# Start-up intro, drawn in code to match the app icon (about 2.6 s, tap to skip):
-#   0.0-0.5  a sound wave rises from the centre line
-#   0.3-0.9  the italic "S" pops in with a red glow, the wave cutting across it
-#   0.9-1.6  sparks burst; the S slides left as "YNK" types in beside it, tagline fades up
-#   2.1-2.6  everything fades into the lobby underneath
+# Start-up loader in the Album Takeover look (about 2.6 s, tap to skip):
+#   0.0-0.5  a warm hairline opens from the centre of the dark ink screen
+#   0.25-1.0 "Synk" rises letter by letter out of the line, the S in coral italic
+#   0.5-2.0  the line becomes a slim loading bar under a sentence-case status
+#   0.9-1.4  "Choose your rhythm" fades up in muted serif italic
+#   2.05-2.6 the wordmark lifts away and the ink clears into the lobby underneath
 signal finished
 signal revealing   # the backdrop starts clearing: the lobby should animate in now
-var revealed = false
-const BOLD = preload("res://assets/fonts/FiraSans-Bold.ttf")
-const RED = Color("ff2d55")
+const A = preload("res://scripts/arcade_style.gd")
 const LENGTH = 2.6
-var t = 0.0
-var sparks: Array = []
-var burst_done = false
+const STATUS = ["Tuning in", "Loading your songs", "Ready"]
+var revealed = false
 var done = false
+var t = 0.0
+var glow: GradientTexture2D
 
 func _ready() -> void:
 	preload("res://scripts/modal_input.gd").register(self)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# One soft radial light, so the glow has no rings.
+	var g = Gradient.new()
+	g.set_color(0, Color(A.MAGENTA, .30)); g.set_color(1, Color(A.MAGENTA, 0.0))
+	g.add_point(.45, Color(A.MAGENTA_DEEP, .10))
+	glow = GradientTexture2D.new(); glow.gradient = g; glow.width = 256; glow.height = 256
+	glow.fill = GradientTexture2D.FILL_RADIAL; glow.fill_from = Vector2(.5, .5); glow.fill_to = Vector2(1, .5)
 
 func _gui_input(event: InputEvent) -> void:
-	# Any tap skips straight to the fade.
-	if (event is InputEventScreenTouch or event is InputEventMouseButton) and event.pressed and t < LENGTH - .75:
-		t = LENGTH - .75
+	# Any tap skips straight to the exit.
+	if (event is InputEventScreenTouch or event is InputEventMouseButton) and event.pressed and t < LENGTH - .55:
+		t = LENGTH - .55
 
 func _process(delta: float) -> void:
 	t += delta
-	if t > .95 and not burst_done:
-		burst_done = true
-		var c = size * .5
-		for i in 48:
-			var a = randf() * TAU; var sp = randf_range(200, 700) * size.y / 900.0
-			sparks.append({"pos": c, "vel": Vector2(cos(a), sin(a)) * sp, "life": randf_range(.4, 1.0), "max": 1.0})
-	for s in sparks:
-		s.pos += s.vel * delta; s.vel *= pow(.2, delta); s.vel.y += 120.0 * delta; s.life -= delta
-	sparks = sparks.filter(func(s): return s.life > 0.0)
-	if t >= LENGTH - .5 and not revealed:
+	if t >= LENGTH - .45 and not revealed:
 		revealed = true; revealing.emit()
 	if t >= LENGTH and not done:
 		done = true; finished.emit(); queue_free(); return
 	queue_redraw()
 
 func ease_out(x: float) -> float: return 1.0 - pow(1.0 - clampf(x, 0.0, 1.0), 3.0)
-func back_out(x: float) -> float:
-	x = clampf(x, 0.0, 1.0); var k = 1.7
-	return 1.0 + (k + 1.0) * pow(x - 1.0, 3.0) + k * pow(x - 1.0, 2.0)
+func ease_in_out(x: float) -> float:
+	x = clampf(x, 0.0, 1.0)
+	return 4.0 * x * x * x if x < .5 else 1.0 - pow(-2.0 * x + 2.0, 3.0) * .5
+
+# How far the loading bar has filled: quick at first, easing into the finish.
+func progress() -> float:
+	return ease_in_out((t - .5) / 1.5)
+
+func status_text() -> String:
+	var p = progress()
+	return STATUS[2] if p >= 1.0 else (STATUS[1] if p > .35 else STATUS[0])
 
 func _draw() -> void:
-	# The wordmark leaves first (slight zoom-out), then the dark backdrop clears to the lobby.
-	var fade = 1.0 - clampf((t - (LENGTH - .75)) / .3, 0.0, 1.0)
-	var backdrop = 1.0 - clampf((t - (LENGTH - .45)) / .45, 0.0, 1.0)
-	draw_rect(Rect2(Vector2.ZERO, size), Color(0, 0, 0, backdrop))  # same black as the launch splash
-	if fade <= 0.0: return
 	var h = size.y
 	var c = size * .5
-	# Soft wine glow behind everything.
-	for i in 6:
-		draw_circle(c, h * (.55 - i * .07), Color(.25, .02, .08, .05 * fade))
-	# The S slides left once the wordmark starts typing in.
-	var slide = ease_out((t - 1.0) / .55)
-	var letter_size = roundi(h * .42)
-	var word = "YNK"
-	var word_w = BOLD.get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1, letter_size).x
-	var s_w = BOLD.get_string_size("S", HORIZONTAL_ALIGNMENT_LEFT, -1, letter_size).x
-	var s_center = Vector2(c.x - (word_w * .5 + h * .015) * slide, c.y)
-	# Sound wave.
-	var grow = ease_out(t / .5)
-	var bars = 27
-	var span = h * .62
-	for i in bars:
-		var u = float(i) / (bars - 1) - .5
-		var env = 1.0 - pow(abs(u) * 2.0, 1.5)
-		var bar = h * .2 * env * grow * (.45 + .55 * abs(sin(t * 6.0 + i * 1.7)))
-		var x = s_center.x + u * span * (1.0 - .35 * slide)
-		draw_line(Vector2(x, c.y - bar * .5), Vector2(x, c.y + bar * .5), Color(1, .82, .86, .9 * fade * (1.0 - .6 * slide)), maxf(2.0, h * .006), true)
-	# The S: pops in with an overshoot, glowing red, slanted like italic.
-	var pop = back_out((t - .3) / .45)
-	if pop > 0.0:
-		var shear = Transform2D(Vector2(1, 0), Vector2(-.2, 1), Vector2.ZERO)
-		var scale_now = pop
-		var xf = Transform2D(0.0, Vector2.ONE * scale_now, 0.0, s_center) * shear
-		draw_set_transform_matrix(xf)
-		var origin = Vector2(-s_w * .5, letter_size * .36)
-		for spread in [26, 16, 9]:
-			draw_string_outline(BOLD, origin, "S", HORIZONTAL_ALIGNMENT_LEFT, -1, letter_size, spread, Color(RED, .18 * fade))
-		draw_string(BOLD, origin, "S", HORIZONTAL_ALIGNMENT_LEFT, -1, letter_size, Color(1, .93, .95, fade))
-		draw_set_transform(Vector2.ZERO)
-	# "YNK" types in beside the S, one letter at a time.
-	if t > 1.05:
-		var x = s_center.x + s_w * .5 + h * .01
-		for i in word.length():
-			var appear = clampf((t - 1.05 - i * .12) / .18, 0.0, 1.0)
-			if appear <= 0.0: break
-			var ch = word[i]
-			var cw = BOLD.get_string_size(ch, HORIZONTAL_ALIGNMENT_LEFT, -1, letter_size).x
-			var col = Color(1, .95 - .35 * (i + 1) / 3.0, .96 - .3 * (i + 1) / 3.0, appear * fade)
-			var pos = Vector2(x, c.y + letter_size * .36 + (1.0 - appear) * h * .04)
-			draw_string_outline(BOLD, pos, ch, HORIZONTAL_ALIGNMENT_LEFT, -1, letter_size, 14, Color(RED, .14 * appear * fade))
-			draw_string(BOLD, pos, ch, HORIZONTAL_ALIGNMENT_LEFT, -1, letter_size, col)
-			x += cw
-	# Tagline.
-	var tag_a = clampf((t - 1.5) / .4, 0.0, 1.0) * fade
+	# The wordmark leaves first, then the ink clears to the lobby.
+	var leave = ease_out((t - (LENGTH - .55)) / .35)
+	var fade = 1.0 - leave
+	var backdrop = 1.0 - clampf((t - (LENGTH - .45)) / .45, 0.0, 1.0)
+	draw_rect(Rect2(Vector2.ZERO, size), Color(A.INK, backdrop))
+	if fade <= 0.0: return
+	# A coral light that breathes behind the wordmark.
+	var breathe = .92 + .08 * sin(t * 3.2)
+	var light = ease_out(t / .8) * fade
+	var gs = Vector2(h * 1.6, h * 1.1) * breathe
+	draw_texture_rect(glow, Rect2(Vector2(c.x - gs.x * .5, c.y - h * .06 - gs.y * .5), gs), false, Color(1, 1, 1, light))
+
+	var lift = -h * .03 * leave
+	var base_y = c.y + h * .03 + lift
+	var word_size = roundi(h * .24)
+	# The hairline: opens from the centre, then settles into the loading track.
+	var open = ease_out(t / .5)
+	var settle = ease_out((t - .45) / .45)
+	var track_w = lerpf(size.x * .62, minf(size.x * .26, h * .62), settle) * open
+	var track_y = base_y + h * lerpf(.035, .14, settle)
+	var track_h = maxf(1.5, h * .0035)
+	draw_rect(Rect2(c.x - track_w * .5, track_y - track_h * .5, track_w, track_h), Color(A.TEXT, lerpf(.55, .14, settle) * fade))
+	if settle > 0.0:
+		var fill_w = track_w * progress()
+		draw_rect(Rect2(c.x - track_w * .5, track_y - track_h * .5, fill_w, track_h), Color(A.MAGENTA, fade * settle))
+		if fill_w > 1.0 and progress() < 1.0:
+			draw_circle(Vector2(c.x - track_w * .5 + fill_w, track_y), track_h * 1.6, Color(A.TEXT, fade * settle))
+
+	# "Synk": each letter rises out of the line, the S in coral italic.
+	var letters = ["S", "y", "n", "k"]
+	var fonts = [A.SERIF_ITALIC, A.SERIF, A.SERIF, A.SERIF]
+	var widths: Array = []
+	var total = 0.0
+	for i in letters.size():
+		var w = fonts[i].get_string_size(letters[i], HORIZONTAL_ALIGNMENT_LEFT, -1, word_size).x
+		widths.append(w); total += w
+	var x = c.x - total * .5
+	for i in letters.size():
+		var appear = ease_out((t - .25 - i * .09) / .5)
+		if appear > 0.0:
+			var col = A.MAGENTA if i == 0 else A.TEXT
+			var pos = Vector2(x, base_y + (1.0 - appear) * h * .06)
+			draw_string(fonts[i], pos, letters[i], HORIZONTAL_ALIGNMENT_LEFT, -1, word_size, Color(col, appear * fade))
+		x += widths[i]
+
+	# Tagline under the wordmark.
+	var tag_a = ease_out((t - .9) / .5) * fade
 	if tag_a > 0.0:
-		var tag = " ".join("CHOOSE YOUR RHYTHM".split(""))
-		var ts = roundi(h * .028)
-		var tw = BOLD.get_string_size(tag, HORIZONTAL_ALIGNMENT_LEFT, -1, ts).x
-		draw_string(BOLD, Vector2(c.x - tw * .5, c.y + letter_size * .62), tag, HORIZONTAL_ALIGNMENT_LEFT, -1, ts, Color(.86, .74, .8, tag_a))
-	# Sparks.
-	for s in sparks:
-		var a = clampf(s.life / s.max, 0.0, 1.0) * fade
-		draw_line(s.pos, s.pos - s.vel * .04, Color(1, .6, .45, a), 2.5, true)
-		draw_circle(s.pos, 2.0, Color(1, .95, .85, a))
+		var tag = "Choose your rhythm"
+		var ts = roundi(h * .042)
+		var tw = A.SERIF_ITALIC.get_string_size(tag, HORIZONTAL_ALIGNMENT_LEFT, -1, ts).x
+		draw_string(A.SERIF_ITALIC, Vector2(c.x - tw * .5, base_y + h * .085 + (1.0 - tag_a) * h * .01), tag, HORIZONTAL_ALIGNMENT_LEFT, -1, ts, Color(A.MUTED, tag_a))
+
+	# Status and percent at either end of the bar.
+	var info_a = ease_out((t - .6) / .4) * fade
+	if info_a > 0.0:
+		var fs = roundi(h * .024)
+		var font = A.sans(500)
+		var left = c.x - track_w * .5
+		var y = track_y + h * .05
+		draw_string(font, Vector2(left, y), status_text(), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(A.SUBTLE, info_a))
+		var pct = "%d%%" % roundi(progress() * 100.0)
+		draw_string(font, Vector2(left, y), pct, HORIZONTAL_ALIGNMENT_RIGHT, track_w, fs, Color(A.DIM, info_a))
