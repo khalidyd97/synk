@@ -1128,11 +1128,7 @@ func make_cap(parent: Node3D, lane: float, offset: float, palette: int, recordin
 	if game.uses_recorder_colors() and not game.uses_skd_recorder_surface():
 		return make_recorder_cap(parent,position_value,palette,size)
 	if recording and game.uses_skd_recorder_surface():
-		var source_cap=make_ssrg_cap(parent,position_value,palette,size)
-		var source_material: ShaderMaterial=source_cap.material_override
-		source_cap.material_override=shared("skd_rec|%s" % source_material.get_instance_id(), func():
-			var m: ShaderMaterial=source_material.duplicate();m.render_priority=3;return m)
-		return source_cap
+		return make_calm_cap(parent,position_value,palette,size)
 	if (not recording and (ssrg_theme and ssrg_theme.active or source_long_visuals() and long_puck)) or (recording and long_puck):
 		var cap=make_ssrg_cap(parent,position_value,palette,size)
 		if recording:
@@ -1165,6 +1161,29 @@ func make_recorder_cap(parent: Node3D, position_value: Vector3, palette: int, si
 	head.position = Vector3(position_value.x, .14, position_value.z)
 	head.rotation = Vector3(-PI * .5, 0, 0)
 	head.set_meta("recorder_billboard", true)
+	return head
+
+# The SKD recorder's note: a flat matte disc in a soft colour per type (tap blue, hold gold,
+# flick rose, slide mint). It sits where the SKD puck would, a little smaller, with no gloss
+# or halo, so a busy take stays calm to look at while recording and correcting.
+const RECORDER_CALM_COLORS = [Color("8cc4e6"), Color("e6c47c"), Color("ee9a9a"), Color("8fd3b0")]
+const RECORDER_CALM_SCALE = .62
+func make_calm_cap(parent: Node3D, position_value: Vector3, palette: int, size = 1.0) -> MeshInstance3D:
+	var tail = size < game.note_size*.99
+	var tint: Color = RECORDER_CALM_COLORS[clampi(palette,0,3)]
+	var mat = shared("recorder_calm|%d" % palette, func():
+		var m = ShaderMaterial.new(); m.shader = preload("res://scripts/recorder_calm_note.gdshader"); m.render_priority = 3
+		m.set_shader_parameter("tint",tint); return m)
+	var mesh_key = "recorder_calm|%s|%s|%s" % [size,tail,ssrg_art_scale()]
+	if not reference_note_meshes.has(mesh_key):
+		var quad = QuadMesh.new()
+		quad.size = (Vector2(132,72) if tail else Vector2(212,116))*SSRG_UNIT*ssrg_art_scale()*RECORDER_CALM_SCALE
+		reference_note_meshes[mesh_key]=quad
+	var head = mesh_node(reference_note_meshes[mesh_key],parent,mat)
+	head.position = Vector3(position_value.x,.13,position_value.z)
+	head.rotation = camera.rotation
+	head.extra_cull_margin=TRACK_LENGTH+SSRG_STAGE_DISTANCE
+	ssrg_billboards.append(weakref(head))
 	return head
 
 func make_circle_cap(parent: Node3D, position_value: Vector3, palette: int, size = 1.0) -> MeshInstance3D:
@@ -1261,8 +1280,8 @@ func make_tail_cap(parent: Node3D, lane: float, offset: float, palette: int, rec
 	cap.name="SustainEndCap"
 	return cap
 
-func make_flick(parent: Node3D, note: Dictionary, palette: int) -> void:
-	make_cap(parent,float(note.lane),0,palette)
+func make_flick(parent: Node3D, note: Dictionary, palette: int, recording = false) -> void:
+	make_cap(parent,float(note.lane),0,palette,recording and game.uses_skd_recorder_surface())
 	# One bold chevron keeps the direction clear without overlapping arrows.
 	var axis = camera.basis*[Vector3.UP,Vector3.RIGHT,Vector3.DOWN,Vector3.LEFT][clampi(int(note.direction),0,3)]
 	for i in 1:
@@ -1535,7 +1554,7 @@ func build_note_node(key: String, note: Dictionary, recording = false) -> void:
 	var first_material = animated_materials.size()
 	var node = Node3D.new(); add_child(node)
 	var palette = palette_for_kind(str(note.kind))
-	if note.kind=="flick": make_flick(node,note,palette)
+	if note.kind=="flick": make_flick(node,note,palette,recording)
 	else: make_cap(node,float(note.lane),0,palette,recording)
 	if note.kind in ["hold","slide"]: make_ribbon(node,note,palette,recording)
 	if game.uses_ssrg_gameplay() and not recording and note.has("ssrg_special") and game.ssrg_presentation:

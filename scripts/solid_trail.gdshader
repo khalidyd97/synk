@@ -84,12 +84,10 @@ void fragment(){
     if(ssrg_ribbon && !joint){
         float across=abs(UV.x*2.0-1.0);
         float core=pow(max(0.0,1.0-across),2.2);
-        // Soft bands drift toward the judgment line, like light running along the slide.
-        float flow=smoothstep(.55,1.0,sin(world_z*.9-TIME*5.0)*.5+.5);
-        color=mix(tint,vec3(1.0,.98,.82),core*.6+flow*core*.35);
-        opacity=.62+core*.3+flow*.08;
-        // A thin bright rim on both edges, like SSRG's outlined slide bar.
-        color=mix(color,vec3(1.0,.93,.6),smoothstep(.72,.9,across)*.5);
+        // Calm and steady: a matte band in the hold's soft gold with a slightly lighter core,
+        // no moving shimmer, so long notes don't pull the eye while recording.
+        color=mix(vec3(.902,.769,.486),vec3(.957,.945,.918),core*.25);
+        opacity=.5+core*.15;
     }
     if(old_ssrg_art && source_art && !joint){
         color=mix(tint,vec3(1.0,.86,.78),.12);
