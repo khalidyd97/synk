@@ -251,7 +251,7 @@ func duplicate_range(at_playhead: bool = false) -> void:
     game.document.selected=-1
     timeline.range_start=destination; timeline.range_end=destination+span
     timeline.reveal_time(destination); timeline.update_range()
-    game.tell("Duplicated %d notes. UNDO reverses the whole copy." % copies.size())
+    game.tell("Duplicated %d notes." % copies.size())
 
 func transform_range(operation: String,amount: float=0) -> bool:
     var timeline=game.timeline; timeline.collect_range()
@@ -286,7 +286,7 @@ func transform_range(operation: String,amount: float=0) -> bool:
         for i in timeline.range_indices.size(): game.document.notes[timeline.range_indices[i]]=changes[i]
     if operation=="time": timeline.range_start+=amount; timeline.range_end+=amount
     timeline.update_range(); game.refresh_editor()
-    game.tell("Range transformed. One UNDO restores the entire operation."); return true
+    game.tell("Range transformed."); return true
 
 func delete_selection() -> void:
     if game.timeline.range_active:
@@ -312,7 +312,7 @@ func copy_range() -> void:
         range_clipboard.append(note)
     set_tool("select")
     game.refresh_editor()
-    game.tell("Copied %d notes. Move the playhead, then tap PASTE." % range_clipboard.size())
+    game.tell("Copied %d notes." % range_clipboard.size())
 
 func paste_range() -> void:
     if range_clipboard.is_empty(): game.tell("Copy a range first."); return
@@ -331,4 +331,4 @@ func paste_range() -> void:
     game.timeline.range_start=destination; game.timeline.range_end=destination+clipboard_span
     game.timeline.reveal_time(destination)
     set_tool("range"); game.timeline.update_range()
-    game.tell("Pasted %d notes. UNDO reverses the whole paste." % copies.size())
+    game.tell("Pasted %d notes." % copies.size())

@@ -1,7 +1,8 @@
 extends CanvasLayer
 const COLORS={"info":Color("f4f1ea"),"success":Color("f4f1ea"),"warning":Color("ff8a5b"),"error":Color("ff6b6b")}
 const HEADINGS={"info":"NOTICE","success":"DONE","warning":"CHECK","error":"ERROR"}
-const MAX_VISIBLE=3
+# One at a time: a new notification replaces the one showing instead of stacking.
+const MAX_VISIBLE=1
 var game: Control
 var overlay: Control
 var items: Array=[]
@@ -44,7 +45,8 @@ func notify(message: String,kind: String="auto",seconds: float=-1.0):
     if kind=="auto" or not COLORS.has(kind): kind=severity(message)
     if not message.to_lower().begins_with("loading") and not message.to_lower().begins_with("importing"):
         clear_progress()
-    var duration=seconds if seconds>0 else clampf(maxf(4.0 if kind in ["info","success"] else 6.0,message.length()/20.0+1.5),4,12)
+    # Routine news goes quickly; problems stay long enough to read.
+    var duration=seconds if seconds>0 else (2.5 if kind in ["info","success"] else clampf(message.length()/20.0+2.0,4,8))
     for item in items:
         if item.message==message and not item.hiding:
             item.remaining=duration; item.duration=duration; return

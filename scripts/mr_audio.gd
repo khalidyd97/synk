@@ -30,7 +30,6 @@ func toggle() -> void:
 	game.prefs.set_value("editor","mr",enabled); game.prefs.save("user://preferences.cfg")
 	if enabled and reduced==null and unavailable.is_empty(): prepare()
 	sync_mode(); refresh_buttons()
-	if enabled: game.tell("MR reduces centered vocals and keeps low bass. Stereo songs work best; some vocals and instruments may remain or change.")
 func prepare() -> void:
 	if original==null or worker.is_started(): return
 	if original is AudioStreamWAV and not original.stereo:

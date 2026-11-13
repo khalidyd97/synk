@@ -608,7 +608,7 @@ func poll_song_worker() -> void:
 			apply_song(entry,result.stream,song_metadata[id])
 			if lobby: lobby.update_selected_track()
 			if open_studio and mode=="library":
-				set_mode("editor"); tell("Tap notes to select. Drag to move. SAVE keeps your chart.")
+				set_mode("editor")
 		else: result.erase("stream")
 		if lobby: lobby.update_track_card(id)
 	start_song_worker()
@@ -1768,7 +1768,6 @@ func stop_take() -> void :
 	if not recorder.takes.is_empty():
 		recorder.apply_take(recorder.takes[recorder.selected_take].notes)
 		recorder.show_review()
-	tell("Review your take: keep it, retry, compare or undo. SAVE when ready.")
 
 func cycle_record_speed() -> void:
 	record_speed=float(RECORD_SPEEDS[(RECORD_SPEEDS.find(record_speed)+1)%RECORD_SPEEDS.size()])
@@ -2955,7 +2954,6 @@ func open_editor() -> void:
 	stop_audition()
 	if not document.dirty and document.notes.is_empty(): document.load_notes(baseline_notes())
 	set_mode("library")
-	chart_library.set_message("Choose a chart to edit, or import audio to start a new one.")
 
 func delete_chart(id: String) -> void:
 	library.delete_chart(id)
@@ -2979,7 +2977,6 @@ func delete_song(id: String) -> void:
 func open_chart(index: int) -> void:
 	if select_song(index,true):
 		set_mode("editor")
-		tell("Tap notes to select. Drag to move. SAVE keeps your chart.")
 	elif loading_song_index==index: chart_library.set_message("Loading audio and chart information…")
 
 func close_editor() -> void:
@@ -3160,7 +3157,7 @@ func import_audio(path: String) -> void:
 	if song_metadata.get(str(result.song.id),{}).has("error"): song_metadata.erase(str(result.song.id))
 	if result.get("cover") is Image and not has_custom_cover(str(result.song.id)): save_cover_image(str(result.song.id),result.cover)
 	apply_song(result.song,result.stream); refresh_library(); set_mode("editor")
-	tell("Audio imported. Add notes or record from the playhead, then SAVE your chart.")
+	tell("Audio imported.")
 
 func select_song(index: int, open_studio: bool = false) -> bool:
 	if document.dirty: tell("Save or RELOAD before changing songs."); return false
@@ -3206,7 +3203,7 @@ func save_editor() -> void:
 		song_metadata[str(song.id)].note_count=sorted.size()
 		song_metadata[str(song.id)].has_chart=true
 	refresh_editor(); refresh_library()
-	tell("Chart saved. Open LIBRARY to choose another song, or TEST CHART to play it.")
+	tell("Chart saved.")
 
 func refresh_editor() -> void:
 	title_label.text=preload("res://scripts/lobby.gd").display_title(str(song.title))+("  •  unsaved" if document.dirty else "")

@@ -93,7 +93,7 @@ func switch(path: String, number: int) -> void:
 	if loaded:
 		game.document.dirty = false; game.features.load_variant()
 	game.chart_library.cache.clear(); game.chart_library.refresh(); game.lobby.refresh()
-	game.tell("Switched %s to v%d. The previous chart is kept in history." % [preload("res://scripts/chart_levels.gd").label(level), number])
+	game.tell("Switched %s to v%d." % [preload("res://scripts/chart_levels.gd").label(level), number])
 	refresh()
 
 func close_view() -> void:

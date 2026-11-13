@@ -103,7 +103,7 @@ func recover(force: bool=false) -> bool:
         game.document.checkpoint(); game.document.notes=notes.duplicate(true); game.document.settings=config; game.document.selected=-1
     else: game.document.load_notes(notes,config)
     game.document.dirty=true; draft_hash=hash(payload(notes))
-    game.tell("Recovered your autosaved "+current_variant+" draft.")
+    game.tell("Draft recovered.")
     return true
 func save_chart(notes: Array) -> Error:
     if settings_from(payload(notes))==null: return ERR_INVALID_DATA

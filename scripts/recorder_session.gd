@@ -230,7 +230,7 @@ func close_review() -> void :
 
 func keep() -> void :
 	close_review();provisional = false;highlights.clear();game.refresh_editor()
-	game.tell("Take kept in your draft. SAVE publishes the chart.")
+	game.tell("Take kept.")
 
 func preview() -> void :
 	if reviewing_audio: stop_preview();return
@@ -387,7 +387,7 @@ func show_review() -> void :
 		text(right, "Replay to check your timing. Retry to record another attempt in the same section.", 18)
 		text(right, "Keep Take returns to the editor. Save there when you are ready to publish your chart.", 18)
 	game.label(review_panel, "Your take stays in the draft until you save the chart.", 0.035, 0.795, 0.965, 0.835, 17).add_theme_color_override("font_color", Color("bcb7ad"))
-	review_action("UNDO TAKE", 0.035, 0.255, func(): undo_take();close_review();game.tell("Take undone. Earlier chart notes restored."), "danger")
+	review_action("UNDO TAKE", 0.035, 0.255, func(): undo_take();close_review();game.tell("Take undone."), "danger")
 	review_action("RETRY SECTION", 0.275, 0.495, retry, "record")
 	review_action("REPLAY TAKE", 0.515, 0.735, preview, "secondary")
 	review_action("KEEP TAKE", 0.755, 0.965, keep, "primary")
