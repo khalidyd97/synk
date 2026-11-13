@@ -25,23 +25,11 @@ func run()->void:
 		check(art!=null and str(art.resource_path).contains("ssrg"),"Recorder note faces use recovered SKD artwork")
 	check(is_equal_approx(world.approach_power(),world.SSRG_APPROACH_POWER),"Live recording keeps SKD's p^6 approach")
 	check(absf(pow(world.reveal_progress(),world.approach_power())-world.RECORDER_REVEAL_SCALE)<.001,"Live recording also stops notes at the rail top")
+	# Correct mode keeps exactly the recording view: same stage, spacing and lanes.
 	game.arranging=true;game.refresh_correct_view();world._process(0.0)
-	check(world.recorder_guides.visible,"Correction mode restores authoring guides")
-	# Correction grid lines sit between the SKD note lanes, not the old SYNK spacing.
-	var guide_ok=true
-	for guide in world.recorder_guides.get_children():
-		if guide.has_meta("boundary"):
-			var boundary=int(guide.get_meta("boundary"))
-			guide_ok=guide_ok and is_equal_approx(guide.position.x,(world.note_x(boundary-1)+world.note_x(boundary))*.5)
-	check(guide_ok,"Correction lane grid follows SKD lane spacing")
-	# Notes stop where the rails begin: the recorder has no cover tile hiding the far end.
-	# Correct mode keeps the stage but spaces time evenly with a mild taper.
-	check(game.uses_even_correct_view() and world.even_view(),"Correct mode uses the even view")
-	check(is_equal_approx(world.ssrg_approach(-world.TRACK_LENGTH),world.EVEN_FAR_SCALE) and is_equal_approx(world.ssrg_approach(0.0),1.0),"Even view tapers mildly, never to a point")
-	var mid=(world.ssrg_warped_z(-world.TRACK_LENGTH)+world.ssrg_warped_z(0.0))*.5
-	check(is_equal_approx(world.ssrg_warped_z(-world.TRACK_LENGTH*.5),mid),"Even view spaces time evenly")
-	check(world.reveal_progress()==0.0,"The whole travel window is visible in the even view")
-	check(world.ssrg_theme.original_stage.visible,"Even view keeps the SKD rail art")
+	check(not game.uses_even_correct_view() and not world.even_view(),"Correct mode keeps the recording view")
+	check(not world.recorder_guides.visible and world.ssrg_theme.original_stage.visible,"Correct mode shows the same SKD lanes and rail art")
+	check(is_equal_approx(world.approach_power(),world.SSRG_APPROACH_POWER),"Correct mode keeps SKD's approach")
 	var probe=Vector3(world.note_x(9.0),world.trail_height(),-12.0)
 	check(world.unwarp_point(world.warp_point(probe)).distance_to(probe)<.001,"SKD projection round-trips for picking")
 	var screen=world.camera.unproject_position(world.warp_point(probe))/Vector2(game.field.viewport.size)

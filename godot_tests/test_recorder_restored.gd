@@ -9,8 +9,8 @@ func run() -> void:
 	await process_frame; await process_frame
 	game.recorder_note_speed=1.0
 	game.document.load_notes([])
-	game.record_here(); game.countdown=0; game.song_time=5.2
-	var hold=SynkChart.note(3,4,"hold"); hold.duration=2
+	game.record_here(); game.countdown=0; game.song_time=3.9
+	var hold=SynkChart.note(3,4,"hold"); hold.duration=.8
 	game.capture.notes=[hold]; game.reset_take_history()
 	game.toggle_arrange()
 	game.arrange_selection={"note":hold,"document":false,"index":0}
@@ -19,9 +19,9 @@ func run() -> void:
 	check(game.note_arranger.handles().size()==2,"Hold has start/end handles")
 	var edited=game.note_arranger.edit(hold,"end",.5,0,-1,game.length())
 	game.note_arranger.replace_note(hold,edited); game.commit_take_history()
-	check(is_equal_approx(hold.duration,2.5),"Hold end extends independently")
-	game.undo_record_note(); check(is_equal_approx(game.capture.notes[0].duration,2),"Undo restores duration")
-	game.redo_record_note(); check(is_equal_approx(game.capture.notes[0].duration,2.5),"Redo restores edited duration")
+	check(is_equal_approx(hold.duration,1.3),"Hold end extends independently")
+	game.undo_record_note(); check(is_equal_approx(game.capture.notes[0].duration,.8),"Undo restores duration")
+	game.redo_record_note(); check(is_equal_approx(game.capture.notes[0].duration,1.3),"Redo restores edited duration")
 	var near=SynkChart.note(6,2); game.capture.notes.append(near)
 	check(is_equal_approx(game.snap_recorder_move(6.03,10,game.capture.notes[0]),6),"Moved note aligns to nearby note time")
 	game.arrange_preview.request(4); game.arrange_preview._process(.05)

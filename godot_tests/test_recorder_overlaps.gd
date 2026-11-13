@@ -22,7 +22,11 @@ func run() -> void:
 	game.capture.notes = clash_notes()
 	var tools = game.overlap_tools
 	tools._process(0);tools.refresh()
-	check(tools.visible and tools.bar.visible, "Overlap bar shows in Correct mode")
+	game.correct_bar._process(0)
+	check(tools.visible and not tools.bar.visible and game.correct_bar.buttons.overlaps.visible and game.correct_bar.buttons.overlaps.text == "2 overlaps", "Correct mode offers an overlaps chip; the bar waits for it")
+	game.correct_bar.buttons.overlaps.pressed.emit(); tools._process(0)
+	check(tools.bar.visible and tools.current == 0, "The chip opens the bar on the first overlap")
+	tools.current = -1; tools.refresh()
 	check(tools.groups.size() == 2, "Finds the three-note chord and the tap inside the hold (well-spaced notes are fine)")
 	check(tools.count_label.text == "2 overlaps", "Bar counts the overlaps")
 	tools.step(1)

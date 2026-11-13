@@ -34,7 +34,9 @@ func run() -> void:
 	game.note_shape="rectangle"
 	check(head.material_override.render_priority>0 and tail.material_override.render_priority>0,"Recorder note faces draw above the slide trail")
 	var arranger = game.note_arranger
-	check(arranger.visible and arranger.delete_point_button.visible, "Slide management controls appear for a selected slide")
+	check(arranger.visible and not arranger.delete_point_button.visible, "Slide extras stay folded away until More")
+	arranger.expanded = true; arranger._process(0)
+	check(arranger.delete_point_button.visible and arranger.plate.visible, "More opens the slide management controls")
 	for button in arranger.buttons.values() + arranger.shape_buttons.values() + [arranger.delete_point_button]:
 		check(not button.get_global_rect().intersects(game.record_overview.get_global_rect()), "Slide controls leave the top seek bar clear")
 		check(not button.get_global_rect().intersects(game.recorder_angle_slider.get_global_rect()), "Slide controls leave the angle slider clear")

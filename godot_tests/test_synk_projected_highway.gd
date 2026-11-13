@@ -112,6 +112,6 @@ func run():
 		image.save_png("res://.tools/synk-judgment-fit-%d.png" % dimensions.x)
 		world.clear_notes()
 	game.set_mode("record");world.apply_camera();world.update_ssrg_warp()
-	check(not world.uses_projected_highway() and world.camera.projection==Camera3D.PROJECTION_PERSPECTIVE,"Recorder retains its independent editable camera")
+	check(world.uses_projected_highway() and world.camera.projection==Camera3D.PROJECTION_ORTHOGONAL,"The recorder always uses the SKD camera (the classic tilted recorder is retired)")
 	game.queue_free();await process_frame
 	print("SYNK projected highway failures: ",failures);quit(failures)

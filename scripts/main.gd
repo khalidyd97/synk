@@ -139,10 +139,10 @@ func forces_ssrg_mode() -> bool:
 # SSRG judging and scoring rules follow ssrg_playable_run, so other styles keep their own look.
 func uses_ssrg_gameplay() -> bool:
 	return ((ssrg_playable_run and not ssrg_forced_run) or (highway_style=="ssrg" and (mode in ["play","paused"] or highway_preview))) and not uses_recorder_colors()
-# The chart recorder can borrow SKD's recovered visual stage (SKD VIEW in the recording
-# aids) without enabling SKD scoring, judgment, combo, health, or gameplay input rules.
-# Off, it is the classic recorder: SYNK's own tilted highway with the angle slider.
-var recorder_skd_view = false
+# The chart recorder always uses SKD's recovered visual stage, while recording and while
+# correcting, without enabling SKD scoring, judgment, combo, health, or gameplay input rules.
+# (The classic tilted SYNK recorder and its angle slider are retired.)
+var recorder_skd_view = true
 func uses_skd_recorder_surface() -> bool:
 	return uses_recorder_colors() and recorder_skd_view
 func toggle_recorder_skd_view() -> void:
@@ -155,9 +155,9 @@ func toggle_recorder_skd_view() -> void:
 var recorder_skd_button: Button
 func update_recorder_skd_button() -> void:
 	if recorder_skd_button: recorder_skd_button.text = "SKD view: " + ("on" if recorder_skd_view else "off"); recorder_skd_button.set_selected(recorder_skd_view)
-# Correct mode spaces that surface evenly with a mild taper (see ssrg_even).
+# Correct mode keeps the recording view exactly; the even, tapered spacing is retired.
 func uses_even_correct_view() -> bool:
-	return uses_skd_recorder_surface() and arranging
+	return false
 func uses_skd_stage() -> bool:
 	return uses_ssrg_gameplay() or uses_skd_recorder_surface()
 func old_ssrg_ui() -> bool:
@@ -434,7 +434,7 @@ func _ready() -> void:
 	bluetooth_latency_ms=clampf(float(prefs.get_value("audio","bluetooth_latency_ms",180)),0,600)
 	note_lines=bool(prefs.get_value("editor","note_lines",true))
 	ghost_recording=bool(prefs.get_value("editor","ghost_recording",true))
-	recorder_skd_view=bool(prefs.get_value("editor","recorder_skd_view",false))
+	space_close_chords=bool(prefs.get_value("editor","space_close_chords",true))
 	recorder_note_speed=clampf(snappedf(float(prefs.get_value("editor","note_speed",1.0)),.1),.1,5.0)
 	record_speed=float(prefs.get_value("editor","record_speed",1.0))
 	if record_speed not in RECORD_SPEEDS: record_speed=1.0
@@ -499,6 +499,7 @@ func _ready() -> void:
 	record_tools.add_child(note_arranger); note_arranger.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlap_tools=preload("res://scripts/recorder_overlaps.gd").new(); overlap_tools.game=self
 	record_tools.add_child(overlap_tools); overlap_tools.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	correct_bar=preload("res://scripts/recorder_correct_bar.gd").new(); correct_bar.game=self; record_tools.add_child(correct_bar)
 	chart_library=Control.new(); chart_library.set_script(load("res://scripts/chart_library.gd")); chart_library.game=self; chart_library.theme=preload("res://scripts/game_theme.gd").arcade()
 	ui.add_child(chart_library); chart_library.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.move_child(chart_library,1)
@@ -775,7 +776,7 @@ func build_ui() -> void:
 
 
 
-	recorder_plate(Rect2(0.012, 0.135, 0.105, 0.5))
+	record_left_plate = recorder_plate(Rect2(0.012, 0.135, 0.105, 0.5))
 	record_right_plate = recorder_plate(Rect2(0.883, 0.135, 0.105, 0.405))
 	var kinds = ["all", "tap", "hold", "slide", "flick"]
 	for i in kinds.size():
@@ -789,6 +790,9 @@ func build_ui() -> void:
 				else:toggle_record_type(kind), "tool"))
 		kind_buttons[-1].tooltip_text = {"all": "Enable every note type for gesture detection", "tap": "Detect taps", "hold": "Detect holds", "slide": "Detect slides", "flick": "Detect flicks"}[kind]
 	button(record_tools, "STOP & REVIEW", 0.84, 0.022, 0.988, 0.105, stop_take, "record")
+	# Correct mode: back to recording sits beside Stop & review; the side columns step away.
+	resume_record_button = button(record_tools, "RECORD", 0.735, 0.022, 0.83, 0.105, toggle_arrange, "tool")
+	resume_record_button.tooltip_text = "Resume recording from here"; resume_record_button.visible = false
 	recorder_angle_caption = label(record_tools, "Angle", 0.12, 0.035, 0.19, 0.095, 16);recorder_angle_caption.add_theme_color_override("font_color", Color("bcb7ad"))
 	recorder_angle_slider=HSlider.new();rect(recorder_angle_slider,record_tools,0.20,0.047,0.40,0.087)
 	recorder_angle_slider.min_value=18;recorder_angle_slider.max_value=90;recorder_angle_slider.step=1
@@ -857,9 +861,9 @@ func build_ui() -> void:
 	r = row.call(7);mr.register_button(button(aids_drawer, "MR OFF", r[0], r[1], r[2], r[3], mr.toggle))
 	r = row.call(8);record_aids_button = button(aids_drawer, "", r[0], r[1], r[2], r[3], toggle_record_aids_display)
 	update_record_aids_button()
-	r = row.call(9);recorder_skd_button = button(aids_drawer, "", r[0], r[1], r[2], r[3], toggle_recorder_skd_view)
-	recorder_skd_button.tooltip_text = "Show the take on the SKD gameplay highway instead of the classic recorder."
-	update_recorder_skd_button()
+	r = row.call(9);space_chords_button = button(aids_drawer, "", r[0], r[1], r[2], r[3], toggle_space_close_chords)
+	space_chords_button.tooltip_text = "Notes played together keep at least one empty lane between them: lanes 2 and 3 become 2 and 4."
+	update_space_chords_button()
 	aids_drawer.visible = false
 
 var aids_drawer: Control
@@ -901,7 +905,7 @@ func build_shape_picker() -> void:
 	var box = StyleBoxFlat.new(); box.bg_color = Color(A.NIGHT, .96); box.set_corner_radius_all(roundi(A.CARD_RADIUS))
 	box.shadow_color = Color(0, 0, 0, .5); box.shadow_size = 24
 	card.add_theme_stylebox_override("panel", box)
-	var heading = label(card, "Shape this note", .04, .05, .7, .2, 30)
+	var heading = label(card, "Turn into a letter or number", .04, .05, .7, .2, 30)
 	heading.add_theme_font_override("font", A.SERIF)
 	var hint = label(card, "Pick a letter or number. The hold becomes up to two slides drawn in that shape; a short hold is lengthened so the shape stays playable.", .04, .19, .96, .28, 16)
 	hint.add_theme_color_override("font_color", A.MUTED)
@@ -961,6 +965,9 @@ func insert_text_slides(text: String) -> int:
 	judgement = "TEXT · %d SLIDES" % notes.size(); flash = 1
 	return notes.size()
 var record_right_plate: Panel
+var record_left_plate: Panel
+var resume_record_button: Button
+var correct_bar: Control
 var recorder_angle_caption: Label
 # While a take is running (not correcting, aids closed) the recorder shows only what you need
 # to play: note types, Correct, Stop & review, status and the lanes. Setup-only controls
@@ -975,8 +982,18 @@ func update_recorder_focus() -> void:
 	var history = not take_undo.is_empty() or not take_redo.is_empty()
 	var show_history = not focus or history
 	take_undo_button.visible = show_history;take_redo_button.visible = show_history
-	text_slides_button.visible = arranging and show_history; text_slides_field.visible = text_slides_button.visible
-	var plate_bottom = 0.135 + (0.501 if text_slides_button.visible else (0.405 if show_history else 0.213))
+	# Correct mode keeps every tool on its one bottom toolbar (recorder_correct_bar.gd):
+	# the type column, the side column and their plates step away.
+	var correcting = mode == "record" and arranging
+	for node in kind_buttons: node.visible = not correcting
+	record_left_plate.visible = not correcting
+	for node in [record_right_plate, aids_toggle, arrange_button]: node.visible = not correcting
+	if correcting: take_undo_button.visible = false; take_redo_button.visible = false
+	resume_record_button.visible = correcting
+	text_slides_button.visible = false; text_slides_field.visible = true
+	var info_right = 0.725 if correcting else 0.83
+	if not is_equal_approx(record_info.anchor_right, info_right): record_info.anchor_right = info_right; record_info.anchor_left = info_right - 0.28
+	var plate_bottom = 0.135 + (0.405 if show_history else 0.213)
 	if not is_equal_approx(record_right_plate.anchor_bottom, plate_bottom): record_right_plate.anchor_bottom = plate_bottom
 	# Guidance until the first note lands; after that the lanes speak for themselves.
 	record_help.visible = not focus or capture.notes.is_empty()
@@ -1419,6 +1436,21 @@ func authoring_lane_gap() -> float:
 	var width=world.SSRG_NOTE_SIZE.x if uses_skd_stage() else world.NOTE_WIDTH
 	var step=absf(world.lane_world_x(1.0)-world.lane_world_x(0.0)) if uses_skd_stage() else world.lane_step()
 	return (width*note_size*.55+.08)/step
+
+# Space close chords (recording aids): notes played together keep at least one empty
+# lane between them, so a chord in lanes 2 and 3 records as 2 and 4 (2, 3, 4 as 2, 4, 6).
+# The note that just landed is the one that moves, unless an edge forces the other.
+const CLOSE_CHORD_GAP = 2.0
+var space_close_chords = true
+var space_chords_button: Button
+func chord_lane_gap() -> float:
+	return maxf(authoring_lane_gap(), CLOSE_CHORD_GAP) if space_close_chords else authoring_lane_gap()
+func toggle_space_close_chords() -> void:
+	space_close_chords = not space_close_chords
+	prefs.set_value("editor", "space_close_chords", space_close_chords); prefs.save("user://preferences.cfg")
+	update_space_chords_button()
+func update_space_chords_button() -> void:
+	if space_chords_button: space_chords_button.text = "Space close chords: " + ("on" if space_close_chords else "off"); space_chords_button.set_selected(space_close_chords)
 
 func space_authored_notes(incoming: Array,fixed: Array) -> bool:
 	var resolved=true
@@ -1920,19 +1952,21 @@ func refresh_arrange_controls() -> void :
 	ghost_button.visible = not arranging;ghost_button.set_selected(ghost_recording)
 	dots_button.text = "●  CONNECTOR: ON" if dots_mode else "●  CONNECTOR: OFF"
 	dots_button.set_selected(dots_mode)
+	# One short line for what you can do right now.
 	if arranging and note_arranger and note_arranger.edit_mode == "draw" and not arrange_selection.is_empty():
-		record_help.text = "Draw: trace the slide along the highway with one finger. Lift to apply; the trace sets its start, end and every bend."
+		record_help.text = "Trace the slide with one finger, then lift to apply."
 	elif arranging and dots_mode:
 		var dots_note: Dictionary = arrange_selection.get("note", {})
-		if dots_note.is_empty() or dots_note.kind not in ["hold", "slide"]: record_help.text = "CONNECTOR: select a hold or slide, then tap its trail to add a playable connector."
-		else: record_help.text = "CONNECTOR: tap the trail to add or remove one (%d). SHAPE drags its handle; DELETE POINT removes the selected anchor." % dots_note.get("checkpoints", []).size()
+		if dots_note.is_empty() or dots_note.kind not in ["hold", "slide"]: record_help.text = "Select a hold or slide, then tap its trail to add a connector."
+		else: record_help.text = "Tap the trail to add or remove a connector (%d now)." % dots_note.get("checkpoints", []).size()
 	elif arranging:
-		if arrange_selection.is_empty(): record_help.text = "Tap a note head or any part of its trail to select and drag it.\nType buttons change the note. Drag empty space to scroll."
+		if arrange_selection.is_empty(): record_help.text = "Tap a note to select it. Drag empty space to scroll."
 		else:
 			var n: Dictionary = arrange_selection.note
 			if n.kind in ["hold", "slide"]:
-				record_help.text = "%s · %.2f–%.2f s | Drag the trail to bend or stretch · SHAPE turns it into a letter or number · CONNECTOR: tap trail" % [str(n.kind).to_upper(), float(n.time), float(n.time) + float(n.duration)]
-			else: record_help.text = "%s · LANE %d · %.2f s\nDrag to move. The buttons on the left change its type or delete it." % [str(n.kind).to_upper(), int(n.lane) + 1, float(n.time)]
+				var how = "Drag to move it." if note_arranger and note_arranger.edit_mode == "move" else "Drag the trail to bend or stretch it."
+				record_help.text = "%s, %.2f–%.2f s. %s" % [str(n.kind).capitalize(), float(n.time), float(n.time) + float(n.duration), how]
+			else: record_help.text = "%s, lane %d, %.2f s. Drag to move it." % [str(n.kind).capitalize(), int(n.lane) + 1, float(n.time)]
 	else:
 		record_help.text = "Detecting %s · tap or swipe on the 13 lanes; each gesture becomes the matching note." % ", ".join(record_types.map(func(kind):return str(kind)))
 
@@ -2499,7 +2533,7 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 	if mode=="record":
 		if not recorder.can_capture(song_time): return
 		if began:
-			capture.minimum_lane_gap=authoring_lane_gap()
+			capture.minimum_lane_gap=chord_lane_gap()
 			capture.onset_bounds=recorder.region
 			capture.begin(id,song_time,p,recorder.capture_tool(),recorder.spacing_blockers(),recorder.allowed_types())
 		capture.move(id,song_time,p)

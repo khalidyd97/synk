@@ -33,9 +33,13 @@ func _ready() -> void :
 			game.dots_mode = key == "points" and not game.dots_mode
 			game.refresh_arrange_controls())
 		buttons[key] = b
-	snap_button = tool_button("", 0, 4);snap_button.pressed.connect(game.cycle_slide_snap)
-	delete_point_button = tool_button("DELETE POINT", 0, 5);delete_point_button.pressed.connect(delete_selected_point)
+	snap_button = tool_button("", 0, 0);snap_button.pressed.connect(game.cycle_slide_snap)
+	delete_point_button = tool_button("DELETE POINT", 0, 1);delete_point_button.pressed.connect(delete_selected_point)
 	more_button = tool_button("MORE", 0, 6);more_button.pressed.connect(func(): expanded = not expanded)
+	# Move, Bend, Draw, Connector and More live on Correct mode's toolbar now
+	# (recorder_correct_bar.gd); this panel holds what More opens.
+	for b in buttons.values(): b.visible = false
+	more_button.visible = false
 	# Row 2: the selected bend point (or the whole slide), clean-up and endpoints.
 	curve_button = tool_button("CURVE", 1, 0);curve_button.pressed.connect(toggle_curve)
 	for i in 2:
@@ -86,15 +90,15 @@ func _process(_delta: float) -> void :
 	if selected_point_index >= note.path.size() - 1: selected_point_index = -1
 	var writable = game.recorder.writable(note) and drags.is_empty() and draw_touches.is_empty()
 	var slide = note.kind == "slide"
-	plate.anchor_bottom = 0.453 if expanded else 0.287
-	more_button.text = "LESS" if expanded else "MORE";more_button.set_selected(expanded)
+	plate.anchor_bottom = 0.453
+	plate.visible = expanded
+	snap_button.visible = expanded
 	for b in extra_buttons: b.visible = expanded
-	delete_point_button.visible = slide
+	delete_point_button.visible = slide and expanded
 	delete_point_button.disabled = selected_point_index <= 0 or not writable
 	for operation in shape_buttons:
 		shape_buttons[operation].visible = slide and expanded
 		shape_buttons[operation].disabled = not writable or (note.path.size() <= 2 if operation == "smooth" else note.path.size() == 2)
-	for key in buttons: buttons[key].set_selected(game.dots_mode if key == "points" else ( not game.dots_mode and edit_mode == key))
 	snap_button.text = {"free": "SNAP · OFF", "lanes": "SNAP · LANES", "beats": "SNAP · BEATS"}[game.slide_snap]
 	snap_button.set_selected(game.slide_snap != "free")
 	# Curve: the selected bend point, or every bend when none is selected.

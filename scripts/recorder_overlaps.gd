@@ -7,6 +7,8 @@ var groups: Array = []
 var current = -1
 # How far apart (in lanes) overlapping notes must sit; 0 = as close as the notes allow.
 var gap_lanes = 2.0
+# The bar opens from the overlaps chip on Correct mode's toolbar and only while there are overlaps.
+var open = false
 var bar: Panel
 var count_label: Label
 var buttons: Dictionary = {}
@@ -24,7 +26,7 @@ func _ready() -> void:
 	gap_lanes = float(game.prefs.get_value("editor", "overlap_gap_lanes", old_mode))
 	gap_lanes = clampf(roundf(gap_lanes), 0.0, MAX_GAP)
 	bar = Panel.new();add_child(bar);bar.mouse_filter = Control.MOUSE_FILTER_STOP
-	bar.anchor_left = 0.155;bar.anchor_right = 0.845;bar.anchor_top = 0.842;bar.anchor_bottom = 0.918
+	bar.anchor_left = 0.155;bar.anchor_right = 0.845;bar.anchor_top = 0.758;bar.anchor_bottom = 0.834;bar.visible = false
 	var style = StyleBoxFlat.new();style.bg_color = Color(0.05, 0.05, 0.06, 0.92)
 	style.border_color = Color(1, 1, 1, 0.07);style.set_border_width_all(1);style.set_corner_radius_all(22)
 	style.shadow_color = Color(0, 0, 0, 0.45);style.shadow_size = 16
@@ -55,7 +57,7 @@ func _ready() -> void:
 
 func build_picker() -> void:
 	picker = Panel.new();add_child(picker);picker.mouse_filter = Control.MOUSE_FILTER_STOP;picker.visible = false
-	picker.anchor_left = 0.155;picker.anchor_right = 0.845;picker.anchor_top = 0.712;picker.anchor_bottom = 0.83
+	picker.anchor_left = 0.155;picker.anchor_right = 0.845;picker.anchor_top = 0.636;picker.anchor_bottom = 0.75
 	picker.add_theme_stylebox_override("panel", bar.get_theme_stylebox("panel"))
 	var title = Label.new();picker.add_child(title);title.text = "Space notes by"
 	title.anchor_left = 0.02;title.anchor_right = 0.16;title.anchor_top = 0;title.anchor_bottom = 1
@@ -154,8 +156,11 @@ func find_groups() -> Array:
 
 func _process(_delta: float) -> void:
 	visible = game.mode == "record" and game.arranging
-	if not visible: groups = [];current = -1;picker.visible = false;return
+	if not visible: groups = [];current = -1;picker.visible = false;open = false;bar.visible = false;return
 	if Engine.get_process_frames() % 6 == 0: refresh()
+	if open and groups.is_empty(): open = false
+	bar.visible = open and not (game.aids_drawer and game.aids_drawer.visible)
+	if not bar.visible: picker.visible = false
 	queue_redraw()
 
 func refresh() -> void:
@@ -174,6 +179,13 @@ func refresh() -> void:
 	picker_count.text = ("%d overlap%s at this gap" % [groups.size(), "" if groups.size() == 1 else "s"]) if any else "Nothing overlaps at this gap"
 	picker_count.add_theme_color_override("font_color", Color("ff8a5b") if any else Color("bcb7ad"))
 	buttons.apply.disabled = not any
+
+# The overlaps chip: open the bar on the first overlap, or close it again.
+func toggle_open() -> void:
+	refresh()
+	open = not open and not groups.is_empty()
+	if open and current < 0: step(1)
+	if not open: picker.visible = false
 
 # Jump to the previous/next overlap: bring it just past the line and select its first note.
 func step(direction: int) -> void:

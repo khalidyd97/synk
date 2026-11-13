@@ -56,8 +56,9 @@ func run() -> void:
 	game.set_process(false); game.recorder.set_process(false); game.stage_intro_enabled=false
 	game.set_mode("editor"); game.document.load_notes([]); game.record_here(); game.countdown=0
 	game.capture.notes=[]; game.toggle_arrange(); game.song_time=20.0
-	game.update_recorder_focus()
-	check(game.text_slides_button.visible,"Correct mode shows the TEXT button")
+	game.update_recorder_focus(); game.correct_bar._process(0)
+	check(game.correct_bar.visible and game.correct_bar.buttons.text.visible,"Correct mode's toolbar offers Type text")
+	check(not game.kind_buttons[1].visible and not game.arrange_button.visible and game.resume_record_button.visible,"Correct mode hides the side columns and offers Record beside Stop")
 	var before=game.take_undo.size()
 	var added=game.insert_text_slides("Hi 7")
 	check(added>0 and game.capture.notes.size()==added,"Typed text is inserted as slides")
@@ -74,11 +75,14 @@ func run() -> void:
 	var hold=SynkChart.note(10.0,6,"hold"); hold.duration=1.5; game.capture.notes.append(hold)
 	game.arrange_selection={"note":hold,"index":0,"document":false}
 	game.refresh_arrange_controls()
-	check(game.text_slides_button.text=="SHAPE","Selecting a hold turns TEXT into SHAPE")
-	game.open_text_slides()
+	game.correct_bar._process(0)
+	var tools=game.correct_bar.buttons
+	check(tools.letter.visible and tools.hold.selected and tools.shape.visible and tools.delete.visible and not tools.text.visible,"A selected hold shows its type, edit tools, Letter and Delete")
+	check(tools.shape.caption.text=="Bend" and tools.letter.caption.text=="Letter","Bend and Letter no longer share one name")
+	tools.letter.pressed.emit()
 	check(game.shape_picker!=null and game.shape_picker.visible,"SHAPE opens the letter and number picker")
 	check(game.shape_selected_note("8")==2 and game.capture.notes.size()==2,"The hold is replaced by the shape's two slides")
-	check(not game.shape_picker.visible and game.text_slides_button.text=="TEXT","The picker closes and the selection clears")
+	check(not game.shape_picker.visible and game.arrange_selection.is_empty(),"The picker closes and the selection clears")
 	check(SynkChart.valid(game.capture.notes),"Shaped slides are valid chart notes")
 	var first=10.0; var last=0.0
 	for n in game.capture.notes: first=minf(first,float(n.time)); last=maxf(last,float(n.time)+float(n.duration))
@@ -89,7 +93,7 @@ func run() -> void:
 	game.arrange_selection={"note":tap,"index":game.capture.notes.size()-1,"document":false}
 	check(game.shape_selected_note("A")==0,"Only holds and slides can be shaped")
 	game.arrange_selection.clear()
-	game.toggle_arrange(); game.update_recorder_focus()
-	check(not game.text_slides_button.visible,"TEXT is hidden while recording")
+	game.toggle_arrange(); game.update_recorder_focus(); game.correct_bar._process(0)
+	check(not game.correct_bar.visible and game.kind_buttons[1].visible and game.arrange_button.visible,"Recording brings the side columns back and hides the toolbar")
 	print("Text slides: ","PASS" if failures==0 else str(failures)+" FAILED")
 	game.queue_free(); await process_frame; quit(failures)

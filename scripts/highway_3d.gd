@@ -1812,7 +1812,7 @@ func _process(delta: float) -> void:
 	var in_play = game.mode=="play" or (game.mode=="paused" and game.paused_mode=="play")
 	var recording_now = game.mode=="record" or (game.mode=="paused" and game.paused_mode=="record")
 	# SKD has no editor grid: in SKD view, show SYNK's guides only while correcting a take.
-	recorder_guides.visible = (recording_now and (game.arranging or not game.uses_skd_recorder_surface())) or (in_play and bool(extras_setting("lane_hints", true)) and not (ssrg_theme and ssrg_theme.active) and not (concept_theme and concept_theme.active))
+	recorder_guides.visible = (recording_now and not game.uses_skd_recorder_surface()) or (in_play and bool(extras_setting("lane_hints", true)) and not (ssrg_theme and ssrg_theme.active) and not (concept_theme and concept_theme.active))
 	if guide_material: guide_material.set_shader_parameter("color",Color(Color("f4f1ea"),.10) if recording_now else Color(Color("777bd5"),.3))
 	if recorder_guides.visible: layout_recorder_guides()
 	update_recorder_channels(delta,recording_now and not game.uses_skd_recorder_surface())
