@@ -8,10 +8,12 @@ uniform float sample_rate = 40.0;
 uniform float now = 0.0;
 uniform float speed = 10.0;
 uniform vec4 tint : source_color = vec4(0.42, 0.85, 1.0, 1.0);
+uniform bool flow_up = false;
 varying float world_z;
-void vertex() { world_z = (MODEL_MATRIX * vec4(VERTEX, 1.0)).z; }
+#include "res://scripts/ssrg_warp.gdshaderinc"
+void vertex() { world_z = (MODEL_MATRIX * vec4(VERTEX, 1.0)).z; VERTEX = ssrg_warp_canvas(VERTEX, MODEL_MATRIX); }
 void fragment() {
-	float t = now - world_z / speed;
+	float t = flow_up ? now + world_z / speed : now - world_z / speed;
 	float index = t * sample_rate;
 	float level = 0.0;
 	if (index >= 0.0 && index < sample_count) {
@@ -24,5 +26,6 @@ void fragment() {
 	float bar = 1.0 - smoothstep(level * 0.95, level * 0.95 + 0.04, half_width);
 	float now_glow = exp(-abs(world_z) * 0.8) * 0.6;   // brighter right at the judgement line
 	ALBEDO = mix(tint.rgb, vec3(1.0), now_glow);
-	ALPHA = bar * (0.55 + now_glow) * smoothstep(-60.0, -45.0, world_z);
+	float far = ssrg_warp.x > 0.5 ? ssrg_reveal(world_z) : smoothstep(-60.0, -45.0, world_z);
+	ALPHA = bar * (0.55 + now_glow) * far;
 }

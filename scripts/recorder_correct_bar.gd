@@ -36,6 +36,13 @@ func _ready() -> void:
 	add("overlaps", "", func(): game.overlap_tools.toggle_open())
 	add("aids", "Aids", game.toggle_record_aids)
 	add("delete", "DELETE", game.delete_arrange_note)
+	add("copy", "Copy part", begin_copy)
+	add("start", "Start here", mark_start)
+	add("end", "End here", mark_end)
+	add("paste", "Paste here", paste_here)
+	add("cancel", "Cancel", cancel_copy)
+	buttons.copy.tooltip_text = "Copy a part: mark its start and end at the line"
+	buttons.paste.tooltip_text = "Paste the copied part so it starts at the line"
 	buttons.text.tooltip_text = "Insert typed letters or numbers as shaped slides"
 	buttons.letter.tooltip_text = "Turn this hold or slide into a letter or number"
 	buttons.shape.tooltip_text = "Drag the trail to bend or stretch it"
@@ -59,8 +66,14 @@ func wanted() -> Array:
 	var note = selected_note()
 	var overlaps = not game.overlap_tools.groups.is_empty()
 	var keys: Array = ["undo", "redo", "|"]
+	if copy_stage != "":
+		keys.append("start" if copy_stage == "start" else "end")
+		keys.append_array(["|", "cancel"])
+		return keys
 	if note.is_empty():
 		keys.append("text")
+		keys.append_array(["|", "copy"])
+		if not clipboard.is_empty(): keys.append("paste")
 		if overlaps: keys.append_array(["|", "overlaps"])
 		keys.append_array(["|", "aids"])
 		return keys
@@ -73,6 +86,7 @@ func wanted() -> Array:
 
 func _process(_delta: float) -> void:
 	visible = game.mode == "record" and game.arranging and not (game.aids_drawer and game.aids_drawer.visible)
+	if not game.arranging and copy_stage != "": copy_stage = ""
 	if not visible: return
 	var keys = wanted()
 	var key = ",".join(keys)
@@ -96,6 +110,72 @@ func arrange(keys: Array) -> void:
 	plate.anchor_left = .5 - total * .5 - .008; plate.anchor_right = .5 + total * .5 + .008
 	plate.anchor_top = TOP; plate.anchor_bottom = BOTTOM
 	plate.offset_left = 0; plate.offset_right = 0; plate.offset_top = 0; plate.offset_bottom = 0
+
+# --- Copy a part and paste it somewhere else --------------------------------------------
+# Correct mode's line is "here": scroll so the start of the part is on the line and mark it,
+# scroll to its end and mark that, then scroll anywhere and paste. The copy keeps its place
+# on the beat grid, so a part copied on the beat lands on the beat.
+var copy_stage = ""          # "" · "start" (waiting for the start mark) · "end" (waiting for the end)
+var copy_start = 0.0
+var clipboard: Array = []    # copied notes, times relative to copy_start
+var clipboard_span = 0.0
+
+func here() -> float: return float(game.song_time)
+
+func begin_copy() -> void:
+	game.arrange_selection = {}
+	copy_stage = "start"; game.refresh_arrange_controls()
+
+func cancel_copy() -> void:
+	copy_stage = ""; game.refresh_arrange_controls()
+
+func mark_start() -> void:
+	copy_start = here(); copy_stage = "end"; game.refresh_arrange_controls()
+
+func mark_end() -> void:
+	var from = minf(copy_start, here()); var to = maxf(copy_start, here())
+	if to - from < .05: game.tell("Scroll to the end of the part first."); return
+	var found: Array = []
+	for note in game.capture.notes + game.document.notes:
+		if float(note.time) >= from - .001 and float(note.time) <= to + .001:
+			var copy: Dictionary = note.duplicate(true); copy.time = float(note.time) - from; found.append(copy)
+	if found.is_empty(): game.tell("There are no notes between %.2f and %.2f s." % [from, to]); return
+	found.sort_custom(func(a, b): return float(a.time) < float(b.time))
+	clipboard = found; clipboard_span = to - from; copy_start = from; copy_stage = ""
+	game.refresh_arrange_controls()
+	game.tell("Copied %d note%s. Scroll to a new place and tap Paste here." % [found.size(), "" if found.size() == 1 else "s"])
+
+# One step of the recorder's grid (its subdivision of the beat).
+func grid_step() -> float:
+	return 60.0 / maxf(1.0, float(game.chart_bpm())) / maxf(1.0, float(game.recorder.division))
+
+func paste_here() -> void:
+	if clipboard.is_empty(): return
+	var step = grid_step()
+	var shift = roundf((here() - copy_start) / step) * step
+	var at = copy_start + shift
+	var copies: Array = []
+	var locks = game.recorder.locks()
+	for source in clipboard:
+		if source.kind in locks: continue
+		var note: Dictionary = source.duplicate(true); note.time = float(source.time) + at
+		if float(note.time) < 0 or float(note.time) + float(note.duration) > game.length() + .001:
+			game.tell("The copied part doesn't fit before the end of the song."); return
+		copies.append(note)
+	if copies.is_empty(): game.tell("Those note types are locked."); return
+	game.space_authored_notes(copies, game.capture.notes + game.document.notes)
+	game.capture.notes.append_array(copies)
+	game.capture.notes.sort_custom(func(a, b): return float(a.time) < float(b.time))
+	game.commit_take_history()
+	if game.overlap_tools: game.overlap_tools.refresh()
+	game.refresh_arrange_controls()
+	game.tell("Pasted %d note%s at %.2f s." % [copies.size(), "" if copies.size() == 1 else "s", at])
+
+# The help line while copying, or "" when not copying.
+func copy_help() -> String:
+	if copy_stage == "start": return "Scroll so the start of the part is on the line, then tap Start here."
+	if copy_stage == "end": return "Start at %.2f s. Scroll to the end of the part, then tap End here." % copy_start
+	return ""
 
 func refresh() -> void:
 	buttons.undo.disabled = game.take_undo.is_empty()

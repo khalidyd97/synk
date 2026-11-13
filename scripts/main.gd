@@ -1959,8 +1959,12 @@ func refresh_arrange_controls() -> void :
 		var dots_note: Dictionary = arrange_selection.get("note", {})
 		if dots_note.is_empty() or dots_note.kind not in ["hold", "slide"]: record_help.text = "Select a hold or slide, then tap its trail to add a connector."
 		else: record_help.text = "Tap the trail to add or remove a connector (%d now)." % dots_note.get("checkpoints", []).size()
+	elif arranging and correct_bar and correct_bar.copy_help() != "":
+		record_help.text = correct_bar.copy_help()
 	elif arranging:
-		if arrange_selection.is_empty(): record_help.text = "Tap a note to select it. Drag empty space to scroll."
+		if arrange_selection.is_empty():
+			var copied = correct_bar.clipboard.size() if correct_bar else 0
+			record_help.text = "%d note%s copied. Scroll to a new place and tap Paste here." % [copied, "" if copied == 1 else "s"] if copied > 0 else "Tap a note to select it. Drag empty space to scroll."
 		else:
 			var n: Dictionary = arrange_selection.note
 			if n.kind in ["hold", "slide"]:
