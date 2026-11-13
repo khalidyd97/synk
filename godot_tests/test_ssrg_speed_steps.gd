@@ -14,7 +14,7 @@ func run() -> void:
 	playables.change_speed(-.1);playables.change_speed(-.1);check(is_equal_approx(game.ssrg_speed_setting(),2.9),"− takes 0.1")
 	game.prefs.set_value("ssrg","speed_value",9.95);playables.change_speed(.1);check(is_equal_approx(game.ssrg_speed_setting(),10.0),"Capped at 10.0")
 	game.prefs.set_value("ssrg","speed_value",1.05);playables.change_speed(-.1);check(is_equal_approx(game.ssrg_speed_setting(),1.0),"Floor at 1.0")
-	check(playables.speed_label.text=="SPEED 1.0","Label shows one decimal (%s)" % playables.speed_label.text)
+	check(playables.speed_label.text=="1.0","Label shows one decimal (%s)" % playables.speed_label.text)
 	game.prefs.set_value("ssrg","speed_value",5.0)
 	playables.speed_held_step=.1;playables.speed_held_time=0.0
 	playables.repeat_held_speed(.3);check(is_equal_approx(game.ssrg_speed_setting(),5.0),"No repeat before 0.4 s")

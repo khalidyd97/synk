@@ -31,10 +31,10 @@ func run() -> void:
 	var chosen=screen.selected_id
 	var card_center=screen.rows[chosen].row.get_global_rect().get_center()
 	await mouse(card_center,true)
-	await move(card_center-Vector2(250,0),Vector2(-250,0))
-	await mouse(card_center-Vector2(250,0),false)
-	check(screen.carousel.scroll_horizontal>150,"SSRG song cards follow horizontal drags")
-	check(screen.selected_id==chosen,"Swiping a song card does not select it")
+	await move(card_center-Vector2(0,250),Vector2(0,-250))
+	await mouse(card_center-Vector2(0,250),false)
+	check(screen.carousel.scroll_vertical>150,"The SSRG song list follows vertical drags")
+	check(screen.selected_id==chosen,"Swiping a song row does not select it")
 	screen.carousel_drag.velocity=500
 	var wizard=screen.import_wizard;wizard.open()
 	await process_frame
