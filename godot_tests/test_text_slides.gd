@@ -32,6 +32,9 @@ func run() -> void:
 			heads_ok=false; push_error("Shape %s starts its slides on top of each other" % character)
 	check(heads_ok,"A shape's two slides never start on top of each other")
 	check(Glyphs.SHAPE_ORDER.length()==Glyphs.SHAPES.size(),"Every shape is offered in the picker")
+	var short_end=0.0
+	for n in Glyphs.shape_notes("C",0.0,.2,6): short_end=maxf(short_end,float(n.time)+float(n.duration))
+	check(short_end>=Glyphs.MIN_SHAPE_TIME-.01,"A very short hold is lengthened rather than squashed flat")
 	check(Glyphs.clean("ab 1?!")=="AB 1","Unsupported characters are dropped and letters upper-cased")
 	# A turns back at its apex: two legs, both running forward in time, meeting at the top.
 	var a=Glyphs.build("A",0.0,1.2,6.0,4.0)

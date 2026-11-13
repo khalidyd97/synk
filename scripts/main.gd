@@ -903,7 +903,7 @@ func build_shape_picker() -> void:
 	card.add_theme_stylebox_override("panel", box)
 	var heading = label(card, "Shape this note", .04, .05, .7, .2, 30)
 	heading.add_theme_font_override("font", A.SERIF)
-	var hint = label(card, "Pick a letter or number. The hold becomes up to two slides drawn in that shape.", .04, .19, .96, .28, 16)
+	var hint = label(card, "Pick a letter or number. The hold becomes up to two slides drawn in that shape; a short hold is lengthened so the shape stays playable.", .04, .19, .96, .28, 16)
 	hint.add_theme_color_override("font_color", A.MUTED)
 	button(card, "Cancel", .8, .06, .96, .18, close_shape_picker, "tool")
 	var characters = Glyphs.SHAPE_ORDER

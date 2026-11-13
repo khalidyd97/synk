@@ -50,14 +50,14 @@ const GLYPHS = {
 
 # Shapes for turning one recorded hold into a character: at most two slides each. Every
 # stroke already runs forward in time (y never drops), so each stroke is exactly one slide;
-# flat runs get FLAT_STEP each. M, N and W need a stroke that runs back in time, which
+# flat runs get the time a finger needs to follow them. M, N and W need a stroke that runs back in time, which
 # would take three or four slides, so they are left to the typed TEXT tool. The two
 # slides never start together on one spot: the second one's head always has room to be hit.
 const SHAPES = {
 	"0": [[[3,0],[1,0],[0,1],[0,5],[2,6]], [[4,1],[4,5],[2,6]]],
 	"1": [[[1,0],[3,0],[2,0],[2,6]], [[1,4.6],[2,6]]],
 	"2": [[[4,0],[0,0],[4,4],[4,5],[3,6],[1,6]], [[0,5],[1,6]]],
-	"3": [[[0,0],[3,0],[4,1],[4,2],[3,3],[1,3]], [[4,4],[4,5],[3,6],[0,6]]],
+	"3": [[[0,0],[3,0],[4,1],[4,2],[3,3],[1.5,3],[3,3],[4,4],[4,5],[3,6],[0,6]]],
 	"4": [[[3,0],[3,6]], [[4,2],[0,2],[3,6]]],
 	"5": [[[0,0],[3,0],[4,1],[4,2],[3,3],[0,3],[0,6],[4,6]]],
 	"6": [[[3,0],[1,0],[0,1],[0,5],[1,6],[4,6]], [[4,1],[4,2],[3,3],[0,3]]],
@@ -68,11 +68,11 @@ const SHAPES = {
 	"B": [[[3,0],[0,0],[0,6]], [[4,1],[4,2],[3,3],[1,3],[3,3],[4,4],[4,5],[3,6],[0,6]]],
 	"C": [[[4,0],[1,0],[0,1],[0,5],[1,6],[4,6]]],
 	"D": [[[2,0],[0,0],[0,6]], [[3,1],[4,2],[4,4],[2,6],[0,6]]],
-	"E": [[[4,0],[0,0],[0,6],[4,6]], [[1,3],[3,3]]],
-	"F": [[[0,0],[0,6],[4,6]], [[1,3],[3,3]]],
+	"E": [[[4,0],[0,0],[0,6],[4,6]], [[1.5,3],[3.5,3]]],
+	"F": [[[0,0],[0,6],[4,6]], [[1.5,3],[3.5,3]]],
 	"G": [[[3,0],[1,0],[0,1],[0,5],[1,6],[4,6]], [[4,1],[4,3],[2,3]]],
 	"H": [[[0,0],[0,3],[4,3],[4,6]], [[4,0],[4,3],[0,3],[0,6]]],
-	"I": [[[1,0],[3,0],[2,0],[2,6],[1,6],[3,6]]],
+	"I": [[[1,0],[2,0],[2,6],[3,6]]],
 	"J": [[[1,0],[3,0],[4,1],[4,6],[2,6]], [[0,.5],[0,1.5]]],
 	"K": [[[0,0],[0,6]], [[4,0],[0,3],[4,6]]],
 	"L": [[[4,0],[0,0],[0,6]]],
@@ -81,7 +81,7 @@ const SHAPES = {
 	"Q": [[[2,0],[0,1.5],[0,4.5],[2,6]], [[4,0],[3,1],[4,2],[4,4.5],[2,6]]],
 	"R": [[[0,0],[0,6],[3,6]], [[4,0],[1,3],[3,3],[4,4],[4,5],[3,6]]],
 	"S": [[[0,0],[3,0],[4,1],[4,2],[3,3],[1,3],[0,4],[0,5],[1,6],[4,6]]],
-	"T": [[[2,0],[2,6],[0,6],[4,6]]],
+	"T": [[[2,0],[2,5],[0,6]], [[2.8,5.4],[4,6]]],
 	"U": [[[3,0],[1,0],[0,1],[0,6]], [[4,1],[4,6]]],
 	"V": [[[2,0],[0,6]], [[2.5,1.5],[4,6]]],
 	"X": [[[0,0],[4,6]], [[4,0],[0,6]]],
@@ -90,29 +90,109 @@ const SHAPES = {
 }
 const SHAPE_ORDER = "0123456789ABCDEFGHIJKLOPQRSTUVXYZ"
 
-# Replaces one hold with its character: the slides fill the hold's own time (start to
-# end) and sit width lanes wide around its lane, kept inside lanes 1-13.
+# Replaces one hold with its character: the slides start with the hold, fill its time
+# (at least MIN_SHAPE_TIME) and sit up to width lanes wide around its lane, inside lanes 1-13.
 static func shape_notes(character: String, start_time: float, duration: float, centre_lane: float, width: float = 8.0) -> Array:
 	var key = character.to_upper()
 	if not SHAPES.has(key): return []
 	var strokes: Array = SHAPES[key]
-	# Flat steps add time, so the grid gets what is left of the hold after the longest run of them.
-	var most_flats = 0
-	for stroke in strokes:
-		var flats = 0
-		for i in range(1, stroke.size()):
-			if is_equal_approx(float(stroke[i][1]), float(stroke[i - 1][1])): flats += 1
-		most_flats = maxi(most_flats, flats)
-	var height = maxf(.3, duration - most_flats * FLAT_STEP)
-	var left = clampf(centre_lane - width * .5, 0.0, float(SynkChart.MAX_LANE) - width)
+	duration = maxf(duration, MIN_SHAPE_TIME)
+	# Every move gets at least the time a finger needs to follow it (FOLLOW_SPEED), so bars
+	# lean a little instead of jumping. The letter's height is then the largest that still
+	# fits the hold; when even the smallest height does not fit, the letter gets narrower.
+	var w = width
+	var height = duration
+	while true:
+		var lo = 0.0; var hi = duration
+		for i in 24:
+			var mid = (lo + hi) * .5
+			if shape_length(strokes, mid, w) <= duration: lo = mid
+			else: hi = mid
+		height = lo
+		if height >= duration * MIN_UPRIGHT or w <= MIN_SHAPE_WIDTH: break
+		w = maxf(MIN_SHAPE_WIDTH, w - 1.0)
+	# Too short a hold would squash the letter flat: it keeps a readable height and runs on
+	# past the hold's end instead.
+	height = maxf(height, MIN_HEIGHT)
+	var left = clampf(centre_lane - w * .5, 0.0, float(SynkChart.MAX_LANE) - w)
 	var notes: Array = []
-	for stroke in strokes:
-		var points: Array = []
-		for p in stroke:
-			var v = Vector2(float(p[0]), float(p[1]))
-			if points.is_empty() or not points[-1].is_equal_approx(v): points.append(v)
-		notes.append(piece_note(points, start_time, height, left, width))
+	for timeline in shape_timelines(strokes, height, w):
+		var lanes: Array = []; var offsets: Array = []
+		for i in timeline.size():
+			lanes.append(clampf(left + float(timeline[i].x) / GRID_W * w, 0.0, float(SynkChart.MAX_LANE)))
+			offsets.append(float(timeline[i].t))
+		var n = SynkChart.note(start_time + offsets[0], roundi(lanes[0]), "slide")
+		n.duration = offsets[-1] - offsets[0]
+		n.ssrg_path = true
+		var path: Array = []
+		for i in lanes.size(): path.append({"offset": offsets[i] - offsets[0], "lane": lanes[i]})
+		n.path = path; n.end_lane = roundi(lanes[-1])
+		notes.append(n)
 	return notes
+
+# Fastest sideways move a shape asks of a finger, in lanes per second.
+const FOLLOW_SPEED = 28.0
+# Shapes always last at least this long, even from a very short hold.
+const MIN_SHAPE_TIME = .8
+# Fraction of the time the letter's upright strokes keep before it is made narrower.
+const MIN_UPRIGHT = .45
+const MIN_SHAPE_WIDTH = 6.0
+# Seconds of upright travel every letter keeps, so it still reads as its shape.
+const MIN_HEIGHT = .55
+# Every slide of a shape lasts at least this long, so its head and end are two clear moments.
+const MIN_STROKE_TIME = .25
+# A stroke that starts above where the first one ends waits this long after it, to re-tap.
+const RETAP_TIME = .15
+
+# The points of one stroke with their times from the shape's start: each move takes as long
+# as its rise in the grid, or as long as the finger needs to cross its lanes, whichever is longer.
+static func stroke_timeline(stroke: Array, height: float, width: float) -> Array:
+	var result: Array = []
+	var t = float(stroke[0][1]) / GRID_H * height
+	for i in stroke.size():
+		var p = stroke[i]
+		if i > 0:
+			var q = stroke[i - 1]
+			if is_equal_approx(float(p[0]), float(q[0])) and is_equal_approx(float(p[1]), float(q[1])): continue
+			var rise = (float(p[1]) - float(q[1])) / GRID_H * height
+			var across = absf(float(p[0]) - float(q[0])) / GRID_W * width / FOLLOW_SPEED
+			t += maxf(maxf(rise, across), .02)
+		result.append({"x": float(p[0]), "y": float(p[1]), "t": t})
+	return result
+
+# All strokes of a shape. The first stroke's sideways moves slow it down, so a later stroke
+# starts no earlier than the first one reaches its height (or ends, if it never does). The
+# shape stays in proportion and the second head never lands beside a finger still on its way.
+static func shape_timelines(strokes: Array, height: float, width: float) -> Array:
+	var result: Array = []
+	for stroke in strokes:
+		var timeline = stroke_timeline(stroke, height, width)
+		var own = float(timeline[-1].t) - float(timeline[0].t)
+		if own < MIN_STROKE_TIME:
+			for point in timeline: point.t = float(timeline[0].t) + (float(point.t) - float(timeline[0].t)) * MIN_STROKE_TIME / maxf(own, .001) if own > 0.0 else float(point.t)
+		if not result.is_empty():
+			var first: Array = result[0]
+			var reach = time_at_height(first, float(timeline[0].y))
+			if float(timeline[0].y) > float(first[-1].y): reach = float(first[-1].t) + RETAP_TIME
+			var shift = maxf(0.0, reach - float(timeline[0].t))
+			for point in timeline: point.t = float(point.t) + shift
+		result.append(timeline)
+	return result
+
+static func time_at_height(timeline: Array, y: float) -> float:
+	for i in timeline.size():
+		if float(timeline[i].y) >= y:
+			if i == 0: return float(timeline[0].t)
+			var a = timeline[i - 1]; var b = timeline[i]
+			var span = float(b.y) - float(a.y)
+			return lerpf(float(a.t), float(b.t), 0.0 if span <= 0.0 else (y - float(a.y)) / span)
+	return float(timeline[-1].t)
+
+static func shape_length(strokes: Array, height: float, width: float) -> float:
+	var longest = 0.0
+	for timeline in shape_timelines(strokes, height, width):
+		longest = maxf(longest, float(timeline[-1].t))
+	return longest
 
 static func supported(character: String) -> bool:
 	return GLYPHS.has(character.to_upper())
