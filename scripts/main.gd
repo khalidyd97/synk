@@ -181,6 +181,10 @@ func set_highway_preview(on: bool, user: Object = null) -> void:
 	if highway_preview==on: return
 	var was_ssrg_look=uses_ssrg_gameplay()
 	highway_preview=on
+	# A closing preview stops the stage drawing this very frame. Otherwise it was drawn once
+	# more in the look it falls back to, preparing shaders nobody was going to see.
+	if not on and field and field.viewport and mode in ["menu","guide","library","editor"]:
+		field.viewport.render_target_update_mode=SubViewport.UPDATE_DISABLED
 	if uses_ssrg_gameplay()!=was_ssrg_look and field and field.world: field.world.refresh_highway_look()
 func gameplay_lane_count() -> int:
 	return ssrg_lane_count if ssrg_playable_run else SynkChart.LANES
