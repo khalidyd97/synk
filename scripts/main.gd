@@ -867,8 +867,74 @@ var text_slides_button: Button
 var text_slides_field: LineEdit
 func open_text_slides() -> void:
 	if not arranging: return
+	# With a hold or slide selected the button shapes that note; otherwise it inserts typed text.
+	if shapeable_selection():
+		open_shape_picker(); return
 	text_slides_field.text = ""
 	floating_text_input.open_for(text_slides_field)
+
+# A recorded hold (or slide) can be turned into a letter or number drawn by at most two slides.
+func shapeable_selection() -> bool:
+	return arranging and not arrange_selection.is_empty() and str(arrange_selection.note.kind) in ["hold", "slide"]
+
+var shape_picker: Control
+func open_shape_picker() -> void:
+	if not shapeable_selection(): return
+	if "slide" in recorder.locks():
+		judgement = "SLIDES LOCKED"; flash = 1; return
+	if shape_picker == null: build_shape_picker()
+	shape_picker.visible = true
+	UiMotion.screen(shape_picker)
+
+func close_shape_picker() -> void:
+	if shape_picker: shape_picker.visible = false
+
+func build_shape_picker() -> void:
+	var A = preload("res://scripts/arcade_style.gd")
+	var Glyphs = preload("res://scripts/slide_glyphs.gd")
+	shape_picker = Control.new(); rect(shape_picker, record_tools, 0, 0, 1, 1)
+	shape_picker.mouse_filter = Control.MOUSE_FILTER_STOP; shape_picker.visible = false
+	var dim = ColorRect.new(); dim.color = Color(A.INK, .72); rect(dim, shape_picker, 0, 0, 1, 1)
+	dim.gui_input.connect(func(event: InputEvent):
+		if (event is InputEventMouseButton or event is InputEventScreenTouch) and event.pressed: close_shape_picker())
+	var card = Panel.new(); rect(card, shape_picker, .12, .2, .88, .8)
+	var box = StyleBoxFlat.new(); box.bg_color = Color(A.NIGHT, .96); box.set_corner_radius_all(roundi(A.CARD_RADIUS))
+	box.shadow_color = Color(0, 0, 0, .5); box.shadow_size = 24
+	card.add_theme_stylebox_override("panel", box)
+	var heading = label(card, "Shape this note", .04, .05, .7, .2, 30)
+	heading.add_theme_font_override("font", A.SERIF)
+	var hint = label(card, "Pick a letter or number. The hold becomes up to two slides drawn in that shape.", .04, .19, .96, .28, 16)
+	hint.add_theme_color_override("font_color", A.MUTED)
+	button(card, "Cancel", .8, .06, .96, .18, close_shape_picker, "tool")
+	var characters = Glyphs.SHAPE_ORDER
+	var columns = 11
+	for i in characters.length():
+		var character = characters[i]
+		var col = i % columns; var row_index = i / columns
+		var x = .04 + col * (.92 / columns); var y = .34 + row_index * .2
+		var key = button(card, character, x + .004, y, x + .92 / columns - .004, y + .17, func(): shape_selected_note(character))
+		key.caption_size = 26
+
+# Replaces the selected hold or slide with the character's slides over the same time and lane.
+func shape_selected_note(character: String) -> int:
+	close_shape_picker()
+	if not shapeable_selection() or "slide" in recorder.locks(): return 0
+	var n: Dictionary = arrange_selection.note
+	if n.kind in recorder.locks() or recorder.current_pass() not in ["all", "slide"]: return 0
+	var notes = preload("res://scripts/slide_glyphs.gd").shape_notes(character, float(n.time), float(n.duration), float(n.lane))
+	if notes.is_empty(): return 0
+	var index = int(arrange_selection.index)
+	if arrange_selection.document:
+		document.checkpoint()
+		if index >= 0 and index < document.notes.size(): document.notes.remove_at(index)
+		document.notes.append_array(notes); document.selected = -1
+	else:
+		if index >= 0 and index < capture.notes.size(): capture.notes.remove_at(index)
+		capture.notes.append_array(notes)
+	arrange_selection.clear(); arrange_touches.clear()
+	commit_take_history(); refresh_arrange_controls()
+	judgement = "SHAPE %s · %d SLIDE%s" % [character, notes.size(), "" if notes.size() == 1 else "S"]; flash = 1
+	return notes.size()
 
 # Inserts the text as letter/number shaped slides into the take, ending just before the
 # current position so the new slides are on screen. Each character is three beats tall and
@@ -1849,6 +1915,8 @@ func refresh_arrange_controls() -> void :
 	for i in range(1, kind_buttons.size()):
 		if kinds[i] in recorder.locks() or (recorder.current_pass() != "all" and kinds[i] != recorder.current_pass()): kind_buttons[i].disabled = true
 	dots_button.visible = arranging
+	if text_slides_button: text_slides_button.text = "SHAPE" if shapeable_selection() else "TEXT"
+	if shape_picker and not shapeable_selection(): close_shape_picker()
 	ghost_button.visible = not arranging;ghost_button.set_selected(ghost_recording)
 	dots_button.text = "●  CONNECTOR: ON" if dots_mode else "●  CONNECTOR: OFF"
 	dots_button.set_selected(dots_mode)
@@ -1863,7 +1931,7 @@ func refresh_arrange_controls() -> void :
 		else:
 			var n: Dictionary = arrange_selection.note
 			if n.kind in ["hold", "slide"]:
-				record_help.text = "%s · %.2f–%.2f s | SHAPE: drag trail to bend or stretch · CONNECTOR: tap trail · DELETE POINT: select a handle" % [str(n.kind).to_upper(), float(n.time), float(n.time) + float(n.duration)]
+				record_help.text = "%s · %.2f–%.2f s | Drag the trail to bend or stretch · SHAPE turns it into a letter or number · CONNECTOR: tap trail" % [str(n.kind).to_upper(), float(n.time), float(n.time) + float(n.duration)]
 			else: record_help.text = "%s · LANE %d · %.2f s\nDrag to move. The buttons on the left change its type or delete it." % [str(n.kind).to_upper(), int(n.lane) + 1, float(n.time)]
 	else:
 		record_help.text = "Detecting %s · tap or swipe on the 13 lanes; each gesture becomes the matching note." % ", ".join(record_types.map(func(kind):return str(kind)))

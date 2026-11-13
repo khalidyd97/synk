@@ -13,6 +13,25 @@ func run() -> void:
 		var notes=Glyphs.build(character,1.0,1.0)
 		if notes.is_empty() or not SynkChart.valid(notes): all_ok=false; push_error("Glyph %s is invalid" % character)
 	check(all_ok,"Every letter and number builds valid notes")
+	# Hold shapes: at most two slides, all inside the hold's time and lanes 1-13.
+	var shapes_ok=true
+	for character in Glyphs.SHAPE_ORDER:
+		for lane in [0,6,12]:
+			var shaped=Glyphs.shape_notes(character,2.0,1.2,lane)
+			var end=0.0
+			for n in shaped:
+				end=maxf(end,float(n.time)+float(n.duration))
+				for p in n.path: if float(p.lane)<0.0 or float(p.lane)>12.0: shapes_ok=false
+			if shaped.is_empty() or shaped.size()>2 or not SynkChart.valid(shaped) or end>3.2+.001:
+				shapes_ok=false; push_error("Shape %s at lane %d is invalid" % [character,lane])
+	check(shapes_ok,"Every hold shape is one or two valid slides inside the hold")
+	var heads_ok=true
+	for character in Glyphs.SHAPE_ORDER:
+		var pair=Glyphs.shape_notes(character,2.0,1.2,6)
+		if pair.size()==2 and SynkNoteSpacing.conflict(pair[0],pair[1],2.0):
+			heads_ok=false; push_error("Shape %s starts its slides on top of each other" % character)
+	check(heads_ok,"A shape's two slides never start on top of each other")
+	check(Glyphs.SHAPE_ORDER.length()==Glyphs.SHAPES.size(),"Every shape is offered in the picker")
 	check(Glyphs.clean("ab 1?!")=="AB 1","Unsupported characters are dropped and letters upper-cased")
 	# A turns back at its apex: two legs, both running forward in time, meeting at the top.
 	var a=Glyphs.build("A",0.0,1.2,6.0,4.0)
@@ -47,6 +66,26 @@ func run() -> void:
 	game.recorder.config.locked=["slide"]
 	check(game.insert_text_slides("A")==0,"Locked slides block text insertion")
 	game.recorder.config.locked=[]
+	# A recorded hold, selected in Correct mode, becomes a letter or number of at most two slides.
+	game.capture.notes=[]
+	var hold=SynkChart.note(10.0,6,"hold"); hold.duration=1.5; game.capture.notes.append(hold)
+	game.arrange_selection={"note":hold,"index":0,"document":false}
+	game.refresh_arrange_controls()
+	check(game.text_slides_button.text=="SHAPE","Selecting a hold turns TEXT into SHAPE")
+	game.open_text_slides()
+	check(game.shape_picker!=null and game.shape_picker.visible,"SHAPE opens the letter and number picker")
+	check(game.shape_selected_note("8")==2 and game.capture.notes.size()==2,"The hold is replaced by the shape's two slides")
+	check(not game.shape_picker.visible and game.text_slides_button.text=="TEXT","The picker closes and the selection clears")
+	check(SynkChart.valid(game.capture.notes),"Shaped slides are valid chart notes")
+	var first=10.0; var last=0.0
+	for n in game.capture.notes: first=minf(first,float(n.time)); last=maxf(last,float(n.time)+float(n.duration))
+	check(is_equal_approx(first,10.0) and absf(last-11.5)<.06,"The shape fills the hold's own time")
+	var undo_size=game.take_undo.size()
+	check(undo_size>0,"Shaping can be undone")
+	var tap=SynkChart.note(12.0,3,"tap"); game.capture.notes.append(tap)
+	game.arrange_selection={"note":tap,"index":game.capture.notes.size()-1,"document":false}
+	check(game.shape_selected_note("A")==0,"Only holds and slides can be shaped")
+	game.arrange_selection.clear()
 	game.toggle_arrange(); game.update_recorder_focus()
 	check(not game.text_slides_button.visible,"TEXT is hidden while recording")
 	print("Text slides: ","PASS" if failures==0 else str(failures)+" FAILED")

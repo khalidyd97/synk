@@ -48,6 +48,72 @@ const GLYPHS = {
 	"Z": [[[0,6],[4,6],[0,0],[4,0]]],
 }
 
+# Shapes for turning one recorded hold into a character: at most two slides each. Every
+# stroke already runs forward in time (y never drops), so each stroke is exactly one slide;
+# flat runs get FLAT_STEP each. M, N and W need a stroke that runs back in time, which
+# would take three or four slides, so they are left to the typed TEXT tool. The two
+# slides never start together on one spot: the second one's head always has room to be hit.
+const SHAPES = {
+	"0": [[[3,0],[1,0],[0,1],[0,5],[2,6]], [[4,1],[4,5],[2,6]]],
+	"1": [[[1,0],[3,0],[2,0],[2,6]], [[1,4.6],[2,6]]],
+	"2": [[[4,0],[0,0],[4,4],[4,5],[3,6],[1,6]], [[0,5],[1,6]]],
+	"3": [[[0,0],[3,0],[4,1],[4,2],[3,3],[1,3]], [[4,4],[4,5],[3,6],[0,6]]],
+	"4": [[[3,0],[3,6]], [[4,2],[0,2],[3,6]]],
+	"5": [[[0,0],[3,0],[4,1],[4,2],[3,3],[0,3],[0,6],[4,6]]],
+	"6": [[[3,0],[1,0],[0,1],[0,5],[1,6],[4,6]], [[4,1],[4,2],[3,3],[0,3]]],
+	"7": [[[1,0],[4,6],[0,6]]],
+	"8": [[[3,0],[1,0],[0,1],[0,2],[4,4],[4,5],[2,6]], [[4,1],[4,2],[0,4],[0,5],[2,6]]],
+	"9": [[[0,0],[3,0],[4,1],[4,5],[2,6]], [[3,3],[1,3],[0,4],[0,5],[2,6]]],
+	"A": [[[0,0],[1,3],[3,3],[2,6]], [[4,0],[3,3],[1,3],[2,6]]],
+	"B": [[[3,0],[0,0],[0,6]], [[4,1],[4,2],[3,3],[1,3],[3,3],[4,4],[4,5],[3,6],[0,6]]],
+	"C": [[[4,0],[1,0],[0,1],[0,5],[1,6],[4,6]]],
+	"D": [[[2,0],[0,0],[0,6]], [[3,1],[4,2],[4,4],[2,6],[0,6]]],
+	"E": [[[4,0],[0,0],[0,6],[4,6]], [[1,3],[3,3]]],
+	"F": [[[0,0],[0,6],[4,6]], [[1,3],[3,3]]],
+	"G": [[[3,0],[1,0],[0,1],[0,5],[1,6],[4,6]], [[4,1],[4,3],[2,3]]],
+	"H": [[[0,0],[0,3],[4,3],[4,6]], [[4,0],[4,3],[0,3],[0,6]]],
+	"I": [[[1,0],[3,0],[2,0],[2,6],[1,6],[3,6]]],
+	"J": [[[1,0],[3,0],[4,1],[4,6],[2,6]], [[0,.5],[0,1.5]]],
+	"K": [[[0,0],[0,6]], [[4,0],[0,3],[4,6]]],
+	"L": [[[4,0],[0,0],[0,6]]],
+	"O": [[[3,0],[1,0],[0,1.5],[0,4.5],[2,6]], [[4,1.5],[4,4.5],[2,6]]],
+	"P": [[[0,0],[0,6],[3,6]], [[1,3],[3,3],[4,4],[4,5],[3,6]]],
+	"Q": [[[2,0],[0,1.5],[0,4.5],[2,6]], [[4,0],[3,1],[4,2],[4,4.5],[2,6]]],
+	"R": [[[0,0],[0,6],[3,6]], [[4,0],[1,3],[3,3],[4,4],[4,5],[3,6]]],
+	"S": [[[0,0],[3,0],[4,1],[4,2],[3,3],[1,3],[0,4],[0,5],[1,6],[4,6]]],
+	"T": [[[2,0],[2,6],[0,6],[4,6]]],
+	"U": [[[3,0],[1,0],[0,1],[0,6]], [[4,1],[4,6]]],
+	"V": [[[2,0],[0,6]], [[2.5,1.5],[4,6]]],
+	"X": [[[0,0],[4,6]], [[4,0],[0,6]]],
+	"Y": [[[2,0],[2,3],[4,6]], [[1.5,3.75],[0,6]]],
+	"Z": [[[4,0],[0,0],[4,6],[0,6]]],
+}
+const SHAPE_ORDER = "0123456789ABCDEFGHIJKLOPQRSTUVXYZ"
+
+# Replaces one hold with its character: the slides fill the hold's own time (start to
+# end) and sit width lanes wide around its lane, kept inside lanes 1-13.
+static func shape_notes(character: String, start_time: float, duration: float, centre_lane: float, width: float = 8.0) -> Array:
+	var key = character.to_upper()
+	if not SHAPES.has(key): return []
+	var strokes: Array = SHAPES[key]
+	# Flat steps add time, so the grid gets what is left of the hold after the longest run of them.
+	var most_flats = 0
+	for stroke in strokes:
+		var flats = 0
+		for i in range(1, stroke.size()):
+			if is_equal_approx(float(stroke[i][1]), float(stroke[i - 1][1])): flats += 1
+		most_flats = maxi(most_flats, flats)
+	var height = maxf(.3, duration - most_flats * FLAT_STEP)
+	var left = clampf(centre_lane - width * .5, 0.0, float(SynkChart.MAX_LANE) - width)
+	var notes: Array = []
+	for stroke in strokes:
+		var points: Array = []
+		for p in stroke:
+			var v = Vector2(float(p[0]), float(p[1]))
+			if points.is_empty() or not points[-1].is_equal_approx(v): points.append(v)
+		notes.append(piece_note(points, start_time, height, left, width))
+	return notes
+
 static func supported(character: String) -> bool:
 	return GLYPHS.has(character.to_upper())
 
