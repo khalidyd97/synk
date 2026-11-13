@@ -5,11 +5,19 @@ func run() -> void:
 	var game=load("res://scenes/main.tscn").instantiate(); root.add_child(game)
 	await process_frame
 	game.note_speed=1; game.recorder_note_speed=1
-	assert(is_equal_approx(game.note_travel_seconds(),2.6))
 	game.set_mode("play")
-	assert(game.uses_ssrg_gameplay() and is_equal_approx(game.note_travel_seconds(),3.5),"Normal play shares SSRG motion")
+	assert(is_equal_approx(game.note_travel_seconds(),3.5),"Normal play at 1x uses SKD's 3.5 s base time")
+	var saved_speed=game.prefs.get_value("ssrg","speed_value",3.0)
+	game.prefs.set_value("ssrg","speed_value",3.0)
 	game.ssrg_playable_run=true; game.highway_style="ssrg"; game.set_mode("play")
-	assert(is_equal_approx(game.note_travel_seconds(),3.5))
+	assert(is_equal_approx(game.note_travel_seconds(),3.5),"SKD SPEED 3 is the 3.5 s base time")
+	# Measured on a real SKD recording at SPEED 1 (2026-11-13): the whole track takes about
+	# 10.45 s and progress rises evenly, so SPEED 1 must stay 3.5/(1/3) = 10.5 s.
+	game.prefs.set_value("ssrg","speed_value",1.0)
+	assert(is_equal_approx(game.note_travel_seconds(),10.5),"SKD SPEED 1 crosses the track in 10.5 s, as recorded")
+	game.prefs.set_value("ssrg","speed_value",10.0)
+	assert(is_equal_approx(game.note_travel_seconds(),1.05),"SKD SPEED 10 is ten times faster")
+	game.prefs.set_value("ssrg","speed_value",3.0)
 	var world=game.field.world; world.apply_camera()
 	var camera=world.camera
 	assert(camera.projection==Camera3D.PROJECTION_ORTHOGONAL,"SSRG uses a direct 2D orthographic stage")
@@ -34,9 +42,10 @@ func run() -> void:
 		assert(absf(SynkCapture.lane(input.x)-lane)<.001,"Orthographic note lane maps back to matching touch lane")
 	game.song_time=5; game.audio.stop()
 	assert(is_zero_approx(world.note_position(4,5).z),"Hit timestamp still reaches judgment plane")
-	game.set_mode("record")
-	assert(is_equal_approx(game.note_travel_seconds(),2.6),"Recorder retains original travel")
+	game.recorder_skd_view=false; game.set_mode("record")
+	assert(is_equal_approx(game.note_travel_seconds(),2.6),"Recorder's other view retains original travel")
 	assert(camera.projection==Camera3D.PROJECTION_PERSPECTIVE,"Recorder restores its original camera")
+	game.prefs.set_value("ssrg","speed_value",saved_speed)
 	game.queue_free(); await process_frame
 	print("SSRG reference motion and normal/recorder isolation: PASS")
 	quit()
