@@ -139,7 +139,7 @@ func lane_x(lane: float) -> float: return (lane-CENTER_LANE)*lane_step()
 # Taps are judged on the note itself, not its lane: a touch counts when it lands within the
 # note's drawn half-width at the judgement bar (plus a little grace).
 func note_reach() -> float:
-	if game.uses_skd_stage(): return SSRG_NOTE_SIZE.x * .5 * game.note_size * 1.1
+	if game.uses_skd_stage(): return SSRG_NOTE_SIZE.x * .5 * game.gameplay_note_size() * 1.1
 	return NOTE_WIDTH * .5 * game.note_size * 1.1
 # SSRG Playables use SSRG's own layout, in its 2D units scaled so its rail edge at the
 # judgement line (512 units from centre) meets the rails at x = 9.75: 13 positions 62.7 units
@@ -185,19 +185,17 @@ func approach_power() -> float:
 	return SSRG_APPROACH_POWER
 const SSRG_STAGE_DISTANCE = 514.0*SSRG_UNIT
 const SSRG_UI_HEIGHT = 640.0
-# Paired 3.6-speed recordings: source note footprints are about 80% of
-# SYNK's previous maximum. This is an artwork fit, not a timing change.
-const SSRG_REFERENCE_NOTE_SCALE = .8
 # Correct mode draws notes at half size so dense passages stay separate and easy to pick.
 const CORRECT_NOTE_SCALE = .5
+# SKD runs: SKD's own note-size option only (main.gd ssrg_note_scale). Elsewhere: SYNK's setting.
 func ssrg_art_scale() -> float:
-	return game.note_size*(SSRG_REFERENCE_NOTE_SCALE if game.ssrg_playable_run else 1.0)*(CORRECT_NOTE_SCALE if even_view() else 1.0)
+	return game.gameplay_note_size()*(CORRECT_NOTE_SCALE if even_view() else 1.0)
 func ssrg_canvas_height() -> float:
 	var view=get_viewport().get_visible_rect().size
 	var aspect=maxf(.1,view.x/maxf(1.0,view.y))
 	# Keep the reference canvas on phones. Narrow landscape screens/tablets
 	# must still fit the full outer note sprites and their touch rectangles.
-	var playable_width=12.0*62.71392+212.0*game.note_size+32.0
+	var playable_width=12.0*62.71392+212.0*game.gameplay_note_size()+32.0
 	if not game.uses_skd_stage():playable_width=(FRAME_HALF_WIDTH*2.0+NOTE_WIDTH*game.note_size)/SSRG_UNIT+32.0
 	return maxf(SSRG_UI_HEIGHT,playable_width/aspect)
 # Even Correct-mode view: the same stage, but time maps linearly to height and size, from
@@ -1119,7 +1117,7 @@ func palette_for_kind(kind: String) -> int:
 
 # Tails reuse the exact head artwork, with their own relative size.
 func make_cap(parent: Node3D, lane: float, offset: float, palette: int, recording = false, size = 1.0) -> MeshInstance3D:
-	size*=game.note_size
+	size*=game.gameplay_note_size()
 	var position_value = Vector3(note_x(lane),.2,offset*travel_speed()*(1 if recording else -1))
 	# Holds and slides follow the chosen note shape like taps: round shapes use SSRG's
 	# round long-note puck, rectangles keep the rectangle head in the ribbon's gold.
@@ -1169,7 +1167,7 @@ func make_recorder_cap(parent: Node3D, position_value: Vector3, palette: int, si
 const RECORDER_CALM_COLORS = [Color("8cc4e6"), Color("e6c47c"), Color("ee9a9a"), Color("8fd3b0")]
 const RECORDER_CALM_SCALE = .62
 func make_calm_cap(parent: Node3D, position_value: Vector3, palette: int, size = 1.0) -> MeshInstance3D:
-	var tail = size < game.note_size*.99
+	var tail = size < game.gameplay_note_size()*.99
 	var tint: Color = RECORDER_CALM_COLORS[clampi(palette,0,3)]
 	var mat = shared("recorder_calm|%d" % palette, func():
 		var m = ShaderMaterial.new(); m.shader = preload("res://scripts/recorder_calm_note.gdshader"); m.render_priority = 3
@@ -1223,7 +1221,7 @@ func make_circle_cap(parent: Node3D, position_value: Vector3, palette: int, size
 # tail caps use the small gold end puck. SYNK's own art in assets/ssrg.
 const SSRG_ART=[preload("res://assets/ssrg/hold.png"),preload("res://assets/ssrg/tap.png"),preload("res://assets/ssrg/flick.png"),preload("res://assets/ssrg/slide.png")]
 func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size = 1.0) -> MeshInstance3D:
-	var tail = size < game.note_size*.99
+	var tail = size < game.gameplay_note_size()*.99
 	# Connector pucks along slides (and the end puck) are the head note's own art at 60%.
 	var phase=fposmod((render_time()-game.chart_offset())*game.chart_bpm()/60.0,1.0)
 	var old_ui=game.old_ssrg_ui()
@@ -1254,7 +1252,7 @@ func ssrg_cap_artwork(palette: int, tail: bool, phase: float, old_ui: bool) -> T
 
 func make_source_long_glow(parent: Node3D, position_value: Vector3, size: float) -> void:
 	var mesh=PlaneMesh.new()
-	mesh.size=Vector2.ONE*(2.8 if size>=game.note_size*.99 else 1.9)*game.note_size
+	mesh.size=Vector2.ONE*(2.8 if size>=game.gameplay_note_size()*.99 else 1.9)*game.gameplay_note_size()
 	var mat=shared("synk_long_glow",func():
 		var result=ShaderMaterial.new();result.shader=preload("res://scripts/source_long_glow.gdshader")
 		result.render_priority=-2
@@ -1276,7 +1274,7 @@ func face_ssrg_billboards() -> void:
 func make_tail_cap(parent: Node3D, lane: float, offset: float, palette: int, recording = false) -> MeshInstance3D:
 	var cap=make_cap(parent,lane,offset,palette,recording,TAIL_CAP_SIZE)
 	# Keep its filled center above the ribbon instead of sinking with the smaller sprite.
-	if game.round_notes() and not game.uses_ssrg_gameplay() and not source_long_visuals(): cap.position.y=.38*game.note_size
+	if game.round_notes() and not game.uses_ssrg_gameplay() and not source_long_visuals(): cap.position.y=.38*game.gameplay_note_size()
 	cap.name="SustainEndCap"
 	return cap
 
@@ -1285,8 +1283,8 @@ func make_flick(parent: Node3D, note: Dictionary, palette: int, recording = fals
 	# One bold chevron keeps the direction clear without overlapping arrows.
 	var axis = camera.basis*[Vector3.UP,Vector3.RIGHT,Vector3.DOWN,Vector3.LEFT][clampi(int(note.direction),0,3)]
 	for i in 1:
-		var base = Vector3(note_x(note.lane),2.0*FIT*game.note_size,0)
-		var arrow_mesh = QuadMesh.new(); arrow_mesh.size=Vector2(3.22,1.6)*FIT*game.note_size
+		var base = Vector3(note_x(note.lane),2.0*FIT*game.gameplay_note_size(),0)
+		var arrow_mesh = QuadMesh.new(); arrow_mesh.size=Vector2(3.22,1.6)*FIT*game.gameplay_note_size()
 		# The SSRG puck is wide and bright; a larger chevron keeps left, up and right readable on it.
 		if game.uses_ssrg_gameplay(): arrow_mesh.size*=1.7
 		var arrow_material = shared("arrow|%d|%s" % [palette, element_color("arrows",colors[palette])], func():
@@ -1307,7 +1305,7 @@ func make_flick(parent: Node3D, note: Dictionary, palette: int, recording = fals
 # notes, and at half height through the thicker circle pucks.
 func trail_height() -> float:
 	if source_long_visuals(): return .13
-	return (.38 if game.round_notes() else .09)*game.note_size
+	return (.38 if game.round_notes() else .09)*game.gameplay_note_size()
 
 func trail_centers(note: Dictionary, count: int, recording = false) -> Array:
 	var duration = float(note.duration)
@@ -1564,7 +1562,7 @@ func build_note_node(key: String, note: Dictionary, recording = false) -> void:
 		mat.set_shader_parameter("artwork",game.ssrg_presentation.special_art(int(note.ssrg_special),int(note.get("ssrg_item",0)),0.0))
 	var lines: Array = []
 	if recording: lines = make_alignment_lines(node,note,palette)
-	var signature = (hash(note) if recording or game.mode=="record" else 0)^hash([game.note_speed,game.ssrg_speed_setting() if game.ssrg_playable_run else 0,game.note_shape,game.note_size,game.trail_style,game.uses_ssrg_gameplay(),game.old_ssrg_ui(),game.uses_skd_recorder_surface(),game.uses_even_correct_view()])
+	var signature = (hash(note) if recording or game.mode=="record" else 0)^hash([game.note_speed,game.ssrg_speed_setting() if game.ssrg_playable_run else 0,game.note_shape,game.gameplay_note_size(),game.trail_style,game.uses_ssrg_gameplay(),game.old_ssrg_ui(),game.uses_skd_recorder_surface(),game.uses_even_correct_view()])
 	if uses_projected_highway() and not recording:
 		for child in node.get_children():
 			if child is GeometryInstance3D:
@@ -1622,7 +1620,7 @@ func sync_note(key: String, note: Dictionary, visible_keys: Dictionary, recordin
 	visible_keys[key] = true
 	if look_signature_frame != Engine.get_process_frames():
 		look_signature_frame = Engine.get_process_frames()
-		look_signature = hash([game.note_speed,game.ssrg_speed_setting() if game.ssrg_playable_run else 0,game.note_shape,game.note_size,game.trail_style,game.uses_ssrg_gameplay(),game.old_ssrg_ui(),game.uses_skd_recorder_surface(),game.uses_even_correct_view()])
+		look_signature = hash([game.note_speed,game.ssrg_speed_setting() if game.ssrg_playable_run else 0,game.note_shape,game.gameplay_note_size(),game.trail_style,game.uses_ssrg_gameplay(),game.old_ssrg_ui(),game.uses_skd_recorder_surface(),game.uses_even_correct_view()])
 	var signature = (hash(note) if recording or game.mode=="record" else 0)^look_signature
 	if notes.has(key) and notes[key].signature != signature:
 		notes[key].node.queue_free(); notes.erase(key)
@@ -1672,7 +1670,7 @@ func update_finger_beams(delta: float = 0.0) -> void:
 	for i in finger_beams.size():
 		var beam: MeshInstance3D = finger_beams[i]
 		# Reuse one mesh per view; rebuild only when switching view/lane layout.
-		var signature=hash([game.gameplay_lane_count(),game.note_size]) if ssrg else (-2 if uses_projected_highway() else -1)
+		var signature=hash([game.gameplay_lane_count(),game.gameplay_note_size()]) if ssrg else (-2 if uses_projected_highway() else -1)
 		if beam.get_meta("layout",-99)!=signature:
 			var mesh=PlaneMesh.new()
 			var near=SSRG_BEAM_NEAR if uses_projected_highway() else JUDGMENT_DEPTH*.5

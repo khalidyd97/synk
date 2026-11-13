@@ -39,6 +39,7 @@ var import_panel: Control
 var import_wizard:Control
 var status_label: Label
 var speed_label: Label
+var note_size_button: Button
 # Speed goes from 1.0 to 10.0 in steps of 0.1; holding − or + keeps stepping.
 const SPEED_STEP = 0.1
 var speed_held_step = 0.0
@@ -157,8 +158,10 @@ func _ready() -> void:
 		field.content_margin_left = 14; field.content_margin_right = 10
 		search.add_theme_stylebox_override(state,field)
 	search.text_changed.connect(func(_t): refresh_songs())
-	sort_button = action(self,"",.54,.035,.64,.115,cycle_sort,"small")
-	action(self,"SHUFFLE",.645,.035,.715,.115,shuffle,"small")
+	sort_button = action(self,"",.54,.035,.615,.115,cycle_sort,"small")
+	action(self,"SHUFFLE",.62,.035,.67,.115,shuffle,"small")
+	# SKD's own three note sizes (100%, 90%, 80%); SYNK's note-size setting doesn't apply here.
+	note_size_button = action(self,"",.675,.035,.72,.115,cycle_note_size,"small")
 	hold_speed(action(self,"−",.725,.035,.755,.115,func(): pass,"small"),-SPEED_STEP)
 	speed_label = text(self,"",.755,.035,.83,.115,14); speed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hold_speed(action(self,"+",.83,.035,.86,.115,func(): pass,"small"),SPEED_STEP)
@@ -674,6 +677,12 @@ func repeat_held_speed(delta: float) -> void:
 
 func refresh_speed() -> void:
 	speed_label.text = "SPEED %.1f" % game.ssrg_speed_setting()
+	if note_size_button: note_size_button.text = "NOTE %d%%" % roundi(game.ssrg_note_scale()*100.0)
+
+func cycle_note_size() -> void:
+	game.prefs.set_value("ssrg","note_scale_index",(game.ssrg_note_scale_index()+1)%game.SSRG_NOTE_SCALES.size())
+	game.prefs.save("user://preferences.cfg")
+	refresh_speed()
 
 # --- Actions ---------------------------------------------------------------------------
 func choose_background() -> void:

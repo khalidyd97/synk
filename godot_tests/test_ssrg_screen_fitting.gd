@@ -13,8 +13,9 @@ func run():
 	for dimensions in [Vector2i(1280,720),Vector2i(2400,1080),Vector2i(2340,1080),Vector2i(2048,1536),Vector2i(1024,768)]:
 		root.size=dimensions;game.size=dimensions;game.field.size=dimensions;game.field.resize_viewport()
 		var world=game.field.world;world.update_ssrg_warp()
-		for sizing in [1.0,1.25]:
-			game.note_size=sizing;world.apply_camera()
+		for index in [0,2]:
+			game.note_size=1.25;game.prefs.set_value("ssrg","note_scale_index",index)
+			var sizing=game.ssrg_note_scale();world.apply_camera()
 			var canvas=world.ssrg_canvas_height()
 			if float(dimensions.x)/dimensions.y>=1.75:check(is_equal_approx(canvas,640.0),"Phone reference scale stays unchanged")
 			var bottom=world.camera.unproject_position(Vector3(0,.035,86.0*world.SSRG_UNIT))

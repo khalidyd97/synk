@@ -192,6 +192,15 @@ func gameplay_lane_count() -> int:
 func ssrg_speed_setting() -> float:
 	return clampf(float(prefs.get_value("ssrg","speed_value",float(prefs.get_value("ssrg","speed",1.0))*3.0)),1.0,10.0)
 func ssrg_note_speed() -> float: return ssrg_speed_setting()/3.0
+# SKD's own note-size option: GameControl.NoteScaleConst in the APK is {1.0, .9, .8}, chosen by
+# NoteScaleIndex (default 0, so 1.0). It multiplies NoteScaleMaximum 212x116 / 132x72. A SPEED 1
+# recording measured notes at 0.99 of that full size. SKD runs use only this option, never
+# SYNK's free note-size setting.
+const SSRG_NOTE_SCALES = [1.0, .9, .8]
+func ssrg_note_scale_index() -> int:
+	return clampi(int(prefs.get_value("ssrg","note_scale_index",0)),0,SSRG_NOTE_SCALES.size()-1)
+func ssrg_note_scale() -> float: return SSRG_NOTE_SCALES[ssrg_note_scale_index()]
+func gameplay_note_size() -> float: return ssrg_note_scale() if ssrg_playable_run else note_size
 
 func ssrg_touch_lane(point: Vector3, lane: float) -> bool:
 	var ui_point=Vector2(point.x/field.world.SSRG_UNIT,-point.z/field.world.SSRG_UNIT-234.0)
