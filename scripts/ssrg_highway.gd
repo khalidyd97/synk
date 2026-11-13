@@ -94,7 +94,7 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 	# Sustains follow their owned physical contact across the judgment line.
 	var x=world.note_x(lane)
 	if world.game.ssrg_playable_run and not sustain_entry.is_empty():x=sustain_finger_x(sustain_entry,world.game.pointers,x)
-	h.node.position = flash_point(x)
+	h.node.position = flash_point(lane_flash_x(x))
 	h.node.rotation = world.camera.rotation
 	h.material.set_shader_parameter("opacity", world.game.features.effect("Hit flashes"))
 	# Hit effects page: size, and an optional colour over the source art.
@@ -103,6 +103,15 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 	h.material.set_shader_parameter("tint", Color.from_string(world.game.hit_color, Color.WHITE) if world.game.hit_color != "" else Color.WHITE)
 	h.material.set_shader_parameter("recolor", world.game.hit_color != "")
 	h.node.visible = true; hits.append(h)
+
+# A flash sits on one of the chart's lanes, as in SKD: the lane nearest the finger, and never
+# outside the first and last one, however far the finger strays.
+func lane_flash_x(x: float) -> float:
+	var last = float(SynkChart.MAX_LANE)
+	# 13 keys use every lane, 7 keys every second one, 4 keys every fourth.
+	var step = last / float(maxi(1, world.game.gameplay_lane_count() - 1))
+	var lane = clampf(world.world_lane(x), 0.0, last)
+	return world.note_x(clampf(roundf(lane / step) * step, 0.0, last))
 
 # Where a flash goes: the note's point on the judgement line, pulled toward the camera along
 # the line of sight. It shows exactly on that point on screen (lifting it instead made outer
@@ -226,7 +235,7 @@ func advance_hits(delta: float, playing: bool) -> void:
 		if held:
 			var x=world.note_x(SynkChart.lane_at(h.sustain_entry.note, world.render_time()))
 			if game.ssrg_playable_run:x=sustain_finger_x(h.sustain_entry,game.pointers,x)
-			h.node.position = flash_point(x)
+			h.node.position = flash_point(lane_flash_x(x))
 		var frames: Array=h.get("frames",imported_frames)
 		if not frames.is_empty(): h.material.set_shader_parameter("atlas",frames[mini(frames.size()-1,int(h.age*HIT_FPS))])
 		h.material.set_shader_parameter("opacity",game.features.effect("Hit flashes"))

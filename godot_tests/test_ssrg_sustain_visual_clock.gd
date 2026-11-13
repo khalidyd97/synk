@@ -20,8 +20,8 @@ func run() -> void:
 	effect.spawn(0,"slide",entry,-999)
 	var hit=effect.hits[0]
 	effect._process(0)
-	var expected=effect.flash_point(world.note_x(SynkChart.lane_at(slide,world.render_time())))
-	check(hit.node.position.is_equal_approx(expected),"Slide flash follows displayed note position, including pause")
+	var expected=effect.flash_point(effect.lane_flash_x(world.note_x(SynkChart.lane_at(slide,world.render_time()))))
+	check(hit.node.position.is_equal_approx(expected),"Slide flash follows the displayed note position, on its nearest lane, including pause")
 	game.set_mode("play")
 	for fps in [30,60,120]:
 		hit.age=0.0
