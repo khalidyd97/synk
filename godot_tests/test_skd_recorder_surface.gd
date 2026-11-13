@@ -25,6 +25,8 @@ func run()->void:
 		check(mat!=null and mat.get_shader_parameter("tint")==world.RECORDER_CALM_COLORS[0],"Recorded taps use the soft tap colour")
 		var flick=SynkChart.note(4.7,3,"flick");game.capture.notes=[tap,flick];world._process(0.0)
 		var flick_head=world.notes.captured1.node.get_child(0) if world.notes.has("captured1") else null
+		var press=world.ssrg_theme.original_stage.press.material_override
+		check(press.get_shader_parameter("base_color")==world.ssrg_theme.original_stage.RECORDER_BAND,"The recorder's judgment band is a faint cream strip, not the play gold")
 		check(flick_head!=null and flick_head.material_override.shader.resource_path.ends_with("recorder_calm_note.gdshader"),"Recorded flicks use the calm disc too")
 	check(is_equal_approx(world.approach_power(),world.SSRG_APPROACH_POWER),"Live recording keeps SKD's p^6 approach")
 	check(absf(pow(world.reveal_progress(),world.approach_power())-world.RECORDER_REVEAL_SCALE)<.001,"Live recording also stops notes at the rail top")

@@ -9,6 +9,7 @@ var entrance_shadow: MeshInstance3D
 var feedback_marks:Array=[]
 var feedback_states:Dictionary={}
 const TRACK_REACH = 1500.0
+const RECORDER_BAND = Color(.957,.945,.918,.2)
 const OLD_RAIL_TOP=Vector2(0,280)
 const OLD_RAIL_BOTTOM_Y=-400.0
 const OLD_RAIL_BOTTOM_X=663.0
@@ -240,6 +241,8 @@ func configure(world: Node3D) -> void :
 	# Source gold tier, unless the player picked a judgment band color.
 	var band = world.custom_color("band_color")
 	press.material_override.set_shader_parameter("base_color",(Color(band,.82) if band != null else Color8(255,75,91,210)) if old_ui else Color8(255,220,65,149))
+	# The recorder keeps the line readable without the loud gold: a faint cream strip.
+	if world.game.uses_skd_recorder_surface(): press.material_override.set_shader_parameter("base_color",RECORDER_BAND)
 	var rail_tint = world.custom_color("rail_color")
 	if rail_tint == null: rail_tint = Color.WHITE
 	for rail in rails:
