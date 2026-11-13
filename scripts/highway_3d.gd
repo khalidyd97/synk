@@ -883,6 +883,8 @@ var prewarmed: Dictionary = {}
 # particles, touch beams) stalled the song when they first showed. So while the loading
 # card covers the stage, the camera draws nothing but one small stand-in per shader, a
 # frame apiece; the stage itself appears once everything it will draw is ready.
+# The recorder and the Settings previews have no card: there the stage is held back the
+# same way, but only for the frames a look seen for the first time actually needs.
 const WARM_LAYER = 1 << 19
 var warming = false
 var warm_queue: Array = []
@@ -891,14 +893,80 @@ var warm_seen: Dictionary = {}   # shaders already drawn since launch
 var warm_stand_in: Node3D
 var warm_wait = 0
 var warm_cull_mask = 0
+var warm_covered = true
+var warm_look = ""
 
-func begin_warmup() -> void:
-	if warming: return
-	warming = true; warm_queue.clear(); warm_total = 0
-	# Nodes added this frame, some of them deferred, exist by the time the scan runs.
-	warm_wait = 2
+func begin_warmup(covered: bool = true) -> void:
+	if warming:
+		# A loading card arrived mid warm-up: look again once its notes and samples exist.
+		if covered and not warm_covered: warm_covered = true; warm_wait = 2
+		return
+	warm_queue.clear(); warm_total = 0; warm_covered = covered
+	if covered:
+		# Nodes added this frame, some of them deferred, exist by the time the scan runs.
+		warm_wait = 2
+	else:
+		# Nothing hides the stage, so it is only held back when there is something to prepare.
+		warm_wait = 0
+		var samples = build_warm_samples()
+		warm_scan()
+		for key in samples:
+			notes[key].node.queue_free(); notes.erase(key)
+		if warm_queue.is_empty(): return
+	warming = true
 	warm_cull_mask = camera.cull_mask
 	camera.cull_mask = WARM_LAYER
+
+# Whether the stage is being drawn at all: during play and recording, and behind a Settings
+# preview. Menus switch it off.
+func stage_drawn() -> bool:
+	return game.highway_preview or game.mode not in ["menu", "guide", "library", "editor"]
+
+# The first time the stage is drawn in a look (the recorder, a Settings preview, another
+# highway or hit style), prepare that look's shaders before showing it.
+func watch_stage_look() -> void:
+	var look = ""
+	if stage_drawn():
+		var mode: String = game.paused_mode if game.mode == "paused" else game.mode
+		if game.highway_preview and mode not in ["play", "record"]: mode = "preview%d" % game.highway_preview_users.size()
+		look = "%s %s %s %s %s %s" % [mode, game.highway_style, game.uses_skd_stage(), game.note_shape, game.get("trail_style"), game.hit_style]
+	if look == warm_look: return
+	warm_look = look
+	# Only while frames are really running (a held stage needs them to be released). Play is
+	# left to its loading card; without one it shows the stage at once, as before.
+	if look != "" and is_processing() and not look.begins_with("play "): begin_warmup(false)
+
+# Things a look builds only when they are first needed: one of each, built out of sight, so
+# the scan knows their shaders. Returns the keys of sample notes for the caller to remove.
+func build_warm_samples() -> Array:
+	# Hit effects of the style in use go into their pools.
+	if uses_ssrg_hits(): ssrg_theme.prefill(1)
+	elif game.hit_style == "bloom": prefill_blooms(1)
+	elif hit_pool.is_empty() and bursts.is_empty():
+		var made: Array = []
+		prewarming_hits = true
+		for kind in ["tap", "hold", "flick"]:
+			spawn_hit(5, kind, 1); made.append(bursts.pop_back())
+		prewarming_hits = false
+		for burst in made: recycle_hit(burst)
+	var keys: Array = []
+	if not game.uses_recorder_colors(): return keys
+	# The recorder builds notes as they are captured or scroll in: one of each kind, as a
+	# captured note and as a ghost of the existing chart.
+	for kind in ["tap", "hold", "slide", "flick"]:
+		for recording in [true, false]:
+			var note = SynkChart.note(0, 6, kind)
+			if kind in ["hold", "slide"]: note.duration = .5
+			if kind == "slide":
+				note.end_lane = 8; note.path = [{"offset": 0.0, "lane": 6.0}, {"offset": .5, "lane": 8.0}]
+			if kind == "flick": note.direction = 1
+			var key = "warm sample %d" % keys.size()
+			build_note_node(key, note, recording)
+			if not notes.has(key): continue
+			if not recording: style_record_ghost(notes[key].node)
+			notes[key].node.visible = false
+			keys.append(key)
+	return keys
 
 func end_warmup() -> void:
 	if not warming: return
@@ -915,9 +983,11 @@ func step_warmup() -> void:
 	if not warming: return
 	if is_instance_valid(warm_stand_in): warm_stand_in.queue_free()
 	warm_stand_in = null
-	# Only while the loading card hides the stage; leaving play or skipping the card ends it.
-	var covered = game.mode in ["play", "paused"] and game.stage_intro != null and game.stage_intro.visible
-	if not covered: end_warmup(); return
+	# Only while the stage it prepares is wanted: leaving it, or skipping the loading card that
+	# covered it, ends the hold.
+	var wanted = stage_drawn()
+	if warm_covered: wanted = game.mode in ["play", "paused"] and game.stage_intro != null and game.stage_intro.visible
+	if not wanted: end_warmup(); return
 	if warm_wait > 0:
 		warm_wait -= 1
 		if warm_wait == 0: warm_scan()
@@ -954,6 +1024,12 @@ func warm_late_pieces() -> Array:
 	if ssrg_theme and ssrg_theme.visible:
 		pieces.append(ssrg_finger_beam_material)
 		pieces.append_array(ssrg_theme.late_pieces())
+	# Touch beams and slide beams, hidden until a finger lands.
+	pieces.append(finger_beam_material)
+	for beam in finger_beams.slice(0, 1) + active_beams.slice(0, 1):
+		if not is_instance_valid(beam): continue
+		if beam is GeometryInstance3D: pieces.append(beam)
+		pieces.append_array(beam.find_children("*", "GeometryInstance3D", true, false))
 	# Hit effects waiting in their pools, with the parts that only show partway through one.
 	var effects: Array = bursts + hit_pool + blooms + bloom_pool
 	if synk_hits: effects += synk_hits.hits + synk_hits.pool
@@ -1308,6 +1384,9 @@ func make_cap(parent: Node3D, lane: float, offset: float, palette: int, recordin
 	# Holds and slides follow the chosen note shape like taps: round shapes use SSRG's
 	# round long-note puck, rectangles keep the rectangle head in the ribbon's gold.
 	var long_puck=palette in [1,3] and game.round_notes()
+	# The classic recorder has its own flat note, whatever style is chosen for play.
+	if game.uses_recorder_colors() and not game.uses_skd_recorder_surface():
+		return make_recorder_cap(parent,position_value,palette,size)
 	if recording and game.uses_skd_recorder_surface():
 		var source_cap=make_ssrg_cap(parent,position_value,palette,size)
 		var source_material: ShaderMaterial=source_cap.material_override
@@ -1326,6 +1405,27 @@ func make_cap(parent: Node3D, lane: float, offset: float, palette: int, recordin
 	if game.round_notes():
 		return make_circle_cap(parent,position_value,palette,size)
 	return artwork(parent,"Tap_Note_Blue" if palette==0 else "Tap_Note_Pink",palette,position_value,Vector2(NOTE_WIDTH,1.4*FIT)*size,CAP_REGION)
+
+# The recorder's note: a flat rounded bar on the track, one design for taps, holds, slides
+# and flicks, told apart by colour. Captured notes and ghosts of the existing chart share it.
+# Tap blue, hold gold (its ribbon's colour), flick pink, slide green.
+const RECORDER_NOTE_COLORS = [Color("45c8ff"), Color("ffc94a"), Color("ff6fb5"), Color("6ee7a0")]
+func make_recorder_cap(parent: Node3D, position_value: Vector3, palette: int, size = 1.0) -> MeshInstance3D:
+	var dimensions = Vector2(NOTE_WIDTH, NOTE_WIDTH * .5) * size
+	var tint: Color = RECORDER_NOTE_COLORS[clampi(palette, 0, 3)]
+	var mat = shared("recorder_note|%d" % palette, func():
+		var m = ShaderMaterial.new(); m.shader = preload("res://scripts/recorder_flat_note.gdshader"); m.render_priority = 2
+		m.set_shader_parameter("tint", tint); m.set_shader_parameter("aspect", dimensions.x / dimensions.y)
+		return m)
+	var mesh_key = "recorder_note|%s" % size
+	if not reference_note_meshes.has(mesh_key):
+		var quad = QuadMesh.new(); quad.size = dimensions
+		reference_note_meshes[mesh_key] = quad
+	var head = mesh_node(reference_note_meshes[mesh_key], parent, mat)
+	head.position = Vector3(position_value.x, .14, position_value.z)
+	head.rotation = Vector3(-PI * .5, 0, 0)
+	head.set_meta("recorder_billboard", true)
+	return head
 
 func make_circle_cap(parent: Node3D, position_value: Vector3, palette: int, size = 1.0) -> MeshInstance3D:
 	# The supplied artwork already contains its perspective and thickness.
@@ -1964,6 +2064,7 @@ func update_recorder_channels(delta: float, recording_now: bool) -> void:
 func _process(delta: float) -> void:
 	if game==null: return
 	step_prebuild()
+	watch_stage_look()
 	step_warmup()
 	if rail_atmosphere:
 		if uses_projected_highway(): rail_atmosphere.visible = false
