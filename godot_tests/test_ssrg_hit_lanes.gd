@@ -20,7 +20,7 @@ func run() -> void:
 	var entry={"done":false,"note":hold,"key":"h","pointer":7,"sustain_last_pointer":7,"sustain_last_identity":41}
 	var finger=func(x:float) -> float:
 		game.pointers={7:{"world":Vector3(x,.035,0),"ssrg_identity":41}}
-		effect._process(0)
+		for i in 60:effect._process(1.0/60.0)
 		return float(effect.hits[0].node.position.x)
 	game.pointers={7:{"world":Vector3(world.note_x(6),.035,0),"ssrg_identity":41}}
 	effect.spawn(6,"hold",entry,7)
@@ -30,6 +30,38 @@ func run() -> void:
 	check(is_equal_approx(finger.call(world.note_x(8)+step*.7),world.note_x(9)),"Past halfway, the flash moves to the next lane")
 	check(is_equal_approx(finger.call(world.note_x(12)+step*4.0),world.note_x(12)),"A finger beyond lane 13 leaves the flash on lane 13")
 	check(is_equal_approx(finger.call(world.note_x(0)-step*4.0),world.note_x(0)),"A finger beyond lane 1 leaves the flash on lane 1")
+	# It glides from lane to lane, passing every connector on the way, instead of jumping.
+	game.pointers={7:{"world":Vector3(world.note_x(6),.035,0),"ssrg_identity":41}}
+	effect._process(1.0/60.0)
+	var before=float(effect.hits[0].node.position.x)
+	check(before<world.note_x(0)+step*2.0 and before>world.note_x(0),"One frame moves the flash part of the way, not all of it")
+	var passed:={}
+	for i in 40:
+		effect._process(1.0/60.0);passed[roundi((float(effect.hits[0].node.position.x)-world.note_x(0))/step)]=true
+	check(is_equal_approx(effect.hits[0].node.position.x,world.note_x(6)) and [1,2,3,4,5,6].all(func(lane):return passed.has(lane)),"The glide passes every lane on the way and rests on the target")
+	# A slide too quick to follow: when it ends, the flash still finishes on the last connector.
+	effect.clear_hits()
+	var quick=SynkChart.note(0,2,"slide");quick.duration=.05;quick.end_lane=9;quick.ssrg_path=true
+	quick.path=[{"offset":0.0,"lane":2.0},{"offset":.05,"lane":9.0}]
+	var quick_entry={"done":false,"note":quick,"key":"q","pointer":-999}
+	game.pointers={};game.song_time=0.0;game.visual_song_time=0.0
+	effect.spawn(2,"slide",quick_entry,-999);effect._process(1.0/60.0)
+	game.song_time=.06;game.visual_song_time=.06;quick_entry.done=true
+	effect._process(1.0/60.0)
+	check(effect.hits.size()==1 and effect.hits[0].node.position.x<world.note_x(9)-step,"The quick slide ends before the flash has arrived")
+	var seconds=0.0
+	while effect.hits.size()==1 and not is_equal_approx(effect.hits[0].node.position.x,world.note_x(9)) and seconds<1.0:
+		effect._process(1.0/60.0);seconds+=1.0/60.0
+	check(effect.hits.size()==1 and is_equal_approx(effect.hits[0].node.position.x,world.note_x(9)) and seconds<=effect.GLIDE_AFTER+.02,"It reaches the last connector within the brief glide (%.2f s)" % seconds)
+	for i in 60:effect._process(1.0/60.0)
+	check(effect.hits.is_empty(),"Then the flash plays out and goes")
+	var missed=quick_entry.duplicate();missed.done=false;missed.erase("ssrg_effect_until")
+	effect.spawn(2,"slide",missed,-999);effect._process(1.0/60.0)
+	missed.done=true;missed["missed_at"]=.06;effect._process(1.0/60.0)
+	var stopped=float(effect.hits[0].node.position.x)
+	for i in 5:effect._process(1.0/60.0)
+	check(is_equal_approx(effect.hits[0].node.position.x,stopped),"A missed slide does not glide on")
+	effect.clear_hits();game.song_time=0.0;game.visual_song_time=0.0
 	for lane in 13:
 		check(is_equal_approx(effect.lane_flash_x(world.note_x(lane)),world.note_x(lane)),"Lane %d is a flash position" % (lane+1))
 	# Charts with fewer keys only use their own lanes.

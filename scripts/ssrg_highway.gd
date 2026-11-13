@@ -94,7 +94,8 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 	# Sustains follow their owned physical contact across the judgment line.
 	var x=world.note_x(lane)
 	if world.game.ssrg_playable_run and not sustain_entry.is_empty():x=sustain_finger_x(sustain_entry,world.game.pointers,x)
-	h.node.position = flash_point(lane_flash_x(x))
+	h.x = lane_flash_x(x); h.placed = false; h.glide_left = GLIDE_AFTER
+	h.node.position = flash_point(h.x)
 	h.node.rotation = world.camera.rotation
 	h.material.set_shader_parameter("opacity", world.game.features.effect("Hit flashes"))
 	# Hit effects page: size, and an optional colour over the source art.
@@ -103,6 +104,12 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 	h.material.set_shader_parameter("tint", Color.from_string(world.game.hit_color, Color.WHITE) if world.game.hit_color != "" else Color.WHITE)
 	h.material.set_shader_parameter("recolor", world.game.hit_color != "")
 	h.node.visible = true; hits.append(h)
+
+# How fast a flash crosses lanes, and how long it may keep going after its note has ended.
+const GLIDE_LANES_PER_SECOND = 30.0
+const GLIDE_AFTER = .3
+func glide_speed() -> float:
+	return GLIDE_LANES_PER_SECOND*absf(world.note_x(1.0)-world.note_x(0.0))
 
 # A flash sits on one of the chart's lanes, as in SKD: the lane nearest the finger, and never
 # outside the first and last one, however far the finger strays.
@@ -228,6 +235,17 @@ func advance_hits(delta: float, playing: bool) -> void:
 	for i in range(hits.size() - 1, -1, -1):
 		var h: Dictionary = hits[i]
 		var held = sustain_effect_active(h.sustain_entry,world.render_time(),game.ssrg_playable_run)
+		# A slide too quick for the flash to keep up: once it ends, the flash finishes its way to
+		# the last connector for a moment instead of stopping short.
+		var finishing = false
+		if not held and playing and not h.sustain_entry.is_empty() and h.get("placed",false) and not h.sustain_entry.has("missed_at") and float(h.get("glide_left",0.0)) > 0.0:
+			var last: Dictionary = h.sustain_entry.note
+			var end_x = lane_flash_x(world.note_x(SynkChart.lane_at(last, float(last.time)+float(last.duration))))
+			if absf(end_x-float(h.x)) > .001:
+				finishing = true; h.glide_left = float(h.glide_left)-delta
+				h.x = move_toward(float(h.x), end_x, maxf(glide_speed(), absf(end_x-float(h.x))/maxf(float(h.glide_left),.016))*delta)
+				h.node.position = flash_point(h.x); h.age = fmod(h.age, HOLD_RETRIGGER)
+		held = held or finishing
 		if playing: h.age += delta
 		if playing and held and h.age > HOLD_RETRIGGER: h.age = fmod(h.age,HOLD_RETRIGGER)
 		if (not held and h.age >= HIT_LIFE) or (game.mode not in ["play", "paused"] and not game.highway_preview):
@@ -235,7 +253,13 @@ func advance_hits(delta: float, playing: bool) -> void:
 		if held:
 			var x=world.note_x(SynkChart.lane_at(h.sustain_entry.note, world.render_time()))
 			if game.ssrg_playable_run:x=sustain_finger_x(h.sustain_entry,game.pointers,x)
-			h.node.position = flash_point(lane_flash_x(x))
+			# The flash rests on lanes and glides between them, so it visibly passes every
+			# connector of a slide rather than jumping from one to the next.
+			if not finishing:
+				var target = lane_flash_x(x)
+				h.x = move_toward(float(h.x), target, glide_speed()*delta) if h.get("placed",false) else target
+				h.placed = true
+				h.node.position = flash_point(h.x)
 		var frames: Array=h.get("frames",imported_frames)
 		if not frames.is_empty(): h.material.set_shader_parameter("atlas",frames[mini(frames.size()-1,int(h.age*HIT_FPS))])
 		h.material.set_shader_parameter("opacity",game.features.effect("Hit flashes"))
