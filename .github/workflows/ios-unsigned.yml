@@ -21,11 +21,22 @@ jobs:
           xcodebuild -version
       - name: Install Godot and export templates
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          curl -fL --retry 3 https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_macos.universal.zip -o /tmp/godot.zip
+          # Copies of the official files live in this repo's draft "Godot 4.7.2 build tools" release;
+          # Godot's own servers are the fallback.
+          fetch() {
+            local tag
+            tag=$(gh release list --repo "${{ github.repository }}" --limit 100 --json tagName,name -q '.[]|select(.name|startswith("Godot 4.7.2 build tools"))|.tagName' | head -1)
+            if [ -n "$tag" ] && gh release download "$tag" --repo "${{ github.repository }}" --pattern "$1" --output "$2" --clobber; then return 0; fi
+            curl -fL --retry 5 --retry-all-errors "https://github.com/godotengine/godot/releases/download/4.7.2-stable/$1" -o "$2" ||
+              curl -fL --retry 5 --retry-all-errors "https://godot-releases.nbg1.your-objectstorage.com/4.7.2-stable/$1" -o "$2"
+          }
+          fetch Godot_v4.7.2-stable_macos.universal.zip /tmp/godot.zip
           unzip -q /tmp/godot.zip -d /tmp/godot
-          curl -fL --retry 3 https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz -o /tmp/templates.zip
+          fetch Godot_v4.7.2-stable_export_templates.tpz /tmp/templates.zip
           unzip -q /tmp/templates.zip -d /tmp/templates
           mkdir -p "$HOME/Library/Application Support/Godot/export_templates/4.7.2.stable"
           cp -R /tmp/templates/templates/. "$HOME/Library/Application Support/Godot/export_templates/4.7.2.stable/"
@@ -80,16 +91,12 @@ jobs:
           cd builds/ipa
           ditto -c -k --sequesterRsrc --keepParent Payload SYNK-unsigned.ipa
           unzip -t SYNK-unsigned.ipa
-      # Publish outside Actions artifact storage, whose quota may be exhausted.
-      - name: Publish unsigned IPA prerelease
-        shell: bash
+      # Artifact storage is full this cycle: attach the IPA to a private draft release instead.
+      - name: Attach IPA to a draft release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -euo pipefail
-          tag="ios-unsigned-${GITHUB_RUN_ID}"
-          gh release create "$tag" builds/ipa/SYNK-unsigned.ipa \
-            --target "$GITHUB_SHA" \
-            --title "SYNK unsigned iOS ${GITHUB_RUN_NUMBER}" \
-            --notes "Unsigned iOS device build from ${GITHUB_SHA}. Sign before installation." \
-            --prerelease
+          gh release create "ios-build-recorder-20261113c" builds/ipa/SYNK-unsigned.ipa \
+            --draft --target "${{ github.sha }}" --repo "${{ github.repository }}" \
+            --title "SYNK iOS build (calm recorder, beat grid, copy/paste) - draft" \
+            --notes "Unsigned IPA for testing. Draft only; not published."
