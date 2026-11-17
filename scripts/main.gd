@@ -2874,11 +2874,12 @@ func update_game() -> void:
 					entry.started=true;entry.pointer=int(track.pointer);entry.error=error;entry.timing_error=judged_at-float(n.time)
 					judge(entry,error,n.kind not in ["hold","slide"])
 					continue
-			# Source auto-miss is inclusive at rear-window * 0.1: 30 ms for
-			# ordinary heads. Holds/slides keep their recovered node windows.
-			var auto_miss_delay=SsrgRules.HEAD_WINDOW*.1 if ssrg_playable_run and n.kind in ["tap","flick"] else hit_good_window(str(n.kind))
-			# A touch is stamped earlier by the touch sync, so a press made inside the late
-			# window can still be on its way: wait for it on the same calibrated clock.
+			# Android can deliver an on-time touch after the gameplay frame has crossed
+			# the note. Keep SKD's grade thresholds, but do not retire an unresolved tap
+			# or flick before its complete judgment window has elapsed.
+			var auto_miss_delay=SsrgRules.good_window() if ssrg_playable_run and n.kind in ["tap","flick"] else hit_good_window(str(n.kind))
+			# Positive touch sync stamps a delayed event earlier. Give the input queue the
+			# same allowance so a valid calibrated press cannot lose a race to auto-miss.
 			if ssrg_playable_run: auto_miss_delay+=maxf(ssrg_touch_sync_ms,0.0)/1000.0
 			if song_time>=float(n.time)+auto_miss_delay:
 				judge(entry,-1)

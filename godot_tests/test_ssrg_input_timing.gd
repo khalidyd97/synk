@@ -15,6 +15,7 @@ func run():
 	game=load("res://scenes/main.tscn").instantiate();root.add_child(game)
 	await process_frame;await process_frame;freeze(game)
 	game.ssrg_playable_run=true;game.ssrg_lane_count=13;game.set_mode("play");game.auto_play=false;game.countdown=0
+	game.ssrg_touch_sync_ms=0
 	game.audio.stop()
 	game.field.sync_projection_style();game.field.world.apply_camera()
 	var point=game.field.world.camera.unproject_position(Vector3(0,.035,0))/Vector2(game.field.viewport.size)
@@ -37,17 +38,23 @@ func run():
 	var current=old.duplicate(true);current.note.time=1.0;current.key="current"
 	game.live=[old,current];game.song_time=1.0
 	game.pointer_event(1,point,true,false,false);game.song_time=1.06;game.update_game()
-	assert(current.done and old.done and not old.started and game.judgment_counts.PERFECT==1 and game.judgment_counts.MISS==1,"Dense taps target the closest beat before the older note's automatic-miss pass")
+	assert(current.done and not old.done and not old.started and game.judgment_counts.PERFECT==1 and game.judgment_counts.MISS==0,"Dense taps target the closest beat while the older note keeps its full late window")
+	game.song_time=1.151;game.update_game()
+	assert(old.done and game.judgment_counts.MISS==1,"The unplayed older dense tap misses once its full late window closes")
 	entry=fixture();game.ssrg_touch_sync_ms=50;game.song_time=1.05
 	game.pointer_event(1,point,true,false,false);game.update_game()
 	assert(entry.done and game.judgement=="PERFECT" and is_zero_approx(entry.timing_error),"Positive SSRG touch sync compensates a late gameplay-clock sample without widening windows")
-	# A frame runs between the 30 ms late boundary and the delayed touch arriving.
+	# A frame runs after the old 30 ms boundary but before the delayed touch arrives.
 	entry=fixture();game.song_time=1.04;game.update_game()
 	assert(not entry.done,"An on-time press still in transit is not auto-missed before it arrives")
 	game.song_time=1.05;game.pointer_event(1,point,true,false,false);game.update_game()
 	assert(entry.done and game.judgement=="PERFECT" and game.judgment_counts.MISS==0,"The delayed on-time press is judged, not missed")
-	entry=fixture();game.song_time=1.081;game.update_game()
-	assert(entry.done and game.judgment_counts.MISS==1,"The late boundary still closes, on the calibrated clock")
+	# A press can be delivered late while its calibrated timestamp remains within
+	# SKD's 300 ms grade window. Auto-miss must wait for that event too.
+	entry=fixture();game.song_time=1.34;game.pointer_event(1,point,true,false,false);game.update_game()
+	assert(entry.done and game.judgement=="GOOD" and game.judgment_counts.MISS==0,"A queued calibrated press inside the full late window is judged")
+	entry=fixture();game.song_time=1.351;game.update_game()
+	assert(entry.done and game.judgment_counts.MISS==1,"The full calibrated late window still closes")
 	game.ssrg_touch_sync_ms=0
 	game.visual_song_time=8.0;game.visual_clock_target=8.0;game.visual_clock_ready=true
 	game.smooth_visual_time(7.99,.016)
