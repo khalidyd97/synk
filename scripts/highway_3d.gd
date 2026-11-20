@@ -1281,6 +1281,13 @@ func make_tail_cap(parent: Node3D, lane: float, offset: float, palette: int, rec
 	cap.name="SustainEndCap"
 	return cap
 
+# The flick arrow matches the flick note's own colour (never the old green "arrows"
+# colour): the SSRG puck's core tint (cyan tap, gold otherwise), or the note palette colour.
+func flick_arrow_color(palette: int) -> Color:
+	if game.uses_ssrg_gameplay():
+		return Color("4fc8ff") if palette == 0 else Color("ffc23a")
+	return element_color(["tap","hold","flick","slide"][clampi(palette,0,3)], colors[palette])
+
 func make_flick(parent: Node3D, note: Dictionary, palette: int, recording = false) -> void:
 	make_cap(parent,float(note.lane),0,palette,recording and game.uses_skd_recorder_surface())
 	# Flicks are up-only. The chevron sits ABOVE the note along the screen's up axis
@@ -1293,11 +1300,12 @@ func make_flick(parent: Node3D, note: Dictionary, palette: int, recording = fals
 		var arrow_mesh = QuadMesh.new(); arrow_mesh.size=Vector2(3.22,1.6)*FIT*game.gameplay_note_size()
 		# The SSRG puck is wide and bright; a larger chevron keeps the up arrow readable on it.
 		if game.uses_ssrg_gameplay(): arrow_mesh.size*=1.7
-		var arrow_material = shared("arrow|%d|%s" % [palette, element_color("arrows",colors[palette])], func():
+		var arrow_tint = flick_arrow_color(palette)
+		var arrow_material = shared("arrow|%d|%s" % [palette, arrow_tint], func():
 			var m = ShaderMaterial.new(); m.shader=preload("res://scripts/flick_arrow.gdshader")
 			if uses_projected_highway() and not game.uses_ssrg_gameplay():
 				m.shader=preload("res://scripts/synk_canvas_arrow.gdshader");m.render_priority=4
-			m.set_shader_parameter("tint",element_color("arrows",colors[palette])); return m)
+			m.set_shader_parameter("tint",arrow_tint); return m)
 		var arrow = mesh_node(arrow_mesh,parent,arrow_material)
 		arrow.position=base; arrow.rotation=camera.rotation
 		arrow.set_meta("recorder_billboard",true)
@@ -1640,8 +1648,8 @@ func sync_note(key: String, note: Dictionary, visible_keys: Dictionary, recordin
 		set_trail_clip(notes[key].node, 0.02 if held else 1000.0)
 	for alignment_line in notes[key].lines: alignment_line.visible = game.note_lines
 	if note.kind=="flick":
-		# The arrow glides forward and returns smoothly; pausing freezes animation_time.
-		var nudge = sin(animation_time*TAU*1.8)*.35
+		# The arrow bobs up and down rapidly; pausing freezes animation_time.
+		var nudge = sin(animation_time*TAU*5.0)*.45
 		for arrow in notes[key].node.get_children():
 			if arrow.has_meta("flick_base"):
 				arrow.position=arrow.get_meta("flick_base")+arrow.get_meta("flick_axis")*nudge
