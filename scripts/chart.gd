@@ -65,7 +65,7 @@ func load_notes(source: Array,config: Variant=null) -> void:
 	notes = source.duplicate(true)
 	if config is Dictionary: settings=config.duplicate(true)
 	for n in notes:
-		if n.kind=="flick" and int(n.direction)==2: n.direction=0
+		if n.kind=="flick": n.direction=0  # flicks are up-only
 	selected = -1; dirty = false; undo_stack.clear(); redo_stack.clear()
 
 func checkpoint() -> void:
@@ -182,6 +182,6 @@ static func demo() -> Array:
 	for i in 96:
 		var n = note(3 + i * 60.0 / 128 * 2, random.randi_range(1, MAX_LANE - 1), "tap" if i < 8 else TYPES[i % 4])
 		n.duration = 60.0 / 128 if n.kind in ["hold", "slide"] else 0.0
-		n.end_lane = clampi(int(n.lane) + (2 if i % 2 == 0 else -2), 0, MAX_LANE); n.direction = [0,1,3][(i / 4) % 3]
+		n.end_lane = clampi(int(n.lane) + (2 if i % 2 == 0 else -2), 0, MAX_LANE); n.direction = 0
 		result.append(n)
 	return result

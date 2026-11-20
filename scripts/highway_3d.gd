@@ -798,7 +798,7 @@ func build_warm_samples() -> Array:
 			if kind in ["hold", "slide"]: note.duration = .5
 			if kind == "slide":
 				note.end_lane = 8; note.path = [{"offset": 0.0, "lane": 6.0}, {"offset": .5, "lane": 8.0}]
-			if kind == "flick": note.direction = 1
+			if kind == "flick": note.direction = 0
 			var key = "warm sample %d" % keys.size()
 			build_note_node(key, note, recording)
 			if not notes.has(key): continue
@@ -939,7 +939,7 @@ func prewarm() -> void:
 	prewarmed[key] = true
 	var group = Node3D.new(); group.name = "ShaderPrewarm"; add_child(group); group.position.z = -30.0
 	make_cap(group, 1, 0, 0)
-	var flick = SynkChart.note(0, 3, "flick"); flick.direction = 1; make_flick(group, flick, 2)
+	var flick = SynkChart.note(0, 3, "flick"); flick.direction = 0; make_flick(group, flick, 2)
 	var hold = SynkChart.note(0, 5, "hold"); hold.duration = .5; make_ribbon(group, hold, 1)
 	var slide = SynkChart.note(0, 7, "slide"); slide.duration = .5; slide.end_lane = 9
 	slide.path = [{"offset": 0.0, "lane": 7.0}, {"offset": .5, "lane": 9.0}]; make_ribbon(group, slide, 1)
@@ -1283,12 +1283,15 @@ func make_tail_cap(parent: Node3D, lane: float, offset: float, palette: int, rec
 
 func make_flick(parent: Node3D, note: Dictionary, palette: int, recording = false) -> void:
 	make_cap(parent,float(note.lane),0,palette,recording and game.uses_skd_recorder_surface())
-	# One bold chevron keeps the direction clear without overlapping arrows.
-	var axis = camera.basis*[Vector3.UP,Vector3.RIGHT,Vector3.DOWN,Vector3.LEFT][clampi(int(note.direction),0,3)]
+	# Flicks are up-only. The chevron sits ABOVE the note along the screen's up axis
+	# (camera up) instead of being lifted straight off the floor, where it overlapped the
+	# puck. In the orthographic SSRG view "up" is a far-end offset, so this reads as above.
+	var up_on_screen = camera.basis.y.normalized()
 	for i in 1:
-		var base = Vector3(note_x(note.lane),2.0*FIT*game.gameplay_note_size(),0)
+		var above = (2.9 if game.uses_ssrg_gameplay() else 2.4)*FIT*game.gameplay_note_size()
+		var base = Vector3(note_x(note.lane),.13,0)+up_on_screen*above
 		var arrow_mesh = QuadMesh.new(); arrow_mesh.size=Vector2(3.22,1.6)*FIT*game.gameplay_note_size()
-		# The SSRG puck is wide and bright; a larger chevron keeps left, up and right readable on it.
+		# The SSRG puck is wide and bright; a larger chevron keeps the up arrow readable on it.
 		if game.uses_ssrg_gameplay(): arrow_mesh.size*=1.7
 		var arrow_material = shared("arrow|%d|%s" % [palette, element_color("arrows",colors[palette])], func():
 			var m = ShaderMaterial.new(); m.shader=preload("res://scripts/flick_arrow.gdshader")
@@ -1297,12 +1300,11 @@ func make_flick(parent: Node3D, note: Dictionary, palette: int, recording = fals
 			m.set_shader_parameter("tint",element_color("arrows",colors[palette])); return m)
 		var arrow = mesh_node(arrow_mesh,parent,arrow_material)
 		arrow.position=base; arrow.rotation=camera.rotation
-		arrow.rotate_object_local(Vector3.FORWARD,float(note.direction)*PI*.5)
 		arrow.set_meta("recorder_billboard",true)
-		arrow.set_meta("flick_direction",int(note.direction))
-		arrow.set_meta("flick_axis_local",[Vector3.UP,Vector3.RIGHT,Vector3.DOWN,Vector3.LEFT][clampi(int(note.direction),0,3)])
+		arrow.set_meta("flick_direction",0)
+		arrow.set_meta("flick_axis_local",Vector3.UP)
 		arrow.set_meta("flick_base",base)
-		arrow.set_meta("flick_axis",axis)
+		arrow.set_meta("flick_axis",up_on_screen)
 
 # Trails run through the middle of their notes: just above the track for flat rectangle
 # notes, and at half height through the thicker circle pucks.
@@ -1868,14 +1870,18 @@ func apply_stage_entrance(p: float) -> void:
 	for it in items:
 		var node = it.node
 		if not is_instance_valid(node) or not _entrance_bases.has(node): continue
+		var base: Vector3 = _entrance_bases[node]
+		var move: Vector3 = it.move
 		var local := clampf((p - float(it.order)) / SPAN, 0.0, 1.0)
 		local = local * local * (3.0 - 2.0 * local)
-		node.position = Vector3(_entrance_bases[node]) + Vector3(it.move) * (1.0 - local)
+		node.position = base + move * (1.0 - local)
 	if p >= .999: finish_stage_entrance()
 
 func finish_stage_entrance() -> void:
 	for node in _entrance_bases:
-		if is_instance_valid(node): node.position = Vector3(_entrance_bases[node])
+		if is_instance_valid(node):
+			var base: Vector3 = _entrance_bases[node]
+			node.position = base
 	_entrance_bases.clear(); _entrance_on = false
 
 func _process(delta: float) -> void:

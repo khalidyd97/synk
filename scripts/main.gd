@@ -1632,6 +1632,10 @@ func start_game(notes: Array,automated: bool = false,section: String = "",is_pra
 	pending_end_hits.clear()
 	var sorted=notes.duplicate(true); sorted.sort_custom(func(a,b): return a.time<b.time)
 	sorted=sorted.filter(func(n): return float(n.time)>=play_range.x-.001 and float(n.time)<play_range.y)
+	# Flicks are up-only: normalize every flick's direction here so both the swipe
+	# judgement (which reads note.direction) and the drawn arrow agree.
+	for n in sorted:
+		if n.kind=="flick": n.direction=0
 	if ssrg_playable_run:
 		preload("res://scripts/ssrg_presentation.gd").apply_events(sorted,song.get("ssrg_presentation",{}))
 		for n in sorted:

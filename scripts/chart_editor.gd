@@ -211,7 +211,7 @@ func refresh_inspector() -> void:
         end_lane_input.set_value_no_signal(float(n.end_lane)+1)
         duration_group.visible=n.kind in ["hold","slide"]
         end_lane_group.visible=n.kind=="slide"
-        direction_group.visible=n.kind=="flick"
+        direction_group.visible=false  # flicks are up-only; no left/right/up picker
         game.slide_tools.visible=n.kind=="slide"
         for key in direction_buttons: direction_buttons[key].set_selected(int(n.direction)==key)
     updating=false

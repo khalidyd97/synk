@@ -23,6 +23,9 @@ var ring_materials: Array = []
 var press_lines: Array = []
 var hit_pool: Array = []
 var hits: Array = []
+# Upward bursts spawned on flick hits so the flash shows the flick's up direction.
+var flick_bursts: Array = []
+const FLICK_BURST_LIFE = .34
 var active = false
 var original_stage: Node3D
 var source_background: Node3D
@@ -133,6 +136,37 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 		h.material.set_shader_parameter("tint", Color.from_string(world.game.hit_color, Color.WHITE) if world.game.hit_color != "" else Color.WHITE)
 		h.material.set_shader_parameter("recolor", world.game.hit_color != "")
 	h.node.visible = true; hits.append(h)
+	if kind == "flick": spawn_flick_indicator(h.x)
+
+# A flick is up-only; its hit spawns an upward chevron burst that rises from the hit point
+# and fades, so the effect clearly indicates the up direction over the plain Effect_A flash.
+func spawn_flick_indicator(x: float) -> void:
+	var g = world.game
+	var mesh = QuadMesh.new()
+	mesh.size = Vector2(3.22, 1.6) * world.FIT * g.gameplay_note_size() * (1.7 if g.uses_ssrg_gameplay() else 1.1)
+	var mat = ShaderMaterial.new(); mat.shader = preload("res://scripts/flick_up_burst.gdshader")
+	mat.render_priority = 7
+	mat.set_shader_parameter("tint", world.element_color("arrows", Color(1.0, 0.96, 1.0)))
+	var parent: Node3D = hit_layer if hit_layer != null else self
+	var node = world.mesh_node(mesh, parent, mat)
+	node.rotation = world.camera.rotation
+	node.position = flash_point(x)
+	flick_bursts.append({"node": node, "material": mat, "age": 0.0, "base": node.position})
+
+func advance_flick_bursts(delta: float, playing: bool) -> void:
+	var up = world.camera.basis.y.normalized()
+	for i in range(flick_bursts.size() - 1, -1, -1):
+		var b: Dictionary = flick_bursts[i]
+		if playing: b.age += delta
+		var p := clampf(b.age / FLICK_BURST_LIFE, 0.0, 1.0)
+		if p >= 1.0:
+			b.node.queue_free(); flick_bursts.remove_at(i); continue
+		# Rise along the screen's up axis and grow a little as it fades.
+		var base: Vector3 = b.base
+		b.node.position = base + up * (2.3 * world.FIT * p)
+		b.node.rotation = world.camera.rotation
+		b.node.scale = Vector3.ONE * (1.0 + .25 * p)
+		b.material.set_shader_parameter("progress", p)
 
 # How fast a flash crosses lanes, and how long it may keep going after its note has ended.
 const GLIDE_LANES_PER_SECOND = 30.0
@@ -231,6 +265,8 @@ func clear_hits() -> void:
 	for hit in hits+hit_pool:
 		hit.node.hide();hit.node.queue_free()
 	hits.clear();hit_pool.clear()
+	for b in flick_bursts: b.node.queue_free()
+	flick_bursts.clear()
 	for background in background_bank:
 		background.particles.clear();background.elapsed=0.0;background.frame_credit=0.0;background.momentum=0.0; background.hide()
 	if world.cover_material:
@@ -300,6 +336,7 @@ func _process(delta: float) -> void:
 # Source RenderLongCoolbombTouch rewinds after normalized time > .3.
 # Independent tap instances intentionally preserve SYNK's uninterrupted dense-hit flow.
 func advance_hits(delta: float, playing: bool) -> void:
+	advance_flick_bursts(delta, playing)
 	var game = world.game
 	for i in range(hits.size() - 1, -1, -1):
 		var h: Dictionary = hits[i]
