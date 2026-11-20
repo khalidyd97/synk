@@ -1647,15 +1647,25 @@ func sync_note(key: String, note: Dictionary, visible_keys: Dictionary, recordin
 		notes[key].held = held
 		set_trail_clip(notes[key].node, 0.02 if held else 1000.0)
 	for alignment_line in notes[key].lines: alignment_line.visible = game.note_lines
-	if note.kind=="flick":
-		# The arrow bobs up and down rapidly; pausing freezes animation_time.
-		var nudge = sin(animation_time*TAU*5.0)*.45
-		for arrow in notes[key].node.get_children():
-			if arrow.has_meta("flick_base"):
-				arrow.position=arrow.get_meta("flick_base")+arrow.get_meta("flick_axis")*nudge
 	notes[key].node.position.z = (visible_time-float(note.time))*travel_speed()
 	if recording: notes[key].node.position.z *= -1
 	elif not held and modifier_hides(notes[key].node.position.z): notes[key].node.visible = false
+	if note.kind=="flick":
+		# The arrow bobs up and down; a gentler rate stays smooth at the device frame rate
+		# (a faster sine looked stepped, and the SSRG projection exaggerates quick vertical moves).
+		var nudge = sin(animation_time*TAU*2.4)*.38
+		var note_z = notes[key].node.position.z
+		for arrow in notes[key].node.get_children():
+			if not arrow.has_meta("flick_base"): continue
+			var fb: Vector3 = arrow.get_meta("flick_base")
+			var ax: Vector3 = arrow.get_meta("flick_axis")
+			var pos = fb + ax*nudge
+			# Lifting the arrow up the track changes its depth, and the SSRG projection scales
+			# x by depth. Pre-scale the arrow's x so its projected position stays over the note.
+			if uses_projected_highway():
+				var q_arrow = ssrg_approach(note_z + pos.z)
+				if q_arrow > .0001: pos.x = fb.x * ssrg_approach(note_z) / q_arrow
+			arrow.position = pos
 
 # Beam sections share the same apex and lane centres as the 2D notes.
 func ssrg_beam_lane(lane: float) -> float:
