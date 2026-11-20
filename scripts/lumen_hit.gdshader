@@ -13,6 +13,9 @@ uniform float particles = 1.0;
 uniform float seed = 0.0;
 // 0 up, 1 right, 2 down, 3 left; below zero for anything that is not a flick.
 uniform float direction = -1.0;
+// Honour the "Note brightness" setting so this additive flash dims with the notes
+// instead of blowing out over the bright song photo.
+global uniform float synk_note_brightness;
 
 float hash(float n) { return fract(sin(n * 91.73 + seed * 17.13) * 43758.5453); }
 
@@ -68,5 +71,5 @@ void fragment() {
 	colour += vec3(1.0) * (core * 2.2 + cross * 1.4 + streak * 0.7 + ring * 0.3 + shards * 0.6);
 	float edge = 1.0 - smoothstep(0.85, 1.0, max(abs(p.x), abs(p.y)));
 	ALBEDO = colour;
-	ALPHA = clamp(ring + trail + column + halo + shards + streak + cross + core, 0.0, 1.0) * edge * opacity;
+	ALPHA = clamp(ring + trail + column + halo + shards + streak + cross + core, 0.0, 1.0) * edge * opacity * synk_note_brightness;
 }

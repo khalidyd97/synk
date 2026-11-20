@@ -52,16 +52,18 @@ void fragment(){
         float frame=floor(fract(synk_time*GLOW_LOOPS_PER_SECOND+centre_z*0.031)*GLOW_FRAMES);
         float loop_heat=1.0-frame/(GLOW_FRAMES-1.0);
         float near=pow(clamp(1.0+centre_z/glow_distance,0.0,1.0),1.4);
-        // Mostly the plain colour: the loop only tints, the full white is kept for the line.
-        float heat=max(loop_heat*0.45,near*0.8);
+        // Extract check: the source draws notes as plain alpha/cutout sprites (UIBatchSprite);
+        // the glow lives in the frame art and a separate effects layer, not a per-note white burn.
+        // So keep this synthetic glow as a gentle tint and let the authored art read through.
+        float heat=max(loop_heat*0.30,near*0.40);
         float bright=dot(art.rgb,vec3(0.3,0.55,0.15));
         // Cool: the white centre takes the note's colour; hot: it burns back to white.
         float centre_mask=smoothstep(0.55,0.95,bright);
         color=mix(color,core_tint*(0.55+0.45*bright),centre_mask*(1.0-heat)*0.8);
-        color=mix(color,vec3(1.0),heat*centre_mask*0.7);
+        color=mix(color,vec3(1.0),heat*centre_mask*0.45);
         // Halo: the blurred note shape (a low mip) around the edge, white-tinted.
         float halo=textureLod(artwork,UV,4.0).a;
-        float rim=heat*halo*(1.0-art.a)*0.45;
+        float rim=heat*halo*(1.0-art.a)*0.30;
         color=mix(color,vec3(1.0),rim/max(0.001,alpha+rim));
         alpha=max(alpha,rim);
     }

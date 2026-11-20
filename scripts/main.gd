@@ -436,7 +436,12 @@ func _ready() -> void:
 	if OS.has_feature("android"):
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	prefs.load("user://preferences.cfg"); timing_ms = float(prefs.get_value("audio","offset_ms",0))
-	ssrg_touch_sync_ms=clampf(float(prefs.get_value("ssrg","touch_sync_ms",0)), -200, 200)
+	# Audio OUTPUT latency is auto-compensated by heard_position(); touch INPUT latency
+	# is not measurable, so touchscreens register taps late. Start mobile with a sane
+	# compensation (positive = treat the tap as earlier) instead of 0; the player can
+	# retune it in Settings. Desktop/pointer input stays at 0.
+	var touch_sync_default: float = 40.0 if OS.get_name() in ["Android", "iOS"] else 0.0
+	ssrg_touch_sync_ms=clampf(float(prefs.get_value("ssrg","touch_sync_ms",touch_sync_default)), -200, 200)
 	bluetooth_mode=bool(prefs.get_value("audio","bluetooth_mode",false))
 	slide_snap=str(prefs.get_value("editor","slide_snap","free"))
 	if slide_snap not in ["free","lanes","beats"]: slide_snap="free"

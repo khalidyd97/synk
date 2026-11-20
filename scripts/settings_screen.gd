@@ -581,7 +581,6 @@ class ColorChip extends Button:
         var code="#"+color.to_html(false).to_upper()
         draw_string(Soft.font_for(self),Vector2(62,size.y*.5+6),code,HORIZONTAL_ALIGNMENT_LEFT,size.x-68,16,Soft.text_color("quiet",0.0,disabled))
 
-var note_brightness_input
 func build_notes(items: VBoxContainer) -> void:
     var shapes=row(items,"Note shape","Choose the note style you see on the highway.",166)
     var tile_row=HBoxContainer.new(); tile_row.add_theme_constant_override("separation",12)
@@ -592,9 +591,6 @@ func build_notes(items: VBoxContainer) -> void:
         shape_tiles[kind]=tile
     var preview=preload("res://scripts/note_appearance_preview.gd").new(); preview.game=game; items.add_child(preview)
     sizing_row(items,"note_size","Note size","Adjust the visual size of note heads.",60,125,game.note_size)
-    note_brightness_input=Stepper.new(40,120,5,game.note_brightness*100,"%",0)
-    add_control(row(items,"Note brightness","Tone the notes and their trails down or up. 80% is the default.",96),note_brightness_input)
-    note_brightness_input.value_changed.connect(func(v): game.change_note_brightness(v/100))
     var trail=row(items,"Trail style","A filled band with round connectors at the points you add in the recorder.")
     trail_style_input=OptionButton.new(); trail_style_input.add_item("Neon trail"); trail_style_input.add_item("Solid ribbon")
     trail_style_input.add_theme_font_size_override("font_size",21); trail_style_input.get_popup().add_theme_font_size_override("font_size",21)
