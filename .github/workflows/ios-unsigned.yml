@@ -80,16 +80,9 @@ jobs:
           cd builds/ipa
           ditto -c -k --sequesterRsrc --keepParent Payload SYNK-unsigned.ipa
           unzip -t SYNK-unsigned.ipa
-      # Publish outside Actions artifact storage, whose quota may be exhausted.
-      - name: Publish unsigned IPA prerelease
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          tag="ios-unsigned-${GITHUB_RUN_ID}"
-          gh release create "$tag" builds/ipa/SYNK-unsigned.ipa \
-            --target "$GITHUB_SHA" \
-            --title "SYNK unsigned iOS ${GITHUB_RUN_NUMBER}" \
-            --notes "Unsigned iOS device build from ${GITHUB_SHA}. Sign before installation." \
-            --prerelease
+      - name: Save unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: SYNK-unsigned-ipa
+          path: builds/ipa/SYNK-unsigned.ipa
+          retention-days: 7
