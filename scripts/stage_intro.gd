@@ -19,12 +19,6 @@ var elapsed = 0.0
 var load_time = LOAD_TIME
 var backdrop: ColorRect
 var backdrop_art: TextureRect
-# A Gaussian-blurred copy of the cover that blooms in as the loader hands off to the
-# stage, so the background reads as the same soft wash the gameplay draws behind the highway.
-var backdrop_blur: TextureRect
-# The blur is computed lazily (see begin/animate) so it never blocks the loading start.
-var blur_source: Texture2D
-var blur_ready = false
 var fx: Control
 var card: Panel
 var card_art: TextureRect
@@ -60,11 +54,6 @@ func _ready() -> void:
 	backdrop_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; backdrop_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	backdrop_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preload("res://scripts/background_motion.gd").attach(backdrop_art,preload("res://scripts/image_atmosphere.gdshader"))
-	# The blurred cover sits above the faint atmospheric art but behind the card, so the sharp
-	# cover keeps flying over a softening background as the highway builds in.
-	backdrop_blur = TextureRect.new(); add_child(backdrop_blur); backdrop_blur.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	backdrop_blur.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; backdrop_blur.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	backdrop_blur.mouse_filter = Control.MOUSE_FILTER_IGNORE; backdrop_blur.modulate.a = 0.0
 	# Gradient wash, light streaks and the equalizer are drawn here, between backdrop and card.
 	fx = Control.new(); add_child(fx); fx.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	fx.mouse_filter = Control.MOUSE_FILTER_IGNORE; fx.draw.connect(draw_fx)
@@ -124,12 +113,6 @@ func song_colors(cover: Texture2D=null) -> Array:
 
 func begin(cover: Texture2D, tint: Color, song_title: String, details: String, skip_loading: bool) -> void:
 	for art in [backdrop_art,card_art,reflection]: art.texture = cover; art.self_modulate = tint
-	# Defer the Gaussian blur off the loading-start path: begin() runs before the loading
-	# screen paints, and a synchronous get_image()+blur here froze the app at 0% on device.
-	# It is computed lazily once the entrance begins, by which point the stage's own set_cover
-	# has cached the identical 72px/sigma-4 pass, so the loader's call is an instant cache hit.
-	blur_source = cover; blur_ready = false
-	backdrop_blur.texture = null; backdrop_blur.self_modulate = tint; backdrop_blur.modulate.a = 0.0
 	var picked = song_colors(cover); accent = picked[0]; accent_2 = picked[1]
 	backdrop.color=loading_shadow
 	backdrop_art.material.set_shader_parameter("artwork_palette",1.0)
@@ -254,14 +237,6 @@ func animate() -> void:
 	backdrop.color=Color(loading_shadow,1.0-smoothstep(.2,.95,e))
 	backdrop_art.modulate.a=.10*alpha
 	backdrop_art.pivot_offset=size*.5;backdrop_art.scale=Vector2.ONE*1.06
-	# As loading ends the navy veil fades and the blurred cover blooms in behind the
-	# rising highway, while the sharp card keeps travelling up to its resting spot.
-	# The blur is built on the first entrance frame (a cached lookup, off the 0% path).
-	if e>0.0 and not blur_ready and blur_source!=null:
-		backdrop_blur.texture=preload("res://scripts/gaussian_blur.gd").of(blur_source,72,4.0)
-		blur_ready=true
-	backdrop_blur.modulate.a=(smoothstep(0.0,.6,e) if blur_ready else 0.0)
-	backdrop_blur.pivot_offset=size*.5;backdrop_blur.scale=Vector2.ONE*lerpf(1.12,1.06,e)
 	if gliding: glide_card(appear)
 	else:
 		var rest=home_rect(appear); card.size=rest.size; card.pivot_offset=card.size*.5

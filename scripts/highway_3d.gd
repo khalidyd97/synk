@@ -1826,67 +1826,6 @@ func update_recorder_channels(delta: float, recording_now: bool) -> void:
 		recorder_lit[i] = 1.0 if held.has(i) else maxf(0.0, recorder_lit[i]-delta*4.0)
 	recorder_channel_material.set_shader_parameter("lit",recorder_lit)
 
-# --- Stage entrance -----------------------------------------------------------------
-# While the loading card flies to the top, the highway builds itself in element by element:
-# the road rises, the rails slide in from the sides, then the judgment band drops onto the
-# line. Transform-only and self-restoring, so gameplay positions are untouched once it ends.
-var _entrance_bases: Dictionary = {}
-var _entrance_on := false
-
-func update_stage_entrance() -> void:
-	var intro = game.stage_intro if game else null
-	var running = intro != null and game.mode == "play" and intro.visible and intro.running()
-	# Only animate during the actual entrance (entrance()>0). Through the loading hold the
-	# stage stays at rest and fully built, so warm-up and the first frames are untouched.
-	var p := intro.entrance() if running else 0.0
-	if not running or p <= 0.0:
-		if _entrance_on: finish_stage_entrance()
-		return
-	apply_stage_entrance(p)
-
-# Each item: {node, move (start offset added to its rest position), order (0..1 stagger)}.
-func stage_entrance_items() -> Array:
-	if uses_skd_stage() and ssrg_theme and ssrg_theme.has_method("entrance_items"):
-		return ssrg_theme.entrance_items()
-	var items: Array = []
-	for node in track_nodes:
-		if is_instance_valid(node): items.append({"node": node, "move": Vector3(0, -1.2, 0), "order": 0.0})
-	if is_instance_valid(highway_shadow): items.append({"node": highway_shadow, "move": Vector3(0, -1.2, 0), "order": 0.0})
-	var rails: Array = gold_nodes if (gold_nodes.size() > 0 and gold_nodes[0].visible) else neon_nodes
-	for node in rails:
-		if not is_instance_valid(node): continue
-		var side := signf(node.position.x) if node.position.x != 0.0 else 1.0
-		items.append({"node": node, "move": Vector3(side * 3.6, .5, 0), "order": .28})
-	var pads = get_node_or_null("JudgmentPads")
-	if pads: items.append({"node": pads, "move": Vector3(0, 2.4, 0), "order": .55})
-	return items
-
-func apply_stage_entrance(p: float) -> void:
-	var items := stage_entrance_items()
-	if items.is_empty(): return
-	if not _entrance_on:
-		_entrance_bases.clear()
-		for it in items:
-			if is_instance_valid(it.node): _entrance_bases[it.node] = it.node.position
-		_entrance_on = true
-	const SPAN := .55
-	for it in items:
-		var node = it.node
-		if not is_instance_valid(node) or not _entrance_bases.has(node): continue
-		var base: Vector3 = _entrance_bases[node]
-		var move: Vector3 = it.move
-		var local := clampf((p - float(it.order)) / SPAN, 0.0, 1.0)
-		local = local * local * (3.0 - 2.0 * local)
-		node.position = base + move * (1.0 - local)
-	if p >= .999: finish_stage_entrance()
-
-func finish_stage_entrance() -> void:
-	for node in _entrance_bases:
-		if is_instance_valid(node):
-			var base: Vector3 = _entrance_bases[node]
-			node.position = base
-	_entrance_bases.clear(); _entrance_on = false
-
 func _process(delta: float) -> void:
 	if game==null: return
 	step_prebuild()
@@ -1906,7 +1845,6 @@ func _process(delta: float) -> void:
 	update_multiplier_wave(delta)
 	animate_miss_shake(delta)
 	update_cover_backdrop()
-	update_stage_entrance()
 	laser_streaks.update()
 	animate_effects(delta)
 	var visible_keys = {}
