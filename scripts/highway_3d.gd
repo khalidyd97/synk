@@ -1836,10 +1836,13 @@ var _entrance_on := false
 func update_stage_entrance() -> void:
 	var intro = game.stage_intro if game else null
 	var running = intro != null and game.mode == "play" and intro.visible and intro.running()
-	if not running:
+	# Only animate during the actual entrance (entrance()>0). Through the loading hold the
+	# stage stays at rest and fully built, so warm-up and the first frames are untouched.
+	var p := intro.entrance() if running else 0.0
+	if not running or p <= 0.0:
 		if _entrance_on: finish_stage_entrance()
 		return
-	apply_stage_entrance(intro.entrance())
+	apply_stage_entrance(p)
 
 # Each item: {node, move (start offset added to its rest position), order (0..1 stagger)}.
 func stage_entrance_items() -> Array:
