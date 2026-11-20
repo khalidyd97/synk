@@ -332,9 +332,11 @@ func build_cover_backdrop() -> void:
 
 func set_cover(texture: Texture2D, tint: Color, album_art: bool = false) -> void:
 	cover_material.set_shader_parameter("cover",texture)
-	# The gameplay stage keeps the cover fully Gaussian-blurred behind the highway (never sharp).
-	# Album-art mode still lays the sharp square on top of this same blurred fill.
-	var blurred = preload("res://scripts/gaussian_blur.gd").of(texture, 40, 10.0) if texture else null
+	# Every gameplay skin uses the same moderate Gaussian background.  The former
+	# 40px/sigma-10 pass erased almost all of the artwork; 72px/sigma-4 keeps its
+	# shapes readable without competing with notes. Album-art mode may still lay
+	# its sharp square over this shared blurred fill.
+	var blurred = preload("res://scripts/gaussian_blur.gd").of(texture,72,4.0) if texture else null
 	cover_material.set_shader_parameter("album_art",album_art and blurred != null)
 	cover_material.set_shader_parameter("cover_blurred",blurred)
 	cover_material.set_shader_parameter("tint",tint)

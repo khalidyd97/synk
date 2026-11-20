@@ -96,6 +96,10 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 	var x=world.note_x(lane)
 	if world.game.ssrg_playable_run and not sustain_entry.is_empty():x=sustain_finger_x(sustain_entry,world.game.pointers,x)
 	h.x = lane_flash_x(x); h.placed = false; h.glide_left = GLIDE_AFTER
+	# Keep the physical lane occupied by this sustain.  SKD starts another Effect_A
+	# instance whenever the finger enters a different lane; the older instances keep
+	# playing, which makes a fast slide read as a continuous chain of impacts.
+	h.last_cross_lane = flash_lane_index(x)
 	h.node.position = flash_point(h.x)
 	h.node.rotation = world.camera.rotation
 	h.material.set_shader_parameter("opacity", world.game.features.effect("Hit flashes"))
@@ -122,11 +126,32 @@ func glide_speed() -> float:
 # A flash sits on one of the chart's lanes, as in SKD: the lane nearest the finger, and never
 # outside the first and last one, however far the finger strays.
 func lane_flash_x(x: float) -> float:
+	return world.note_x(flash_lane_value(flash_lane_index(x)))
+
+func flash_lane_step() -> float:
 	var last = float(SynkChart.MAX_LANE)
 	# 13 keys use every lane, 7 keys every second one, 4 keys every fourth.
-	var step = last / float(maxi(1, world.game.gameplay_lane_count() - 1))
+	return last / float(maxi(1, world.game.gameplay_lane_count() - 1))
+
+func flash_lane_index(x: float) -> int:
+	var last = float(SynkChart.MAX_LANE)
+	var step = flash_lane_step()
 	var lane = clampf(world.world_lane(x), 0.0, last)
-	return world.note_x(clampf(roundf(lane / step) * step, 0.0, last))
+	return clampi(int(roundf(lane / step)),0,world.game.gameplay_lane_count()-1)
+
+func flash_lane_value(index: int) -> float:
+	return clampf(float(index)*flash_lane_step(),0.0,float(SynkChart.MAX_LANE))
+
+func emit_crossed_lane_hits(h: Dictionary, x: float) -> void:
+	var current=flash_lane_index(x)
+	var previous=int(h.get("last_cross_lane",current))
+	if current==previous:return
+	var direction=1 if current>previous else -1
+	# Emit every intermediate lane even if a fast move crosses several between
+	# rendered frames. Revisiting a lane emits again, just like a new finger entry.
+	for index in range(previous+direction,current+direction,direction):
+		spawn(flash_lane_value(index),"slide",{},-999)
+	h.last_cross_lane=current
 
 # Where a flash goes: the note's point on the judgement line, pulled toward the camera along
 # the line of sight. It shows exactly on that point on screen (lifting it instead made outer
@@ -280,6 +305,7 @@ func advance_hits(delta: float, playing: bool) -> void:
 		if held:
 			var x=world.note_x(SynkChart.lane_at(h.sustain_entry.note, world.render_time()))
 			if game.ssrg_playable_run:x=sustain_finger_x(h.sustain_entry,game.pointers,x)
+			if game.ssrg_playable_run and h.kind=="slide" and not finishing:emit_crossed_lane_hits(h,x)
 			# The flash rests on lanes and glides between them, so it visibly passes every
 			# connector of a slide rather than jumping from one to the next.
 			if not finishing:

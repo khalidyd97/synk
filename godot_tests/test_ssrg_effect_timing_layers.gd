@@ -35,8 +35,24 @@ func run():
 	effect._process(.101)
 	check(is_equal_approx(hit.age,.101-effect.HOLD_RETRIGGER),"Held effect preserves excess frame time when restarting")
 	entry.done=true;effect._process(.32)
-	check(effect.hits.size()==1,"Released effect completes its remaining animation")
+	check(effect.hits.size()==1,"Released effect completes its remaining animation (got %d)" % effect.hits.size())
 	effect._process(.02);check(effect.hits.is_empty(),"Released effect returns to pool")
+	var slide_note=SynkChart.note(0,2,"slide");slide_note.duration=10.0;slide_note.end_lane=8
+	var slide_entry={"done":false,"note":slide_note,"pointer":17,"sustain_last_pointer":17,"sustain_last_identity":71,"ssrg_contact":true}
+	game.pointers[17]={"world":Vector3(world.note_x(2),.035,0),"ssrg_identity":71}
+	effect.spawn(2,"slide",slide_entry,17)
+	effect.advance_hits(.001,true)
+	game.pointers[17].world.x=world.note_x(5)
+	effect.advance_hits(.001,true)
+	check(effect.hits.size()==4,"Sliding across three new lanes leaves one independent flash on every crossed lane (got %d)" % effect.hits.size())
+	var occupied:Dictionary={}
+	for lane_hit in effect.hits:occupied[roundi(world.world_lane(float(lane_hit.x)))]=true
+	check(occupied.has(2) and occupied.has(3) and occupied.has(4) and occupied.has(5),"Crossed-lane flashes occupy the complete finger path")
+	game.pointers[17].world.x=world.note_x(4)
+	effect.advance_hits(.001,true)
+	check(effect.hits.size()==5,"Re-entering a lane emits a fresh flash (got %d)" % effect.hits.size())
+	game.pointers.erase(17);slide_entry.done=true
+	world.clear_hit_effects()
 	for i in 40:effect.spawn(4.5,"tap",{},-999)
 	check(effect.hits.size()==40,"Dense hits preserve all overlapping instances")
 	world.clear_hit_effects()

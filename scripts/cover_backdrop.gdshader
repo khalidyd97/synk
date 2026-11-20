@@ -42,7 +42,8 @@ void fragment() {
 	vec2 fit = image_aspect > screen_aspect ? vec2(screen_aspect / image_aspect, 1.0) : vec2(1.0, image_aspect / screen_aspect);
 	float center_y = fit.y < 0.999 ? 0.42 : 0.5;
 	vec2 uv = vec2((UV.x - 0.5) * fit.x / zoom + 0.5, (UV.y - center_y) * fit.y / zoom + 0.5);
-	vec3 picture = texture(cover, uv).rgb;
+	// One consistent blurred gameplay backdrop in every highway mode.
+	vec3 picture = texture(cover_blurred, uv).rgb;
 	if (album_art) {
 		// Square cover sized to the screen height (or width on portrait), feathered into the blur.
 		float side = min(0.84, 0.9 * screen_aspect);
