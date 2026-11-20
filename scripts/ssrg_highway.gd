@@ -67,6 +67,23 @@ func _ready() -> void:
 		line.visible = false; press_lines.append(line)
 	refresh()
 
+# Stage-entrance pieces for highway_3d's build-in: the rails slide in from the sides, the
+# judgment band and its glow rise up from the bottom edge, and the far entrance veil settles
+# in. Transform-only; highway_3d snaps them back to rest once the entrance finishes.
+func entrance_items() -> Array:
+	var items: Array = []
+	if not is_instance_valid(original_stage): return items
+	var st = original_stage
+	for group in [st.rails, st.old_rails]:
+		for r in group:
+			if not is_instance_valid(r): continue
+			var side := signf(r.position.x) if r.position.x != 0.0 else 1.0
+			items.append({"node": r, "move": Vector3(side * 6.5, 0, 0), "order": .1})
+	if is_instance_valid(st.entrance_shadow): items.append({"node": st.entrance_shadow, "move": Vector3(0, 0, -3.5), "order": .0})
+	if is_instance_valid(st.press): items.append({"node": st.press, "move": Vector3(0, 0, 4.5), "order": .42})
+	if is_instance_valid(st.press_glow): items.append({"node": st.press_glow, "move": Vector3(0, 0, 4.5), "order": .48})
+	return items
+
 func shaded_plane(size: Vector2, shader: Shader, at: Vector3, priority: int) -> MeshInstance3D:
 	var mesh = PlaneMesh.new(); mesh.size = size
 	var mat = ShaderMaterial.new(); mat.shader = shader; mat.render_priority = priority
