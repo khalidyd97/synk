@@ -332,9 +332,10 @@ func build_cover_backdrop() -> void:
 
 func set_cover(texture: Texture2D, tint: Color, album_art: bool = false) -> void:
 	cover_material.set_shader_parameter("cover",texture)
-	# Album art alone is shown twice: blurred to fill the screen, and sharp at its own size on top.
-	var blurred = blurred_cover(texture) if album_art and texture else null
-	cover_material.set_shader_parameter("album_art",blurred != null)
+	# The gameplay stage keeps the cover fully Gaussian-blurred behind the highway (never sharp).
+	# Album-art mode still lays the sharp square on top of this same blurred fill.
+	var blurred = preload("res://scripts/gaussian_blur.gd").of(texture, 40, 10.0) if texture else null
+	cover_material.set_shader_parameter("album_art",album_art and blurred != null)
 	cover_material.set_shader_parameter("cover_blurred",blurred)
 	cover_material.set_shader_parameter("tint",tint)
 	cover_material.set_shader_parameter("strength",1.0)
@@ -1438,7 +1439,10 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 			if uses_projected_highway() and not recording: m.render_priority=-4
 			m.set_shader_parameter("source_art",source_visual)
 			m.set_shader_parameter("old_ssrg_art",old_source)
-			m.set_shader_parameter("joined_source",source_visual)
+			# SKD submits every linked section as its own RenderLongLine call.  Keeping
+			# the sections independent also preserves the three l1/l2/l3 alpha layers;
+			# a joined/mitered band changes both the corner silhouette and brightness.
+			m.set_shader_parameter("joined_source",false)
 			m.set_shader_parameter("enhanced_synk",enhanced_synk_long_visuals())
 			m.set_shader_parameter("ssrg_line_x_scale",ssrg_art_scale()*1.3 if source_visual else 1.0)
 			m.set_shader_parameter("ssrg_ribbon",recorder_slide)

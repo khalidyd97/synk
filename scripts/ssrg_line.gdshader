@@ -1,7 +1,8 @@
 shader_type spatial;
-render_mode unshaded, blend_add, depth_draw_never, cull_disabled, fog_disabled;
-// Thin silver light strip along the track (rails, press lines). UV.x runs across the strip;
-// bright core with a soft falloff, fading toward the far end.
+render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, fog_disabled;
+// Thin flat strip along the track (press lines). UV.x runs across the strip; a soft core
+// falloff fading toward the far end. Alpha-blended (not additive) so the hold trail reads
+// as a plain line and does not glow/bloom over the background.
 uniform vec4 tint : source_color = vec4(0.95, 0.96, 1.0, 1.0);
 uniform float strength = 1.0;
 uniform float far_fade = 1.0;      // 1: fade with distance; 0: even brightness

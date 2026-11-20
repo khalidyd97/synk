@@ -76,11 +76,6 @@ void fragment(){
     }else if(world_z>clip_z) discard;
     vec3 color=source_art?source_chip:tint*.87;
     float opacity=source_art?.2:.8;
-    if(joined_source && source_art && !old_ssrg_art && !joint){
-        float core=pow(max(0.0,1.0-abs(UV.x*2.0-1.0)),2.0);
-        color=mix(tint,vec3(1.0,.98,.78),core*.45);
-        opacity=.43+core*.12;
-    }
     if(ssrg_ribbon && !joint){
         float across=abs(UV.x*2.0-1.0);
         float core=pow(max(0.0,1.0-across),2.2);
@@ -103,7 +98,11 @@ void fragment(){
             opacity+=core*.10;
         }
     }
-    if(!joint){
+    // SKD's l1/l2/l3 chips are fully opaque, uniform 6x6 texels. Their source
+    // alpha is supplied by the batch color (.2 per overlapping quad), without
+    // an invented soft edge or cream centre. Non-source ribbons keep the
+    // shader feather used by SYNK's own trail styles.
+    if(!joint && !source_art){
         float edge=min(UV.x,1.0-UV.x);
         float feather=max(fwidth(UV.x),.001);
         opacity*=smoothstep(0.0,feather,edge);

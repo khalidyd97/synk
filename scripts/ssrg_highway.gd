@@ -63,7 +63,7 @@ func _ready() -> void:
 		rings.append(ring); ring_materials.append(ring_mat)
 	for i in 10:
 		var line = shaded_plane(Vector2(.5, 60.0), preload("res://scripts/ssrg_line.gdshader"), Vector3(0, .055, -30.0), 2)
-		line.material_override.set_shader_parameter("tint", Color(.75, .9, 1.0)); line.material_override.set_shader_parameter("strength", .7)
+		line.material_override.set_shader_parameter("tint", Color(.75, .9, 1.0)); line.material_override.set_shader_parameter("strength", .5)
 		line.visible = false; press_lines.append(line)
 	refresh()
 
@@ -136,8 +136,8 @@ func flash_point(x: float) -> Vector3:
 	var on_line = Vector3(x, .035, 0)
 	return on_line + Vector3.UP*FLASH_PULL if world.game.uses_ssrg_gameplay() else on_line + (world.camera.global_position - on_line).normalized() * FLASH_PULL
 
-# Slightly smaller than the source sprite: full size reads too large on big phones (iPhone 16 Pro Max).
-const HIT_SCALE = 0.85
+# The recording confirms the packaged def_c_trans 2x footprint is used at full size.
+const HIT_SCALE = 1.0
 var hit_layer: Node3D
 # On SYNK's wider perspective lanes the source art is drawn a little larger.
 const SYNK_HIGHWAY_SCALE = 1.25
@@ -159,6 +159,9 @@ func make_hit() -> Dictionary:
 #   Lumen: SYNK's own flash, drawn by lumen_hit.gdshader, coloured by note type.
 const STYLE_SHADERS = {"ssrg": preload("res://scripts/ssrg_hit.gdshader"), "lumen": preload("res://scripts/lumen_hit.gdshader")}
 func hit_style() -> String:
+	# SSRG playback always uses the packaged Effect_A sequence seen in SKD.
+	# Other SYNK highways keep the player's SKD/Lumen preference.
+	if world.game.uses_ssrg_gameplay(): return "ssrg"
 	return "lumen" if world.game.hit_style == "lumen" else "ssrg"
 
 func style_hit(h: Dictionary) -> void:

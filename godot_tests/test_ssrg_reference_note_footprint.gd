@@ -36,6 +36,7 @@ func run() -> void:
 				if material.shader.resource_path.ends_with("solid_trail.gdshader"):
 					matched=true
 					assert(is_equal_approx(material.get_shader_parameter("ssrg_half_width"),116.0*.4*.5*scale*world.SSRG_UNIT),"Connectors scale with the pucks")
+					assert(not material.get_shader_parameter("joined_source"),"SKD renders each linked hold section independently")
 		assert(matched,"Hold connector material inspected")
 		holder.queue_free()
 	game.prefs.set_value("ssrg","note_scale_index",0)

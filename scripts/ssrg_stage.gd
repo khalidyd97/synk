@@ -1,6 +1,7 @@
 extends Node3D
 var receptors: Array = []
 var press: MeshInstance3D
+var press_glow: MeshInstance3D
 var rails: Array = []
 var old_rails: Array = []
 var old_rail_glows: Array = []
@@ -53,6 +54,16 @@ func _init() -> void :
 	mat.set_shader_parameter("artwork",preload("res://assets/ssrg/imported/judgment_Main_black_BG3.png"))
 	mat.set_shader_parameter("base_color",Color8(255,220,65,149)); mat.render_priority=-7
 	press.material_override=mat; add_child(press)
+	# The recording shows a continuous same-colour halo immediately below the
+	# 130-unit judgment band. It is separate from the textured band face.
+	press_glow=MeshInstance3D.new(); var glow_plane=PlaneMesh.new()
+	glow_plane.size=Vector2(1156,32)*UNIT;press_glow.mesh=glow_plane
+	press_glow.name="JudgmentBarGlow"
+	# Source UI y: band bottom -315; glow centre -325. World z=-(y+234)*UNIT.
+	press_glow.position=Vector3(-5*UNIT,.034,91*UNIT)
+	var glow_mat=ShaderMaterial.new();glow_mat.shader=preload("res://scripts/ssrg_judgment_glow.gdshader")
+	glow_mat.set_shader_parameter("glow_color",Color8(255,220,65,150));glow_mat.render_priority=-6
+	press_glow.material_override=glow_mat;add_child(press_glow)
 	for lane in 13:
 		var ring = MeshInstance3D.new(); var disc = QuadMesh.new();disc.size = Vector2(212.0, 116.0)*9.75/512.0   # SSRG guide sprite size
 		ring.mesh = disc
@@ -234,15 +245,20 @@ func configure(world: Node3D) -> void :
 	var stock_road = true
 	var old_ui=world.game.old_ssrg_ui()
 	press.visible = stock_road
+	press_glow.visible = stock_road
 	press.material_override.set_shader_parameter("artwork",preload("res://assets/ssrg/old_ui/track/Main_black BG3.png") if old_ui else preload("res://assets/ssrg/imported/judgment_Main_black_BG3.png"))
 	entrance_shadow.visible=not old_ui
 	for ring in receptors:ring.material_override.set_shader_parameter("artwork",preload("res://assets/ssrg/old_ui/track/note_guide 01.png") if old_ui else preload("res://assets/ssrg/imported/guide_original.png"))
 	for mark in feedback_marks:mark.material_override.set_shader_parameter("artwork",preload("res://assets/ssrg/old_ui/track/note_guide 01.png") if old_ui else preload("res://assets/ssrg/imported/guide_original.png"))
 	# Source gold tier, unless the player picked a judgment band color.
 	var band = world.custom_color("band_color")
-	press.material_override.set_shader_parameter("base_color",(Color(band,.82) if band != null else Color8(255,75,91,210)) if old_ui else Color8(255,220,65,149))
+	var band_color:Color=(Color(band,.82) if band != null else Color8(255,75,91,210)) if old_ui else Color8(255,220,65,149)
+	press.material_override.set_shader_parameter("base_color",band_color)
+	press_glow.material_override.set_shader_parameter("glow_color",Color(band_color,150.0/255.0))
 	# The recorder keeps the line readable without the loud gold: a faint cream strip.
-	if world.game.uses_skd_recorder_surface(): press.material_override.set_shader_parameter("base_color",RECORDER_BAND)
+	if world.game.uses_skd_recorder_surface():
+		press.material_override.set_shader_parameter("base_color",RECORDER_BAND)
+		press_glow.visible=false
 	var rail_tint = world.custom_color("rail_color")
 	if rail_tint == null: rail_tint = Color.WHITE
 	for rail in rails:

@@ -73,7 +73,7 @@ void fragment() {
 	float haze = (top+side+edge_halo*0.16*(1.0-UV.y))*mix(1.0,0.12,inside_track);
 	vec3 wash_color = mix(rail_glow_left,rail_glow_right,smoothstep(0.15,0.85,UV.x));
 	vec3 wash = wash_color*haze*rail_glow_opacity*(1.25+glow_beat*0.45);
-	if (photo) { art = picture; wash = vec3(0.0); }
+	if (photo) { art = texture(cover_blurred, uv).rgb; wash = vec3(0.0); }
 	vec3 base=plain ? vec3(0.0) : photo ? art * brightness : (art+wash) * brightness;
 	if(photo){
 		// Source quarter texture is opaque at its outer corner (0,0),

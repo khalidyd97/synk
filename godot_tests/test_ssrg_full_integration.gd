@@ -19,6 +19,12 @@ func run():
 	var bar=world.ssrg_theme.original_stage.press
 	check(bar.material_override.get_shader_parameter("artwork").resource_path.ends_with("judgment_Main_black_BG3.png"),"Judgment bar uses source slanted artwork")
 	check(bar.material_override.get_shader_parameter("base_color").is_equal_approx(Color8(255,220,65,149)),"Judgment bar stays the exact fixed source gold")
+	var bar_glow=world.ssrg_theme.original_stage.press_glow
+	check(bar_glow.visible and is_equal_approx(bar_glow.mesh.size.x,bar.mesh.size.x) and is_equal_approx(bar_glow.mesh.size.y,32.0*world.SSRG_UNIT),"Judgment glow spans the bar and occupies the recorded 32-unit under-band falloff")
+	check(bar_glow.material_override.shader.resource_path.ends_with("ssrg_judgment_glow.gdshader"),"Judgment glow uses a continuous soft falloff rather than the striped bar artwork")
+	var glow_color:Color=bar_glow.material_override.get_shader_parameter("glow_color")
+	var bar_color:Color=bar.material_override.get_shader_parameter("base_color")
+	check(Vector3(glow_color.r,glow_color.g,glow_color.b).is_equal_approx(Vector3(bar_color.r,bar_color.g,bar_color.b)) and is_equal_approx(glow_color.a,150.0/255.0),"Under-bar halo follows the current judgment-bar RGB")
 	check(bar.material_override.render_priority>world.ssrg_theme.original_stage.rails[0].material_override.render_priority,"Gold bar draws above the rail's dark road shading")
 	game.song_time=5.0;game.visual_clock_ready=false
 	var point=world.camera.unproject_position(Vector3(0,.035,0))/Vector2(game.field.viewport.size)
@@ -78,7 +84,7 @@ func run():
 	game.update_game()
 	check(game.judged==2 and game.judgment_counts.MISS==2,"Missing an imported slide start accounts for both head and end")
 	var effect=world.ssrg_theme.make_hit()
-	check(effect.node.mesh.size.is_equal_approx(Vector2(620,372)*world.SSRG_UNIT*world.ssrg_theme.HIT_SCALE),"Hit flash includes source parent scale and centered dimensions")
+	check(effect.node.mesh.size.is_equal_approx(Vector2(620,372)*world.SSRG_UNIT),"SKD hit flash uses the full packaged def_c_trans 2x footprint")
 	effect.node.queue_free()
 	game.prefs.set_value("ssrg","speed",1.0)
 	if game.prefs.has_section_key("ssrg","speed_value"):game.prefs.erase_section_key("ssrg","speed_value")
