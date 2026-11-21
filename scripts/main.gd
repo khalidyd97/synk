@@ -992,7 +992,8 @@ func update_recorder_focus() -> void:
 	# SKD's recovered camera is fixed, so the angle slider belongs to the classic view only.
 	for node in [recorder_angle_caption, recorder_angle_slider, recorder_angle_label]:
 		if node:node.visible=not focus and not recorder_skd_view
-	if record_overview:record_overview.visible=not focus
+	# The take overview stays up during an active take too, not only while correcting.
+	if record_overview:record_overview.visible=true
 	var history = not take_undo.is_empty() or not take_redo.is_empty()
 	var show_history = not focus or history
 	take_undo_button.visible = show_history;take_redo_button.visible = show_history
@@ -3405,9 +3406,13 @@ func snap_recorder_move(at: float, latest: float, moving: Dictionary = {}) -> fl
 
 
 func begin_resume_lead() -> float:
-	ready_point = recorder_seek_target if recorder_seek_target>=0 else (chart_empty_point() if capture.notes.size() + document.notes.size() > 0 else song_time)
+	# Resuming from a scrub (the Correct-mode line) starts exactly at that position; the
+	# run-up lead only applies when continuing on from the end of the recorded notes.
+	var from_scrub = recorder_seek_target >= 0
+	ready_point = recorder_seek_target if from_scrub else (chart_empty_point() if capture.notes.size() + document.notes.size() > 0 else song_time)
 	recorder_seek_target=-1.0
-	var target = maxf(maxf(0.0, recorder.region.x if recorder.active else 0.0), ready_point - float(recorder.resume_lead))
+	var lead = 0.0 if from_scrub else float(recorder.resume_lead)
+	var target = maxf(maxf(0.0, recorder.region.x if recorder.active else 0.0), ready_point - lead)
 	song_time = target;visual_song_time = target;visual_clock_ready = false
 	return target
 
