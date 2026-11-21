@@ -26,7 +26,7 @@ var hits: Array = []
 # Flick hit: copies of the real Effect_A hit animation flung upward, so the flick's hit
 # effect reads as an upward explosion made of the actual hit flash.
 var flick_frags: Array = []
-const FLICK_FRAG_LIFE = HIT_LIFE
+const FLICK_FRAG_LIFE = .5
 var active = false
 var original_stage: Node3D
 var source_background: Node3D
@@ -128,7 +128,7 @@ func spawn_flick_explosion(x: float) -> void:
 	if imported_frames.is_empty(): return
 	var up = world.camera.basis.y.normalized()
 	var sidev = world.camera.basis.x.normalized()
-	var count = 6
+	var count = 8
 	var tint = world.flick_arrow_color(2)
 	var recolor = world.game.uses_ssrg_gameplay()
 	for i in count:
@@ -141,9 +141,9 @@ func spawn_flick_explosion(x: float) -> void:
 		var node = world.mesh_node(mesh, parent, mat)
 		node.rotation = world.camera.rotation
 		node.position = flash_point(x)
-		# Fan around straight up (±~46°), each at its own speed.
-		var ang = (float(i) / float(count - 1) - 0.5) * 1.6
-		var speed = (6.0 + randf() * 5.0) * world.FIT
+		# A tight fan around straight up (±~29°) launched hard, so the burst clearly shoots upward.
+		var ang = (float(i) / float(count - 1) - 0.5) * 1.0
+		var speed = (11.0 + randf() * 8.0) * world.FIT
 		var vel = (up * cos(ang) - sidev * sin(ang)) * speed
 		flick_frags.append({"node": node, "material": mat, "age": 0.0, "base": node.position, "vel": vel})
 
@@ -158,8 +158,9 @@ func advance_flick_frags(delta: float, playing: bool) -> void:
 			f.node.queue_free(); flick_frags.remove_at(i); continue
 		var base: Vector3 = f.base
 		var vel: Vector3 = f.vel
-		# Fly out along the fan, pulled back down (opposite screen-up) by gravity.
-		f.node.position = base + vel * a - up * (9.0 * world.FIT * a * a)
+		# Fly out along the fan, pulled back down (opposite screen-up) by a light gravity so
+		# the burst keeps travelling upward longer.
+		f.node.position = base + vel * a - up * (4.5 * world.FIT * a * a)
 		f.node.rotation = world.camera.rotation
 		var frame_index = int(a * HIT_FPS)
 		f.material.set_shader_parameter("atlas", imported_frames[mini(imported_frames.size() - 1, frame_index)])
