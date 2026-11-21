@@ -1654,6 +1654,7 @@ func sync_note(key: String, note: Dictionary, visible_keys: Dictionary, recordin
 		# The arrow bobs up and down; a gentler rate stays smooth at the device frame rate
 		# (a faster sine looked stepped, and the SSRG projection exaggerates quick vertical moves).
 		var nudge = sin(animation_time*TAU*2.4)*.38
+		var pulse01 = .5+.5*sin(animation_time*TAU*2.4)   # brightest/biggest at the top of the bob
 		var note_z = notes[key].node.position.z
 		for arrow in notes[key].node.get_children():
 			if not arrow.has_meta("flick_base"): continue
@@ -1666,6 +1667,7 @@ func sync_note(key: String, note: Dictionary, visible_keys: Dictionary, recordin
 				var q_arrow = ssrg_approach(note_z + pos.z)
 				if q_arrow > .0001: pos.x = fb.x * ssrg_approach(note_z) / q_arrow
 			arrow.position = pos
+			if arrow.material_override is ShaderMaterial: arrow.material_override.set_shader_parameter("pulse",pulse01)
 
 # Beam sections share the same apex and lane centres as the 2D notes.
 func ssrg_beam_lane(lane: float) -> float:
