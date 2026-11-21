@@ -133,7 +133,7 @@ func spawn_flick_explosion(x: float) -> void:
 	var recolor = world.game.uses_ssrg_gameplay()
 	for i in count:
 		var mesh = QuadMesh.new()
-		mesh.size = Vector2(620, 372) * world.SSRG_UNIT * HIT_SCALE * (0.5 + randf() * 0.4)
+		mesh.size = Vector2(620, 372) * world.SSRG_UNIT * HIT_SCALE * (0.38 + randf() * 0.28)
 		var mat = ShaderMaterial.new(); mat.shader = STYLE_SHADERS["ssrg"]; mat.render_priority = 8
 		mat.set_shader_parameter("atlas", imported_frames[0])
 		mat.set_shader_parameter("tint", tint); mat.set_shader_parameter("recolor", recolor)
@@ -142,8 +142,8 @@ func spawn_flick_explosion(x: float) -> void:
 		node.rotation = world.camera.rotation
 		node.position = flash_point(x)
 		# A tight fan around straight up (±~29°) launched hard, so the burst clearly shoots upward.
-		var ang = (float(i) / float(count - 1) - 0.5) * 1.0
-		var speed = (11.0 + randf() * 8.0) * world.FIT
+		var ang = (float(i) / float(count - 1) - 0.5) * 0.85
+		var speed = (8.0 + randf() * 6.0) * world.FIT
 		var vel = (up * cos(ang) - sidev * sin(ang)) * speed
 		flick_frags.append({"node": node, "material": mat, "age": 0.0, "base": node.position, "vel": vel})
 
@@ -162,6 +162,8 @@ func advance_flick_frags(delta: float, playing: bool) -> void:
 		# the burst keeps travelling upward longer.
 		f.node.position = base + vel * a - up * (4.5 * world.FIT * a * a)
 		f.node.rotation = world.camera.rotation
+		# Each fragment shrinks as it rises, so the burst tightens on its way up.
+		f.node.scale = Vector3.ONE * (1.0 - 0.62 * (a / FLICK_FRAG_LIFE))
 		var frame_index = int(a * HIT_FPS)
 		f.material.set_shader_parameter("atlas", imported_frames[mini(imported_frames.size() - 1, frame_index)])
 		f.material.set_shader_parameter("opacity", opacity * (1.0 - a / FLICK_FRAG_LIFE))
