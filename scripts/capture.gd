@@ -78,7 +78,8 @@ func end(id: int, time: float, p: Vector2, canceled = false) -> Dictionary:
 	if g.tool == "auto":
 		var allowed: Array = g.allowed
 		var displacement: Vector2 = p - g.start
-		var swipe = maxf(absf(displacement.x), absf(displacement.y)) >= .035 and (absf(displacement.x) > absf(displacement.y) or displacement.y < 0)
+		# A flick is a hard upward swipe only (up clearly dominates sideways motion).
+		var swipe = (-displacement.y) >= .05 and (-displacement.y) > absf(displacement.x) * 1.8
 		if "flick" in allowed and n.duration <= .30 and swipe: n.kind = "flick"
 		elif "slide" in allowed and n.duration >= .04 and g.max_delta >= .8: n.kind = "slide"
 		elif "hold" in allowed and n.duration >= .14: n.kind = "hold"
@@ -88,9 +89,9 @@ func end(id: int, time: float, p: Vector2, canceled = false) -> Dictionary:
 		else: return {}
 	if n.kind=="flick":
 		var displacement: Vector2=p-g.start
-		if maxf(absf(displacement.x),absf(displacement.y))<.035: return {}
-		n.direction=(1 if displacement.x>0 else 3) if absf(displacement.x)>absf(displacement.y) else (2 if displacement.y>0 else 0)
-		if n.direction==2: return {}
+		# Up-only: a flick must be a hard upward swipe, never a sideways or downward one.
+		if (-displacement.y)<.05 or (-displacement.y)<=absf(displacement.x)*1.8: return {}
+		n.direction=0
 	if n.kind in ["tap","flick"]: n.duration = 0.0; n.path = []; n.end_lane = n.lane
 	else:
 		if n.duration < .04: return {}

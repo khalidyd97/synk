@@ -24,8 +24,9 @@ void fragment() {
                   segment_distance(p,vec2(0.0,-0.44),vec2(0.72,0.44)));
     float core = 1.0-smoothstep(0.085,0.13,d);
     float rim = 1.0-smoothstep(0.18,0.24,d);
-    float glow = exp(-d*d*45.0)*0.42;
-    vec3 color = mix(tint,vec3(1.0,0.96,1.0),core);
+    // A tight bright glow around the chevron plus a wider soft halo for a clean white bloom.
+    float glow = exp(-d*d*45.0)*0.55 + exp(-d*d*10.0)*0.32;
+    vec3 color = mix(tint,vec3(1.0),core);
     float gray = dot(color,vec3(0.299,0.587,0.114));
     ALBEDO = mix(color,vec3(gray*0.52),desaturate);
     ALPHA = clamp(rim+glow,0.0,1.0)*ghost_fade*ssrg_reveal(centre_z);

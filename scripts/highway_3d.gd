@@ -1300,7 +1300,7 @@ func make_flick(parent: Node3D, note: Dictionary, palette: int, recording = fals
 		var arrow_mesh = QuadMesh.new(); arrow_mesh.size=Vector2(3.22,1.6)*FIT*game.gameplay_note_size()
 		# The SSRG puck is wide and bright; a larger chevron keeps the up arrow readable on it.
 		if game.uses_ssrg_gameplay(): arrow_mesh.size*=1.7
-		var arrow_tint = flick_arrow_color(palette)
+		var arrow_tint = Color(1.0, 1.0, 1.0)  # flick arrow: pure white with a soft glow
 		var arrow_material = shared("arrow|%d|%s" % [palette, arrow_tint], func():
 			var m = ShaderMaterial.new(); m.shader=preload("res://scripts/flick_arrow.gdshader")
 			if uses_projected_highway() and not game.uses_ssrg_gameplay():

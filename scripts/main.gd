@@ -2901,8 +2901,11 @@ func update_game() -> void:
 		var p: Dictionary=pointers[entry.pointer]
 		if n.kind=="flick":
 			var displacement: Vector2=p.position-p.start
-			var direction: Vector2=[Vector2.UP,Vector2.RIGHT,Vector2.DOWN,Vector2.LEFT][int(n.direction)]
-			if displacement.dot(direction)>.035 and displacement.dot(direction)>absf(displacement.dot(direction.orthogonal())): judge(entry,float(entry.error))
+			# Flicks are up-only and must be a hard upward flick: a clear upward move that
+			# clearly dominates any sideways motion. A left/right (or shallow diagonal) swipe
+			# does not register.
+			var up: float = -displacement.y
+			if up>.05 and up>absf(displacement.x)*1.8: judge(entry,float(entry.error))
 			elif song_time>float(n.time)+(hit_good_window("flick") if ssrg_playable_run else extras.good_window()) or (ssrg_playable_run and p.get("ssrg_ended",false)): judge(entry,-1)
 		elif n.kind in ["hold","slide"] and not process_checkpoints(entry,SynkCapture.lane(p.position.x),false):
 			continue
