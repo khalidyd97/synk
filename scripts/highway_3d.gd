@@ -78,6 +78,7 @@ var highway_shadow: MeshInstance3D
 var judgment_material: ShaderMaterial
 var track_materials: Array = []
 var track_nodes: Array = []
+var stage_reveal_active=false
 var sky_material: ShaderMaterial
 # The cover plane sits this far in front of the camera, behind the whole highway.
 const COVER_DISTANCE = 150.0
@@ -1792,6 +1793,52 @@ func animate_miss_shake(delta: float) -> void:
 	# The loading card fades away over a stationary highway. No entrance zoom.
 	apply_camera(Vector3(sin(phase)*.065,sin(phase*1.3)*.025,0)*strength)
 
+# Loading-to-play handoff. Each visual family grows into place in its own window;
+# camera/projection and node positions never move, so input remains perfectly aligned.
+func stage_reveal_groups() -> Array:
+	var road:Array=track_nodes.duplicate()
+	if highway_shadow:road.append(highway_shadow)
+	if concept_theme and concept_theme.road_sprite:road.append(concept_theme.road_sprite)
+	var rails:Array=gold_nodes+neon_nodes
+	var bands:Array=[];var guides:Array=[]
+	var judgment=get_node_or_null("JudgmentPads")
+	if judgment:bands.append(judgment)
+	if ssrg_theme and ssrg_theme.original_stage:
+		var source=ssrg_theme.original_stage
+		road.append(source.entrance_shadow)
+		rails.append_array(source.rails);rails.append_array(source.old_rails)
+		rails.append_array(source.old_rail_glows);rails.append_array(source.old_rail_dots)
+		bands.append(source.press);bands.append(source.press_glow)
+		guides.append_array(source.receptors);guides.append_array(source.feedback_marks)
+	if lane_markers:guides.append(lane_markers)
+	return [road,rails,bands,guides]
+
+func reveal_scale(node:Node3D,amount:float,kind:int) -> void:
+	if not node.has_meta("stage_reveal_scale"):node.set_meta("stage_reveal_scale",node.scale)
+	var base:Vector3=node.get_meta("stage_reveal_scale")
+	var f=lerpf(.015,1.0,amount)
+	if kind==0:node.scale=base*Vector3(1.0,f,f) # road grows down the screen
+	elif kind==1:node.scale=base*Vector3(1.0,f,f) # rails extend from the horizon
+	elif kind==2:node.scale=base*Vector3(f,1.0,1.0) # judgment band opens sideways
+	else:node.scale=base*f # receptors settle into their lanes
+
+func apply_stage_reveal() -> void:
+	var intro=game.stage_intro if game else null
+	var groups=stage_reveal_groups()
+	if intro and intro.running():
+		stage_reveal_active=true
+		var windows=[[0.0,.34],[.12,.55],[.34,.72],[.56,.92]]
+		for kind in groups.size():
+			var amount=float(intro.reveal_part(windows[kind][0],windows[kind][1]))
+			for node in groups[kind]:
+				if node is Node3D:reveal_scale(node,amount,kind)
+	elif stage_reveal_active:
+		for group in groups:
+			for node in group:
+				if node is Node3D and node.has_meta("stage_reveal_scale"):
+					node.scale=node.get_meta("stage_reveal_scale");node.remove_meta("stage_reveal_scale")
+		stage_reveal_active=false
+
 # A completed hold or slide is judged slightly before its tail is drawn at the line (early
 # release, and the render clock trails the judgment clock), so keep drawing it until then.
 func finishing_sustain(entry: Dictionary) -> bool:
@@ -1909,6 +1956,7 @@ func _process(delta: float) -> void:
 		# Prebuilt chart notes are kept and hidden; anything built on the fly is freed.
 		if notes[key].get("prebuilt", false): notes[key].node.visible = false
 		else: notes[key].node.queue_free(); notes.erase(key)
+	apply_stage_reveal()
 	shown_keys = visible_keys
 
 # A stationary touch emits no drag events. Advance its visual tail using the song

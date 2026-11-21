@@ -53,7 +53,8 @@ func _ready() -> void:
 	backdrop_art = TextureRect.new(); add_child(backdrop_art); backdrop_art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	backdrop_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; backdrop_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	backdrop_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	preload("res://scripts/background_motion.gd").attach(backdrop_art,preload("res://scripts/image_atmosphere.gdshader"))
+	var blur_material=ShaderMaterial.new();blur_material.shader=preload("res://scripts/loading_blur.gdshader")
+	backdrop_art.material=blur_material
 	# Gradient wash, light streaks and the equalizer are drawn here, between backdrop and card.
 	fx = Control.new(); add_child(fx); fx.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	fx.mouse_filter = Control.MOUSE_FILTER_IGNORE; fx.draw.connect(draw_fx)
@@ -113,6 +114,11 @@ func song_colors(cover: Texture2D=null) -> Array:
 
 func begin(cover: Texture2D, tint: Color, song_title: String, details: String, skip_loading: bool) -> void:
 	for art in [backdrop_art,card_art,reflection]: art.texture = cover; art.self_modulate = tint
+	# One moderate Gaussian treatment for backgrounds and album-art-only songs.
+	# The square loading card stays sharp and floats above this transitioning layer.
+	var blurred=preload("res://scripts/gaussian_blur.gd").of(cover,72,4.0) if cover else null
+	backdrop_art.material.set_shader_parameter("blurred_art",blurred if blurred else cover)
+	backdrop_art.material.set_shader_parameter("blur_amount",1.0 if skip_loading else 0.0)
 	var picked = song_colors(cover); accent = picked[0]; accent_2 = picked[1]
 	backdrop.color=loading_shadow
 	backdrop_art.material.set_shader_parameter("artwork_palette",1.0)
@@ -176,6 +182,12 @@ func entrance() -> float:
 	var e = clampf((elapsed - load_time) / ENTER_TIME, 0.0, 1.0)
 	return e * e * (3.0 - 2.0 * e)
 
+# Separate windows let the world assemble in readable layers without moving the camera.
+func reveal_part(start:float,finish:float) -> float:
+	if not visible:return 1.0
+	var raw=clampf((elapsed-load_time)/ENTER_TIME,0.0,1.0)
+	return smoothstep(start,finish,raw)
+
 func card_side() -> float: return minf(size.y*.55,size.x*.28)
 
 func card_home() -> Vector2: return Vector2(size.x*.64,(size.y-card_side())*.42)
@@ -234,8 +246,10 @@ func _process(delta: float) -> void:
 func animate() -> void:
 	var appear=smoothstep(0.0,.5,elapsed) if load_time>0 else 1.0
 	var e=entrance();var alpha=appear*(1.0-smoothstep(0.0,.8,e))
+	var blur_progress=1.0 if load_time<=0.0 else smoothstep(.08,.82,load_progress())
+	backdrop_art.material.set_shader_parameter("blur_amount",blur_progress)
 	backdrop.color=Color(loading_shadow,1.0-smoothstep(.2,.95,e))
-	backdrop_art.modulate.a=.10*alpha
+	backdrop_art.modulate.a=.34*alpha
 	backdrop_art.pivot_offset=size*.5;backdrop_art.scale=Vector2.ONE*1.06
 	if gliding: glide_card(appear)
 	else:

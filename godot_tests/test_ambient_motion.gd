@@ -42,6 +42,10 @@ func run() -> void:
     g.stage_intro_enabled=true; g.set_mode("menu"); g.start_game([SynkChart.note(3,4)],false)
     check(is_equal_approx(g.stage_intro.load_time,5.0),"Game loading screen lasts five seconds before its transition")
     var w=g.field.world; var origin=w.camera_rest_position()
+    g.stage_intro.elapsed=g.stage_intro.load_time+.12;g.stage_intro.animate();w.apply_stage_reveal()
+    check(w.stage_reveal_active and w.track_nodes[0].scale.z<1.0,"Highway road begins before the later stage elements")
+    g.stage_intro.elapsed=g.stage_intro.load_time+.55;g.stage_intro.animate();w.apply_stage_reveal()
+    check(w.get_node("JudgmentPads").scale.x>0.1,"Judgment band opens after the road and rails")
     for at in [0.0,.5,1.15,1.6,2.0]:
         g.stage_intro.elapsed=at; g.stage_intro.animate(); w.animate_miss_shake(0)
         check(is_equal_approx(w.camera.fov,w.GAMEPLAY_FOV),"Highway FOV remains fixed throughout entrance")

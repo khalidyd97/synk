@@ -21,7 +21,8 @@ func run():
         check(intro.backdrop_art.material.get_shader_parameter("palette_primary").is_equal_approx(intro.accent),"Animated backdrop shares the artwork palette")
         check(is_equal_approx(intro.load_time,5),"Adaptive loading keeps the five-second duration")
         intro.elapsed=1; intro.animate()
-        check(is_equal_approx(intro.card.modulate.r,.9) and intro.backdrop_art.modulate.a<=.12,"New loading screen keeps artwork legible over a subdued backdrop")
+        check(is_equal_approx(intro.card.modulate.r,.9) and intro.backdrop_art.modulate.a<=.35,"Loading keeps the sharp card legible over the artwork backdrop")
+        check(float(intro.backdrop_art.material.get_shader_parameter("blur_amount"))>0.0,"Loading artwork transitions progressively into its Gaussian gameplay blur")
     g.queue_free(); await process_frame
     print("Artwork-adaptive loading: ","PASS" if failures==0 else str(failures)+" FAILED")
     quit(0 if failures==0 else 1)
