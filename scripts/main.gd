@@ -123,7 +123,7 @@ var record_overview: Control
 var recorder_seek_target=-1.0
 # Highway look: "gold" or "neon", optional custom rail/band colors ("" follows the style),
 # and how dark the see-through highway surface is (1 = the style's default).
-const HIGHWAY_STYLES=["gold","neon","ssrg","aurora","solar"]
+const HIGHWAY_STYLES=["ssrg"]  # only the SSRG/SKD highway is offered
 var highway_style = "ssrg"  # the SKD stage is the stock look for every song
 var ssrg_presentation:Node
 var ssrg_screens:Control
@@ -1037,7 +1037,7 @@ func set_mode(value: String,animate_transition:bool=true) -> void:
 	var was_ssrg_look=uses_ssrg_gameplay()
 	if ssrg_playable_run and value not in ["play","paused"]:
 		ssrg_playable_run=false; ssrg_forced_run=false
-		highway_style=ssrg_playable_previous_style if ssrg_playable_previous_style in HIGHWAY_STYLES else "gold"
+		highway_style=ssrg_playable_previous_style if ssrg_playable_previous_style in HIGHWAY_STYLES else "ssrg"
 		if field and field.world: field.world.refresh_highway_look()
 	if value!=mode and animate_transition:
 		# Menus slide forward and back by depth; entering or leaving the stage dissolves.
@@ -1242,7 +1242,7 @@ func change_highway_angle(value: float) -> void:
 
 func change_highway_look(key: String,value: Variant) -> void:
 	match key:
-		"style": highway_style = str(value) if str(value) in HIGHWAY_STYLES else "gold"; value = highway_style
+		"style": highway_style = str(value) if str(value) in HIGHWAY_STYLES else "ssrg"; value = highway_style
 		"rail_color": rail_color = str(value); value = rail_color
 		"band_color": band_color = str(value); value = band_color
 		"opacity": highway_opacity = clampf(float(value),.3,1.6); value = highway_opacity

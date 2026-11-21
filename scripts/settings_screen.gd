@@ -516,13 +516,7 @@ func section(items: VBoxContainer,title: String) -> void:
     var heading=label(items,title,13,ACCENT); heading.custom_minimum_size.y=26
 func build_highway(items: VBoxContainer) -> void:
     var preview=preload("res://scripts/highway_look_preview.gd").new(); preview.game=game; items.add_child(preview)
-    var styles=row(items,"Highway style","Five styles. Shared 13-lane SSRG view.",322)
-    var tile_row=GridContainer.new(); tile_row.columns=3; tile_row.add_theme_constant_override("h_separation",12); tile_row.add_theme_constant_override("v_separation",12)
-    add_control(styles,tile_row,440)
-    for kind in game.HIGHWAY_STYLES:
-        var tile=StyleTile.new(kind); tile_row.add_child(tile); tile.custom_minimum_size=Vector2(138,136)
-        tile.pressed.connect(func(): if not Action.was_dragged(tile): game.change_highway_look("style",kind))
-        style_tiles[kind]=tile
+    # Only the SSRG/SKD highway is offered now, so there is no style picker.
     old_ssrg_ui_row=row(items,"OLD UI SSRG","STAYC note sprites, guide rings, judgment bar and thin edge rails.",112)
     old_ssrg_ui_switch=Switch.new();add_control(old_ssrg_ui_row,old_ssrg_ui_switch,152)
     connect_switch(old_ssrg_ui_switch,game.change_old_ssrg_ui)
