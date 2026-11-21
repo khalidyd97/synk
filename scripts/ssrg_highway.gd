@@ -125,14 +125,14 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 	h.node.visible = true; hits.append(h)
 	if kind == "flick": spawn_flick_sparks(h.x)
 
-# The flick splash: a tight column of sparks launched straight up from the judgment bar. They
-# fan only a little sideways (narrow) but travel far up (tall) and arc back under gravity, so
-# the burst shoots up the screen in the flick's direction rather than spreading wide.
+# The flick splash: sparks launched up from the judgment bar. They travel far up (tall) and
+# spread out sideways as well, arcing back under gravity, so the burst reads as a wide upward
+# spray. Coloured to match the hit flash (white, or the player's chosen hit colour).
 func spawn_flick_sparks(x: float) -> void:
 	var up = world.camera.basis.y.normalized()
 	var sidev = world.camera.basis.x.normalized()
 	var origin = flash_point(x)
-	var tint = world.flick_arrow_color(2).lerp(Color.WHITE, 0.55)
+	var tint = Color.from_string(world.game.hit_color, Color.WHITE) if world.game.hit_color != "" else Color.WHITE
 	var parent: Node3D = hit_layer if hit_layer != null else self
 	for i in FLICK_SPARK_COUNT:
 		var mesh = QuadMesh.new()
@@ -142,9 +142,9 @@ func spawn_flick_sparks(x: float) -> void:
 		var node = world.mesh_node(mesh, parent, mat)
 		node.rotation = world.camera.rotation
 		node.position = origin
-		# Mostly straight up (tall), with a small sideways jitter (narrow).
-		var up_speed = (16.0 + randf() * 10.0) * world.FIT
-		var side_speed = (randf() - 0.5) * 2.4 * world.FIT
+		# Up (tall) with a wide sideways spread, so the spray fans out as it rises.
+		var up_speed = (15.0 + randf() * 9.0) * world.FIT
+		var side_speed = (randf() - 0.5) * 9.0 * world.FIT
 		var vel = up * up_speed + sidev * side_speed
 		flick_sparks.append({"node": node, "material": mat, "age": 0.0, "base": origin, "vel": vel})
 
