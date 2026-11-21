@@ -23,10 +23,13 @@ var ring_materials: Array = []
 var press_lines: Array = []
 var hit_pool: Array = []
 var hits: Array = []
-# A flick uses the same Effect_A hit flash as a tap; it just launches upward as it plays,
-# so the hit reads as moving up the screen (the flick's direction) rather than sitting still.
-const FLICK_RISE = 3.2
-const FLICK_LAUNCH_STRETCH = 0.18
+# A flick's hit is the ordinary Effect_A flash, kept on the judgment bar like a tap, plus a
+# burst of sparks flung straight up from the bar (tall and narrow) so the impact reads as an
+# explosive splash in the flick's up direction.
+var flick_sparks: Array = []
+const FLICK_SPARK_LIFE = .46
+const FLICK_SPARK_COUNT = 18
+const FLICK_SPARK_SHADER = preload("res://scripts/flick_spark.gdshader")
 var active = false
 var original_stage: Node3D
 var source_background: Node3D
@@ -115,24 +118,53 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 		h.material.set_shader_parameter("particles", world.game.features.effect("Particles"))
 	# Hit effects page: size, and an optional colour over the source art.
 	h.node.scale = Vector3.ONE * world.game.hit_size * (1.0 if world.game.uses_ssrg_gameplay() else SYNK_HIGHWAY_SCALE)
-	h.base_scale = h.node.scale
 	h.node.rotation = world.camera.rotation
 	if h.style == "ssrg":
 		h.material.set_shader_parameter("tint", Color.from_string(world.game.hit_color, Color.WHITE) if world.game.hit_color != "" else Color.WHITE)
 		h.material.set_shader_parameter("recolor", world.game.hit_color != "")
 	h.node.visible = true; hits.append(h)
+	if kind == "flick": spawn_flick_sparks(h.x)
 
-# A flick's flash is the ordinary Effect_A hit, lifted up the screen as it plays (and given a
-# brief vertical launch stretch at the start) so the impact clearly travels in the flick's
-# up direction. t is the flash's own 0..1 life.
-func apply_flick_motion(h: Dictionary) -> void:
-	var t = clampf(h.age / HIT_LIFE, 0.0, 1.0)
+# The flick splash: a tight column of sparks launched straight up from the judgment bar. They
+# fan only a little sideways (narrow) but travel far up (tall) and arc back under gravity, so
+# the burst shoots up the screen in the flick's direction rather than spreading wide.
+func spawn_flick_sparks(x: float) -> void:
 	var up = world.camera.basis.y.normalized()
-	var lift = (1.0 - pow(1.0 - t, 2.0)) * FLICK_RISE * world.FIT  # quick launch, easing out
-	h.node.position = flash_point(float(h.x)) + up * lift
-	var stretch = (1.0 - t) * FLICK_LAUNCH_STRETCH  # strongest at the hit, gone by the end
-	var base: Vector3 = h.get("base_scale", h.node.scale)
-	h.node.scale = base * Vector3(1.0 - stretch * 0.5, 1.0 + stretch, 1.0)
+	var sidev = world.camera.basis.x.normalized()
+	var origin = flash_point(x)
+	var tint = world.flick_arrow_color(2).lerp(Color.WHITE, 0.55)
+	var parent: Node3D = hit_layer if hit_layer != null else self
+	for i in FLICK_SPARK_COUNT:
+		var mesh = QuadMesh.new()
+		mesh.size = Vector2.ONE * (1.05 + randf() * 0.7) * world.FIT
+		var mat = ShaderMaterial.new(); mat.shader = FLICK_SPARK_SHADER; mat.render_priority = 9
+		mat.set_shader_parameter("tint", tint)
+		var node = world.mesh_node(mesh, parent, mat)
+		node.rotation = world.camera.rotation
+		node.position = origin
+		# Mostly straight up (tall), with a small sideways jitter (narrow).
+		var up_speed = (16.0 + randf() * 10.0) * world.FIT
+		var side_speed = (randf() - 0.5) * 2.4 * world.FIT
+		var vel = up * up_speed + sidev * side_speed
+		flick_sparks.append({"node": node, "material": mat, "age": 0.0, "base": origin, "vel": vel})
+
+func advance_flick_sparks(delta: float, playing: bool) -> void:
+	var up = world.camera.basis.y.normalized()
+	var opacity = world.game.features.effect("Hit flashes")
+	for i in range(flick_sparks.size() - 1, -1, -1):
+		var f: Dictionary = flick_sparks[i]
+		if playing: f.age += delta
+		var a: float = f.age
+		if a >= FLICK_SPARK_LIFE:
+			f.node.queue_free(); flick_sparks.remove_at(i); continue
+		var base: Vector3 = f.base
+		var vel: Vector3 = f.vel
+		# Ballistic arc: fast up, pulled back down so the column peaks tall then falls.
+		f.node.position = base + vel * a - up * (18.0 * world.FIT * a * a)
+		f.node.rotation = world.camera.rotation
+		var k = a / FLICK_SPARK_LIFE
+		f.node.scale = Vector3.ONE * (1.0 - 0.7 * k)          # sparks shrink as they fly
+		f.material.set_shader_parameter("opacity", opacity * (1.0 - k))
 
 # How fast a flash crosses lanes, and how long it may keep going after its note has ended.
 const GLIDE_LANES_PER_SECOND = 30.0
@@ -231,6 +263,8 @@ func clear_hits() -> void:
 	for hit in hits+hit_pool:
 		hit.node.hide();hit.node.queue_free()
 	hits.clear();hit_pool.clear()
+	for f in flick_sparks: f.node.queue_free()
+	flick_sparks.clear()
 	for background in background_bank:
 		background.particles.clear();background.elapsed=0.0;background.frame_credit=0.0;background.momentum=0.0; background.hide()
 	if world.cover_material:
@@ -300,6 +334,7 @@ func _process(delta: float) -> void:
 # Source RenderLongCoolbombTouch rewinds after normalized time > .3.
 # Independent tap instances intentionally preserve SYNK's uninterrupted dense-hit flow.
 func advance_hits(delta: float, playing: bool) -> void:
+	advance_flick_sparks(delta, playing)
 	var game = world.game
 	for i in range(hits.size() - 1, -1, -1):
 		var h: Dictionary = hits[i]
@@ -337,7 +372,6 @@ func advance_hits(delta: float, playing: bool) -> void:
 			h.material.set_shader_parameter("particles", game.features.effect("Particles"))
 		elif not frames.is_empty(): h.material.set_shader_parameter("atlas",frames[mini(frames.size()-1,frame_index)])
 		h.material.set_shader_parameter("opacity",game.features.effect("Hit flashes"))
-		if h.kind == "flick" and not held: apply_flick_motion(h)
 	return
 	if game.live.size() != used_for_size:
 		used_for_size = game.live.size(); used_lanes.clear()

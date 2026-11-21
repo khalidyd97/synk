@@ -650,6 +650,8 @@ func build_editor(items: VBoxContainer,guides: VBoxContainer) -> void:
         if game.ghost_recording!=on: game.toggle_ghost_recording())
     editor_switch(items,"lines","Alignment lines","Show note alignment guides in the recorder.",game.note_lines,func(on):
         if game.note_lines!=on: game.toggle_note_lines())
+    editor_switch(items,"realnotes","Realistic notes","Record and correct with the real gameplay note faces instead of flat recorder notes.",game.recorder_real_notes,func(on):
+        if game.recorder_real_notes!=on: game.toggle_recorder_real_notes())
     speed_button=action(items,"RECORD SPEED  ·  "+str(game.record_speed)+"×",func():
         game.cycle_record_speed(); speed_button.text="RECORD SPEED  ·  "+str(game.record_speed)+"×")
     action(items,"RECORDER PREFERENCES  →",func(): game.recorder.show_setup(true))
@@ -687,4 +689,5 @@ func refresh() -> void:
     authoring_switches.mr.set_pressed_no_signal(game.mr.enabled)
     authoring_switches.ghost.set_pressed_no_signal(game.ghost_recording)
     authoring_switches.lines.set_pressed_no_signal(game.note_lines)
+    if authoring_switches.has("realnotes"): authoring_switches.realnotes.set_pressed_no_signal(game.recorder_real_notes)
     speed_button.text="RECORD SPEED  ·  "+str(game.record_speed)+"×"

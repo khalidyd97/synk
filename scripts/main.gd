@@ -145,6 +145,16 @@ func uses_ssrg_gameplay() -> bool:
 var recorder_skd_view = true
 func uses_skd_recorder_surface() -> bool:
 	return uses_recorder_colors() and recorder_skd_view
+# Recorder note faces: flat recorder notes (default) or the real gameplay note pucks.
+var recorder_real_notes = false
+func uses_recorder_real_notes() -> bool:
+	return uses_recorder_colors() and recorder_real_notes
+func toggle_recorder_real_notes() -> void:
+	recorder_real_notes = not recorder_real_notes
+	prefs.set_value("editor", "recorder_real_notes", recorder_real_notes); prefs.save("user://preferences.cfg")
+	if field and field.world:
+		field.world.clear_notes(); field.world.refresh_highway_look()
+	judgement = "REAL NOTES" if recorder_real_notes else "FLAT NOTES"; flash = 1
 func toggle_recorder_skd_view() -> void:
 	recorder_skd_view = not recorder_skd_view
 	prefs.set_value("editor", "recorder_skd_view", recorder_skd_view); prefs.save("user://preferences.cfg")
@@ -449,6 +459,7 @@ func _ready() -> void:
 	note_lines=bool(prefs.get_value("editor","note_lines",true))
 	ghost_recording=bool(prefs.get_value("editor","ghost_recording",true))
 	space_close_chords=bool(prefs.get_value("editor","space_close_chords",true))
+	recorder_real_notes=bool(prefs.get_value("editor","recorder_real_notes",false))
 	recorder_note_speed=clampf(snappedf(float(prefs.get_value("editor","note_speed",1.0)),.1),.1,5.0)
 	record_speed=float(prefs.get_value("editor","record_speed",1.0))
 	if record_speed not in RECORD_SPEEDS: record_speed=1.0

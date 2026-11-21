@@ -1125,6 +1125,14 @@ func make_cap(parent: Node3D, lane: float, offset: float, palette: int, recordin
 	# Holds and slides follow the chosen note shape like taps: round shapes use SSRG's
 	# round long-note puck, rectangles keep the rectangle head in the ribbon's gold.
 	var long_puck=palette in [1,3] and game.round_notes()
+	# Recorder "Realistic notes" toggle: every captured/ghost note wears the real gameplay
+	# puck instead of a flat recorder note, lifted above the recorder stage like the slide puck.
+	if recording and game.uses_recorder_real_notes():
+		var real=make_ssrg_cap(parent,position_value,palette,size)
+		var real_base: ShaderMaterial=real.material_override
+		real.material_override=shared("ssrg_rec|%s" % real_base.get_instance_id(), func():
+			var m: ShaderMaterial=real_base.duplicate(); m.render_priority=2; return m)
+		return real
 	# The classic recorder has its own flat note, whatever style is chosen for play.
 	if game.uses_recorder_colors() and not game.uses_skd_recorder_surface():
 		return make_recorder_cap(parent,position_value,palette,size)
