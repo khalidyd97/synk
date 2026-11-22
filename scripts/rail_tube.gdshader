@@ -19,6 +19,7 @@ void vertex() {
 }
 
 void fragment() {
+	if (ssrg_reveal(world_z) < 0.5) discard;
 	vec3 n = normalize(world_normal);
 	float diffuse = clamp(dot(n, normalize(vec3(0.0, 1.0, 0.45))) * 0.5 + 0.5, 0.0, 1.0);
 	vec3 cream = vec3(1.0, 1.0, 1.0);

@@ -18,5 +18,5 @@ void vertex() {
 void fragment() {
 	float across = flip ? 1.0 - UV.x : UV.x;
 	ALBEDO = vec3(0.0);
-	ALPHA = strength * pow(1.0 - across, 2.2) * smoothstep(-60.0, -38.0, world_z);
+	ALPHA = strength * pow(1.0 - across, 2.2) * smoothstep(-60.0, -38.0, world_z) * ssrg_reveal(world_z);
 }

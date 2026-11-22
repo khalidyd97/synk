@@ -23,5 +23,5 @@ void fragment() {
 	float heartbeat = 0.86 + 0.14 * sin(animation_time * 2.5);
 	float core = 1.0 - smoothstep(0.12, 0.4, abs(UV.x - 0.5));
 	ALBEDO = mix(tint, vec3(0.9, 0.94, 1.0), runner * 0.65);
-	ALPHA = (0.22 + 0.53 * core + 0.55 * runner) * heartbeat * strength * smoothstep(-60.0, -36.0, world_z);
+	ALPHA = (0.22 + 0.53 * core + 0.55 * runner) * heartbeat * strength * smoothstep(-60.0, -36.0, world_z) * ssrg_reveal(world_z);
 }

@@ -23,5 +23,5 @@ void vertex() {
 void fragment() {
 	ALBEDO = color;
 	float near = mix(1.0, near_fraction, smoothstep(-30.0, 2.0, world_z));
-	ALPHA = opacity * near * smoothstep(far_end, far_end + fade_length, world_z);
+	ALPHA = opacity * near * smoothstep(far_end, far_end + fade_length, world_z) * ssrg_reveal(world_z);
 }

@@ -255,8 +255,11 @@ func animate() -> void:
 	var after_load=maxf(0.0,elapsed-load_time)
 	var blur_progress=1.0 if load_time<=0.0 else smoothstep(0.0,BLUR_TIME,after_load)
 	backdrop_art.material.set_shader_parameter("blur_amount",blur_progress)
-	backdrop.color=Color(loading_shadow,1.0-smoothstep(.2,.95,e))
-	backdrop_art.modulate.a=.34*alpha
+	# Uncover the stage as soon as its depth wipe starts. The labels/card continue
+	# their longer hand-off, while the opaque curtain no longer hides the highway.
+	var curtain_alpha=1.0-smoothstep(0.0,.34,e)
+	backdrop.color=Color(loading_shadow,curtain_alpha)
+	backdrop_art.modulate.a=.34*alpha*curtain_alpha
 	backdrop_art.pivot_offset=size*.5;backdrop_art.scale=Vector2.ONE*1.06
 	if gliding: glide_card(appear)
 	else:
