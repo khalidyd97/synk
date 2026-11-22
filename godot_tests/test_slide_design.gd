@@ -13,6 +13,9 @@ func run() -> void:
 	var game = load("res://scenes/main.tscn").instantiate()
 	root.add_child(game);await process_frame
 	game.set_process(false)
+	# Flexible curves and freehand silhouettes belong to Classic recorder view;
+	# SKD view is covered separately by the discrete node-chain test.
+	game.recorder_skd_view=false
 	# Path model.
 	var s = slide_note()
 	check(is_equal_approx(SynkChart.lane_at(s, 1.25), 4.0), "SSRG bends default to sharp corners (straight segments)")
@@ -27,7 +30,7 @@ func run() -> void:
 	game.arrange_selection = {"note": note, "document": false}
 	var arranger = game.note_arranger
 	await process_frame;arranger._process(0)
-	check(arranger.visible and arranger.snap_button.visible and not arranger.curve_button.visible, "A selected slide shows the tool row, with the rest folded away")
+	check(arranger.visible and not arranger.snap_button.visible and not arranger.curve_button.visible, "A selected slide keeps its extra shape rows folded away")
 	arranger.expanded = true;arranger._process(0)
 	check(arranger.curve_button.visible and arranger.preset_buttons["wave"].visible, "MORE unfolds the shape rows")
 	for button in arranger.preset_buttons.values() + [arranger.curve_button, arranger.snap_button]:

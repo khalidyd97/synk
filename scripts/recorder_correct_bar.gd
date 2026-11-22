@@ -79,7 +79,12 @@ func wanted() -> Array:
 		return keys
 	keys.append_array(KINDS)
 	if note.kind in ["hold", "slide"]:
-		keys.append("|"); keys.append_array(MODES.keys()); keys.append_array(["more", "|", "letter"])
+		keys.append("|")
+		if game.uses_skd_recorder_surface():
+			# SKD authors an ordered chain of discrete channel nodes. Freehand curves and
+			# text silhouettes belong to SYNK's Classic recorder, not the source format.
+			keys.append_array(["move","shape","points","more"])
+		else:keys.append_array(MODES.keys());keys.append_array(["more", "|", "letter"])
 	if overlaps: keys.append_array(["|", "overlaps"])
 	keys.append_array(["|", "delete"])
 	return keys

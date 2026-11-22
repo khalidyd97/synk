@@ -90,6 +90,7 @@ func _process(_delta: float) -> void :
 	if selected_point_index >= note.path.size() - 1: selected_point_index = -1
 	var writable = game.recorder.writable(note) and drags.is_empty() and draw_touches.is_empty()
 	var slide = note.kind == "slide"
+	var skd_nodes=game.uses_skd_recorder_surface()
 	plate.anchor_bottom = 0.453
 	plate.visible = expanded
 	snap_button.visible = expanded
@@ -97,17 +98,19 @@ func _process(_delta: float) -> void :
 	delete_point_button.visible = slide and expanded
 	delete_point_button.disabled = selected_point_index <= 0 or not writable
 	for operation in shape_buttons:
-		shape_buttons[operation].visible = slide and expanded
+		shape_buttons[operation].visible = slide and expanded and (not skd_nodes or operation=="straighten")
 		shape_buttons[operation].disabled = not writable or (note.path.size() <= 2 if operation == "smooth" else note.path.size() == 2)
-	snap_button.text = {"free": "SNAP · OFF", "lanes": "SNAP · LANES", "beats": "SNAP · BEATS"}[game.slide_snap]
-	snap_button.set_selected(game.slide_snap != "free")
+	snap_button.text = "SKD GRID" if skd_nodes else {"free": "SNAP · OFF", "lanes": "SNAP · LANES", "beats": "SNAP · BEATS"}[game.slide_snap]
+	snap_button.disabled=skd_nodes
+	snap_button.set_selected(skd_nodes or game.slide_snap != "free")
 	# Curve: the selected bend point, or every bend when none is selected.
 	var inner = inner_points(note)
-	curve_button.visible = slide and expanded
+	curve_button.visible = slide and expanded and not skd_nodes
 	curve_button.disabled = not writable or inner.is_empty()
 	curve_button.text = "POINT CURVE" if selected_point_index > 0 else "CURVE ALL"
 	curve_button.set_selected(not inner.is_empty() and curved(note, inner))
 	for preset in preset_buttons:
+		preset_buttons[preset].visible=expanded and (not skd_nodes or preset in ["zigzag","mirror","flip"])
 		preset_buttons[preset].disabled = not writable or (preset == "flip" and not slide)
 	queue_redraw()
 func marker_point(note: Dictionary, at: float) -> Variant:
@@ -352,6 +355,7 @@ func snap_point(note: Dictionary, index: int) -> void:
 	var low = float(note.path[index - 1].offset) + 0.005; var high = float(note.path[index + 1].offset) - 0.005
 	var snapped = game.snap_slide_time(float(note.time) + float(point.offset)) - float(note.time)
 	if snapped >= low and snapped <= high: point.offset = snapped
+	if game.uses_skd_recorder_surface():point.erase("curve")
 
 static func inner_points(note: Dictionary) -> Array:
 	var result: Array = []
@@ -391,8 +395,12 @@ static func ensure_slide(note: Dictionary) -> void:
 		note.path = [{"offset": 0.0, "lane": float(note.lane)}, {"offset": float(note.duration), "lane": float(note.end_lane)}]
 
 # Replace the path, keeping lane/end_lane in step with its first and last points.
-static func write_path(note: Dictionary, path: Array) -> void:
+func write_path(note: Dictionary, path: Array) -> void:
 	for point in path: point.lane = clampf(float(point.lane), 0, SynkChart.MAX_LANE)
+	if game.uses_skd_recorder_surface():
+		note.ssrg_path=true
+		for point in path:
+			point.lane=float(roundi(float(point.lane)));point.erase("curve")
 	path[0].offset = 0.0;path[-1].offset = float(note.duration)
 	note.lane = clampi(roundi(float(path[0].lane)), 0, SynkChart.MAX_LANE);path[0].lane = float(note.lane)
 	note.end_lane = clampi(roundi(float(path[-1].lane)), 0, SynkChart.MAX_LANE);path[-1].lane = float(note.end_lane)
@@ -460,8 +468,19 @@ func finish_draw(samples: Array) -> void:
 		raw.append({"offset": clampf(sample.x - start, 0, note.duration), "lane": clampf(sample.y, 0, SynkChart.MAX_LANE), "curve": true})
 	raw[0].offset = 0.0;raw[-1].offset = note.duration
 	note.path = raw
-	var path = smooth_path(note)
-	for i in range(1, path.size() - 1): path[i].lane = game.snap_slide_lane(float(path[i].lane))
+	var path = SynkCapture.snap_path(raw,float(note.duration)) if game.uses_skd_recorder_surface() else smooth_path(note)
+	for i in range(1, path.size() - 1):
+		path[i].lane = game.snap_slide_lane(float(path[i].lane))
+		path[i].offset=clampf(game.snap_slide_time(float(note.time)+float(path[i].offset))-float(note.time),.005,float(note.duration)-.005)
+		if game.uses_skd_recorder_surface():path[i].erase("curve")
+	path.sort_custom(func(a,b):return float(a.offset)<float(b.offset))
+	if game.uses_skd_recorder_surface():
+		# Several freehand samples may quantize onto one source tick. Collapse them
+		# into one node so the saved chain remains strictly ordered and importable.
+		var nodes:Array=[path[0]]
+		for i in range(1,path.size()-1):
+			if float(path[i].offset)>float(nodes[-1].offset)+.001:nodes.append(path[i])
+		nodes.append(path[-1]);path=nodes
 	write_path(note, path)
 	selected_point_index = -1
 	end_change()

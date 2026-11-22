@@ -3502,10 +3502,14 @@ func cycle_slide_snap() -> void:
 	prefs.set_value("editor", "slide_snap", slide_snap);prefs.save("user://preferences.cfg")
 	refresh_arrange_controls()
 func snap_slide_lane(lane: float) -> float:
-	return clampf(roundf(lane) if slide_snap != "free" else snappedf(lane, 0.05), 0, SynkChart.MAX_LANE)
+	# SKD charts address discrete channels; fractional lanes are a SYNK-only authoring aid.
+	return clampf(roundf(lane) if uses_skd_recorder_surface() or slide_snap != "free" else snappedf(lane, 0.05), 0, SynkChart.MAX_LANE)
 func snap_slide_time(at: float) -> float:
-	if slide_snap != "beats": return at
-	var step = 60.0 / maxf(1.0, chart_bpm()) / 4.0
+	if not uses_skd_recorder_surface() and slide_snap != "beats": return at
+	# A source slide is a sequence of chart-tick nodes. Use the recorder's visible
+	# grid division so the authored connector and the displayed beat line are identical.
+	var division=maxf(1.0,float(recorder.division)) if uses_skd_recorder_surface() and recorder else 4.0
+	var step = 60.0 / maxf(1.0, chart_bpm()) / division
 	return chart_offset() + snappedf(at - chart_offset(), step)
 func begin_trail_bend(touch: Dictionary, n: Dictionary, offset: float) -> void :
 	if touch.document: document.checkpoint()
