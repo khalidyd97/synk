@@ -22,7 +22,12 @@ func run():
         check(is_equal_approx(intro.load_time,5),"Adaptive loading keeps the five-second duration")
         intro.elapsed=1; intro.animate()
         check(is_equal_approx(intro.card.modulate.r,.9) and intro.backdrop_art.modulate.a<=.35,"Loading keeps the sharp card legible over the artwork backdrop")
-        check(float(intro.backdrop_art.material.get_shader_parameter("blur_amount"))>0.0,"Loading artwork transitions progressively into its Gaussian gameplay blur")
+        check(is_zero_approx(float(intro.backdrop_art.material.get_shader_parameter("blur_amount"))),"Loading background stays sharp before 100 percent")
+        intro.elapsed=intro.load_time+intro.BLUR_TIME*.5;intro.animate()
+        var halfway=float(intro.backdrop_art.material.get_shader_parameter("blur_amount"))
+        check(halfway>0.0 and halfway<1.0 and is_zero_approx(intro.entrance()),"Gaussian handoff begins only after loading completes and precedes the highway")
+        intro.elapsed=intro.load_time+intro.BLUR_TIME;intro.animate()
+        check(is_equal_approx(float(intro.backdrop_art.material.get_shader_parameter("blur_amount")),1.0),"Background reaches its full gameplay blur before the stage reveal")
     g.queue_free(); await process_frame
     print("Artwork-adaptive loading: ","PASS" if failures==0 else str(failures)+" FAILED")
     quit(0 if failures==0 else 1)

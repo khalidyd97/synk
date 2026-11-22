@@ -3,7 +3,10 @@ extends Control
 # Song intro before gameplay: a loading screen built from the cover art and the song's colors,
 # then an entrance where the cover and details slide away over the stationary highway.
 const LOAD_TIME = 5.0
-const ENTER_TIME = .95
+const ENTER_TIME = 1.35
+# The post-load handoff is deliberately serial: first resolve the full-screen
+# artwork into its Gaussian version, then uncover the stage and move the card.
+const BLUR_TIME = .32
 const NAVY = Color(.006,.008,.025)
 const TIPS = [
 	"Hold notes: keep your finger down until the ring reaches the bar.",
@@ -179,13 +182,15 @@ func running() -> bool: return visible and elapsed < load_time + ENTER_TIME
 # 0 while the loading screen is up, easing to 1 as the stage finishes entering.
 func entrance() -> float:
 	if not visible: return 1.0
-	var e = clampf((elapsed - load_time) / ENTER_TIME, 0.0, 1.0)
+	var blur_wait=BLUR_TIME if load_time>0.0 else 0.0
+	var e = clampf((elapsed-load_time-blur_wait)/maxf(.001,ENTER_TIME-blur_wait),0.0,1.0)
 	return e * e * (3.0 - 2.0 * e)
 
 # Separate windows let the world assemble in readable layers without moving the camera.
 func reveal_part(start:float,finish:float) -> float:
 	if not visible:return 1.0
-	var raw=clampf((elapsed-load_time)/ENTER_TIME,0.0,1.0)
+	var blur_wait=BLUR_TIME if load_time>0.0 else 0.0
+	var raw=clampf((elapsed-load_time-blur_wait)/maxf(.001,ENTER_TIME-blur_wait),0.0,1.0)
 	return smoothstep(start,finish,raw)
 
 func card_side() -> float: return minf(size.y*.55,size.x*.28)
@@ -246,7 +251,9 @@ func _process(delta: float) -> void:
 func animate() -> void:
 	var appear=smoothstep(0.0,.5,elapsed) if load_time>0 else 1.0
 	var e=entrance();var alpha=appear*(1.0-smoothstep(0.0,.8,e))
-	var blur_progress=1.0 if load_time<=0.0 else smoothstep(.08,.82,load_progress())
+	# Loading stays completely sharp. Only a genuinely completed load starts this clock.
+	var after_load=maxf(0.0,elapsed-load_time)
+	var blur_progress=1.0 if load_time<=0.0 else smoothstep(0.0,BLUR_TIME,after_load)
 	backdrop_art.material.set_shader_parameter("blur_amount",blur_progress)
 	backdrop.color=Color(loading_shadow,1.0-smoothstep(.2,.95,e))
 	backdrop_art.modulate.a=.34*alpha
@@ -272,7 +279,8 @@ func animate() -> void:
 # The cover keeps full opacity and travels on an eased curve from the loading card to the
 # gameplay panel's rectangle, shrinking as it goes, so the hand-off has no visible jump.
 func glide_card(appear: float) -> void:
-	var raw=clampf((elapsed-load_time)/ENTER_TIME,0.0,1.0) if visible else 1.0
+	var blur_wait=BLUR_TIME if load_time>0.0 else 0.0
+	var raw=clampf((elapsed-load_time-blur_wait)/maxf(.001,ENTER_TIME-blur_wait),0.0,1.0) if visible else 1.0
 	var t=raw*raw*raw*(raw*(raw*6.0-15.0)+10.0)
 	var flying=arriving
 	var start=home_rect(appear)
