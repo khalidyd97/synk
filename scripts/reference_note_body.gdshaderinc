@@ -37,6 +37,9 @@ vec3 hsv_to_rgb(vec3 c){
 // Player setting: how bright notes and their trails are (Settings > Visuals > Notes).
 global uniform float synk_note_brightness;
 uniform bool note_brightness_applies = true;
+// Animated flick frames: the chevron above this UV row is never dimmed by the note
+// brightness setting (it keeps full white like the old flick arrow); the puck below is.
+uniform float full_bright_above_uv = -1.0;
 void fragment(){
     if((ssrg_warp.x>0.5?centre_z:world_z)>clip_z) discard;
     vec4 art=texture(artwork,UV);
@@ -69,5 +72,8 @@ void fragment(){
     }
     ALBEDO=mix(color,vec3(gray*0.52),desaturate)*source_tint.rgb;
     ALPHA=alpha*opacity*ghost_fade*source_tint.a*smoothstep(-60.0,-55.0,world_z)*ssrg_reveal(centre_z);
-	if(note_brightness_applies) ALBEDO*=synk_note_brightness;
+	if(note_brightness_applies){
+		float keep=full_bright_above_uv>0.0?1.0-smoothstep(full_bright_above_uv-0.03,full_bright_above_uv,UV.y):0.0;
+		ALBEDO*=mix(synk_note_brightness,max(synk_note_brightness,1.0),keep);
+	}
 }

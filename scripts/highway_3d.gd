@@ -1318,6 +1318,8 @@ func flick_frame_material(frame: int) -> ShaderMaterial:
 		material.shader = preload("res://scripts/synk_canvas_note.gdshader") if projected else preload("res://scripts/reference_note.gdshader")
 		material.render_priority = 3
 		material.set_shader_parameter("artwork", FLICK_FRAMES[frame])
+		# Rows above y=380 of the 768 px frame hold only the chevron and its sparks.
+		material.set_shader_parameter("full_bright_above_uv", 380.0 / 768.0)
 		return material)
 
 func make_animated_flick(parent: Node3D, lane: float) -> void:
