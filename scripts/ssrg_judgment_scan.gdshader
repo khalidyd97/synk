@@ -25,11 +25,15 @@ void fragment(){
     float depth=clamp((near_z-world_z)/(near_z-far_z),0.0,1.0);
     float half_width=mix(.50,.025,pow(depth,.72));
     float across=abs(UV.x-.5);
-    float centre=1.0-smoothstep(half_width*.24,half_width*.62,across);
-    float feather=1.0-smoothstep(half_width*.40,half_width,across);
+    // Fill the complete usable road between the rails. Previously the visible
+    // energy lived mainly in a narrow centre core, even though the scan mesh
+    // itself covered the highway. Keep only a soft falloff at the rail edges.
+    float full_width=1.0-smoothstep(half_width*.82,half_width,across);
+    float inner_glow=1.0-smoothstep(half_width*.48,half_width*.96,across);
+    float rail_bloom=exp(-pow((across-half_width*.88)/max(half_width*.16,.001),2.0));
     float root=mix(.58,1.0,smoothstep(0.0,.12,depth));
-    float shaft=reached*root*(centre*.34+feather*.12);
-    float light=(shaft+tip*centre*.62+tip_bloom*feather*.18)*strength;
+    float shaft=reached*root*(full_width*.32+inner_glow*.15+rail_bloom*.08);
+    float light=(shaft+tip*full_width*.66+tip_bloom*(inner_glow*.25+rail_bloom*.12))*strength;
     ALBEDO=color.rgb*(.68+tip_bloom*.38);
     EMISSION=color.rgb*light*1.8;
     ALPHA=light*.46;
