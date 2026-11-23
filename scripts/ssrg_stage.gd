@@ -69,9 +69,9 @@ func _init() -> void :
 	# A one-shot horizontal scan launches from the judgment bar and climbs to the
 	# highway entrance after the bar's centre-out burst.
 	judgment_scan=MeshInstance3D.new();judgment_scan.name="JudgmentHighwayScan"
-	# Narrow longitudinal plane: the flash follows the highway depth instead of
-	# drawing a horizontal band across the screen.
-	var scan_plane=PlaneMesh.new();scan_plane.size=Vector2(150*UNIT,9.5)
+	# Its base is exactly the 1156-unit judgment-bar width; the shader narrows that
+	# full-width glow continuously toward the highway's vanishing point.
+	var scan_plane=PlaneMesh.new();scan_plane.size=Vector2(1156*UNIT,9.5)
 	judgment_scan.mesh=scan_plane;judgment_scan.position=Vector3(-5*UNIT,.19,-4.6)
 	judgment_scan.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var scan_mat=ShaderMaterial.new();scan_mat.shader=preload("res://scripts/ssrg_judgment_scan.gdshader")

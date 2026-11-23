@@ -20,10 +20,15 @@ void fragment(){
     float reached=smoothstep(head-.10,head+.10,world_z);
     float tip=exp(-pow(distance_to_head/.34,2.0));
     float tip_bloom=exp(-pow(distance_to_head/.82,2.0));
-    float centre=exp(-pow((UV.x-.5)/.24,2.0));
-    float feather=exp(-pow((UV.x-.5)/.46,2.0));
-    float start_fade=1.0-smoothstep(near_z-.65,near_z+.04,world_z);
-    float shaft=reached*start_fade*(centre*.34+feather*.12);
+    // This recovered stage uses a direct 2D canvas, so taper explicitly: wide at
+    // the judgment bar and progressively narrower toward the vanishing point.
+    float depth=clamp((near_z-world_z)/(near_z-far_z),0.0,1.0);
+    float half_width=mix(.50,.025,pow(depth,.72));
+    float across=abs(UV.x-.5);
+    float centre=1.0-smoothstep(half_width*.24,half_width*.62,across);
+    float feather=1.0-smoothstep(half_width*.40,half_width,across);
+    float root=mix(.58,1.0,smoothstep(0.0,.12,depth));
+    float shaft=reached*root*(centre*.34+feather*.12);
     float light=(shaft+tip*centre*.62+tip_bloom*feather*.18)*strength;
     ALBEDO=color.rgb*(.68+tip_bloom*.38);
     EMISSION=color.rgb*light*1.8;
