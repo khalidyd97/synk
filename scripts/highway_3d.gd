@@ -1240,12 +1240,13 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 		m.set_shader_parameter("artwork",art); m.set_shader_parameter("approach_glow",false)
 		m.set_meta("ssrg_palette",palette);m.set_meta("ssrg_tail",tail);m.set_meta("ssrg_old_ui",old_ui)
 		m.set_shader_parameter("core_tint",Color("4fc8ff") if palette==0 else Color("ffc23a"))
-		# Flicks share the blue tap puck art; desaturate it to a neutral silver so the up-flick
-		# reads as its own note type instead of looking like a blue tap.
+		# Flicks share the source puck silhouette, but use a vivid rose treatment so
+		# they cannot be mistaken for blue taps during a fast approach.
 		if palette==2:
-			m.set_shader_parameter("saturation_scale",0.0)
-			m.set_shader_parameter("value_scale",1.08)
-			m.set_shader_parameter("core_tint",Color(0.86,0.88,0.92))
+			m.set_shader_parameter("hue_shift",.37)
+			m.set_shader_parameter("saturation_scale",1.25)
+			m.set_shader_parameter("value_scale",1.12)
+			m.set_shader_parameter("core_tint",Color("ff4fa8"))
 		return m)
 	var mesh_key = "ssrg|%s|%s|%s|%s|%s" % [size, tail, palette,ssrg_art_scale(),old_ui]
 	if not reference_note_meshes.has(mesh_key):
@@ -1303,16 +1304,17 @@ func flick_arrow_color(palette: int) -> Color:
 
 func make_flick(parent: Node3D, note: Dictionary, palette: int, recording = false) -> void:
 	make_cap(parent,float(note.lane),0,palette,recording and game.uses_skd_recorder_surface())
-	# Flicks are up-only. Lay the chevron directly on the road, slightly ahead of the
-	# puck toward the far end, so it shares the highway perspective instead of facing
-	# the camera like a floating billboard.
+	# Flicks are up-only. Two connected chevrons begin over the puck and continue
+	# toward the far end. Both lie flat on the road, preserving highway perspective
+	# while making the required swipe unmistakable at approach speed.
 	var highway_forward=Vector3.FORWARD
-	for i in 1:
-		var above = (2.9 if game.uses_ssrg_gameplay() else 2.4)*FIT*game.gameplay_note_size()
+	for i in 2:
+		var above = ((.75 if game.uses_ssrg_gameplay() else .65)+float(i)*1.35)*FIT*game.gameplay_note_size()
 		var base = Vector3(note_x(note.lane),.17,-above)
-		var arrow_mesh = PlaneMesh.new(); arrow_mesh.size=Vector2(3.22,1.6)*FIT*game.gameplay_note_size()
-		# The SSRG puck is wide and bright; a larger chevron keeps the up arrow readable on it.
-		if game.uses_ssrg_gameplay(): arrow_mesh.size*=1.7
+		var arrow_mesh = PlaneMesh.new(); arrow_mesh.size=Vector2(3.55,1.76)*FIT*game.gameplay_note_size()*(1.0-float(i)*.12)
+		# The source puck is wide and bright; oversize the white/black chevrons so
+		# their silhouette survives the note glow and a detailed background.
+		if game.uses_ssrg_gameplay(): arrow_mesh.size*=1.55
 		var arrow_tint = Color(1.0, 1.0, 1.0)  # flick arrow: pure white with a soft glow
 		var arrow_material = shared("arrow|%d|%s" % [palette, arrow_tint], func():
 			var m = ShaderMaterial.new(); m.shader=preload("res://scripts/flick_arrow.gdshader")
@@ -1325,6 +1327,7 @@ func make_flick(parent: Node3D, note: Dictionary, palette: int, recording = fals
 		arrow.set_meta("flick_axis_local",highway_forward)
 		arrow.set_meta("flick_base",base)
 		arrow.set_meta("flick_axis",highway_forward)
+		arrow.set_meta("flick_chevron_index",i)
 
 # Trails run through the middle of their notes: just above the track for flat rectangle
 # notes, and at half height through the thicker circle pucks.
