@@ -1817,8 +1817,15 @@ func stage_reveal_from(rest: float) -> float:
 	if intro == null or not intro.running(): return rest
 	# The loading background has already crossfaded away before this clock begins,
 	# so every frame of the road-and-rails depth wipe is visible behind the flying art.
+	# Interpolate the projected depth, not chart progress: SSRG's p^6 projection would
+	# otherwise reveal most of the visible highway in only a few frames and look like a pop.
 	var a = float(intro.reveal_part(0.0, 0.90))
-	return lerpf(1.0, rest, a)
+	if even_view():
+		var rest_depth=lerpf(EVEN_FAR_SCALE,1.0,rest)
+		return inverse_lerp(EVEN_FAR_SCALE,1.0,lerpf(1.0,rest_depth,a))
+	var power=approach_power()
+	var projected=lerpf(1.0,pow(rest,power),a)
+	return pow(projected,1.0/power)
 
 # A completed hold or slide is judged slightly before its tail is drawn at the line (early
 # release, and the render clock trails the judgment clock), so keep drawing it until then.
