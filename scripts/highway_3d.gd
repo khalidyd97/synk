@@ -1338,7 +1338,8 @@ func make_animated_flick(parent: Node3D, lane: float) -> void:
 	sprite.set_meta("recorder_billboard", true)
 
 func make_flick(parent: Node3D, note: Dictionary, palette: int, recording = false) -> void:
-	if not recording and not game.uses_recorder_colors() and (not game.ssrg_playable_run or game.ssrg_forced_run):
+	# SSRG special item notes swap their head artwork, so they keep the static puck.
+	if not recording and not game.uses_recorder_colors() and not note.has("ssrg_special"):
 		make_animated_flick(parent, float(note.lane))
 		return
 	make_cap(parent,float(note.lane),0,palette,recording and game.uses_skd_recorder_surface())
