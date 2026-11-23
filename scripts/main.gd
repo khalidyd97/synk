@@ -1397,8 +1397,8 @@ func baseline_notes() -> Array:
 	return saved_notes if features.chart_exists() else []
 
 # Phone review fixture: a dense Lv 30 chart that makes the flick silhouette easy
-# to inspect at real approach speed. It is installed once in Android debug builds
-# and then behaves like an ordinary editable chart without being overwritten.
+# to inspect at real approach speed. It is installed once on Android and then
+# behaves like an ordinary editable chart without being overwritten.
 func flick_test_chart() -> Array:
 	var notes:Array=[]
 	var beat=60.0/128.0
@@ -1418,7 +1418,7 @@ func flick_test_chart() -> Array:
 	return notes
 
 func ensure_android_debug_flick_chart() -> void:
-	if not OS.is_debug_build() or OS.get_name()!="Android":return
+	if OS.get_name()!="Android":return
 	var path="user://charts/eclipse_lv30.json"
 	if not FileAccess.file_exists(path):
 		var settings={"bpm":128.0,"beat_offset":0.0,"verse2":-1.0,"bridge":-1.0,"bookmarks":[]}
