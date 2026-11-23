@@ -1815,9 +1815,9 @@ func animate_miss_shake(delta: float) -> void:
 func stage_reveal_from(rest: float) -> float:
 	var intro = game.stage_intro if game else null
 	if intro == null or not intro.running(): return rest
-	# Give the loading curtain a moment to uncover the judgment end, then draw the
-	# road and rails outward. This makes the element-by-element stage arrival visible.
-	var a = float(intro.reveal_part(0.10, 0.94))
+	# The loading background has already crossfaded away before this clock begins,
+	# so every frame of the road-and-rails depth wipe is visible behind the flying art.
+	var a = float(intro.reveal_part(0.0, 0.90))
 	return lerpf(1.0, rest, a)
 
 # A completed hold or slide is judged slightly before its tail is drawn at the line (early

@@ -6,7 +6,7 @@ uniform sampler2D blurred_art : source_color, filter_linear;
 uniform float blur_amount : hint_range(0.0,1.0)=0.0;
 // Keep the loading artwork readable but clearly behind the progress UI. This is
 // independent of blur so the background is already dim while the chart builds.
-uniform float dim_amount : hint_range(0.0,0.8)=0.48;
+uniform float dim_amount : hint_range(0.0,0.9)=0.70;
 uniform vec4 palette_primary : source_color=vec4(0.64,0.42,1.0,1.0);
 uniform vec4 palette_secondary : source_color=vec4(0.22,0.73,1.0,1.0);
 uniform float artwork_palette=1.0;
