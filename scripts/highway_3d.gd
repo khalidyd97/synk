@@ -1304,15 +1304,14 @@ func flick_arrow_color(palette: int) -> Color:
 
 func make_flick(parent: Node3D, note: Dictionary, palette: int, recording = false) -> void:
 	make_cap(parent,float(note.lane),0,palette,recording and game.uses_skd_recorder_surface())
-	# Flicks are up-only. A single filled arrow is integrated into the front of the
-	# puck and lies flat on the road, preserving highway perspective without the
-	# oversized double-chevron silhouette.
+	# Flicks are up-only. A single compact chevron sits directly on the road plane
+	# over the puck, preserving the highway perspective with no upright geometry.
 	var highway_forward=Vector3.FORWARD
 	for i in 1:
-		var above = (.58 if game.uses_ssrg_gameplay() else .50)*FIT*game.gameplay_note_size()
+		var above = (.34 if game.uses_ssrg_gameplay() else .30)*FIT*game.gameplay_note_size()
 		var base = Vector3(note_x(note.lane),.17,-above)
-		var arrow_mesh = PlaneMesh.new(); arrow_mesh.size=Vector2(2.7,2.15)*FIT*game.gameplay_note_size()
-		if game.uses_ssrg_gameplay(): arrow_mesh.size*=1.28
+		var arrow_mesh = PlaneMesh.new(); arrow_mesh.size=Vector2(3.45,1.52)*FIT*game.gameplay_note_size()
+		if game.uses_ssrg_gameplay(): arrow_mesh.size*=1.25
 		var arrow_tint = Color(1.0, 1.0, 1.0)  # flick arrow: pure white with a soft glow
 		var arrow_material = shared("arrow|%d|%s" % [palette, arrow_tint], func():
 			var m = ShaderMaterial.new(); m.shader=preload("res://scripts/flick_arrow.gdshader")
