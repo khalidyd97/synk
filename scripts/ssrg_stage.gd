@@ -264,9 +264,10 @@ func update_entrance(world: Node3D) -> void:
 		right_rail_in=float(intro.reveal_part(.28,.56))
 		judgment_in=float(intro.reveal_part(.56,.79))
 		floor_in=float(intro.reveal_part(.79,1.0))
-		# Let the perspective beam use the full judgment/darkness handoff instead of
-		# racing through only the final few frames.
-		scan_progress=float(intro.reveal_part(.56,1.0))
+	# The full-width beam is the final handoff after 3-2-1, not part of loading.
+	# Normal note motion remains frozen until this pass reaches the entrance.
+	if world.game.post_countdown_flash>0.0:
+		scan_progress=world.game.post_countdown_flash_progress()
 		scan_strength=sin(scan_progress*PI)*1.35
 	for index in rails.size():
 		var rail_in=left_rail_in if index==0 else right_rail_in

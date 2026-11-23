@@ -77,6 +77,13 @@ func run() -> void:
 	check(three_color!=two_color and two_color!=one_color and three_color!=one_color,"Each countdown swipe receives a different random color")
 	check(effect.hits.all(func(hit):return hit.sustain_entry.is_empty()),"Countdown swipes have no gameplay notes")
 	effect.update_countdown_sweep(0.0)
+	# Once 1 finishes, the highway scan gets its own final beat before notes move.
+	game.countdown=.01;game.gameplay_start_lead=2.0;game.post_countdown_flash=0.0;game.start_position=0.0;game.song_time=-2.01
+	game._process(.02)
+	check(is_equal_approx(game.post_countdown_flash,game.POST_COUNTDOWN_FLASH_TIME),"Finishing the count starts the final highway flash")
+	var held_lead=game.gameplay_start_lead
+	game._process(.1)
+	check(game.post_countdown_flash<game.POST_COUNTDOWN_FLASH_TIME and is_equal_approx(game.gameplay_start_lead,held_lead),"Note approach waits while the final flash travels upward")
 	# Charts with fewer keys only use their own lanes.
 	game.ssrg_lane_count=7
 	check(is_equal_approx(effect.lane_flash_x(world.note_x(3)),world.note_x(4)) and is_equal_approx(effect.lane_flash_x(world.note_x(2.9)),world.note_x(2)),"A 7-key chart flashes on its seven lanes")

@@ -103,6 +103,8 @@ var judgement = ""
 var judgement_kind = "tap"
 var countdown = 0.0
 var gameplay_start_lead = 0.0
+const POST_COUNTDOWN_FLASH_TIME = .9
+var post_countdown_flash = 0.0
 var audio_handoff = 0.0   # seconds after the music starts in which notes ease onto its clock
 var resume_countdown = 0.0
 var resume_start_audio = false
@@ -1687,6 +1689,7 @@ func start_game(notes: Array,automated: bool = false,section: String = "",is_pra
 	start_position=play_range.x-lead_in
 	var first_note_time=float(sorted[0].time) if not sorted.is_empty() else start_position
 	score=0; displayed_score=0; combo=0; combo_pulse=0; rank_pulse=0; shown_rank="SS"; hold_pulse_time=0; max_combo=0; earned=0; judged=0; ssrg_failed=false; score_panel.energy=.5; score_panel.shown_energy=.5; judgment_counts={"PERFECT":0,"GREAT":0,"GOOD":0,"MISS":0}; countdown=3; start_position=play_range.x-lead_in; song_time=start_position-3; judgement="READY"; flash=1
+	post_countdown_flash=0.0
 	update_section_volume()
 	# A restart only replays the stage entrance; coming from a menu shows the loading card first.
 	var restarting=mode in ["play","paused"]
@@ -1776,6 +1779,9 @@ static func format_score(value: int) -> String:
 
 func countdown_color(number: int) -> Color:
 	return SynkGameplayColors.resolve(self,"countdown",[Color("ff7ad9"),Color("a36aff"),Color("38baff")][clampi(number-1,0,2)])
+
+func post_countdown_flash_progress() -> float:
+	return clampf(1.0-post_countdown_flash/POST_COUNTDOWN_FLASH_TIME,0.0,1.0) if post_countdown_flash>0.0 else 1.0
 
 func draw_countdown_ring() -> void:
 	var remaining=resume_countdown if resume_countdown>0 else countdown
@@ -2327,9 +2333,13 @@ func _process(delta: float) -> void:
 			judgement="READY "+str(ceili(countdown)); flash=1
 			if countdown==0:
 				audio.stream_paused=false
-				if mode!="play" or gameplay_start_lead<=0:audio.play(start_position)
+				if mode=="play" and ssrg_playable_run:post_countdown_flash=POST_COUNTDOWN_FLASH_TIME
+				if mode!="play" or (gameplay_start_lead<=0 and post_countdown_flash<=0):audio.play(start_position)
 				UiSound.play(self,"go")
 				if extras and mode=="play": extras.on_song_start()
+		elif mode=="play" and post_countdown_flash>0:
+			post_countdown_flash=maxf(0.0,post_countdown_flash-delta)
+			visual_song_time=song_time;visual_clock_ready=false
 		elif mode=="play" and gameplay_start_lead>0:
 			gameplay_start_lead=maxf(0,gameplay_start_lead-delta)
 			song_time=start_position-gameplay_start_lead
