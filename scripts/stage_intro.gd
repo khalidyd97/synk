@@ -42,6 +42,7 @@ var chips: Array = []
 var loading_shadow = NAVY
 var accent = Color("a36aff")
 var accent_2 = Color("38baff")
+var blur_backdrop = true
 var info_x = 0.0
 var info_width = 0.0
 # Every song: the cover glides into the play_cover panel instead of sliding away.
@@ -120,12 +121,16 @@ func song_colors(cover: Texture2D=null) -> Array:
 	return [Color("a36aff"),Color("38baff")]
 
 func begin(cover: Texture2D, tint: Color, song_title: String, details: String, skip_loading: bool) -> void:
-	for art in [backdrop_art,card_art,reflection]: art.texture = cover; art.self_modulate = tint
-	# One moderate Gaussian treatment for backgrounds and album-art-only songs.
-	# The square loading card stays sharp and floats above this transitioning layer.
-	var blurred=preload("res://scripts/gaussian_blur.gd").of(cover,72,4.0) if cover else null
-	backdrop_art.material.set_shader_parameter("blurred_art",blurred if blurred else cover)
-	backdrop_art.material.set_shader_parameter("blur_amount",1.0 if skip_loading else 0.0)
+	var song_id=str(game.song.id) if game and not game.song.is_empty() else ""
+	var backdrop_source=game.stage_backdrop_for_id(song_id) if game else cover
+	blur_backdrop=game==null or (not game.has_background(song_id) and game.has_album_art(song_id))
+	backdrop_art.texture=backdrop_source;backdrop_art.self_modulate=tint
+	for art in [card_art,reflection]: art.texture=cover;art.self_modulate=tint
+	# Only an album-art fallback receives the Gaussian treatment. A dedicated
+	# gameplay background remains sharp while retaining the same fixed dimming.
+	var blurred=preload("res://scripts/gaussian_blur.gd").of(backdrop_source,72,4.0) if backdrop_source and blur_backdrop else backdrop_source
+	backdrop_art.material.set_shader_parameter("blurred_art",blurred if blurred else backdrop_source)
+	backdrop_art.material.set_shader_parameter("blur_amount",1.0 if skip_loading and blur_backdrop else 0.0)
 	backdrop_art.material.set_shader_parameter("dim_amount",BACKDROP_DIM)
 	var picked = song_colors(cover); accent = picked[0]; accent_2 = picked[1]
 	backdrop.color=loading_shadow
@@ -261,7 +266,7 @@ func animate() -> void:
 	var ui_alpha=0.0 if load_time<=0.0 else appear*(1.0-smoothstep(0.0,LOADING_UI_FADE_TIME,after_load))
 	var blur_start=LOADING_UI_FADE_TIME
 	var blur_progress=1.0 if load_time<=0.0 else smoothstep(blur_start,blur_start+BLUR_TIME,after_load)
-	backdrop_art.material.set_shader_parameter("blur_amount",blur_progress)
+	backdrop_art.material.set_shader_parameter("blur_amount",blur_progress if blur_backdrop else 0.0)
 	# Blur never changes brightness. Once it is fully resolved, crossfade to the
 	# identically blurred gameplay backdrop before any highway geometry enters.
 	var background_start=LOADING_UI_FADE_TIME+BLUR_TIME

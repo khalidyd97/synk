@@ -15,6 +15,12 @@ func run() -> void:
     check(g.save_background_image(id,wide)=="","Gameplay background saves")
     var backdrop: Texture2D=g.stage_backdrop_for_id(id)
     check(backdrop!=null and backdrop.get_width()==320 and backdrop.get_height()==180,"The background wins and keeps its shape")
+    # Dedicated backgrounds stay sharp; only album art used as fallback is blurred.
+    g.field.world.set_cover(backdrop,Color.WHITE,false)
+    check(g.field.world.cover_material.get_shader_parameter("cover_blurred")==backdrop and not g.field.world.cover_material.get_shader_parameter("album_art"),"Dedicated gameplay background remains sharp")
+    var fallback=g.cover_texture_for_id("eclipse")
+    g.field.world.set_cover(fallback,Color.WHITE,true)
+    check(g.field.world.cover_material.get_shader_parameter("cover_blurred")!=fallback and g.field.world.cover_material.get_shader_parameter("album_art"),"Album-art fallback receives the Gaussian blur")
     g.remove_background(id)
     check(not g.has_background(id) and g.stage_backdrop_for_id(id)==null,"Removing the background falls back again")
     var big=Image.create(4000,1000,false,Image.FORMAT_RGBA8)
