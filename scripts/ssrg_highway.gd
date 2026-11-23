@@ -141,7 +141,7 @@ func spawn_flick_sparks(x: float) -> void:
 	var parent: Node3D = hit_layer if hit_layer != null else self
 	for i in FLICK_SPARK_COUNT:
 		var mesh = QuadMesh.new()
-		mesh.size = Vector2(0.32, 1.35) * (0.7 + randf() * 0.6) * world.FIT
+		mesh.size = Vector2(0.38, 2.0) * (0.7 + randf() * 0.6) * world.FIT
 		var mat = ShaderMaterial.new(); mat.shader = FLICK_SPARK_SHADER; mat.render_priority = 9
 		mat.set_shader_parameter("tint", tint)
 		mat.set_shader_parameter("seed", randf() * 100.0)
@@ -150,13 +150,45 @@ func spawn_flick_sparks(x: float) -> void:
 		# Mostly up: the sum of two randoms clusters angles near vertical, and none goes
 		# wider than FLICK_SPARK_SPREAD either side, so the spray leans the flick's way.
 		var angle = (randf() + randf() - 1.0) * deg_to_rad(FLICK_SPARK_SPREAD)
-		var speed = (9.0 + randf() * 16.0) * world.FIT
+		# Faster the closer to vertical, so the tallest sparks shoot straight up.
+		var speed = (11.0 + randf() * 18.0) * world.FIT * (1.0 + 0.45 * cos(angle * 1.8))
 		var up_speed = cos(angle) * speed
 		var side_speed = sin(angle) * speed * 1.3
 		# Each spark dies at its own random time, so the spray thins out gradually.
 		var life = FLICK_SPARK_LIFE * (0.35 + randf() * 0.65)
 		flick_sparks.append({"node": node, "material": mat, "age": 0.0, "life": life, "base": origin, "up_speed": up_speed, "side_speed": side_speed})
 		orient_flick_spark(node, side_speed, up_speed)
+	spawn_flick_flare(origin, up, tint, parent)
+
+# The upward flare: one tall straight streak that shoots up from the hit and fades fast,
+# drawn with the spark shader so it shares the white-core, cyan-glow look.
+const FLICK_FLARE_LIFE = .22
+const FLICK_FLARE_SIZE = Vector2(3.2, 11.0)
+var flick_flares: Array = []
+func spawn_flick_flare(origin: Vector3, up: Vector3, tint: Color, parent: Node3D) -> void:
+	var mesh = QuadMesh.new(); mesh.size = FLICK_FLARE_SIZE * world.FIT
+	var mat = ShaderMaterial.new(); mat.shader = FLICK_SPARK_SHADER; mat.render_priority = 9
+	mat.set_shader_parameter("tint", tint); mat.set_shader_parameter("bend", 0.0); mat.set_shader_parameter("sharpness", 10.0)
+	var node = world.mesh_node(mesh, parent, mat)
+	node.rotation = world.camera.rotation
+	flick_flares.append({"node": node, "material": mat, "age": 0.0, "base": origin, "up": up})
+	advance_flick_flares(0.0, false)
+
+func advance_flick_flares(delta: float, playing: bool) -> void:
+	var opacity = world.game.features.effect("Hit flashes")
+	for i in range(flick_flares.size() - 1, -1, -1):
+		var f: Dictionary = flick_flares[i]
+		if playing: f.age += delta
+		var k = f.age / FLICK_FLARE_LIFE
+		if k >= 1.0:
+			f.node.queue_free(); flick_flares.remove_at(i); continue
+		# Shoots up fast (eased), stretching tall, while it fades.
+		var grow = 1.0 - pow(1.0 - k, 3.0)
+		var length = lerpf(.35, 1.0, grow)
+		f.node.scale = Vector3(lerpf(1.0, .55, k), length, 1.0)
+		f.node.position = f.base + f.up * (FLICK_FLARE_SIZE.y * world.FIT * length * .5)
+		f.node.rotation = world.camera.rotation
+		f.material.set_shader_parameter("opacity", opacity * (1.0 - k) * (1.0 - k))
 
 const FLICK_SPARK_GRAVITY = 18.0
 const FLICK_SPARK_SPREAD = 50.0  # widest angle from straight up, in degrees
@@ -311,6 +343,8 @@ func clear_hits() -> void:
 	hits.clear();hit_pool.clear()
 	for f in flick_sparks: f.node.queue_free()
 	flick_sparks.clear()
+	for f in flick_flares: f.node.queue_free()
+	flick_flares.clear()
 	for background in background_bank:
 		background.particles.clear();background.elapsed=0.0;background.frame_credit=0.0;background.momentum=0.0; background.hide()
 	if world.cover_material:
@@ -383,6 +417,7 @@ func _process(delta: float) -> void:
 # Independent tap instances intentionally preserve SYNK's uninterrupted dense-hit flow.
 func advance_hits(delta: float, playing: bool) -> void:
 	advance_flick_sparks(delta, playing)
+	advance_flick_flares(delta, playing)
 	var game = world.game
 	for i in range(hits.size() - 1, -1, -1):
 		var h: Dictionary = hits[i]
