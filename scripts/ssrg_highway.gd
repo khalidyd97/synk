@@ -24,11 +24,11 @@ var press_lines: Array = []
 var hit_pool: Array = []
 var hits: Array = []
 # A flick's hit is the ordinary Effect_A flash, kept on the judgment bar like a tap, plus a
-# burst of sparks flung straight up from the bar (tall and narrow) so the impact reads as an
+# burst of lightning strands flung up from the bar (tall and narrow) so the impact reads as an
 # explosive splash in the flick's up direction.
 var flick_sparks: Array = []
 const FLICK_SPARK_LIFE = .46
-const FLICK_SPARK_COUNT = 18
+const FLICK_SPARK_COUNT = 14
 const FLICK_SPARK_SHADER = preload("res://scripts/flick_spark.gdshader")
 var active = false
 var countdown_sweep_number = -1
@@ -130,9 +130,9 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 	h.node.visible = true; hits.append(h)
 	if kind == "flick": spawn_flick_sparks(h.x)
 
-# The flick splash: sparks launched up from the judgment bar. They travel far up (tall) and
-# spread out sideways as well, arcing back under gravity, so the burst reads as a wide upward
-# spray. Coloured to match the hit flash (white, or the player's chosen hit colour).
+# The flick splash: lightning strands launched up from the judgment bar, like the streaky
+# shards of the Effect_A hit flash. They travel far up and spread out sideways, arcing back
+# under gravity, each turned along its flight so the bolt points the way it moves.
 func spawn_flick_sparks(x: float) -> void:
 	var up = world.camera.basis.y.normalized()
 	var sidev = world.camera.basis.x.normalized()
@@ -141,20 +141,27 @@ func spawn_flick_sparks(x: float) -> void:
 	var parent: Node3D = hit_layer if hit_layer != null else self
 	for i in FLICK_SPARK_COUNT:
 		var mesh = QuadMesh.new()
-		mesh.size = Vector2.ONE * (1.05 + randf() * 0.7) * world.FIT
+		mesh.size = Vector2(0.6, 3.4) * (0.75 + randf() * 0.55) * world.FIT
 		var mat = ShaderMaterial.new(); mat.shader = FLICK_SPARK_SHADER; mat.render_priority = 9
 		mat.set_shader_parameter("tint", tint)
+		mat.set_shader_parameter("seed", randf() * 100.0)
 		var node = world.mesh_node(mesh, parent, mat)
-		node.rotation = world.camera.rotation
 		node.position = origin
 		# Up (tall) with a wide sideways spread, so the spray fans out as it rises.
 		var up_speed = (15.0 + randf() * 9.0) * world.FIT
 		var side_speed = (randf() - 0.5) * 9.0 * world.FIT
-		var vel = up * up_speed + sidev * side_speed
-		flick_sparks.append({"node": node, "material": mat, "age": 0.0, "base": origin, "vel": vel})
+		flick_sparks.append({"node": node, "material": mat, "age": 0.0, "base": origin, "up_speed": up_speed, "side_speed": side_speed})
+		orient_flick_spark(node, side_speed, up_speed)
+
+const FLICK_SPARK_GRAVITY = 18.0
+# Face the camera, then turn the strand so its head points along its current flight.
+func orient_flick_spark(node: Node3D, side_speed: float, up_speed: float) -> void:
+	node.rotation = world.camera.rotation
+	node.rotate_object_local(Vector3.BACK, atan2(-side_speed, up_speed))
 
 func advance_flick_sparks(delta: float, playing: bool) -> void:
 	var up = world.camera.basis.y.normalized()
+	var sidev = world.camera.basis.x.normalized()
 	var opacity = world.game.features.effect("Hit flashes")
 	for i in range(flick_sparks.size() - 1, -1, -1):
 		var f: Dictionary = flick_sparks[i]
@@ -162,14 +169,14 @@ func advance_flick_sparks(delta: float, playing: bool) -> void:
 		var a: float = f.age
 		if a >= FLICK_SPARK_LIFE:
 			f.node.queue_free(); flick_sparks.remove_at(i); continue
-		var base: Vector3 = f.base
-		var vel: Vector3 = f.vel
+		var gravity = FLICK_SPARK_GRAVITY * world.FIT
 		# Ballistic arc: fast up, pulled back down so the column peaks tall then falls.
-		f.node.position = base + vel * a - up * (18.0 * world.FIT * a * a)
-		f.node.rotation = world.camera.rotation
+		f.node.position = f.base + up * (f.up_speed * a - gravity * a * a) + sidev * (f.side_speed * a)
+		orient_flick_spark(f.node, f.side_speed, f.up_speed - 2.0 * gravity * a)
 		var k = a / FLICK_SPARK_LIFE
-		f.node.scale = Vector3.ONE * (1.0 - 0.7 * k)          # sparks shrink as they fly
-		f.material.set_shader_parameter("opacity", opacity * (1.0 - k))
+		f.node.scale = Vector3.ONE * (1.0 - 0.5 * k)          # strands shrink as they fly
+		f.material.set_shader_parameter("age", k)
+		f.material.set_shader_parameter("opacity", opacity * (1.0 - k * k))
 
 # How fast a flash crosses lanes, and how long it may keep going after its note has ended.
 const GLIDE_LANES_PER_SECOND = 30.0
