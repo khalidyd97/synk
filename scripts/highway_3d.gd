@@ -1311,6 +1311,9 @@ const FLICK_FRAMES = [
 	preload("res://assets/neon/flick/flick_6.png"),
 ]
 
+# 10 steps make one full up-and-down bounce, so this is about 1.6 bounces a second.
+const FLICK_LOOP_STEPS_PER_SECOND = 16.0
+
 func flick_frame_material(frame: int) -> ShaderMaterial:
 	var projected = uses_projected_highway()
 	return shared("flick_frame|%s|%d" % [projected, frame], func():
@@ -1706,8 +1709,11 @@ func sync_note(key: String, note: Dictionary, visible_keys: Dictionary, recordin
 	if note.kind=="flick":
 		var sprite = notes[key].node.get_node_or_null("AnimatedFlick") as MeshInstance3D
 		if sprite:
-			var approach = 1.0 - (float(note.time) - visible_time) / game.note_travel_seconds()
-			var frame = clampi(floori(approach * FLICK_FRAMES.size()), 0, FLICK_FRAMES.size() - 1)
+			# Ping-pong the six frames (1..6..1) on a loop so the chevron keeps bouncing up
+			# off the puck and back down all the way to the judgement line.
+			var last = FLICK_FRAMES.size() - 1
+			var step = posmod(floori((animation_time + float(note.time) * .37) * FLICK_LOOP_STEPS_PER_SECOND), last * 2)
+			var frame = step if step <= last else last * 2 - step
 			if frame != int(sprite.get_meta("flick_frame", 0)):
 				sprite.material_override = flick_frame_material(frame)
 				sprite.set_meta("flick_frame", frame)
