@@ -15,15 +15,17 @@ void vertex(){
 void fragment(){
     float head=mix(near_z,far_z,progress);
     float distance_to_head=abs(world_z-head);
-    // A wide, feathered wash with no opaque core: the highway catches a moving
-    // bloom rather than having a solid horizontal stripe drawn over it.
-    float glow=exp(-pow(distance_to_head/.30,2.0));
-    float bloom=exp(-pow(distance_to_head/.72,2.0));
-    float behind=smoothstep(head-.08,head+.12,world_z);
-    float afterglow=behind*exp(-max(world_z-head,0.0)*1.15);
-    float side=pow(smoothstep(0.0,.18,UV.x)*smoothstep(0.0,.18,1.0-UV.x),.65);
-    float light=(glow*.52+bloom*.24+afterglow*.10)*side*strength;
-    ALBEDO=color.rgb*(.72+bloom*.42);
-    EMISSION=color.rgb*light*1.65;
-    ALPHA=light*.48;
+    // Grow a soft shaft from the judgment bar toward the moving tip. The plane
+    // lies on the road, so perspective keeps it aligned with the highway angle.
+    float reached=smoothstep(head-.10,head+.10,world_z);
+    float tip=exp(-pow(distance_to_head/.34,2.0));
+    float tip_bloom=exp(-pow(distance_to_head/.82,2.0));
+    float centre=exp(-pow((UV.x-.5)/.24,2.0));
+    float feather=exp(-pow((UV.x-.5)/.46,2.0));
+    float start_fade=1.0-smoothstep(near_z-.65,near_z+.04,world_z);
+    float shaft=reached*start_fade*(centre*.34+feather*.12);
+    float light=(shaft+tip*centre*.62+tip_bloom*feather*.18)*strength;
+    ALBEDO=color.rgb*(.68+tip_bloom*.38);
+    EMISSION=color.rgb*light*1.8;
+    ALPHA=light*.46;
 }
