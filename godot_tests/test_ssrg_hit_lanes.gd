@@ -64,12 +64,19 @@ func run() -> void:
 	effect.clear_hits();game.song_time=0.0;game.visual_song_time=0.0
 	for lane in 13:
 		check(is_equal_approx(effect.lane_flash_x(world.note_x(lane)),world.note_x(lane)),"Lane %d is a flash position" % (lane+1))
-	# The loading glow carries one visual-only swipe across the empty judgment line.
-	effect.clear_hits();effect.update_entrance_sweep(.01,true)
-	check(effect.hits.size()==1 and effect.hits[0].sustain_entry.is_empty(),"Loading swipe begins on lane 1 without a gameplay note")
-	effect.update_entrance_sweep(.5,true);effect.update_entrance_sweep(1.0,true)
-	check(effect.hits.size()==13 and is_equal_approx(effect.hits[-1].node.position.x,world.note_x(12)),"One loading swipe emits lanes 1 through 13 exactly once")
-	effect.update_entrance_sweep(0.0,false)
+	# Each countdown number carries one visual-only swipe across the empty line.
+	effect.clear_hits();effect.update_countdown_sweep(2.99);effect.update_countdown_sweep(2.01)
+	check(effect.hits.size()==13 and is_equal_approx(effect.hits[0].node.position.x,world.note_x(0)) and is_equal_approx(effect.hits[-1].node.position.x,world.note_x(12)),"Three swipes lanes 1 to 13")
+	var three_color:Color=effect.hits[0].material.get_shader_parameter("tint")
+	effect.clear_hits();effect.update_countdown_sweep(1.99);effect.update_countdown_sweep(1.01)
+	check(effect.hits.size()==13 and is_equal_approx(effect.hits[0].node.position.x,world.note_x(12)) and is_equal_approx(effect.hits[-1].node.position.x,world.note_x(0)),"Two swipes lanes 13 to 1")
+	var two_color:Color=effect.hits[0].material.get_shader_parameter("tint")
+	effect.clear_hits();effect.update_countdown_sweep(.99);effect.update_countdown_sweep(.01)
+	check(effect.hits.size()==13 and is_equal_approx(effect.hits[0].node.position.x,world.note_x(0)) and is_equal_approx(effect.hits[-1].node.position.x,world.note_x(12)),"One swipes lanes 1 to 13")
+	var one_color:Color=effect.hits[0].material.get_shader_parameter("tint")
+	check(three_color!=two_color and two_color!=one_color and three_color!=one_color,"Each countdown swipe receives a different random color")
+	check(effect.hits.all(func(hit):return hit.sustain_entry.is_empty()),"Countdown swipes have no gameplay notes")
+	effect.update_countdown_sweep(0.0)
 	# Charts with fewer keys only use their own lanes.
 	game.ssrg_lane_count=7
 	check(is_equal_approx(effect.lane_flash_x(world.note_x(3)),world.note_x(4)) and is_equal_approx(effect.lane_flash_x(world.note_x(2.9)),world.note_x(2)),"A 7-key chart flashes on its seven lanes")

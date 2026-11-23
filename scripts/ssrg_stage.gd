@@ -281,8 +281,6 @@ func update_entrance(world: Node3D) -> void:
 	press_glow.material_override.set_shader_parameter("entrance",judgment_in)
 	judgment_scan.material_override.set_shader_parameter("progress",scan_progress)
 	judgment_scan.material_override.set_shader_parameter("strength",scan_strength)
-	if world.ssrg_theme:
-		world.ssrg_theme.update_entrance_sweep(scan_progress,intro != null and intro.running())
 
 func warmup(world: Node3D) -> void :
 	if not visible: return

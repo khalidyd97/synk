@@ -31,8 +31,11 @@ const FLICK_SPARK_LIFE = .46
 const FLICK_SPARK_COUNT = 18
 const FLICK_SPARK_SHADER = preload("res://scripts/flick_spark.gdshader")
 var active = false
-var entrance_sweep_lane = -1
-var entrance_sweep_tail = 0.0
+var countdown_sweep_number = -1
+var countdown_sweep_step = -1
+var countdown_sweep_tail = 0.0
+var countdown_sweep_hue = -1.0
+var countdown_sweep_color = Color.WHITE
 var original_stage: Node3D
 var source_background: Node3D
 var background_bank:Array=[]
@@ -204,18 +207,33 @@ func emit_crossed_lane_hits(h: Dictionary, x: float) -> void:
 		spawn(flash_lane_value(index),"slide",{},-999)
 	h.last_cross_lane=current
 
-# Loading reveal: one empty slide gesture sweeps lane 1 through lane 13 while
-# the judgment glow climbs the highway. These flashes have no gameplay entry.
-func update_entrance_sweep(progress:float,running:bool) -> void:
-	if not running or progress<=0.0:
-		entrance_sweep_lane=-1
+# Countdown reveal: every number carries one empty slide gesture. Three and one
+# travel left-to-right; two travels right-to-left. These have no gameplay entry.
+func update_countdown_sweep(remaining:float) -> void:
+	if remaining<=0.0:
+		countdown_sweep_number=-1
+		countdown_sweep_step=-1
 		return
-	var target=clampi(floori(progress*float(world.game.gameplay_lane_count()-1)),0,world.game.gameplay_lane_count()-1)
-	var first=0 if entrance_sweep_lane<0 else entrance_sweep_lane+1
-	for index in range(first,target+1):
+	var number=clampi(ceili(remaining),1,3)
+	if number!=countdown_sweep_number:
+		countdown_sweep_number=number
+		countdown_sweep_step=-1
+		countdown_sweep_hue=randf() if countdown_sweep_hue<0.0 else fmod(countdown_sweep_hue+randf_range(.22,.78),1.0)
+		countdown_sweep_color=Color.from_hsv(countdown_sweep_hue,.78,1.0)
+	var fraction=remaining-floorf(remaining)
+	var progress=0.0 if is_zero_approx(fraction) else 1.0-fraction
+	var last=world.game.gameplay_lane_count()-1
+	# Divide the second into one slot per lane so the final lane fires before the
+	# number changes, rather than requiring an unreachable exact progress of 1.
+	var target=clampi(floori(progress*float(last+1)),0,last)
+	for step in range(countdown_sweep_step+1,target+1):
+		var index=step if number in [3,1] else last-step
 		spawn(flash_lane_value(index),"slide",{},-999)
-		entrance_sweep_tail=HIT_LIFE
-	entrance_sweep_lane=maxi(entrance_sweep_lane,target)
+		var hit:Dictionary=hits[-1]
+		hit.material.set_shader_parameter("tint",countdown_sweep_color)
+		if hit.style=="ssrg":hit.material.set_shader_parameter("recolor",true)
+		countdown_sweep_tail=HIT_LIFE
+	countdown_sweep_step=maxi(countdown_sweep_step,target)
 
 # Where a flash goes: the note's point on the judgement line, pulled toward the camera along
 # the line of sight. It shows exactly on that point on screen (lifting it instead made outer
@@ -326,8 +344,8 @@ func _process(delta: float) -> void:
 	original_stage.update(world)
 	var game = world.game
 	var playing = (game.mode == "play" and game.countdown<=0 and game.resume_countdown<=0) or game.highway_preview
-	entrance_sweep_tail=maxf(0.0,entrance_sweep_tail-delta)
-	var hit_playing=playing or (game.stage_intro and game.stage_intro.running()) or entrance_sweep_tail>0.0
+	countdown_sweep_tail=maxf(0.0,countdown_sweep_tail-delta)
+	var hit_playing=playing or countdown_sweep_tail>0.0
 	var presentation=game.ssrg_presentation
 	var using_state=presentation and presentation.active
 	var weights=presentation.weights if using_state else [1.0,0.0,0.0,0.0]

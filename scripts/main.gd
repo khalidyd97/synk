@@ -2368,6 +2368,9 @@ func _process(delta: float) -> void:
 		if resume_countdown==0: resume_grace=.35
 	var intro_running=mode in ["play","paused"] and stage_intro.running()
 	var counting=mode in ["play","record"] and (countdown>0 or resume_countdown>0)
+	if ssrg_playable_run and field and field.world and field.world.ssrg_theme:
+		var sweep_remaining=resume_countdown if resume_countdown>0 else countdown
+		field.world.ssrg_theme.update_countdown_sweep(sweep_remaining if mode=="play" and counting and not intro_running else 0.0)
 	practice_hud.visible=practice.active and mode in ["play","paused"]
 	practice_hud.text="PRACTICE · %s× · %s%d" % [str(practice.speed),"LOOP " if practice.repeat_enabled else "TAKE ",practice.round_number]
 	timing_label.visible=mode=="play" and not auto_play and not counting and flash>0 and not finishing
