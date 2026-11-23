@@ -139,9 +139,12 @@ func spawn_flick_sparks(x: float) -> void:
 	var origin = flash_point(x)
 	var tint = Color.from_string(world.game.hit_color, Color.WHITE) if world.game.hit_color != "" else Color.WHITE
 	var parent: Node3D = hit_layer if hit_layer != null else self
+	# Shrink the whole splash's travel so even the tallest spark stops at the middle of the screen.
+	var reach = flick_splash_reach(origin, up)
+	var fit = clampf((reach - FLICK_SPARK_MAX_LENGTH * .5 * world.FIT) / (flick_spark_max_rise() * world.FIT), 0.0, 1.0)
 	for i in FLICK_SPARK_COUNT:
 		var mesh = QuadMesh.new()
-		mesh.size = Vector2(0.38, 2.0) * (0.7 + randf() * 0.6) * world.FIT
+		mesh.size = Vector2(0.38, FLICK_SPARK_MAX_LENGTH / 1.3) * (0.7 + randf() * 0.6) * world.FIT
 		var mat = ShaderMaterial.new(); mat.shader = FLICK_SPARK_SHADER; mat.render_priority = 9
 		mat.set_shader_parameter("tint", tint)
 		mat.set_shader_parameter("seed", randf() * 100.0)
@@ -151,27 +154,43 @@ func spawn_flick_sparks(x: float) -> void:
 		# wider than FLICK_SPARK_SPREAD either side, so the spray leans the flick's way.
 		var angle = (randf() + randf() - 1.0) * deg_to_rad(FLICK_SPARK_SPREAD)
 		# Faster the closer to vertical, so the tallest sparks shoot straight up.
-		var speed = (11.0 + randf() * 18.0) * world.FIT * (1.0 + 0.45 * cos(angle * 1.8))
+		var speed = (FLICK_SPARK_MIN_SPEED + randf() * FLICK_SPARK_EXTRA_SPEED) * world.FIT * (1.0 + 0.45 * cos(angle * 1.8)) * fit
 		var up_speed = cos(angle) * speed
 		var side_speed = sin(angle) * speed * 1.3
 		# Each spark dies at its own random time, so the spray thins out gradually.
 		var life = FLICK_SPARK_LIFE * (0.35 + randf() * 0.65)
-		flick_sparks.append({"node": node, "material": mat, "age": 0.0, "life": life, "base": origin, "up_speed": up_speed, "side_speed": side_speed})
+		flick_sparks.append({"node": node, "material": mat, "age": 0.0, "life": life, "base": origin, "up_speed": up_speed, "side_speed": side_speed, "gravity": FLICK_SPARK_GRAVITY * world.FIT * fit})
 		orient_flick_spark(node, side_speed, up_speed)
-	spawn_flick_flare(origin, up, tint, parent)
+	spawn_flick_flare(origin, up, tint, parent, minf(reach, FLICK_FLARE_SIZE.y * world.FIT))
+
+# How far up (in world units, along the camera's up) the splash may reach from `origin`
+# before it would pass the middle of the screen.
+func flick_splash_reach(origin: Vector3, up: Vector3) -> float:
+	var cam: Camera3D = world.camera
+	var middle = cam.get_viewport().get_visible_rect().size.y * FLICK_SPLASH_TOP
+	var from = cam.unproject_position(origin)
+	var pixels_per_unit = from.y - cam.unproject_position(origin + up).y
+	if pixels_per_unit <= 0.0: return INF
+	return maxf(0.0, from.y - middle) / pixels_per_unit
+
+# The highest rise (in FIT units) the fastest, straight-up spark reaches before it dies.
+func flick_spark_max_rise() -> float:
+	var top_speed = (FLICK_SPARK_MIN_SPEED + FLICK_SPARK_EXTRA_SPEED) * 1.45
+	var t = minf(top_speed / (2.0 * FLICK_SPARK_GRAVITY), FLICK_SPARK_LIFE)
+	return top_speed * t - FLICK_SPARK_GRAVITY * t * t
 
 # The upward flare: one tall straight streak that shoots up from the hit and fades fast,
 # drawn with the spark shader so it shares the white-core, cyan-glow look.
 const FLICK_FLARE_LIFE = .22
 const FLICK_FLARE_SIZE = Vector2(3.2, 11.0)
 var flick_flares: Array = []
-func spawn_flick_flare(origin: Vector3, up: Vector3, tint: Color, parent: Node3D) -> void:
-	var mesh = QuadMesh.new(); mesh.size = FLICK_FLARE_SIZE * world.FIT
+func spawn_flick_flare(origin: Vector3, up: Vector3, tint: Color, parent: Node3D, height: float) -> void:
+	var mesh = QuadMesh.new(); mesh.size = Vector2(FLICK_FLARE_SIZE.x * world.FIT, height)
 	var mat = ShaderMaterial.new(); mat.shader = FLICK_SPARK_SHADER; mat.render_priority = 9
 	mat.set_shader_parameter("tint", tint); mat.set_shader_parameter("bend", 0.0); mat.set_shader_parameter("sharpness", 10.0)
 	var node = world.mesh_node(mesh, parent, mat)
 	node.rotation = world.camera.rotation
-	flick_flares.append({"node": node, "material": mat, "age": 0.0, "base": origin, "up": up})
+	flick_flares.append({"node": node, "material": mat, "age": 0.0, "base": origin, "up": up, "height": height})
 	advance_flick_flares(0.0, false)
 
 func advance_flick_flares(delta: float, playing: bool) -> void:
@@ -186,12 +205,17 @@ func advance_flick_flares(delta: float, playing: bool) -> void:
 		var grow = 1.0 - pow(1.0 - k, 3.0)
 		var length = lerpf(.35, 1.0, grow)
 		f.node.scale = Vector3(lerpf(1.0, .55, k), length, 1.0)
-		f.node.position = f.base + f.up * (FLICK_FLARE_SIZE.y * world.FIT * length * .5)
+		f.node.position = f.base + f.up * (f.height * length * .5)
 		f.node.rotation = world.camera.rotation
 		f.material.set_shader_parameter("opacity", opacity * (1.0 - k) * (1.0 - k))
 
 const FLICK_SPARK_GRAVITY = 18.0
 const FLICK_SPARK_SPREAD = 50.0  # widest angle from straight up, in degrees
+const FLICK_SPARK_MIN_SPEED = 11.0
+const FLICK_SPARK_EXTRA_SPEED = 18.0
+const FLICK_SPARK_MAX_LENGTH = 2.6  # longest spark streak, in FIT units
+# The splash never rises past this fraction of the screen height from the top (.5 = the middle).
+const FLICK_SPLASH_TOP = .5
 # Face the camera, then turn the strand so its head points along its current flight.
 func orient_flick_spark(node: Node3D, side_speed: float, up_speed: float) -> void:
 	node.rotation = world.camera.rotation
@@ -207,7 +231,7 @@ func advance_flick_sparks(delta: float, playing: bool) -> void:
 		var a: float = f.age
 		if a >= f.life:
 			f.node.queue_free(); flick_sparks.remove_at(i); continue
-		var gravity = FLICK_SPARK_GRAVITY * world.FIT
+		var gravity: float = f.gravity
 		# Ballistic arc: fast up, pulled back down so the column peaks tall then falls.
 		f.node.position = f.base + up * (f.up_speed * a - gravity * a * a) + sidev * (f.side_speed * a)
 		orient_flick_spark(f.node, f.side_speed, f.up_speed - 2.0 * gravity * a)
