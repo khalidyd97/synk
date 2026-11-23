@@ -24,11 +24,11 @@ var press_lines: Array = []
 var hit_pool: Array = []
 var hits: Array = []
 # A flick's hit is the ordinary Effect_A flash, kept on the judgment bar like a tap, plus a
-# burst of lightning strands flung up from the bar (tall and narrow) so the impact reads as an
+# spray of short spark streaks flung up and out from the bar so the impact reads as an
 # explosive splash in the flick's up direction.
 var flick_sparks: Array = []
-const FLICK_SPARK_LIFE = .46
-const FLICK_SPARK_COUNT = 14
+const FLICK_SPARK_LIFE = .42
+const FLICK_SPARK_COUNT = 26
 const FLICK_SPARK_SHADER = preload("res://scripts/flick_spark.gdshader")
 var active = false
 var countdown_sweep_number = -1
@@ -130,9 +130,9 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 	h.node.visible = true; hits.append(h)
 	if kind == "flick": spawn_flick_sparks(h.x)
 
-# The flick splash: lightning strands launched up from the judgment bar, like the streaky
-# shards of the Effect_A hit flash. They travel far up and spread out sideways, arcing back
-# under gravity, each turned along its flight so the bolt points the way it moves.
+# The flick splash: short spark streaks sprayed up and out from the judgment bar, like the
+# streaky shards of the Effect_A hit flash. They fan across a wide arc (mostly up, some almost
+# sideways), arc back under gravity, and each is turned along its flight.
 func spawn_flick_sparks(x: float) -> void:
 	var up = world.camera.basis.y.normalized()
 	var sidev = world.camera.basis.x.normalized()
@@ -141,15 +141,17 @@ func spawn_flick_sparks(x: float) -> void:
 	var parent: Node3D = hit_layer if hit_layer != null else self
 	for i in FLICK_SPARK_COUNT:
 		var mesh = QuadMesh.new()
-		mesh.size = Vector2(0.6, 3.4) * (0.75 + randf() * 0.55) * world.FIT
+		mesh.size = Vector2(0.32, 1.35) * (0.7 + randf() * 0.6) * world.FIT
 		var mat = ShaderMaterial.new(); mat.shader = FLICK_SPARK_SHADER; mat.render_priority = 9
 		mat.set_shader_parameter("tint", tint)
 		mat.set_shader_parameter("seed", randf() * 100.0)
 		var node = world.mesh_node(mesh, parent, mat)
 		node.position = origin
-		# Up (tall) with a wide sideways spread, so the spray fans out as it rises.
-		var up_speed = (15.0 + randf() * 9.0) * world.FIT
-		var side_speed = (randf() - 0.5) * 9.0 * world.FIT
+		# A wide fan: anywhere from straight up to nearly sideways, at mixed speeds.
+		var angle = (randf() * 2.0 - 1.0) * deg_to_rad(78.0)
+		var speed = (9.0 + randf() * 16.0) * world.FIT
+		var up_speed = cos(angle) * speed
+		var side_speed = sin(angle) * speed * 1.3
 		flick_sparks.append({"node": node, "material": mat, "age": 0.0, "base": origin, "up_speed": up_speed, "side_speed": side_speed})
 		orient_flick_spark(node, side_speed, up_speed)
 
