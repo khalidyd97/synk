@@ -12,6 +12,9 @@ void fragment(){
     steel=mix(steel,vec3(.98,.99,1.0),outer_white);
     steel=mix(steel,vec3(.97,.98,1.0),inner_white);
     steel=mix(steel,vec3(.88,.91,.95),inner_silver);
-    ALBEDO=steel;
-    ALPHA=outside*entrance;
+    float wipe=smoothstep(UV.x-.08,UV.x,entrance);
+    float edge=exp(-pow((UV.x-entrance)*20.0,2.0))*(1.0-smoothstep(.88,1.0,entrance));
+    ALBEDO=steel*(1.0+edge*1.2);
+    EMISSION=steel*edge*.55;
+    ALPHA=outside*wipe*smoothstep(0.0,.14,entrance);
 }

@@ -10,5 +10,6 @@ void fragment(){
     float packet=exp(-pow((UV.x-center)*38.0,2.0));
     ALBEDO=accent.rgb*(.7+1.2*packet)*line.rgb;
     EMISSION=accent.rgb*(.3+1.5*packet)*line.rgb;
-    ALPHA=line.a*(.72+.28*packet)*entrance;
+    float wipe=smoothstep(UV.x-.08,UV.x,entrance);
+    ALPHA=line.a*(.72+.28*packet)*wipe*smoothstep(0.0,.14,entrance);
 }

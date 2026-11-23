@@ -40,6 +40,7 @@ func _init() -> void :
 		mat.render_priority=-8
 		mat.set_shader_parameter("artwork",preload("res://assets/ssrg/imported/rail_original.png"))
 		mat.set_shader_parameter("along_rail",false)
+		mat.set_shader_parameter("rail_side",float(side))
 		rail.material_override=mat; add_child(rail); rails.append(rail)
 		var old_rail=make_old_rail(side,UNIT)
 		add_child(old_rail);old_rails.append(old_rail)
@@ -245,10 +246,10 @@ func update_entrance(world: Node3D) -> void:
 	var judgment_in=1.0
 	var floor_in=1.0
 	if intro != null and intro.running():
-		left_rail_in=float(intro.reveal_part(0.0,.23))
-		right_rail_in=float(intro.reveal_part(.23,.46))
-		judgment_in=float(intro.reveal_part(.46,.73))
-		floor_in=float(intro.reveal_part(.73,1.0))
+		left_rail_in=float(intro.reveal_part(0.0,.28))
+		right_rail_in=float(intro.reveal_part(.28,.56))
+		judgment_in=float(intro.reveal_part(.56,.79))
+		floor_in=float(intro.reveal_part(.79,1.0))
 	for index in rails.size():
 		var rail_in=left_rail_in if index==0 else right_rail_in
 		rails[index].material_override.set_shader_parameter("rail_entrance",rail_in)
