@@ -13,9 +13,9 @@ func run() -> void:
 	var note=SynkChart.note(0,6,"flick");note.direction=0
 	game.field.world.make_flick(visual,note,2)
 	var chevrons=visual.get_children().filter(func(child):return child.has_meta("flick_chevron_index"))
-	check(chevrons.size()==2,"A flick has two flat directional chevrons")
+	check(chevrons.size()==1,"A flick has one clean flat directional arrow")
 	check(is_equal_approx(float(visual.get_child(0).material_override.get_shader_parameter("hue_shift")),.37),"The flick puck uses its vivid rose treatment")
-	check(float(chevrons[0].position.z)>float(chevrons[1].position.z),"Chevrons extend from the puck up the highway")
+	check(float(chevrons[0].position.z)<0.0,"The arrow begins over the puck and points up the highway")
 	game.queue_free();await process_frame
 	print("Flick visual: ","PASS" if failures==0 else str(failures)+" FAILED")
 	quit(failures)
