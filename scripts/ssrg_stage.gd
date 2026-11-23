@@ -2,6 +2,7 @@ extends Node3D
 var receptors: Array = []
 var press: MeshInstance3D
 var press_glow: MeshInstance3D
+var judgment_scan: MeshInstance3D
 var rails: Array = []
 var old_rails: Array = []
 var old_rail_glows: Array = []
@@ -65,6 +66,15 @@ func _init() -> void :
 	var glow_mat=ShaderMaterial.new();glow_mat.shader=preload("res://scripts/ssrg_judgment_glow.gdshader")
 	glow_mat.set_shader_parameter("glow_color",Color8(255,220,65,150));glow_mat.render_priority=-6
 	press_glow.material_override=glow_mat;add_child(press_glow)
+	# A one-shot horizontal scan launches from the judgment bar and climbs to the
+	# highway entrance after the bar's centre-out burst.
+	judgment_scan=MeshInstance3D.new();judgment_scan.name="JudgmentHighwayScan"
+	var scan_plane=PlaneMesh.new();scan_plane.size=Vector2(1156*UNIT,9.5)
+	judgment_scan.mesh=scan_plane;judgment_scan.position=Vector3(-5*UNIT,.19,-4.6)
+	judgment_scan.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var scan_mat=ShaderMaterial.new();scan_mat.shader=preload("res://scripts/ssrg_judgment_scan.gdshader")
+	scan_mat.render_priority=4;scan_mat.set_shader_parameter("color",Color8(255,220,65))
+	judgment_scan.material_override=scan_mat;add_child(judgment_scan)
 	for lane in 13:
 		var ring = MeshInstance3D.new(); var disc = QuadMesh.new();disc.size = Vector2(212.0, 116.0)*9.75/512.0   # SSRG guide sprite size
 		ring.mesh = disc
@@ -245,11 +255,15 @@ func update_entrance(world: Node3D) -> void:
 	var right_rail_in=1.0
 	var judgment_in=1.0
 	var floor_in=1.0
+	var scan_progress=1.0
+	var scan_strength=0.0
 	if intro != null and intro.running():
 		left_rail_in=float(intro.reveal_part(0.0,.28))
 		right_rail_in=float(intro.reveal_part(.28,.56))
 		judgment_in=float(intro.reveal_part(.56,.79))
 		floor_in=float(intro.reveal_part(.79,1.0))
+		scan_progress=float(intro.reveal_part(.70,.98))
+		scan_strength=sin(scan_progress*PI)*1.35
 	for index in rails.size():
 		var rail_in=left_rail_in if index==0 else right_rail_in
 		rails[index].material_override.set_shader_parameter("rail_entrance",rail_in)
@@ -261,6 +275,8 @@ func update_entrance(world: Node3D) -> void:
 		old_rail_dots[index].material_override.set_shader_parameter("entrance",rail_in)
 	press.material_override.set_shader_parameter("entrance",judgment_in)
 	press_glow.material_override.set_shader_parameter("entrance",judgment_in)
+	judgment_scan.material_override.set_shader_parameter("progress",scan_progress)
+	judgment_scan.material_override.set_shader_parameter("strength",scan_strength)
 
 func warmup(world: Node3D) -> void :
 	if not visible: return
