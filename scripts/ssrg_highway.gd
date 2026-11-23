@@ -171,7 +171,7 @@ func flick_splash_reach(origin: Vector3, up: Vector3) -> float:
 	var from = cam.unproject_position(origin)
 	var pixels_per_unit = from.y - cam.unproject_position(origin + up).y
 	if pixels_per_unit <= 0.0: return INF
-	return maxf(0.0, from.y - middle) / pixels_per_unit
+	return maxf(0.0, from.y - middle) / pixels_per_unit * FLICK_SPLASH_HEIGHT_SCALE
 
 # The highest rise (in FIT units) the fastest, straight-up spark reaches before it dies.
 func flick_spark_max_rise() -> float:
@@ -216,6 +216,8 @@ const FLICK_SPARK_EXTRA_SPEED = 18.0
 const FLICK_SPARK_MAX_LENGTH = 2.6  # longest spark streak, in FIT units
 # The splash never rises past this fraction of the screen height from the top (.5 = the middle).
 const FLICK_SPLASH_TOP = .5
+# Then stretched past that by this much (1.2 = 20% higher than the middle of the screen).
+const FLICK_SPLASH_HEIGHT_SCALE = 1.2
 # Face the camera, then turn the strand so its head points along its current flight.
 func orient_flick_spark(node: Node3D, side_speed: float, up_speed: float) -> void:
 	node.rotation = world.camera.rotation
