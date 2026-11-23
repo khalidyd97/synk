@@ -11,6 +11,7 @@ var note_speed_input: Stepper
 var highway_angle_input: Stepper
 var timing_input: Stepper
 var ssrg_touch_sync_input: Stepper
+var ssrg_health_toggle: Switch
 var bluetooth_toggle: Switch
 var bluetooth_latency_input: Stepper
 var song_preview_toggle: Switch
@@ -435,6 +436,8 @@ func build_gameplay(items: VBoxContainer,browsing: VBoxContainer) -> void:
     extras_switch(items,"touch_assist","Touch assist","A tap just beside an empty lane still hits the nearby note.")
     extras_switch(items,"lane_hints","Lane lines","Show faint lane lines while you play.")
     extras_switch(items,"window_preview","Timing window preview","Show the PERFECT and GREAT zones on the line during the countdown.")
+    ssrg_health_toggle=Switch.new(); add_control(row(items,"Disable health","Keep health full and prevent life-based failure. Misses, scoring and combo still work normally."),ssrg_health_toggle,152)
+    ssrg_health_toggle.button_pressed=game.ssrg_health_disabled; connect_switch(ssrg_health_toggle,game.change_ssrg_health_disabled)
     extras_switch(items,"mirror","Mirror","Flip every chart left to right.")
     extras_switch(items,"hidden","Hidden","Notes fade out as they near the line.")
     extras_switch(items,"sudden","Sudden","Notes appear late, partway down the highway.")
@@ -678,6 +681,7 @@ func refresh() -> void:
     for kind in color_mode_tiles: color_mode_tiles[kind].selected=kind==game.highway_colors
     if highway_opacity_input: highway_opacity_input.sync_value(game.highway_opacity*100)
     if not song_preview_toggle: return
+    ssrg_health_toggle.set_pressed_no_signal(game.ssrg_health_disabled)
     song_preview_toggle.set_pressed_no_signal(game.lobby.preview_enabled)
     metronome_toggle.set_pressed_no_signal(game.beat_clock.enabled)
     bluetooth_toggle.set_pressed_no_signal(game.bluetooth_mode); bluetooth_latency_input.editable=game.bluetooth_mode

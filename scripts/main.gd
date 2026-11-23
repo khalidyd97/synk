@@ -110,6 +110,7 @@ var ssrg_resume_position=-1.0
 var start_position = 0.0
 var timing_ms = 0.0
 var ssrg_touch_sync_ms = 0.0
+var ssrg_health_disabled = false
 var bluetooth_mode = false
 var bluetooth_latency_ms = 180.0
 var note_speed = 1.0
@@ -452,6 +453,7 @@ func _ready() -> void:
 	# retune it in Settings. Desktop/pointer input stays at 0.
 	var touch_sync_default: float = 40.0 if OS.get_name() in ["Android", "iOS"] else 0.0
 	ssrg_touch_sync_ms=clampf(float(prefs.get_value("ssrg","touch_sync_ms",touch_sync_default)), -200, 200)
+	ssrg_health_disabled=bool(prefs.get_value("ssrg","disable_health",false))
 	bluetooth_mode=bool(prefs.get_value("audio","bluetooth_mode",false))
 	slide_snap=str(prefs.get_value("editor","slide_snap","free"))
 	if slide_snap not in ["free","lanes","beats"]: slide_snap="free"
@@ -1421,6 +1423,13 @@ func change_audio_offset(value: float) -> void:
 func change_ssrg_touch_sync(value:float) -> void:
 	ssrg_touch_sync_ms=clampf(snappedf(value,5.0),-200,200)
 	prefs.set_value("ssrg","touch_sync_ms",ssrg_touch_sync_ms);prefs.save("user://preferences.cfg")
+
+func change_ssrg_health_disabled(value:bool) -> void:
+	ssrg_health_disabled=value
+	prefs.set_value("ssrg","disable_health",value);prefs.save("user://preferences.cfg")
+	if value and ssrg_presentation:
+		ssrg_presentation.life=100.0
+		if ssrg_presentation.state==0:ssrg_presentation.select_state(1)
 
 func toggle_note_lines() -> void:
 	note_lines=not note_lines; update_note_lines_button()
@@ -2996,10 +3005,10 @@ func judge(entry: Dictionary,error: float,complete: bool = true,source_grade: St
 		if stage_intro and stage_intro.play_cover:stage_intro.play_cover.on_note_hit(judgement)
 	if ssrg_playable_run and ssrg_presentation and (effects or judgement!="MISS"):ssrg_presentation.judged(judgement,entry.note)
 	if effects and extras: extras.on_judged(entry,judgement,combo)
-	if effects and ssrg_playable_run and ssrg_presentation and judgement=="MISS" and ssrg_presentation.life<=0 and not practice.active:ssrg_game_over()
+	if effects and ssrg_playable_run and ssrg_presentation and judgement=="MISS" and ssrg_presentation.life<=0 and not ssrg_health_disabled and not practice.active:ssrg_game_over()
 
 func ssrg_game_over() -> void:
-	if ssrg_failed or finishing or mode!="play":return
+	if ssrg_health_disabled or ssrg_failed or finishing or mode!="play":return
 	ssrg_failed=true;audio.stream_paused=true;pointers.clear();ssrg_touch_router.reset();ssrg_contact_ids.clear()
 	paused_mode="play";set_mode("paused",false)
 	# The reason sits on the line under the title, clear of the buttons.

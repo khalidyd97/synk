@@ -59,8 +59,12 @@ func judged(grade:String,note:Dictionary={}) -> void:
 	if not game.ssrg_playable_run or not active:return
 	if grade=="MISS":
 		game.score=score_rules.settle()
-		life=maxf(0.0,life-LIFE_PENALTY[difficulty_index])
-		select_state(1 if life>=100.0 else 0)
+		if game.ssrg_health_disabled:
+			life=100.0
+			select_state(1)
+		else:
+			life=maxf(0.0,life-LIFE_PENALTY[difficulty_index])
+			select_state(1 if life>=100.0 else 0)
 		return
 	var event_key=str(note.get("ssrg_order",hash(note)))
 	if note.has("ssrg_special") and not triggered_specials.has(event_key):
