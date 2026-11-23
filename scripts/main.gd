@@ -573,6 +573,7 @@ func _ready() -> void:
 	build_waveform()
 	floating_text_input=preload("res://scripts/floating_text_input.gd").new()
 	floating_text_input.game=self; add_child(floating_text_input)
+	ensure_android_debug_flick_chart()
 	features.activate_song()
 	for scope in [settings_panel,studio,sync_helper,record_tools]: preload("res://scripts/interface_life.gd").mount(scope)
 	queue_song_metadata()
@@ -1394,6 +1395,39 @@ func start_autoplay() -> void:
 
 func baseline_notes() -> Array:
 	return saved_notes if features.chart_exists() else []
+
+# Phone review fixture: a dense Lv 30 chart that makes the flick silhouette easy
+# to inspect at real approach speed. It is installed once in Android debug builds
+# and then behaves like an ordinary editable chart without being overwritten.
+func flick_test_chart() -> Array:
+	var notes:Array=[]
+	var beat=60.0/128.0
+	for i in 180:
+		var at=3.0+float(i)*beat*.5
+		var lane=posmod(i*5+floori(float(i)/8.0)*2,SynkChart.LANES)
+		var kind="flick" if i%5!=4 else "tap"
+		if i%20==15:kind="slide"
+		elif i%20==19:kind="hold"
+		var note=SynkChart.note(at,lane,kind)
+		if kind=="flick":note.direction=0
+		elif kind in ["hold","slide"]:
+			note.duration=beat*1.5
+			note.end_lane=clampi(lane+(3 if (i/20)%2==0 else -3),0,SynkChart.MAX_LANE)
+			if kind=="slide":note.path=[{"offset":0.0,"lane":float(lane)},{"offset":note.duration,"lane":float(note.end_lane)}]
+		notes.append(note)
+	return notes
+
+func ensure_android_debug_flick_chart() -> void:
+	if not OS.is_debug_build() or OS.get_name()!="Android":return
+	var path="user://charts/eclipse_lv30.json"
+	if not FileAccess.file_exists(path):
+		var settings={"bpm":128.0,"beat_offset":0.0,"verse2":-1.0,"bridge":-1.0,"bookmarks":[]}
+		var payload={"version":SynkChart.FORMAT_VERSION,"song_id":"eclipse","chart_name":"lv30","title":"Eclipse · Flick Test","bpm":128.0,"beat_offset":0.0,"chart_settings":settings,"notes":flick_test_chart()}
+		SynkLibrary.atomic_write(path,payload)
+	if not bool(prefs.get_value("debug","flick_lv30_selected",false)):
+		prefs.set_value("charts","eclipse","lv30")
+		prefs.set_value("debug","flick_lv30_selected",true)
+		prefs.save("user://preferences.cfg")
 
 func audio_time() -> float:
 	if audio.stream_paused:return maxf(0,audio.get_playback_position())
