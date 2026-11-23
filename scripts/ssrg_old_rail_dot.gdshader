@@ -5,6 +5,7 @@ uniform vec4 accent : source_color=vec4(1.0,.26,.34,1.0);
 uniform vec2 rail_start=vec2(0.0);
 uniform vec2 rail_end=vec2(0.0);
 uniform vec2 rail_half_widths=vec2(.05,.5);
+uniform float entrance : hint_range(0.0,1.0) = 1.0;
 varying vec2 stage_position;
 void vertex(){
     vec3 point=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz;
@@ -20,5 +21,5 @@ void fragment(){
     float light=max(art.r,max(art.g,art.b));
     ALBEDO=accent.rgb*light;
     EMISSION=accent.rgb*light*.7;
-    ALPHA=light*.85*inside;
+    ALPHA=light*.85*inside*entrance;
 }

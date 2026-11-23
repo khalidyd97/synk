@@ -153,6 +153,7 @@ const BAND_TOP = .5 + 185.0/640.0
 const BAND_BOTTOM = .5 + 315.0/640.0
 func update(world: Node3D) -> void :
 	if not visible: return
+	update_entrance(world)
 	if world.game.old_ssrg_ui():
 		var presentation=world.game.ssrg_presentation
 		var rave_color:Color=presentation.beam_color if presentation and presentation.active else Color8(255,67,88)
@@ -234,6 +235,26 @@ func update_touch_feedback(world:Node3D) -> void:
 		mark.material_override.set_shader_parameter("progress",intensity*((1.0-pop) if contact else .45))
 		mark.visible=intensity>0
 	feedback_states=retained
+
+# Assemble the stage in three readable passes after the blurred background lands:
+# rails first, then the judgment band and its halo, then the dark road between them.
+func update_entrance(world: Node3D) -> void:
+	var intro=world.game.stage_intro
+	var rails_in=1.0
+	var judgment_in=1.0
+	var floor_in=1.0
+	if intro != null and intro.running():
+		rails_in=float(intro.reveal_part(0.0,.38))
+		judgment_in=float(intro.reveal_part(.38,.68))
+		floor_in=float(intro.reveal_part(.68,1.0))
+	for rail in rails:
+		rail.material_override.set_shader_parameter("rail_entrance",rails_in)
+		rail.material_override.set_shader_parameter("floor_entrance",floor_in)
+	for rail in old_rails:rail.material_override.set_shader_parameter("entrance",rails_in)
+	for glow in old_rail_glows:glow.material_override.set_shader_parameter("entrance",rails_in)
+	for dot in old_rail_dots:dot.material_override.set_shader_parameter("entrance",rails_in)
+	press.material_override.set_shader_parameter("entrance",judgment_in)
+	press_glow.material_override.set_shader_parameter("entrance",judgment_in)
 
 func warmup(world: Node3D) -> void :
 	if not visible: return

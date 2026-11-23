@@ -3,7 +3,7 @@ extends Control
 # Song intro before gameplay: a loading screen built from the cover art and the song's colors,
 # then an entrance where the cover and details slide away over the stationary highway.
 const LOAD_TIME = 5.0
-const ENTER_TIME = 1.35
+const ENTER_TIME = 1.95
 # The post-load handoff is deliberately serial: first resolve the full-screen
 # artwork into its Gaussian version, crossfade that unchanged dim background into
 # the gameplay backdrop, then reveal the highway while moving the card.
