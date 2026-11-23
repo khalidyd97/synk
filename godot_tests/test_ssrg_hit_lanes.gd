@@ -64,6 +64,12 @@ func run() -> void:
 	effect.clear_hits();game.song_time=0.0;game.visual_song_time=0.0
 	for lane in 13:
 		check(is_equal_approx(effect.lane_flash_x(world.note_x(lane)),world.note_x(lane)),"Lane %d is a flash position" % (lane+1))
+	# The loading glow carries one visual-only swipe across the empty judgment line.
+	effect.clear_hits();effect.update_entrance_sweep(.01,true)
+	check(effect.hits.size()==1 and effect.hits[0].sustain_entry.is_empty(),"Loading swipe begins on lane 1 without a gameplay note")
+	effect.update_entrance_sweep(.5,true);effect.update_entrance_sweep(1.0,true)
+	check(effect.hits.size()==13 and is_equal_approx(effect.hits[-1].node.position.x,world.note_x(12)),"One loading swipe emits lanes 1 through 13 exactly once")
+	effect.update_entrance_sweep(0.0,false)
 	# Charts with fewer keys only use their own lanes.
 	game.ssrg_lane_count=7
 	check(is_equal_approx(effect.lane_flash_x(world.note_x(3)),world.note_x(4)) and is_equal_approx(effect.lane_flash_x(world.note_x(2.9)),world.note_x(2)),"A 7-key chart flashes on its seven lanes")

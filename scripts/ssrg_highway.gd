@@ -31,6 +31,8 @@ const FLICK_SPARK_LIFE = .46
 const FLICK_SPARK_COUNT = 18
 const FLICK_SPARK_SHADER = preload("res://scripts/flick_spark.gdshader")
 var active = false
+var entrance_sweep_lane = -1
+var entrance_sweep_tail = 0.0
 var original_stage: Node3D
 var source_background: Node3D
 var background_bank:Array=[]
@@ -202,6 +204,19 @@ func emit_crossed_lane_hits(h: Dictionary, x: float) -> void:
 		spawn(flash_lane_value(index),"slide",{},-999)
 	h.last_cross_lane=current
 
+# Loading reveal: one empty slide gesture sweeps lane 1 through lane 13 while
+# the judgment glow climbs the highway. These flashes have no gameplay entry.
+func update_entrance_sweep(progress:float,running:bool) -> void:
+	if not running or progress<=0.0:
+		entrance_sweep_lane=-1
+		return
+	var target=clampi(floori(progress*float(world.game.gameplay_lane_count()-1)),0,world.game.gameplay_lane_count()-1)
+	var first=0 if entrance_sweep_lane<0 else entrance_sweep_lane+1
+	for index in range(first,target+1):
+		spawn(flash_lane_value(index),"slide",{},-999)
+		entrance_sweep_tail=HIT_LIFE
+	entrance_sweep_lane=maxi(entrance_sweep_lane,target)
+
 # Where a flash goes: the note's point on the judgement line, pulled toward the camera along
 # the line of sight. It shows exactly on that point on screen (lifting it instead made outer
 # flashes drift off the line and look tilted) and draws in front of the track.
@@ -311,6 +326,8 @@ func _process(delta: float) -> void:
 	original_stage.update(world)
 	var game = world.game
 	var playing = (game.mode == "play" and game.countdown<=0 and game.resume_countdown<=0) or game.highway_preview
+	entrance_sweep_tail=maxf(0.0,entrance_sweep_tail-delta)
+	var hit_playing=playing or (game.stage_intro and game.stage_intro.running()) or entrance_sweep_tail>0.0
 	var presentation=game.ssrg_presentation
 	var using_state=presentation and presentation.active
 	var weights=presentation.weights if using_state else [1.0,0.0,0.0,0.0]
@@ -329,7 +346,7 @@ func _process(delta: float) -> void:
 		world.cover_material.set_shader_parameter("ssrg_fever_dark",dark)
 	if using_state:
 		world.ssrg_finger_beam_material.set_shader_parameter("tint",world.element_color("beams",presentation.beam_color))
-	advance_hits(delta,playing)
+	advance_hits(delta,hit_playing)
 
 # Source RenderLongCoolbombTouch rewinds after normalized time > .3.
 # Independent tap instances intentionally preserve SYNK's uninterrupted dense-hit flow.
