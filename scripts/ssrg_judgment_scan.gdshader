@@ -15,13 +15,15 @@ void vertex(){
 void fragment(){
     float head=mix(near_z,far_z,progress);
     float distance_to_head=abs(world_z-head);
-    float core=exp(-pow(distance_to_head/.055,2.0));
-    float halo=exp(-pow(distance_to_head/.24,2.0));
-    // The trail remains on the judgment side of the travelling head.
-    float behind=smoothstep(head-.02,head+.04,world_z);
-    float trail=behind*exp(-max(world_z-head,0.0)*1.45);
-    float side=smoothstep(0.0,.035,UV.x)*smoothstep(0.0,.035,1.0-UV.x);
-    ALBEDO=color.rgb*(1.0+core*1.8);
-    EMISSION=color.rgb*(core*2.6+halo*1.1+trail*.32)*strength;
-    ALPHA=(core+halo*.52+trail*.16)*side*strength;
+    // A wide, feathered wash with no opaque core: the highway catches a moving
+    // bloom rather than having a solid horizontal stripe drawn over it.
+    float glow=exp(-pow(distance_to_head/.30,2.0));
+    float bloom=exp(-pow(distance_to_head/.72,2.0));
+    float behind=smoothstep(head-.08,head+.12,world_z);
+    float afterglow=behind*exp(-max(world_z-head,0.0)*1.15);
+    float side=pow(smoothstep(0.0,.18,UV.x)*smoothstep(0.0,.18,1.0-UV.x),.65);
+    float light=(glow*.52+bloom*.24+afterglow*.10)*side*strength;
+    ALBEDO=color.rgb*(.72+bloom*.42);
+    EMISSION=color.rgb*light*1.65;
+    ALPHA=light*.48;
 }
