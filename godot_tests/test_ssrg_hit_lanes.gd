@@ -84,6 +84,11 @@ func run() -> void:
 	var held_lead=game.gameplay_start_lead
 	game._process(.1)
 	check(game.post_countdown_flash<game.POST_COUNTDOWN_FLASH_TIME and is_equal_approx(game.gameplay_start_lead,held_lead),"Note approach waits while the final flash travels upward")
+	# Pause/resume uses the numeric countdown only—never the opening lane choreography.
+	effect.clear_hits();game.post_countdown_flash=0.0;game.countdown=0.0;game.resume_countdown=2.99
+	game._process(.01)
+	check(effect.hits.is_empty(),"Resume countdown does not emit lane swipe effects")
+	game.resume_countdown=0.0
 	# Charts with fewer keys only use their own lanes.
 	game.ssrg_lane_count=7
 	check(is_equal_approx(effect.lane_flash_x(world.note_x(3)),world.note_x(4)) and is_equal_approx(effect.lane_flash_x(world.note_x(2.9)),world.note_x(2)),"A 7-key chart flashes on its seven lanes")
