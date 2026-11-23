@@ -156,9 +156,9 @@ func spawn_flick_sparks(x: float) -> void:
 		# Faster the closer to vertical, so the tallest sparks shoot straight up.
 		var speed = (FLICK_SPARK_MIN_SPEED + randf() * FLICK_SPARK_EXTRA_SPEED) * world.FIT * (1.0 + 0.45 * cos(angle * 1.8)) * fit
 		var up_speed = cos(angle) * speed
-		var side_speed = sin(angle) * speed * 1.3
+		var side_speed = sin(angle) * speed
 		# Each spark dies at its own random time, so the spray thins out gradually.
-		var life = FLICK_SPARK_LIFE * (0.35 + randf() * 0.65)
+		var life = FLICK_SPARK_LIFE * (0.6 + randf() * 0.4)
 		flick_sparks.append({"node": node, "material": mat, "age": 0.0, "life": life, "base": origin, "up_speed": up_speed, "side_speed": side_speed, "gravity": FLICK_SPARK_GRAVITY * world.FIT * fit})
 		orient_flick_spark(node, side_speed, up_speed)
 	spawn_flick_flare(origin, up, tint, parent, minf(reach, FLICK_FLARE_SIZE.y * world.FIT))
@@ -209,11 +209,11 @@ func advance_flick_flares(delta: float, playing: bool) -> void:
 		f.node.rotation = world.camera.rotation
 		f.material.set_shader_parameter("opacity", opacity * (1.0 - k) * (1.0 - k))
 
-const FLICK_SPARK_GRAVITY = 18.0
-const FLICK_SPARK_SPREAD = 50.0  # widest angle from straight up, in degrees
-const FLICK_SPARK_MIN_SPEED = 11.0
-const FLICK_SPARK_EXTRA_SPEED = 18.0
-const FLICK_SPARK_MAX_LENGTH = 2.6  # longest spark streak, in FIT units
+const FLICK_SPARK_GRAVITY = 10.0
+const FLICK_SPARK_SPREAD = 30.0  # widest angle from straight up, in degrees
+const FLICK_SPARK_MIN_SPEED = 20.0
+const FLICK_SPARK_EXTRA_SPEED = 12.0
+const FLICK_SPARK_MAX_LENGTH = 3.6  # longest spark streak, in FIT units
 # The splash never rises past this fraction of the screen height from the top (.5 = the middle).
 const FLICK_SPLASH_TOP = .5
 # Then stretched past that by this much (1.2 = 20% higher than the middle of the screen).
