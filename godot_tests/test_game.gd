@@ -271,7 +271,8 @@ func run() -> void:
 	var flick_arrow=flick_arrow_node.material_override as ShaderMaterial
 	check(flick_arrow.get_shader_parameter("tint")==world.colors[2],"Flick direction arrow uses the flick color")
 	var flick_cap=world.notes["play3"].node.get_child(0)
-	check(world.camera.unproject_position(flick_arrow_node.global_position).y<world.camera.unproject_position(flick_cap.global_position).y-10,"Flick arrow floats above its note")
+	check(flick_arrow_node.mesh is PlaneMesh and is_zero_approx(flick_arrow_node.rotation.x),"Flick arrow lies flat on the highway")
+	check(flick_arrow_node.position.z<flick_cap.position.z,"Flat flick arrow points ahead of its note toward the highway")
 	var slide = SynkChart.note(2,5,"slide"); slide.duration=1.0; slide.end_lane=9
 	game.start_game([hold,slide]); game.song_time=1.0
 	world._process(0)

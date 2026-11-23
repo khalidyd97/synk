@@ -29,7 +29,7 @@ func run() -> void:
 	var tap_head = world.notes.angle_tap.node.get_child(0)
 	var flick_arrow = world.notes.angle_flick.node.get_child(1)
 	check(is_equal_approx(tap_head.rotation.x,-PI*.5),"Recorder note face lies on the highway in the flat view")
-	check(is_equal_approx(flick_arrow.rotation.x,-PI*.5),"Recorder flick arrow lies on the highway in the flat view")
+	check(is_zero_approx(flick_arrow.rotation.x) and flick_arrow.mesh is PlaneMesh,"Recorder flick arrow lies on the highway in the flat view")
 	var band: Color=world.judgment_material.get_shader_parameter("base_color")
 	check(world.ssrg_theme.original_stage.visible, "Recorder judgment uses the recovered SKD judgment art")
 	var bar = game.field.project(6.0, 0.0)
@@ -40,7 +40,7 @@ func run() -> void:
 	game.change_highway_angle(35.0)
 	check(world.camera.projection==Camera3D.PROJECTION_ORTHOGONAL, "The SKD recorder keeps its fixed camera when an old angle is saved")
 	check(is_equal_approx(tap_head.rotation.x,-PI*.5),"Recorder note stays flat on the highway in perspective")
-	check(is_equal_approx(flick_arrow.rotation.x,-PI*.5),"Recorder arrow stays flat on the highway in perspective")
+	check(is_zero_approx(flick_arrow.rotation.x) and flick_arrow.mesh is PlaneMesh,"Recorder arrow stays flat on the highway in perspective")
 	check(is_equal_approx(game.recorder_angle_slider.value,35.0) and game.recorder_angle_label.text=="35°", "Recorder slider follows angle changes")
 	game.queue_free()
 	await process_frame

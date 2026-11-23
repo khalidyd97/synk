@@ -1305,14 +1305,14 @@ func flick_arrow_color(palette: int) -> Color:
 
 func make_flick(parent: Node3D, note: Dictionary, palette: int, recording = false) -> void:
 	make_cap(parent,float(note.lane),0,palette,recording and game.uses_skd_recorder_surface())
-	# Flicks are up-only. The chevron sits ABOVE the note along the screen's up axis
-	# (camera up) instead of being lifted straight off the floor, where it overlapped the
-	# puck. In the orthographic SSRG view "up" is a far-end offset, so this reads as above.
-	var up_on_screen = camera.basis.y.normalized()
+	# Flicks are up-only. Lay the chevron directly on the road, slightly ahead of the
+	# puck toward the far end, so it shares the highway perspective instead of facing
+	# the camera like a floating billboard.
+	var highway_forward=Vector3.FORWARD
 	for i in 1:
 		var above = (2.9 if game.uses_ssrg_gameplay() else 2.4)*FIT*game.gameplay_note_size()
-		var base = Vector3(note_x(note.lane),.13,0)+up_on_screen*above
-		var arrow_mesh = QuadMesh.new(); arrow_mesh.size=Vector2(3.22,1.6)*FIT*game.gameplay_note_size()
+		var base = Vector3(note_x(note.lane),.17,-above)
+		var arrow_mesh = PlaneMesh.new(); arrow_mesh.size=Vector2(3.22,1.6)*FIT*game.gameplay_note_size()
 		# The SSRG puck is wide and bright; a larger chevron keeps the up arrow readable on it.
 		if game.uses_ssrg_gameplay(): arrow_mesh.size*=1.7
 		var arrow_tint = Color(1.0, 1.0, 1.0)  # flick arrow: pure white with a soft glow
@@ -1322,12 +1322,11 @@ func make_flick(parent: Node3D, note: Dictionary, palette: int, recording = fals
 				m.shader=preload("res://scripts/synk_canvas_arrow.gdshader");m.render_priority=4
 			m.set_shader_parameter("tint",arrow_tint); return m)
 		var arrow = mesh_node(arrow_mesh,parent,arrow_material)
-		arrow.position=base; arrow.rotation=camera.rotation
-		arrow.set_meta("recorder_billboard",true)
+		arrow.position=base
 		arrow.set_meta("flick_direction",0)
-		arrow.set_meta("flick_axis_local",Vector3.UP)
+		arrow.set_meta("flick_axis_local",highway_forward)
 		arrow.set_meta("flick_base",base)
-		arrow.set_meta("flick_axis",up_on_screen)
+		arrow.set_meta("flick_axis",highway_forward)
 
 # Trails run through the middle of their notes: just above the track for flat rectangle
 # notes, and at half height through the thicker circle pucks.
@@ -1666,10 +1665,10 @@ func sync_note(key: String, note: Dictionary, visible_keys: Dictionary, recordin
 	if recording: notes[key].node.position.z *= -1
 	elif not held and modifier_hides(notes[key].node.position.z): notes[key].node.visible = false
 	if note.kind=="flick":
-		# The arrow bobs up and down; a gentler rate stays smooth at the device frame rate
-		# (a faster sine looked stepped, and the SSRG projection exaggerates quick vertical moves).
-		var nudge = sin(animation_time*TAU*2.4)*.38
-		var pulse01 = .5+.5*sin(animation_time*TAU*2.4)   # brightest/biggest at the top of the bob
+		# Keep the flat arrow alive with a small glide along the highway. It never lifts
+		# toward the camera, so its plane and perspective remain locked to the road.
+		var nudge = sin(animation_time*TAU*2.0)*.16
+		var pulse01 = .5+.5*sin(animation_time*TAU*2.0)
 		var note_z = notes[key].node.position.z
 		for arrow in notes[key].node.get_children():
 			if not arrow.has_meta("flick_base"): continue
