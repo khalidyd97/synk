@@ -7,6 +7,7 @@ const ENTER_TIME = 2.40
 # The post-load handoff is deliberately serial: first resolve the full-screen
 # artwork into its Gaussian version, crossfade that unchanged dim background into
 # the gameplay backdrop, then reveal the highway while moving the card.
+const LOADING_UI_FADE_TIME = .24
 const BLUR_TIME = .32
 const BACKGROUND_FADE_TIME = .20
 const BACKDROP_DIM = .70
@@ -186,14 +187,14 @@ func running() -> bool: return visible and elapsed < load_time + ENTER_TIME
 # 0 while the loading screen is up, easing to 1 as the stage finishes entering.
 func entrance() -> float:
 	if not visible: return 1.0
-	var background_wait=(BLUR_TIME+BACKGROUND_FADE_TIME) if load_time>0.0 else 0.0
+	var background_wait=(LOADING_UI_FADE_TIME+BLUR_TIME+BACKGROUND_FADE_TIME) if load_time>0.0 else 0.0
 	var e = clampf((elapsed-load_time-background_wait)/maxf(.001,ENTER_TIME-background_wait),0.0,1.0)
 	return e * e * (3.0 - 2.0 * e)
 
 # Separate windows let the world assemble in readable layers without moving the camera.
 func reveal_part(start:float,finish:float) -> float:
 	if not visible:return 1.0
-	var background_wait=(BLUR_TIME+BACKGROUND_FADE_TIME) if load_time>0.0 else 0.0
+	var background_wait=(LOADING_UI_FADE_TIME+BLUR_TIME+BACKGROUND_FADE_TIME) if load_time>0.0 else 0.0
 	var raw=clampf((elapsed-load_time-background_wait)/maxf(.001,ENTER_TIME-background_wait),0.0,1.0)
 	return smoothstep(start,finish,raw)
 
@@ -254,14 +255,17 @@ func _process(delta: float) -> void:
 
 func animate() -> void:
 	var appear=smoothstep(0.0,.5,elapsed) if load_time>0 else 1.0
-	var e=entrance();var alpha=appear*(1.0-smoothstep(0.0,.8,e))
+	var e=entrance()
 	# Loading stays completely sharp. Only a genuinely completed load starts this clock.
 	var after_load=maxf(0.0,elapsed-load_time)
-	var blur_progress=1.0 if load_time<=0.0 else smoothstep(0.0,BLUR_TIME,after_load)
+	var ui_alpha=0.0 if load_time<=0.0 else appear*(1.0-smoothstep(0.0,LOADING_UI_FADE_TIME,after_load))
+	var blur_start=LOADING_UI_FADE_TIME
+	var blur_progress=1.0 if load_time<=0.0 else smoothstep(blur_start,blur_start+BLUR_TIME,after_load)
 	backdrop_art.material.set_shader_parameter("blur_amount",blur_progress)
 	# Blur never changes brightness. Once it is fully resolved, crossfade to the
 	# identically blurred gameplay backdrop before any highway geometry enters.
-	var background_mix=1.0 if load_time<=0.0 else smoothstep(BLUR_TIME,BLUR_TIME+BACKGROUND_FADE_TIME,after_load)
+	var background_start=LOADING_UI_FADE_TIME+BLUR_TIME
+	var background_mix=1.0 if load_time<=0.0 else smoothstep(background_start,background_start+BACKGROUND_FADE_TIME,after_load)
 	var curtain_alpha=1.0-background_mix
 	backdrop.color=Color(loading_shadow,curtain_alpha)
 	backdrop_art.modulate.a=.52*appear*curtain_alpha
@@ -273,12 +277,12 @@ func animate() -> void:
 		card.position=rest.position+Vector2(e*e*size.x*.35,0)
 		card.rotation=-.025*(1.0-e)
 		card.scale=Vector2.ONE*lerpf(.96,1.0,appear)
-		card.modulate=Color(.9,.9,.9,alpha if not arriving else 1.0-smoothstep(0.0,.8,e))
+		card.modulate=Color(.9,.9,.9,ui_alpha if not arriving else 1.0-smoothstep(0.0,.8,e))
 	reflection.visible=false
 	for label in [eyebrow,title,meta_label]:
-		label.modulate.a=alpha;label.position.x=info_x-(e*e*size.x*.2)+(1.0-appear)*15
-	for label in [status,percent,tip]:label.modulate.a=alpha
-	bar.modulate=Color(1,1,1,alpha)
+		label.modulate.a=ui_alpha;label.position.x=info_x+(1.0-appear)*15
+	for label in [status,percent,tip]:label.modulate.a=ui_alpha
+	bar.modulate=Color(1,1,1,ui_alpha)
 	eyebrow.text="SYNK  /  ON STAGE"
 	status.text="PREPARING YOUR STAGE" if load_progress()<1 else "READY TO PLAY"
 	percent.text="%02d%%" % roundi(load_progress()*100)
@@ -287,7 +291,7 @@ func animate() -> void:
 # The cover keeps full opacity and travels on an eased curve from the loading card to the
 # gameplay panel's rectangle, shrinking as it goes, so the hand-off has no visible jump.
 func glide_card(appear: float) -> void:
-	var background_wait=(BLUR_TIME+BACKGROUND_FADE_TIME) if load_time>0.0 else 0.0
+	var background_wait=(LOADING_UI_FADE_TIME+BLUR_TIME+BACKGROUND_FADE_TIME) if load_time>0.0 else 0.0
 	var raw=clampf((elapsed-load_time-background_wait)/maxf(.001,ENTER_TIME-background_wait),0.0,1.0) if visible else 1.0
 	var t=raw*raw*raw*(raw*(raw*6.0-15.0)+10.0)
 	var flying=arriving
@@ -306,7 +310,8 @@ func glide_card(appear: float) -> void:
 	card_art.material.set_shader_parameter("rect_size",card.size)
 
 func draw_fx() -> void:
-	var alpha=1.0-smoothstep(0.0,.8,entrance())
+	var after_load=maxf(0.0,elapsed-load_time)
+	var alpha=0.0 if load_time<=0.0 else (1.0-smoothstep(0.0,LOADING_UI_FADE_TIME,after_load))
 	if alpha<=0:return
 	var w=size.x;var h=size.y
 	# A quiet editorial stage card: oversized artwork, cropped orbital lines,
