@@ -27,7 +27,7 @@ var hits: Array = []
 # spray of short spark streaks flung up and out from the bar so the impact reads as an
 # explosive splash in the flick's up direction.
 var flick_sparks: Array = []
-const FLICK_SPARK_LIFE = .5   # the longest a spark lives; each one picks its own, shorter or equal
+const FLICK_SPARK_LIFE = .3   # the longest a spark lives; each one picks its own, shorter or equal
 const FLICK_SPARK_COUNT = 26
 const FLICK_SPARK_SHADER = preload("res://scripts/flick_spark.gdshader")
 var active = false
@@ -146,7 +146,7 @@ func spawn_flick_sparks(x: float, flash_scale: float = 1.0) -> void:
 	if world.game.hit_color != "":
 		glow = tint; deep = tint.darkened(.35)
 	# Sparks rise out of the flash's bright disc, not from one point at its centre.
-	var disc = Vector2(620, 372) * world.SSRG_UNIT * HIT_SCALE * flash_scale * Vector2(.2, .05)
+	var disc = Vector2(620, 372) * world.SSRG_UNIT * HIT_SCALE * flash_scale * Vector2(.1, .04)
 	# Shrink the whole splash's travel so even the tallest spark stops at the middle of the screen.
 	var reach = flick_splash_reach(origin, up)
 	var fit = clampf((reach - FLICK_SPARK_MAX_LENGTH * .5 * world.FIT) / (flick_spark_max_rise() * world.FIT), 0.0, 1.0)
@@ -228,10 +228,10 @@ const FLICK_SPARK_GLOW = Color(.25, .92, 1.0)
 const FLICK_SPARK_DEEP = Color(.18, .45, 1.0)
 # Sparks burst out as the flash reaches full size (its frames 2-3 at 33 fps), in seconds.
 const FLICK_SPARK_DELAY = Vector2(.03, .09)
-const FLICK_SPARK_SPREAD = 30.0  # widest angle from straight up, in degrees
-const FLICK_SPARK_MIN_SPEED = 20.0
-const FLICK_SPARK_EXTRA_SPEED = 12.0
-const FLICK_SPARK_MAX_LENGTH = 3.6  # longest spark streak, in FIT units
+const FLICK_SPARK_SPREAD = 14.0  # widest angle from straight up, in degrees
+const FLICK_SPARK_MIN_SPEED = 32.0
+const FLICK_SPARK_EXTRA_SPEED = 20.0
+const FLICK_SPARK_MAX_LENGTH = 4.5  # longest spark streak, in FIT units
 # The splash never rises past this fraction of the screen height from the top (.5 = the middle).
 const FLICK_SPLASH_TOP = .5
 # Then stretched past that by this much (1.2 = 20% higher than the middle of the screen).
