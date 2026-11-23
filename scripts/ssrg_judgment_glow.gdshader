@@ -9,6 +9,11 @@ void fragment(){
     float vertical=smoothstep(0.0,.82,UV.y);
     vertical*=vertical;
     float side=smoothstep(0.0,.035,UV.x)*smoothstep(0.0,.035,1.0-UV.x);
-    ALBEDO=glow_color.rgb;
-    ALPHA=glow_color.a*vertical*side*.72*entrance;
+    float distance_from_centre=abs(UV.x-.5);
+    float radius=smoothstep(0.0,.82,entrance)*.62;
+    float reveal=1.0-smoothstep(radius,radius+.09,distance_from_centre);
+    float wave=exp(-pow((distance_from_centre-radius)*20.0,2.0));
+    float burst=exp(-pow((entrance-.56)*6.5,2.0));
+    ALBEDO=glow_color.rgb*(1.0+burst*1.8+wave*1.2);
+    ALPHA=glow_color.a*vertical*side*reveal*(.32+entrance*.4+wave*burst*1.45);
 }

@@ -236,23 +236,28 @@ func update_touch_feedback(world:Node3D) -> void:
 		mark.visible=intensity>0
 	feedback_states=retained
 
-# Assemble the stage in three readable passes after the blurred background lands:
-# rails first, then the judgment band and its halo, then the dark road between them.
+# Assemble the stage in four readable passes after the blurred background lands:
+# left rail, right rail, a center-out judgment burst, then the dark road between them.
 func update_entrance(world: Node3D) -> void:
 	var intro=world.game.stage_intro
-	var rails_in=1.0
+	var left_rail_in=1.0
+	var right_rail_in=1.0
 	var judgment_in=1.0
 	var floor_in=1.0
 	if intro != null and intro.running():
-		rails_in=float(intro.reveal_part(0.0,.38))
-		judgment_in=float(intro.reveal_part(.38,.68))
-		floor_in=float(intro.reveal_part(.68,1.0))
-	for rail in rails:
-		rail.material_override.set_shader_parameter("rail_entrance",rails_in)
-		rail.material_override.set_shader_parameter("floor_entrance",floor_in)
-	for rail in old_rails:rail.material_override.set_shader_parameter("entrance",rails_in)
-	for glow in old_rail_glows:glow.material_override.set_shader_parameter("entrance",rails_in)
-	for dot in old_rail_dots:dot.material_override.set_shader_parameter("entrance",rails_in)
+		left_rail_in=float(intro.reveal_part(0.0,.23))
+		right_rail_in=float(intro.reveal_part(.23,.46))
+		judgment_in=float(intro.reveal_part(.46,.73))
+		floor_in=float(intro.reveal_part(.73,1.0))
+	for index in rails.size():
+		var rail_in=left_rail_in if index==0 else right_rail_in
+		rails[index].material_override.set_shader_parameter("rail_entrance",rail_in)
+		rails[index].material_override.set_shader_parameter("floor_entrance",floor_in)
+	for index in old_rails.size():
+		var rail_in=left_rail_in if index==0 else right_rail_in
+		old_rails[index].material_override.set_shader_parameter("entrance",rail_in)
+		old_rail_glows[index].material_override.set_shader_parameter("entrance",rail_in)
+		old_rail_dots[index].material_override.set_shader_parameter("entrance",rail_in)
 	press.material_override.set_shader_parameter("entrance",judgment_in)
 	press_glow.material_override.set_shader_parameter("entrance",judgment_in)
 
