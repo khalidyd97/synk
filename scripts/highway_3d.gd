@@ -1302,7 +1302,45 @@ func flick_arrow_color(palette: int) -> Color:
 		return Color("4fc8ff") if palette == 0 else Color("ffc23a")
 	return element_color(["tap","hold","flick","slide"][clampi(palette,0,3)], colors[palette])
 
+const FLICK_FRAMES = [
+	preload("res://assets/neon/flick/flick_1.png"),
+	preload("res://assets/neon/flick/flick_2.png"),
+	preload("res://assets/neon/flick/flick_3.png"),
+	preload("res://assets/neon/flick/flick_4.png"),
+	preload("res://assets/neon/flick/flick_5.png"),
+	preload("res://assets/neon/flick/flick_6.png"),
+]
+
+func flick_frame_material(frame: int) -> ShaderMaterial:
+	var projected = uses_projected_highway()
+	return shared("flick_frame|%s|%d" % [projected, frame], func():
+		var material = ShaderMaterial.new()
+		material.shader = preload("res://scripts/synk_canvas_note.gdshader") if projected else preload("res://scripts/reference_note.gdshader")
+		material.render_priority = 3
+		material.set_shader_parameter("artwork", FLICK_FRAMES[frame])
+		return material)
+
+func make_animated_flick(parent: Node3D, lane: float) -> void:
+	var size = game.gameplay_note_size()
+	var disc_width = 212.0 * SSRG_UNIT * ssrg_art_scale() if game.uses_ssrg_gameplay() else NOTE_WIDTH
+	var width = disc_width * size * 768.0 / 636.0
+	var mesh_key = "flick_animation|%s" % width
+	if not reference_note_meshes.has(mesh_key):
+		var quad = QuadMesh.new()
+		quad.size = Vector2(width, width)
+		# The disc centre is at y=553 in the 768 px frame.
+		quad.center_offset.y = width * (553.0 / 768.0 - 0.5)
+		reference_note_meshes[mesh_key] = quad
+	var sprite = mesh_node(reference_note_meshes[mesh_key], parent, flick_frame_material(0))
+	sprite.name = "AnimatedFlick"
+	sprite.position = Vector3(note_x(lane), .38 * size, 0.0)
+	sprite.rotation = camera.rotation
+	sprite.set_meta("recorder_billboard", true)
+
 func make_flick(parent: Node3D, note: Dictionary, palette: int, recording = false) -> void:
+	if not recording and not game.uses_recorder_colors() and (not game.ssrg_playable_run or game.ssrg_forced_run):
+		make_animated_flick(parent, float(note.lane))
+		return
 	make_cap(parent,float(note.lane),0,palette,recording and game.uses_skd_recorder_surface())
 	# Flicks are up-only. A single compact chevron sits directly on the road plane
 	# over the puck, preserving the highway perspective with no upright geometry.
@@ -1663,6 +1701,14 @@ func sync_note(key: String, note: Dictionary, visible_keys: Dictionary, recordin
 	if recording: notes[key].node.position.z *= -1
 	elif not held and modifier_hides(notes[key].node.position.z): notes[key].node.visible = false
 	if note.kind=="flick":
+		var sprite = notes[key].node.get_node_or_null("AnimatedFlick") as MeshInstance3D
+		if sprite:
+			var approach = 1.0 - (float(note.time) - visible_time) / game.note_travel_seconds()
+			var frame = clampi(floori(approach * FLICK_FRAMES.size()), 0, FLICK_FRAMES.size() - 1)
+			if frame != int(sprite.get_meta("flick_frame", 0)):
+				sprite.material_override = flick_frame_material(frame)
+				sprite.set_meta("flick_frame", frame)
+			return
 		# Keep the flat arrow alive with a small glide along the highway. It never lifts
 		# toward the camera, so its plane and perspective remain locked to the road.
 		var nudge = sin(animation_time*TAU*2.0)*.16
