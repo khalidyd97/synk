@@ -27,7 +27,7 @@ var hits: Array = []
 # spray of short spark streaks flung up and out from the bar so the impact reads as an
 # explosive splash in the flick's up direction.
 var flick_sparks: Array = []
-const FLICK_SPARK_LIFE = .42
+const FLICK_SPARK_LIFE = .5   # the longest a spark lives; each one picks its own, shorter or equal
 const FLICK_SPARK_COUNT = 26
 const FLICK_SPARK_SHADER = preload("res://scripts/flick_spark.gdshader")
 var active = false
@@ -147,15 +147,19 @@ func spawn_flick_sparks(x: float) -> void:
 		mat.set_shader_parameter("seed", randf() * 100.0)
 		var node = world.mesh_node(mesh, parent, mat)
 		node.position = origin
-		# A wide fan: anywhere from straight up to nearly sideways, at mixed speeds.
-		var angle = (randf() * 2.0 - 1.0) * deg_to_rad(78.0)
+		# Mostly up: the sum of two randoms clusters angles near vertical, and none goes
+		# wider than FLICK_SPARK_SPREAD either side, so the spray leans the flick's way.
+		var angle = (randf() + randf() - 1.0) * deg_to_rad(FLICK_SPARK_SPREAD)
 		var speed = (9.0 + randf() * 16.0) * world.FIT
 		var up_speed = cos(angle) * speed
 		var side_speed = sin(angle) * speed * 1.3
-		flick_sparks.append({"node": node, "material": mat, "age": 0.0, "base": origin, "up_speed": up_speed, "side_speed": side_speed})
+		# Each spark dies at its own random time, so the spray thins out gradually.
+		var life = FLICK_SPARK_LIFE * (0.35 + randf() * 0.65)
+		flick_sparks.append({"node": node, "material": mat, "age": 0.0, "life": life, "base": origin, "up_speed": up_speed, "side_speed": side_speed})
 		orient_flick_spark(node, side_speed, up_speed)
 
 const FLICK_SPARK_GRAVITY = 18.0
+const FLICK_SPARK_SPREAD = 50.0  # widest angle from straight up, in degrees
 # Face the camera, then turn the strand so its head points along its current flight.
 func orient_flick_spark(node: Node3D, side_speed: float, up_speed: float) -> void:
 	node.rotation = world.camera.rotation
@@ -169,13 +173,13 @@ func advance_flick_sparks(delta: float, playing: bool) -> void:
 		var f: Dictionary = flick_sparks[i]
 		if playing: f.age += delta
 		var a: float = f.age
-		if a >= FLICK_SPARK_LIFE:
+		if a >= f.life:
 			f.node.queue_free(); flick_sparks.remove_at(i); continue
 		var gravity = FLICK_SPARK_GRAVITY * world.FIT
 		# Ballistic arc: fast up, pulled back down so the column peaks tall then falls.
 		f.node.position = f.base + up * (f.up_speed * a - gravity * a * a) + sidev * (f.side_speed * a)
 		orient_flick_spark(f.node, f.side_speed, f.up_speed - 2.0 * gravity * a)
-		var k = a / FLICK_SPARK_LIFE
+		var k = a / f.life
 		f.node.scale = Vector3.ONE * (1.0 - 0.5 * k)          # strands shrink as they fly
 		f.material.set_shader_parameter("age", k)
 		f.material.set_shader_parameter("opacity", opacity * (1.0 - k * k))
