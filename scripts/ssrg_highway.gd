@@ -125,8 +125,11 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 	h.node.scale = Vector3.ONE * world.game.hit_size * (1.0 if world.game.uses_ssrg_gameplay() else SYNK_HIGHWAY_SCALE)
 	h.node.rotation = world.camera.rotation
 	if h.style == "ssrg":
-		h.material.set_shader_parameter("tint", Color.from_string(world.game.hit_color, Color.WHITE) if world.game.hit_color != "" else Color.WHITE)
-		h.material.set_shader_parameter("recolor", world.game.hit_color != "")
+		# A colour picked on the Hit effects page wins; by default each flash takes its note's
+		# colour (blue taps, gold holds and slides, pink flicks). Special notes keep Effect_B.
+		var recolor = world.game.hit_color != "" or NOTE_HIT_KEYS.has(kind)
+		h.material.set_shader_parameter("tint", hit_tint(kind) if recolor else Color.WHITE)
+		h.material.set_shader_parameter("recolor", recolor)
 	h.node.visible = true; hits.append(h)
 	if kind == "flick": spawn_flick_sparks(h.x, h.node.scale.x)
 
@@ -141,10 +144,9 @@ func spawn_flick_sparks(x: float, flash_scale: float = 1.0) -> void:
 	var parent: Node3D = hit_layer if hit_layer != null else self
 	# Match the Effect_A flash: its cyan while hot, its deeper blue as it dies (or the colour
 	# picked on the Hit effects page).
-	var glow = FLICK_SPARK_GLOW
-	var deep = FLICK_SPARK_DEEP
-	if world.game.hit_color != "":
-		glow = tint; deep = tint.darkened(.35)
+	# The flash's colour: the picked hit colour, or the flick note's own.
+	var glow = hit_tint("flick")
+	var deep = glow.darkened(.35)
 	# Sparks rise out of the flash's bright disc, not from one point at its centre.
 	var disc = Vector2(620, 372) * world.SSRG_UNIT * HIT_SCALE * flash_scale * Vector2(.1, .04)
 	# Shrink the whole splash's travel so even the tallest spark stops at the middle of the screen.
@@ -200,7 +202,7 @@ var flick_flares: Array = []
 func spawn_flick_flare(origin: Vector3, up: Vector3, tint: Color, parent: Node3D, height: float) -> void:
 	var mesh = QuadMesh.new(); mesh.size = Vector2(FLICK_FLARE_SIZE.x * world.FIT, height)
 	var mat = ShaderMaterial.new(); mat.shader = FLICK_SPARK_SHADER; mat.render_priority = 9
-	mat.set_shader_parameter("tint", tint); mat.set_shader_parameter("bend", 0.0); mat.set_shader_parameter("sharpness", 10.0)
+	mat.set_shader_parameter("tint", tint); mat.set_shader_parameter("glow", hit_tint("flick")); mat.set_shader_parameter("bend", 0.0); mat.set_shader_parameter("sharpness", 10.0)
 	var node = world.mesh_node(mesh, parent, mat)
 	node.rotation = world.camera.rotation
 	flick_flares.append({"node": node, "material": mat, "age": 0.0, "base": origin, "up": up, "height": height})
@@ -223,9 +225,6 @@ func advance_flick_flares(delta: float, playing: bool) -> void:
 		f.material.set_shader_parameter("opacity", opacity * (1.0 - k) * (1.0 - k))
 
 const FLICK_SPARK_GRAVITY = 10.0
-# Effect_A's colours: bright cyan around the white core, deeper blue in its fading frames.
-const FLICK_SPARK_GLOW = Color(.25, .92, 1.0)
-const FLICK_SPARK_DEEP = Color(.18, .45, 1.0)
 # Sparks burst out as the flash reaches full size (its frames 2-3 at 33 fps), in seconds.
 const FLICK_SPARK_DELAY = Vector2(.03, .09)
 const FLICK_SPARK_SPREAD = 14.0  # widest angle from straight up, in degrees
@@ -371,6 +370,16 @@ func style_hit(h: Dictionary) -> void:
 
 # Lumen's colours follow the notes: blue taps, gold holds and slides (their connectors are
 # gold), pink flicks. A colour chosen on the Hit effects page replaces them.
+# The note colour a default-coloured hit flash takes, by note kind.
+const NOTE_HIT_KEYS = {"tap": "tap", "hold": "hold", "slide": "slide", "flick": "flick"}
+# SSRG notes are drawn from their own art, so the flash matches that art's colour
+# (sampled from tap.png, hold.png and the flick puck) rather than the theme palette.
+const SSRG_NOTE_COLORS = {"tap": Color("19acf5"), "hold": Color("ebb521"), "slide": Color("ebb521"), "flick": Color("fa1068")}
+func hit_tint(kind: String) -> Color:
+	if world.game.hit_color != "": return Color.from_string(world.game.hit_color, Color.WHITE)
+	if world.game.uses_ssrg_gameplay(): return SSRG_NOTE_COLORS.get(kind, SSRG_NOTE_COLORS.tap)
+	return world.element_color(NOTE_HIT_KEYS.get(kind, "tap"), LUMEN_COLORS.get(kind, LUMEN_COLORS.tap))
+
 const LUMEN_COLORS = {"tap": Color("4fd2ff"), "hold": Color("ffc94a"), "slide": Color("ffc94a"), "flick": Color("ff6fb5"), "special": Color("b993ff")}
 func lumen_tint(kind: String) -> Color:
 	if world.game.hit_color != "": return Color.from_string(world.game.hit_color, Color.WHITE)
