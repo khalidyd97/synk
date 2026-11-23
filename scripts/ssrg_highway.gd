@@ -128,17 +128,25 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 		h.material.set_shader_parameter("tint", Color.from_string(world.game.hit_color, Color.WHITE) if world.game.hit_color != "" else Color.WHITE)
 		h.material.set_shader_parameter("recolor", world.game.hit_color != "")
 	h.node.visible = true; hits.append(h)
-	if kind == "flick": spawn_flick_sparks(h.x)
+	if kind == "flick": spawn_flick_sparks(h.x, h.node.scale.x)
 
 # The flick splash: short spark streaks sprayed up and out from the judgment bar, like the
 # streaky shards of the Effect_A hit flash. They fan across a wide arc (mostly up, some almost
 # sideways), arc back under gravity, and each is turned along its flight.
-func spawn_flick_sparks(x: float) -> void:
+func spawn_flick_sparks(x: float, flash_scale: float = 1.0) -> void:
 	var up = world.camera.basis.y.normalized()
 	var sidev = world.camera.basis.x.normalized()
 	var origin = flash_point(x)
 	var tint = Color.from_string(world.game.hit_color, Color.WHITE) if world.game.hit_color != "" else Color.WHITE
 	var parent: Node3D = hit_layer if hit_layer != null else self
+	# Match the Effect_A flash: its cyan while hot, its deeper blue as it dies (or the colour
+	# picked on the Hit effects page).
+	var glow = FLICK_SPARK_GLOW
+	var deep = FLICK_SPARK_DEEP
+	if world.game.hit_color != "":
+		glow = tint; deep = tint.darkened(.35)
+	# Sparks rise out of the flash's bright disc, not from one point at its centre.
+	var disc = Vector2(620, 372) * world.SSRG_UNIT * HIT_SCALE * flash_scale * Vector2(.2, .05)
 	# Shrink the whole splash's travel so even the tallest spark stops at the middle of the screen.
 	var reach = flick_splash_reach(origin, up)
 	var fit = clampf((reach - FLICK_SPARK_MAX_LENGTH * .5 * world.FIT) / (flick_spark_max_rise() * world.FIT), 0.0, 1.0)
@@ -147,9 +155,14 @@ func spawn_flick_sparks(x: float) -> void:
 		mesh.size = Vector2(0.38, FLICK_SPARK_MAX_LENGTH / 1.3) * (0.7 + randf() * 0.6) * world.FIT
 		var mat = ShaderMaterial.new(); mat.shader = FLICK_SPARK_SHADER; mat.render_priority = 9
 		mat.set_shader_parameter("tint", tint)
+		mat.set_shader_parameter("glow", glow)
+		mat.set_shader_parameter("deep", deep)
 		mat.set_shader_parameter("seed", randf() * 100.0)
 		var node = world.mesh_node(mesh, parent, mat)
-		node.position = origin
+		var spot = Vector2(randf() * 2.0 - 1.0, randf() * 2.0 - 1.0)
+		var base = origin + sidev * (spot.x * absf(spot.x) * disc.x) + up * (spot.y * disc.y)
+		node.position = base
+		node.visible = false
 		# Mostly up: the sum of two randoms clusters angles near vertical, and none goes
 		# wider than FLICK_SPARK_SPREAD either side, so the spray leans the flick's way.
 		var angle = (randf() + randf() - 1.0) * deg_to_rad(FLICK_SPARK_SPREAD)
@@ -159,7 +172,7 @@ func spawn_flick_sparks(x: float) -> void:
 		var side_speed = sin(angle) * speed
 		# Each spark dies at its own random time, so the spray thins out gradually.
 		var life = FLICK_SPARK_LIFE * (0.6 + randf() * 0.4)
-		flick_sparks.append({"node": node, "material": mat, "age": 0.0, "life": life, "base": origin, "up_speed": up_speed, "side_speed": side_speed, "gravity": FLICK_SPARK_GRAVITY * world.FIT * fit})
+		flick_sparks.append({"node": node, "material": mat, "age": -randf_range(FLICK_SPARK_DELAY.x, FLICK_SPARK_DELAY.y), "life": life, "base": base, "up_speed": up_speed, "side_speed": side_speed, "gravity": FLICK_SPARK_GRAVITY * world.FIT * fit})
 		orient_flick_spark(node, side_speed, up_speed)
 	spawn_flick_flare(origin, up, tint, parent, minf(reach, FLICK_FLARE_SIZE.y * world.FIT))
 
@@ -210,6 +223,11 @@ func advance_flick_flares(delta: float, playing: bool) -> void:
 		f.material.set_shader_parameter("opacity", opacity * (1.0 - k) * (1.0 - k))
 
 const FLICK_SPARK_GRAVITY = 10.0
+# Effect_A's colours: bright cyan around the white core, deeper blue in its fading frames.
+const FLICK_SPARK_GLOW = Color(.25, .92, 1.0)
+const FLICK_SPARK_DEEP = Color(.18, .45, 1.0)
+# Sparks burst out as the flash reaches full size (its frames 2-3 at 33 fps), in seconds.
+const FLICK_SPARK_DELAY = Vector2(.03, .09)
 const FLICK_SPARK_SPREAD = 30.0  # widest angle from straight up, in degrees
 const FLICK_SPARK_MIN_SPEED = 20.0
 const FLICK_SPARK_EXTRA_SPEED = 12.0
@@ -233,12 +251,16 @@ func advance_flick_sparks(delta: float, playing: bool) -> void:
 		var a: float = f.age
 		if a >= f.life:
 			f.node.queue_free(); flick_sparks.remove_at(i); continue
+		# Waiting for the flash to bloom before bursting out of it.
+		f.node.visible = a >= 0.0
+		if a < 0.0: continue
 		var gravity: float = f.gravity
 		# Ballistic arc: fast up, pulled back down so the column peaks tall then falls.
 		f.node.position = f.base + up * (f.up_speed * a - gravity * a * a) + sidev * (f.side_speed * a)
 		orient_flick_spark(f.node, f.side_speed, f.up_speed - 2.0 * gravity * a)
 		var k = a / f.life
-		f.node.scale = Vector3.ONE * (1.0 - 0.5 * k)          # strands shrink as they fly
+		# Streaks shorten to small specks as they cool, like the shards the flash leaves behind.
+		f.node.scale = Vector3(1.0 - 0.35 * k, 1.0 - 0.75 * k, 1.0)
 		f.material.set_shader_parameter("age", k)
 		f.material.set_shader_parameter("opacity", opacity * (1.0 - k * k))
 
