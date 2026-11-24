@@ -1,14 +1,16 @@
 extends Node
-# SYNK mode's stage: one of four backdrops drawn on the screen-filling quad behind the
+# SYNK mode's stage: one of five backdrops drawn on the screen-filling quad behind the
 # highway, in place of the song artwork and SSRG's stage effects. The player picks one in
 # Settings > Highway (prefs "highway"/"synk_stage").
+#   aura:    veils of amber light curling out from the rails, on black (synk_stage_aura)
 #   waves:   a sea of sound waves that sync on the beat (synk_stage.gdshader)
 #   worlds:  two mirrored worlds that drift apart and snap together (synk_stage_worlds)
 #   stars:   a constellation drawn by the player's hits (synk_stage_stars)
 #   strings: harp strings along the rails, plucked by hits (synk_stage_strings)
-const STAGES = ["waves", "worlds", "stars", "strings"]
-const LABELS = {"waves": "WAVES", "worlds": "WORLDS", "stars": "STARS", "strings": "STRINGS"}
+const STAGES = ["aura", "waves", "worlds", "stars", "strings"]
+const LABELS = {"aura": "AURA", "waves": "WAVES", "worlds": "WORLDS", "stars": "STARS", "strings": "STRINGS"}
 const SHADERS = {
+	"aura": preload("res://scripts/synk_stage_aura.gdshader"),
 	"waves": preload("res://scripts/synk_stage.gdshader"),
 	"worlds": preload("res://scripts/synk_stage_worlds.gdshader"),
 	"stars": preload("res://scripts/synk_stage_stars.gdshader"),
@@ -31,8 +33,8 @@ var gap_pending = false
 var rng = RandomNumberGenerator.new()
 
 static func stage_of(game: Node) -> String:
-	var value = str(game.prefs.get_value("highway", "synk_stage", "waves"))
-	return value if value in STAGES else "waves"
+	var value = str(game.prefs.get_value("highway", "synk_stage", "aura"))
+	return value if value in STAGES else "aura"
 
 func _ready() -> void:
 	sky = SubViewport.new(); sky.size = Vector2i(1280, 720); sky.transparent_bg = true
