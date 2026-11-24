@@ -44,6 +44,7 @@ func update(delta: float) -> void:
         last_strengths=strengths
     var custom=world.custom_color("rail_color")
     var colors=[custom if custom!=null else (world.colors[0] if world.cover_palette_active else Color("39d9ff")),custom if custom!=null else (world.colors[1] if world.cover_palette_active else Color("ed45f5"))]
+    if world.game.synk_mode() and custom==null: colors=world.SYNK_MODE_RAIL_GLOW.duplicate()
     var glow_colors=world.rail_glow_colors()
     if colors+glow_colors!=last_colors:
         for i in 2:

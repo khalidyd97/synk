@@ -214,7 +214,7 @@ func spawn_flick_slice(lane: float, angle: float) -> void:
 	var edge = tint.lerp(Color.WHITE, .6)
 	for side in [-1.0, 1.0]:
 		var mat = ShaderMaterial.new(); mat.shader = FLICK_SLICE_SHADER; mat.render_priority = 7
-		mat.set_shader_parameter("artwork", world.FLICK_FRAMES[0])
+		mat.set_shader_parameter("artwork", world.flick_frames()[0])
 		mat.set_shader_parameter("cut_point", Vector2(.5, 553.0 / 768.0))
 		mat.set_shader_parameter("cut_angle", -angle)
 		mat.set_shader_parameter("side", side)
@@ -458,8 +458,11 @@ const NOTE_HIT_KEYS = {"tap": "tap", "hold": "hold", "slide": "slide", "flick": 
 # SSRG notes are drawn from their own art, so the flash matches that art's colour
 # (sampled from tap.png, hold.png and the flick puck) rather than the theme palette.
 const SSRG_NOTE_COLORS = {"tap": Color("19acf5"), "hold": Color("ebb521"), "slide": Color("ebb521"), "flick": Color("fa1068")}
+# SYNK mode's note colours (assets/synk_mode): coral taps, amber holds and slides; flicks keep their pink.
+const SYNK_NOTE_COLORS = {"tap": Color("ff6b3d"), "hold": Color("ffc36b"), "slide": Color("ffc36b"), "flick": Color("ff2d7a")}
 func hit_tint(kind: String) -> Color:
 	if world.game.hit_color != "": return Color.from_string(world.game.hit_color, Color.WHITE)
+	if world.game.synk_mode(): return SYNK_NOTE_COLORS.get(kind, SYNK_NOTE_COLORS.tap)
 	if world.game.uses_ssrg_gameplay(): return SSRG_NOTE_COLORS.get(kind, SSRG_NOTE_COLORS.tap)
 	return world.element_color(NOTE_HIT_KEYS.get(kind, "tap"), LUMEN_COLORS.get(kind, LUMEN_COLORS.tap))
 

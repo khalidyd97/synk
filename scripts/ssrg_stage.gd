@@ -289,20 +289,36 @@ func warmup(world: Node3D) -> void :
 	receptor.position.x = 0;receptor.rotation = world.camera.rotation
 	receptor.material_override.set_shader_parameter("progress", 1.0);receptor.show()
 
+# SYNK mode's palette (the SYNK logo's coral and amber on near-black, cream highlights).
+const SYNK_FLOOR = Color("0c0911")
+const SYNK_GLOW = Color("ff6b3d")
+const SYNK_SCAN = Color("ffd9a8")
 func configure(world: Node3D) -> void :
 	var stock_road = true
 	var old_ui=world.game.old_ssrg_ui()
+	var synk=world.game.synk_mode()
 	press.visible = stock_road
 	press_glow.visible = stock_road
-	press.material_override.set_shader_parameter("artwork",preload("res://assets/ssrg/old_ui/track/Main_black BG3.png") if old_ui else preload("res://assets/ssrg/imported/judgment_Main_black_BG3.png"))
+	var judgment_art:Texture2D=preload("res://assets/ssrg/imported/judgment_Main_black_BG3.png")
+	if old_ui: judgment_art=preload("res://assets/ssrg/old_ui/track/Main_black BG3.png")
+	elif synk: judgment_art=preload("res://assets/synk_mode/judgment.png")
+	press.material_override.set_shader_parameter("artwork",judgment_art)
 	entrance_shadow.visible=not old_ui
-	for ring in receptors:ring.material_override.set_shader_parameter("artwork",preload("res://assets/ssrg/old_ui/track/note_guide 01.png") if old_ui else preload("res://assets/ssrg/imported/guide_original.png"))
-	for mark in feedback_marks:mark.material_override.set_shader_parameter("artwork",preload("res://assets/ssrg/old_ui/track/note_guide 01.png") if old_ui else preload("res://assets/ssrg/imported/guide_original.png"))
-	# Source gold tier, unless the player picked a judgment band color.
+	var rail_art:Texture2D=preload("res://assets/synk_mode/rail.png") if synk else preload("res://assets/ssrg/imported/rail_original.png")
+	entrance_shadow.material_override.set_shader_parameter("rail_art",rail_art)
+	var guide:Texture2D=preload("res://assets/ssrg/imported/guide_original.png")
+	if old_ui: guide=preload("res://assets/ssrg/old_ui/track/note_guide 01.png")
+	elif synk: guide=preload("res://assets/synk_mode/guide.png")
+	for ring in receptors:ring.material_override.set_shader_parameter("artwork",guide)
+	for mark in feedback_marks:mark.material_override.set_shader_parameter("artwork",guide)
+	# Source gold tier, unless the player picked a judgment band color. SYNK mode's bar
+	# carries its own colours, so it is drawn untinted.
 	var band = world.custom_color("band_color")
 	var band_color:Color=(Color(band,.82) if band != null else Color8(255,75,91,210)) if old_ui else Color8(255,220,65,149)
+	if synk: band_color=Color(band,.95) if band != null else Color(1,1,1,.95)
 	press.material_override.set_shader_parameter("base_color",band_color)
-	press_glow.material_override.set_shader_parameter("glow_color",Color(band_color,150.0/255.0))
+	press_glow.material_override.set_shader_parameter("glow_color",Color(SYNK_GLOW,150.0/255.0) if synk and band == null else Color(band_color,150.0/255.0))
+	judgment_scan.material_override.set_shader_parameter("color",SYNK_SCAN if synk else Color8(255,220,65))
 	# The recorder keeps the line readable without the loud gold: a faint cream strip.
 	if world.game.uses_skd_recorder_surface():
 		press.material_override.set_shader_parameter("base_color",RECORDER_BAND)
@@ -311,9 +327,10 @@ func configure(world: Node3D) -> void :
 	if rail_tint == null: rail_tint = Color.WHITE
 	for rail in rails:
 		rail.visible = stock_road and not old_ui
+		rail.material_override.set_shader_parameter("artwork", rail_art)
 		rail.material_override.set_shader_parameter("tint", rail_tint)
 		rail.material_override.set_shader_parameter("floor_opacity",clampf(float(world.game.highway_opacity),.3,1.6))
-		rail.material_override.set_shader_parameter("floor_tint",world.element_color("track",Color.BLACK))
+		rail.material_override.set_shader_parameter("floor_tint",world.element_color("track",SYNK_FLOOR if synk else Color.BLACK))
 	for rail in old_rails:
 		rail.visible=stock_road and old_ui
 	for rail in old_rail_glows:

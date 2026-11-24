@@ -126,7 +126,8 @@ var record_overview: Control
 var recorder_seek_target=-1.0
 # Highway look: "gold" or "neon", optional custom rail/band colors ("" follows the style),
 # and how dark the see-through highway surface is (1 = the style's default).
-const HIGHWAY_STYLES=["ssrg"]  # only the SSRG/SKD highway is offered
+# The SSRG/SKD highway, and SYNK mode: the same SSRG stage and rules in SYNK's own artwork.
+const HIGHWAY_STYLES=["ssrg","synk"]
 var highway_style = "ssrg"  # the SKD stage is the stock look for every song
 var ssrg_presentation:Node
 var ssrg_screens:Control
@@ -141,7 +142,7 @@ func forces_ssrg_mode() -> bool:
 # The SSRG look: imported SSRG runs, and SYNK songs played with the "ssrg" highway style.
 # SSRG judging and scoring rules follow ssrg_playable_run, so other styles keep their own look.
 func uses_ssrg_gameplay() -> bool:
-	return ((ssrg_playable_run and not ssrg_forced_run) or (highway_style=="ssrg" and (mode in ["play","paused"] or highway_preview))) and not uses_recorder_colors()
+	return ((ssrg_playable_run and not ssrg_forced_run) or (highway_style in ["ssrg","synk"] and (mode in ["play","paused"] or highway_preview))) and not uses_recorder_colors()
 # The chart recorder always uses SKD's recovered visual stage, while recording and while
 # correcting, without enabling SKD scoring, judgment, combo, health, or gameplay input rules.
 # (The classic tilted SYNK recorder and its angle slider are retired.)
@@ -174,7 +175,14 @@ func uses_even_correct_view() -> bool:
 func uses_skd_stage() -> bool:
 	return uses_ssrg_gameplay() or uses_skd_recorder_surface()
 func old_ssrg_ui() -> bool:
-	return uses_ssrg_gameplay() and bool(prefs.get_value("highway","old_ssrg_ui",false))
+	return uses_ssrg_gameplay() and not synk_mode() and bool(prefs.get_value("highway","old_ssrg_ui",false))
+# SYNK mode: the SSRG stage, projection, timing and rules, drawn with SYNK's own highway,
+# rails, judgment bar and notes (assets/synk_mode, made by tools/make_synk_mode_art.py).
+func synk_mode() -> bool:
+	return uses_ssrg_gameplay() and highway_style=="synk"
+# Which artwork the SSRG stage draws: "synk", "old" (the 2014 UI) or "" (the stock SSRG art).
+func ssrg_skin() -> String:
+	return "synk" if synk_mode() else ("old" if old_ssrg_ui() else "")
 func change_old_ssrg_ui(on: bool) -> void:
 	prefs.set_value("highway","old_ssrg_ui",on);prefs.save("user://preferences.cfg")
 	if field and field.world:
@@ -1270,6 +1278,9 @@ func change_highway_look(key: String,value: Variant) -> void:
 		prefs.set_value("highway","element_colors",gameplay_colors)
 	prefs.set_value("highway",key,value); prefs.save("user://preferences.cfg")
 	if key in ["colors","style"]: apply_stage_cover()
+	if key=="style":
+		# A new style swaps the note artwork: rebuild the notes and their animation frames.
+		field.world.ssrg_animation_frame=-1; field.world.look_signature_frame=-1
 	field.world.refresh_highway_look()
 	if settings_panel: settings_panel.refresh()
 

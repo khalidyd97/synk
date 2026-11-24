@@ -545,8 +545,10 @@ func element_color(key: String,fallback: Color) -> Color:
 		return Color.from_string(str(game.hit_color),fallback)
 	return SynkGameplayColors.resolve(game,key,fallback) if game!=null else fallback
 
+const SYNK_MODE_HOLD = Color("ffc36b")
 func trail_color(palette: int) -> Color:
 	if game.old_ssrg_ui() and palette in [1,3]: return Color("edb65c")
+	if game.synk_mode() and palette in [1,3]: return SYNK_MODE_HOLD
 	if source_long_visuals() and palette in [1,3]: return Color("f9d568")
 	if palette in [1,3] and game.uses_recorder_colors(): return Color("f9d568")
 	return element_color("slide_trail" if palette==3 else "hold_trail",colors[palette])
@@ -556,7 +558,10 @@ func rail_glow_colors() -> Array:
 	var gold=game.uses_recorder_colors() or game.highway_style=="gold"
 	var left: Color=custom if custom!=null else (JUDGMENT_GOLD if gold and not cover_palette_active else colors[0])
 	var right: Color=custom if custom!=null else (JUDGMENT_GOLD if gold and not cover_palette_active else colors[1])
+	# SYNK mode's rails glow in its own coral and amber, not the song cover's colours.
+	if game.synk_mode() and custom==null: left=SYNK_MODE_RAIL_GLOW[0]; right=SYNK_MODE_RAIL_GLOW[1]
 	return [element_color("glow",left),element_color("glow",right)]
+const SYNK_MODE_RAIL_GLOW = [Color("ff6b3d"), Color("ffc36b")]
 
 # Applies the chosen highway style, custom rail/band colors and highway darkness.
 func refresh_highway_look() -> void:
@@ -1233,12 +1238,12 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 	var tail = size < game.gameplay_note_size()*.99
 	# Connector pucks along slides (and the end puck) are the head note's own art at 60%.
 	var phase=fposmod((render_time()-game.chart_offset())*game.chart_bpm()/60.0,1.0)
-	var old_ui=game.old_ssrg_ui()
-	var art := ssrg_cap_artwork(palette,tail,phase,old_ui)
-	var mat = shared("ssrg|%d|%s|%s" % [palette,tail,old_ui], func():
+	var skin:String=game.ssrg_skin()
+	var art := ssrg_cap_artwork(palette,tail,phase,skin)
+	var mat = shared("ssrg|%d|%s|%s" % [palette,tail,skin], func():
 		var m = ShaderMaterial.new(); m.shader = preload("res://scripts/reference_note.gdshader")
 		m.set_shader_parameter("artwork",art); m.set_shader_parameter("approach_glow",false)
-		m.set_meta("ssrg_palette",palette);m.set_meta("ssrg_tail",tail);m.set_meta("ssrg_old_ui",old_ui)
+		m.set_meta("ssrg_palette",palette);m.set_meta("ssrg_tail",tail);m.set_meta("ssrg_skin",skin)
 		m.set_shader_parameter("core_tint",Color("4fc8ff") if palette==0 else Color("ffc23a"))
 		# Flicks share the source puck silhouette, but use a vivid rose treatment so
 		# they cannot be mistaken for blue taps during a fast approach.
@@ -1248,7 +1253,7 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 			m.set_shader_parameter("value_scale",1.12)
 			m.set_shader_parameter("core_tint",Color("ff4fa8"))
 		return m)
-	var mesh_key = "ssrg|%s|%s|%s|%s|%s" % [size, tail, palette,ssrg_art_scale(),old_ui]
+	var mesh_key = "ssrg|%s|%s|%s|%s|%s" % [size, tail, palette,ssrg_art_scale(),skin]
 	if not reference_note_meshes.has(mesh_key):
 		# Packaged IngameRenderer maximum sizes, before the shared p^6 scale.
 		var quad = QuadMesh.new()
@@ -1264,8 +1269,8 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 	ssrg_billboards.append(weakref(head))
 	return head
 
-func ssrg_cap_artwork(palette: int, tail: bool, phase: float, old_ui: bool) -> Texture2D:
-	return SsrgNotes.artwork(palette in [1,3],not tail,phase,old_ui)
+func ssrg_cap_artwork(palette: int, tail: bool, phase: float, skin: String) -> Texture2D:
+	return SsrgNotes.artwork(palette in [1,3],not tail,phase,skin)
 
 func make_source_long_glow(parent: Node3D, position_value: Vector3, size: float) -> void:
 	var mesh=PlaneMesh.new()
@@ -1311,16 +1316,30 @@ const FLICK_FRAMES = [
 	preload("res://assets/neon/flick/flick_6.png"),
 ]
 
+# SYNK mode's flick (tools/make_synk_mode_art.py): a hot-pink puck and a rising cream chevron,
+# in the same 768 px frame layout, so it animates and bounces exactly like the flick above.
+const SYNK_FLICK_FRAMES = [
+	preload("res://assets/synk_mode/flick1.png"),
+	preload("res://assets/synk_mode/flick2.png"),
+	preload("res://assets/synk_mode/flick3.png"),
+	preload("res://assets/synk_mode/flick4.png"),
+	preload("res://assets/synk_mode/flick5.png"),
+	preload("res://assets/synk_mode/flick6.png"),
+]
+func flick_frames() -> Array:
+	return SYNK_FLICK_FRAMES if game.synk_mode() else FLICK_FRAMES
+
 # 10 steps make one full up-and-down bounce, so this is about 1.6 bounces a second.
 const FLICK_LOOP_STEPS_PER_SECOND = 16.0
 
 func flick_frame_material(frame: int) -> ShaderMaterial:
 	var projected = uses_projected_highway()
-	return shared("flick_frame|%s|%d" % [projected, frame], func():
+	var synk = game.synk_mode()
+	return shared("flick_frame|%s|%d|%s" % [projected, frame, synk], func():
 		var material = ShaderMaterial.new()
 		material.shader = preload("res://scripts/synk_canvas_note.gdshader") if projected else preload("res://scripts/reference_note.gdshader")
 		material.render_priority = 3
-		material.set_shader_parameter("artwork", FLICK_FRAMES[frame])
+		material.set_shader_parameter("artwork", (SYNK_FLICK_FRAMES if synk else FLICK_FRAMES)[frame])
 		# Rows above y=380 of the 768 px frame hold only the chevron and its sparks.
 		material.set_shader_parameter("full_bright_above_uv", 380.0 / 768.0)
 		return material)
@@ -1638,7 +1657,7 @@ func build_note_node(key: String, note: Dictionary, recording = false) -> void:
 		mat.set_shader_parameter("artwork",game.ssrg_presentation.special_art(int(note.ssrg_special),int(note.get("ssrg_item",0)),0.0))
 	var lines: Array = []
 	if recording: lines = make_alignment_lines(node,note,palette)
-	var signature = (hash(note) if recording or game.mode=="record" else 0)^hash([game.note_speed,game.ssrg_speed_setting() if game.ssrg_playable_run else 0,game.note_shape,game.gameplay_note_size(),game.trail_style,game.uses_ssrg_gameplay(),game.old_ssrg_ui(),game.uses_skd_recorder_surface(),game.uses_even_correct_view()])
+	var signature = (hash(note) if recording or game.mode=="record" else 0)^hash([game.note_speed,game.ssrg_speed_setting() if game.ssrg_playable_run else 0,game.note_shape,game.gameplay_note_size(),game.trail_style,game.uses_ssrg_gameplay(),game.ssrg_skin(),game.uses_skd_recorder_surface(),game.uses_even_correct_view()])
 	if uses_projected_highway() and not recording:
 		for child in node.get_children():
 			if child is GeometryInstance3D:
@@ -1696,7 +1715,7 @@ func sync_note(key: String, note: Dictionary, visible_keys: Dictionary, recordin
 	visible_keys[key] = true
 	if look_signature_frame != Engine.get_process_frames():
 		look_signature_frame = Engine.get_process_frames()
-		look_signature = hash([game.note_speed,game.ssrg_speed_setting() if game.ssrg_playable_run else 0,game.note_shape,game.gameplay_note_size(),game.trail_style,game.uses_ssrg_gameplay(),game.old_ssrg_ui(),game.uses_skd_recorder_surface(),game.uses_even_correct_view()])
+		look_signature = hash([game.note_speed,game.ssrg_speed_setting() if game.ssrg_playable_run else 0,game.note_shape,game.gameplay_note_size(),game.trail_style,game.uses_ssrg_gameplay(),game.ssrg_skin(),game.uses_skd_recorder_surface(),game.uses_even_correct_view()])
 	var signature = (hash(note) if recording or game.mode=="record" else 0)^look_signature
 	if notes.has(key) and notes[key].signature != signature:
 		notes[key].node.queue_free(); notes.erase(key)
@@ -1916,7 +1935,7 @@ func animate_ssrg_notes() -> void:
 			mat.set_shader_parameter("artwork",game.ssrg_presentation.special_art(int(mat.get_meta("ssrg_special")),int(mat.get_meta("ssrg_item",0)),beat))
 		elif mat.has_meta("ssrg_palette"):
 			var palette=int(mat.get_meta("ssrg_palette"))
-			mat.set_shader_parameter("artwork",ssrg_cap_artwork(palette,bool(mat.get_meta("ssrg_tail")),beat,bool(mat.get_meta("ssrg_old_ui",false))))
+			mat.set_shader_parameter("artwork",ssrg_cap_artwork(palette,bool(mat.get_meta("ssrg_tail")),beat,str(mat.get_meta("ssrg_skin",""))))
 	ssrg_note_materials=alive
 
 # Lights the recorder's channel under each finger that is drawing a note, then fades it.

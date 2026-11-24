@@ -45,12 +45,32 @@ const OLD_HOLD_TAIL_FRAMES := [
 	preload("res://assets/ssrg/old_ui/long/nc5.png"), preload("res://assets/ssrg/old_ui/long/nc6.png"),
 ]
 
+# SYNK mode's notes (tools/make_synk_mode_art.py): coral taps, amber holds and tails.
+const SYNK_TAP_FRAMES := [
+	preload("res://assets/synk_mode/tap1.png"), preload("res://assets/synk_mode/tap2.png"),
+	preload("res://assets/synk_mode/tap3.png"), preload("res://assets/synk_mode/tap4.png"),
+	preload("res://assets/synk_mode/tap5.png"), preload("res://assets/synk_mode/tap6.png"),
+]
+const SYNK_HOLD_HEAD_FRAMES := [
+	preload("res://assets/synk_mode/hold1.png"), preload("res://assets/synk_mode/hold2.png"),
+	preload("res://assets/synk_mode/hold3.png"), preload("res://assets/synk_mode/hold4.png"),
+	preload("res://assets/synk_mode/hold5.png"), preload("res://assets/synk_mode/hold6.png"),
+]
+const SYNK_HOLD_TAIL_FRAMES := [
+	preload("res://assets/synk_mode/tail1.png"), preload("res://assets/synk_mode/tail2.png"),
+	preload("res://assets/synk_mode/tail3.png"), preload("res://assets/synk_mode/tail4.png"),
+	preload("res://assets/synk_mode/tail5.png"), preload("res://assets/synk_mode/tail6.png"),
+]
+
 static func frame_index(beat01: float) -> int:
 	# Caller supplies the beat phase, shared by all visible notes.
 	return FRAME_ORDER[clampi(int(clampf(beat01, 0.0, 1.0) * BEAT_FRAME_MULTIPLIER), 0, 11)]
 
-static func artwork(is_long: bool, is_long_start: bool, beat01: float, old_ui: bool=false) -> Texture2D:
-	var frames = (OLD_TAP_FRAMES if not is_long else (OLD_HOLD_HEAD_FRAMES if is_long_start else OLD_HOLD_TAIL_FRAMES)) if old_ui else (TAP_FRAMES if not is_long else (HOLD_HEAD_FRAMES if is_long_start else HOLD_TAIL_FRAMES))
+# skin: "" for the stock SSRG notes, "old" for the 2014 UI, "synk" for SYNK mode.
+static func artwork(is_long: bool, is_long_start: bool, beat01: float, skin: String = "") -> Texture2D:
+	var frames = TAP_FRAMES if not is_long else (HOLD_HEAD_FRAMES if is_long_start else HOLD_TAIL_FRAMES)
+	if skin == "old": frames = OLD_TAP_FRAMES if not is_long else (OLD_HOLD_HEAD_FRAMES if is_long_start else OLD_HOLD_TAIL_FRAMES)
+	elif skin == "synk": frames = SYNK_TAP_FRAMES if not is_long else (SYNK_HOLD_HEAD_FRAMES if is_long_start else SYNK_HOLD_TAIL_FRAMES)
 	return frames[frame_index(beat01)]
 
 static func note_tint(is_long: bool, chain_missed: bool, judged: bool, judgment_is_miss: bool) -> Color:
