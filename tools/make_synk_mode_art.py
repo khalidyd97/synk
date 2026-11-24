@@ -7,6 +7,7 @@ coral and amber on near-black, with cream highlights.
 
     python tools/make_synk_mode_art.py
 """
+import time
 from pathlib import Path
 
 import numpy as np
@@ -42,7 +43,23 @@ def over(dst_rgb, dst_a, rgb, a):
 def save(rgb, a, path, size=None):
     img = Image.fromarray(np.clip(np.dstack([rgb, a]) * 255 + .5, 0, 255).astype(np.uint8), "RGBA")
     if size: img = img.resize(size, Image.LANCZOS)
-    img.save(path)
+    # Another program (antivirus, a sync tool) can briefly lock a file it has just seen
+    # change; try again a few times before giving up.
+    for attempt in range(8):
+        try:
+            img.save(path); return
+        except OSError:
+            if attempt == 7: raise
+            time.sleep(.4)
+
+
+# Puck geometry as fractions of its sprite, matched to the SSRG note sprites it replaces
+# (their outline spans x 2..207, y 10..108 of 212 x 116), so notes meet the lane rings and
+# the judgment line exactly as the SSRG notes do.
+PUCK_RX = .47      # half-width of the face
+PUCK_TOP = .435    # centre of the top face, from the sprite's top
+PUCK_RY = .34      # half-height of the face
+PUCK_SIDE = .14    # thickness of the side below the face
 
 
 def puck(w, h, color, heat):
@@ -50,9 +67,9 @@ def puck(w, h, color, heat):
     a cream rim, a white-hot core and a small four-point sparkle (the SYNK mark)."""
     W, H = w * SS, h * SS
     y, x = np.mgrid[0:H, 0:W].astype(float) / SS
-    cx, rx = w / 2, w * .44
-    top_cy, ry = h * .43, h * .32
-    side = h * .1  # thickness of the side below the top face
+    cx, rx = w / 2, w * PUCK_RX
+    top_cy, ry = h * PUCK_TOP, h * PUCK_RY
+    side = h * PUCK_SIDE  # thickness of the side below the top face
     r_top = np.sqrt(((x - cx) / rx) ** 2 + ((y - top_cy) / ry) ** 2)
     r_low = np.sqrt(((x - cx) / rx) ** 2 + ((y - top_cy - side) / ry) ** 2)
     rgb = np.zeros((H, W, 3)); a = np.zeros((H, W))
@@ -123,14 +140,14 @@ def flick():
     in a pink glow that rises over six frames (the game loops them up and down). Same
     768 px frame as the original flick art: the disc is 636 px wide, centred at y=553."""
     size, ss = 768, 2
-    disc_w = 636
-    w = round(disc_w / .88); h = round(w * 116 / 212)
-    top_cy = .43 * h
+    # The original flick's disc is 623 px wide, with its outline centred at y=558.5.
+    w = round(623 / (2 * PUCK_RX)); h = round(w * 116 / 212)
+    top_cy = (PUCK_TOP + PUCK_SIDE / 2) * h
     for i in range(6):
         k = i / 5
         rgb = np.zeros((size, size, 3)); a = np.zeros((size, size))
         prgb, pa = downsample(*puck(w, h, FLICK, HEAT[min(i, 2)]), w, h)
-        x0, y0 = round(size / 2 - w / 2), round(553 - top_cy)
+        x0, y0 = round(size / 2 - w / 2), round(558.5 - top_cy)
         y1 = min(size, y0 + h)
         crop = y1 - y0
         sub_rgb = rgb[y0:y1, x0:x0 + w]; sub_a = a[y0:y1, x0:x0 + w]
@@ -191,7 +208,8 @@ def guide():
     w, h = 212, 116
     W, H = w * SS, h * SS
     y, x = np.mgrid[0:H, 0:W].astype(float) / SS
-    r = np.sqrt(((x - w / 2) / (w * .44)) ** 2 + ((y - h * .43) / (h * .32)) ** 2)
+    # Where a note's base lands: the SSRG guide ring spans x 7..202, y 25..108.
+    r = np.sqrt(((x - w / 2) / (w * .485)) ** 2 + ((y - h * (PUCK_TOP + PUCK_SIDE)) / (h * .375)) ** 2)
     rgb = np.zeros((H, W, 3)); a = np.zeros((H, W))
     rgb, a = over(rgb, a, np.broadcast_to(CORAL, rgb.shape), np.exp(-((r - .95) / .12) ** 2) * .45)
     rgb, a = over(rgb, a, np.broadcast_to(CREAM, rgb.shape), np.exp(-((r - .95) / .025) ** 2))
