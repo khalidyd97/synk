@@ -322,6 +322,8 @@ def guide():
     rgb, a = over(rgb, a, np.broadcast_to(CORAL, rgb.shape), np.exp(-((r - .95) / .12) ** 2) * .45)
     rgb, a = over(rgb, a, np.broadcast_to(CREAM, rgb.shape), np.exp(-((r - .95) / .025) ** 2))
     rgb, a = over(rgb, a, np.broadcast_to(CREAM, rgb.shape), np.exp(-((r - .55) / .02) ** 2) * .45)
+    # Fade to nothing before the sprite's edges, so its rectangle never shows on the bar.
+    a = a * smooth(0, 7, np.minimum(np.minimum(x, w - x), np.minimum(y, h - y)))
     save(*downsample(rgb, a, w, h), OUT / "guide.png")
 
 
@@ -376,10 +378,16 @@ BAR_LINE = np.array([.86, .91, 1.0])
 BAR_LINE_WARM = np.array([1.0, .74, .40])
 
 
+# Ember bar colours, toned down from the rails' amber.
+EMBER_EDGE = np.array([.86, .40, .26])
+EMBER_MIDDLE = np.array([.88, .66, .34])
+
+
 def judgment():
-    """Judgment bar: a crisp bright line along the top, warming to amber at the rails,
-    with its light spilling down into nearly clear glass that fades away, and a faint second
-    line at the bottom. It runs on under the rails, which are drawn over it.
+    """Judgment bar, "Ember": a quiet band of light that burns coral at the rails and gold
+    in the middle, brightest along its top edge and cooling to nothing below, under a slim
+    warm-white line. Kept low so notes and hits stay the brightest things on the road.
+    It runs on under the rails, which are drawn over it.
 
     Stage geometry (SSRG canvas units, from ssrg_stage.gd): the bar is a 1156 x 130 plane
     centred at x=-5, z=16; the left rail sprite is 720 x 578 centred at x=-360, z=-203,
@@ -395,33 +403,23 @@ def judgment():
     inner = 720.0 - (outer_x + (road_x - outer_x) * .3)
     world_x = -5.0 - 578.0 + (x + .5) / W * 1156.0
     ends = smooth(0.0, 3.0, inner - np.abs(world_x))
-
-    # How close each pixel is to a rail: 0 across the middle of the bar, 1 at its ends.
-    to_rail = smooth(190.0, 0.0, inner - np.abs(world_x))[..., None]
     top = .07                                   # where the top line sits
     below = np.maximum(v - top, 0)
-    # Glass: nearly clear, with a cool dark tint that thins out toward the bottom, so the
-    # bar reads as a strip of light on the road rather than a grey block.
-    rgb = np.broadcast_to(BAR_GLASS, (H, W, 3)).copy()
-    alpha = (.46 * np.exp(-below / .5) + .05) * (v > top - .012)
-    # Light spilling down from the top line into the glass: cool in the middle of the bar,
-    # warming to amber where it meets the rails.
-    line_colour = BAR_LINE + (BAR_LINE_WARM - BAR_LINE) * to_rail
-    spill = np.exp(-below / .15) * (v >= top)
-    rgb = rgb + (line_colour - rgb) * (spill * .5)[..., None]
-    alpha = alpha + spill * .2
-    # The top line: crisp and bright.
-    line = np.exp(-((v - top) / .017) ** 2)
-    rgb = rgb + (line_colour - rgb) * np.clip(line * 1.2, 0, 1)[..., None]
-    rgb = rgb + (1 - rgb) * (np.exp(-((v - top) / .007) ** 2) * .8)[..., None]
-    alpha = np.maximum(alpha, line)
-    # A faint second line closes the strip at the bottom.
-    low = np.exp(-((v - .925) / .011) ** 2)
-    rgb = rgb + (line_colour * .9 - rgb) * (low * .8)[..., None]
-    alpha = np.maximum(alpha, low * .38)
-    alpha = np.clip(alpha, 0, 1) * smooth(1.0, .96, v)
-    mask = ends
-    save(rgb, alpha * mask, OUT / "judgment.png")
+    # The band's colour: muted coral beside the rails, muted gold across the middle.
+    middle = np.exp(-(world_x / 360.0) ** 2)[..., None]
+    band = EMBER_EDGE + (EMBER_MIDDLE - EMBER_EDGE) * middle
+    # A long fall-off: the gradient carries most of the way down the bar.
+    heat = np.exp(-below / .58) * (v >= top - .01)
+    rgb = band * (.4 + .6 * heat[..., None])
+    alpha = heat * .44
+    # The top line: slim, warm white, a little softer than the rails.
+    line = np.exp(-((v - top) / .014) ** 2)
+    rgb = rgb + (CORE_WARM - rgb) * np.clip(line, 0, 1)[..., None]
+    rgb = rgb + (1 - rgb) * (np.exp(-((v - top) / .006) ** 2) * .6)[..., None]
+    alpha = np.maximum(alpha, line * .85)
+    alpha = np.maximum(alpha, np.exp(-np.maximum(top - v, 0) / .03) * (v < top) * .3)
+    alpha = np.clip(alpha, 0, 1) * smooth(1.0, .80, v)
+    save(rgb, alpha * ends, OUT / "judgment.png")
 
 
 if __name__ == "__main__":
