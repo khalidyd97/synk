@@ -216,52 +216,68 @@ def pause():
 
 
 def hit():
-    """SYNK mode's hit flash: 11 frames on black for additive blending, the same 310 x 186
-    sprite and 33 fps rhythm as SSRG's Effect_A (bloom to a white-hot peak by the third
-    frame, then a spreading ring and drifting shards). Its own character: the bloom is
-    SYNK's four-point sparkle, a cross of light over a flattened shock ring, and the
-    shards are small sparkles. The game recolours it per note from its brightness."""
+    """SYNK mode's hit: the note's ring releasing. Eleven frames on black for additive
+    blending, the same 310 x 186 sprite and 33 fps timing as SSRG's Effect_A.
+    The ring snaps outward along the road as a crisp double rim; the glass inside it
+    flashes once; a narrow pillar of light shoots up from the centre and thins away; and
+    shards of glass scatter and tumble upward. There is no large bloom, so the road stays
+    readable. The game recolours it per note from its brightness."""
     w, h, ss = 310, 186, 2
     Y, X = np.mgrid[0:h * ss, 0:w * ss].astype(float) / ss
-    cx, cy, half, squash = 155.0, 92.0, 150.0, .6
+    cx, cy, half, squash = 155.0, 96.0, 150.0, .52       # the ring lies flat on the road, centred on the hit
     dx, dy = X - cx, Y - cy
-    r = np.hypot(dx, dy / squash) / half          # 0 at the centre, 1 at the sprite's edge
-    rng = np.random.default_rng(7)
-    shards = [(rng.uniform(0, 2 * np.pi), rng.uniform(.45, 1.15), rng.uniform(4.5, 9.5), rng.uniform(0, .5)) for _ in range(18)]
+    r = np.hypot(dx, dy / squash) / half                 # 0 at the centre, 1 at the sprite's side edge
+    rng = np.random.default_rng(11)
+    # Shards: direction, speed, size, spin, rise.
+    shards = [(rng.uniform(0, 2 * np.pi), rng.uniform(.5, 1.05), rng.uniform(12, 22), rng.uniform(-3, 3), rng.uniform(.3, 1.0)) for _ in range(11)]
     for i in range(11):
         t = i / 10
-        peak = np.exp(-((t - .24) / .24) ** 2)     # the bloom: strongest at frame 3
-        fade = (1 - t) ** 1.1
+        ease = 1 - (1 - t) ** 2.4                        # fast out, slowing
+        fade = (1 - t) ** 1.3
+        snap = np.exp(-(t / .16) ** 2)                   # the first instant
         light = np.zeros_like(r)
-        # White-hot core, flattened like the floor it sits on.
-        core_r = .16 + .40 * peak
-        light += np.exp(-(r / core_r) ** 2) * max(1.9 * peak, 1.15 * (1 - t) ** 1.3)
-        light += np.exp(-r / (.2 + .35 * peak)) * (.7 * peak + .25 * fade)
-        # A glowing disc of light on the floor, spreading with the ring and lasting like SSRG's.
-        disc_r = .34 + .5 * (1 - (1 - t) ** 2)
-        light += smooth(disc_r, disc_r * .55, r) * (.7 * peak + .45 * (1 - t) ** 1.2)
-        # Shock ring spreading out, and a fainter one following it.
-        ring_r = .14 + .8 * (1 - (1 - t) ** 2.2)
-        light += np.exp(-((r - ring_r) / (.02 + .06 * (1 - t))) ** 2) * fade * 1.15
-        if t > .1:
-            light += np.exp(-((r - ring_r * .62) / .03) ** 2) * (1 - t) ** 1.4 * .7
-        # The four-point sparkle: a long horizontal flare and a shorter rising one.
-        light += np.exp(-(dy / (1.6 + 3.2 * peak)) ** 2) * np.exp(-np.abs(dx) / (30 + 115 * peak)) * peak * 1.25
-        light += np.exp(-(dx / (1.6 + 2.6 * peak)) ** 2) * np.exp(-np.abs(dy) / (10 + 62 * peak)) * peak * 1.0
-        # Sparkle shards thrown outward, drifting up a little as they fade.
-        for angle, speed, size, lift in shards:
-            d = (.1 + speed * (1 - (1 - t) ** 1.8)) * half * .92
+        # The ring: a bold outer rim and a fine inner one, like the note, thinning as it runs.
+        ring_r = .30 + .64 * ease
+        width = .030 * (1 - .65 * t) + .006
+        light += np.exp(-((r - ring_r) / width) ** 2) * (.55 + .75 * fade) * min(1.0, 1.5 - t)
+        light += np.exp(-((r - ring_r * .86) / (width * .45)) ** 2) * fade * .7
+        light += np.exp(-np.abs(r - ring_r) / .05) * fade * .22          # a soft glow hugging the rim
+        # A second, fainter ring leaves a beat later.
+        if t > .2:
+            late = (t - .2) / .8
+            light += np.exp(-((r - (.22 + .5 * (1 - (1 - late) ** 2))) / .012) ** 2) * (1 - late) ** 1.5 * .45
+        # The glass inside the ring flashes once and clears.
+        light += smooth(ring_r, ring_r * .5, r) * snap * .5
+        # A small hot core, only at the first instant.
+        light += np.exp(-(r / .11) ** 2) * snap * 1.6
+        # The pillar: a narrow column rising from the centre, thinning and fading.
+        rise = np.clip((cy - Y) / (cy - 4), 0, 1)        # 0 at the ring's centre, 1 at the sprite's top
+        pillar_w = 2.0 + 9.0 * (1 - t) ** 2
+        reach = min(1.0, .35 + 2.6 * t)                  # how high it has shot
+        column = np.exp(-(dx / pillar_w) ** 2) * (Y <= cy + 2) * smooth(reach, reach * .55, rise) * (1 - t) ** 1.6
+        light += column * 1.25
+        light += np.exp(-np.abs(dx) / (pillar_w * 3.5)) * (Y <= cy + 2) * smooth(reach, reach * .4, rise) * (1 - t) ** 2 * .22
+        # A fine streak along the road through the centre.
+        light += np.exp(-(dy / (1.2 + 2.0 * snap)) ** 2) * np.exp(-np.abs(dx) / (40 + 90 * ease)) * (1 - t) ** 2.2 * .9
+        # Shards of glass: kites lit along one edge, flying out, rising and tumbling.
+        for angle, speed, size, spin, lift in shards:
+            d = (.22 + speed * ease) * half * .8
             sx = cx + np.cos(angle) * d
-            sy = cy + np.sin(angle) * d * squash - lift * d * .3
-            scale = size * (1 - .55 * t) * (.6 + .6 * peak)
-            ax, ay = np.abs(X - sx) / scale, np.abs(Y - sy) / scale
-            star = np.clip(1 - (np.sqrt(ax / 2.2) + np.sqrt(ay / 2.2)), 0, 1)
-            light += (star ** 1.3 * 2.0 + np.exp(-(ax ** 2 + ay ** 2) * 2) * 1.0) * (1 - t) ** .8 * min(1.0, t * 12)
+            sy = cy + np.sin(angle) * d * squash - lift * ease * 46
+            turn = angle + spin * t
+            lx = (X - sx) * np.cos(turn) + (Y - sy) * np.sin(turn)
+            ly = -(X - sx) * np.sin(turn) + (Y - sy) * np.cos(turn)
+            scale = size * (1 - .5 * t)
+            kite = 1 - (np.abs(lx) / (scale * np.where(lx > 0, 1.5, .7)) + np.abs(ly) / (scale * .42))
+            inside = kite > 0
+            facet = np.clip(.18 + .5 * (ly / (scale * .42) + 1) / 2, 0, 1)
+            rim = smooth(.16, 0, kite) * (ly > 0)
+            light += inside * (facet * .95 + rim * 1.5) * (1 - t) ** .9 * min(1.0, t * 10)
         # Keep everything inside the sprite.
-        light *= smooth(1.0, .9, r) * smooth(0, 8, np.minimum(Y, h - Y))
+        light *= smooth(0, 6, np.minimum(np.minimum(X, w - X), np.minimum(Y, h - Y)))
         light = np.clip(light, 0, 2)
         base = np.clip(light, 0, 1)
-        rgb = CORAL * base[..., None] + (WHITE - CORAL) * np.clip(light - .55, 0, 1)[..., None]
+        rgb = CORAL * base[..., None] + (WHITE - CORAL) * np.clip(light - .6, 0, 1)[..., None]
         img = Image.fromarray(np.clip(rgb * 255 + .5, 0, 255).astype(np.uint8), "RGB").resize((w, h), Image.LANCZOS).convert("RGBA")
         for attempt in range(8):
             try:
