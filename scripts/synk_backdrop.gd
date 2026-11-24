@@ -23,6 +23,7 @@ var material: ShaderMaterial
 # Recent note hits, newest first: {"at": screen position 0..1, "age", "kind", "color"}.
 var hits: Array = []
 var vanish = Vector2(.5, .1)
+var energy = 0.0
 # Worlds: how far the two worlds have been knocked apart by misses (0..1).
 var drift = 0.0
 var misses_seen = 0
@@ -96,13 +97,9 @@ func update(on: bool, delta: float) -> void:
 	# The highway's far end on screen: every stage is built around it.
 	vanish = world.camera.unproject_position(Vector3(0, 0, -492.0 * world.SSRG_UNIT)) / view
 	var beats = (world.render_time() - game.chart_offset()) * game.chart_bpm() / 60.0
-	# Energy: how far into rave the run is, or the combo on runs without rave.
-	var energy = 0.0
-	var presentation = game.ssrg_presentation
-	if presentation and presentation.active:
-		for index in 6: energy += float(presentation.phase_weights[index]) * index / 5.0
-	else:
-		energy = clampf(float(game.combo) / 150.0, 0.0, 1.0) * .6
+	# Energy: SYNK mode has no rave, so the stage builds with the combo and drops on a miss.
+	var target = clampf(float(game.combo) / 120.0, 0.0, 1.0)
+	energy = lerpf(energy, target, 1.0 - exp(-delta * 3.0))
 	material.set_shader_parameter("vanish", vanish)
 	# The rails' lines on screen, so no stage draws under the highway between them.
 	for side in [-1, 1]:

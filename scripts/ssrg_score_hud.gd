@@ -74,7 +74,6 @@ func _draw() -> void:
 	if presentation and presentation.active:draw_source_extras(presentation,origin,unit,color)
 # SYNK mode's life bar: a slanted run of segments filling coral to amber, a cream outline,
 # a bright leading segment, LIFE and the percentage above it, and a red pulse when low.
-# During rave, a thin pink strip under it shows the fever gauge.
 const SYNK_SEGMENTS=24
 const SYNK_SLANT=7.0
 const SYNK_CORAL=Color("ff6b3d")
@@ -114,16 +113,11 @@ func draw_synk_life(presentation:Node,active:bool,origin:Vector2,unit:float,alph
 	if lit>0:
 		var end=inset+minf(lit,SYNK_SEGMENTS)*step-gap
 		draw_line(at+Vector2(slant+inset,-1.5*unit),at+Vector2(slant+end,-1.5*unit),Color(SYNK_AMBER if not low else SYNK_DANGER,.35*alpha),2.0*unit)
-	# LIFE and the percentage, above the bar.
+	# LIFE and the percentage, above the bar. (SYNK mode has no rave, so no fever gauge.)
 	var font:Font=game.GAME_FONT
 	var size_px=maxi(10,roundi(13*unit))
 	spaced(font,at+Vector2(slant,-6*unit),"LIFE",size_px,4*unit,Color(SYNK_CREAM,.85*alpha))
 	draw_string(font,at+Vector2(slant+bar.x-60*unit,-6*unit),"%d%%" % roundi(life*100),HORIZONTAL_ALIGNMENT_RIGHT,60*unit,size_px,Color(SYNK_DANGER if low else SYNK_AMBER,alpha))
-	# Rave: the fever gauge as a thin pink strip under the bar.
-	if active and int(presentation.state)>0:
-		var fever=clampf(float(presentation.shown_gauge),0,1)
-		var strip=Rect2(at+Vector2(0,bar.y+4*unit),Vector2(bar.x*fever,3*unit))
-		draw_rect(strip,Color(Color("ff2d7a"),.9*alpha))
 
 # Text with extra space between its letters, drawn from its left end.
 func spaced(font:Font,at:Vector2,text:String,px:int,gap:float,tint:Color) -> float:
@@ -134,8 +128,7 @@ func spaced(font:Font,at:Vector2,text:String,px:int,gap:float,tint:Color) -> flo
 	return x-at.x-gap
 
 # SYNK mode's score: a small spaced label, a clean number with a soft amber glow, and a
-# thin amber rule under it that fades out to the left. The rave bonus sits on its own line
-# beneath, and the best score in the top right.
+# thin amber rule under it that fades out to the left, and the best score in the top right.
 const SYNK_SCORE_AMBER=Color("ff9a3c")
 func draw_synk_score(presentation:Node,active:bool,origin:Vector2,unit:float,alpha:float) -> void:
 	var font:Font=game.GAME_FONT
@@ -154,13 +147,6 @@ func draw_synk_score(presentation:Node,active:bool,origin:Vector2,unit:float,alp
 	draw_polyline_colors(PackedVector2Array([Vector2(left,rule_y),Vector2(right,rule_y)]),PackedColorArray([Color(SYNK_SCORE_AMBER,0),Color(SYNK_SCORE_AMBER,.95*alpha)]),maxf(1.0,1.6*unit),true)
 	draw_circle(Vector2(right,rule_y),maxf(1.5,2.4*unit),Color(1,.95,.85,alpha))
 	if not active:return
-	# Rave bonus: the multiplier and what it has banked so far.
-	var bonus=int(presentation.score_rules.current_pending_bonus())
-	if bonus>0:
-		var line="RAVE  x%d    +%s" % [clampi(int(presentation.state)-1,1,4),game.format_score(bonus)]
-		var bonus_px=maxi(11,roundi(17*unit))
-		var bonus_width=font.get_string_size(line,HORIZONTAL_ALIGNMENT_LEFT,-1,bonus_px).x
-		draw_string(font,Vector2(right-bonus_width,rule_y+24*unit),line,HORIZONTAL_ALIGNMENT_LEFT,-1,bonus_px,Color(SYNK_AMBER,alpha))
 	# Best score, top right.
 	var edge=size.x-origin.x-120*unit
 	var best:String=game.format_score(presentation.best_score)

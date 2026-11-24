@@ -53,8 +53,12 @@ func reset(count:int,config:Dictionary={},start_state:int=5) -> void:
 func profile_color(index:int) -> Color:
 	var c=DATA.PROFILES[clampi(index,0,5)].beam
 	return Color(c[0],c[1],c[2],c[3])
+# SYNK mode has no rave: the run never climbs past the plain full-life state, so there are
+# no rave tiers, no rave bonus (the score rules pay none below tier 2) and no rave visuals.
+func rave_enabled() -> bool:
+	return game.highway_style!="synk"
 func select_state(value:int) -> void:
-	state=clampi(value,0,5);gauge=0.0;remaining=maxi(1,ceili(note_count/10.0))
+	state=clampi(value,0,5 if rave_enabled() else 1);gauge=0.0;remaining=maxi(1,ceili(note_count/10.0))
 func judged(grade:String,note:Dictionary={}) -> void:
 	if not game.ssrg_playable_run or not active:return
 	if grade=="MISS":

@@ -9,7 +9,7 @@ render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, fog_disabled;
 //     the two snap into step and merge into one bright line, then drift apart: they sync.
 //   - A swell runs from the horizon to the player once per beat.
 //   - Each note hit sends a ripple through the waves from where it landed.
-// `energy` (0 calm .. 1 full rave) makes the sea taller and brighter.
+// `energy` (0 calm .. 1 at a long combo) makes the sea taller and brighter.
 uniform vec2 vanish = vec2(0.5, 0.1);   // the highway's far end on screen
 uniform float aspect = 1.7778;
 uniform float beat = 0.0;               // 0..1 through the current beat
