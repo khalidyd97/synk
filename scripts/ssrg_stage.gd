@@ -4,6 +4,7 @@ var press: MeshInstance3D
 var press_glow: MeshInstance3D
 var judgment_scan: MeshInstance3D
 var rails: Array = []
+var rail_overlays: Array = []
 var old_rails: Array = []
 var old_rail_glows: Array = []
 var old_rail_dots: Array = []
@@ -43,6 +44,15 @@ func _init() -> void :
 		mat.set_shader_parameter("along_rail",false)
 		mat.set_shader_parameter("rail_side",float(side))
 		rail.material_override=mat; add_child(rail); rails.append(rail)
+		# SYNK mode: the rail's light again, above the judgment bar, so the rails overlay it.
+		var overlay=rail.duplicate() as MeshInstance3D
+		overlay.name="RailOverBarLeft" if side<0 else "RailOverBarRight"
+		overlay.position.y=.1
+		overlay.material_override=mat.duplicate()
+		overlay.material_override.render_priority=-5
+		overlay.material_override.set_shader_parameter("rail_only",true)
+		overlay.visible=false
+		add_child(overlay); rail_overlays.append(overlay)
 		var old_rail=make_old_rail(side,UNIT)
 		add_child(old_rail);old_rails.append(old_rail)
 		var old_glow=make_old_rail_glow(side,UNIT)
@@ -273,6 +283,7 @@ func update_entrance(world: Node3D) -> void:
 		var rail_in=left_rail_in if index==0 else right_rail_in
 		rails[index].material_override.set_shader_parameter("rail_entrance",rail_in)
 		rails[index].material_override.set_shader_parameter("floor_entrance",floor_in)
+		rail_overlays[index].material_override.set_shader_parameter("rail_entrance",rail_in)
 	for index in old_rails.size():
 		var rail_in=left_rail_in if index==0 else right_rail_in
 		old_rails[index].material_override.set_shader_parameter("entrance",rail_in)
@@ -332,6 +343,10 @@ func configure(world: Node3D) -> void :
 		rail.material_override.set_shader_parameter("tint", rail_tint)
 		rail.material_override.set_shader_parameter("floor_opacity",clampf(float(world.game.highway_opacity),.3,1.6))
 		rail.material_override.set_shader_parameter("floor_tint",world.element_color("track",SYNK_FLOOR if synk else Color.BLACK))
+	for overlay in rail_overlays:
+		overlay.visible = stock_road and synk
+		overlay.material_override.set_shader_parameter("artwork", rail_art)
+		overlay.material_override.set_shader_parameter("tint", rail_tint)
 	for rail in old_rails:
 		rail.visible=stock_road and old_ui
 	for rail in old_rail_glows:

@@ -8,6 +8,8 @@ uniform float floor_opacity = 1.0;
 uniform float rail_entrance : hint_range(0.0,1.0) = 1.0;
 uniform float floor_entrance : hint_range(0.0,1.0) = 1.0;
 uniform float rail_side = 1.0;
+// A second copy of the rail drawn above the judgment bar: the rail's light only, no road.
+uniform bool rail_only = false;
 void vertex(){
     // Each half arrives gently from its outer edge while its rail is being drawn.
     VERTEX.x+=rail_side*(1.0-rail_entrance)*.72;
@@ -23,4 +25,11 @@ void fragment(){
     ALBEDO=road?floor_tint:art.rgb*tint.rgb*(1.0+leading_edge*1.65);
     EMISSION=road?vec3(0.0):art.rgb*tint.rgb*leading_edge*.85;
     ALPHA=art.a*tint.a*(road?floor_opacity*floor_entrance:rail_wipe*smoothstep(0.0,.16,rail_entrance));
+    if(rail_only){
+        // Only the light itself: the rail's dim outer glow must not darken the bar under it.
+        float light=max(art.r,max(art.g,art.b));
+        ALBEDO=art.rgb/max(light,0.001)*tint.rgb*(1.0+leading_edge*1.65);
+        // Fade the faintest glow out smoothly, so it leaves no edge across the bar.
+        ALPHA=art.a*tint.a*rail_wipe*smoothstep(0.0,.16,rail_entrance)*light*smoothstep(0.02,0.22,light);
+    }
 }

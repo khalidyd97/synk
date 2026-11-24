@@ -352,9 +352,9 @@ def judgment():
     vertical = src[:, W // 2, 3][:, None] * np.ones((1, W))
     _, _, pl, pr = rail_edges()
     z = -49.0 + v * 130.0
-    # The bar runs up to the rail's bright core, which sits mid-way across the rail band.
+    # The bar runs on under the rails, which are drawn over it, and stops at their outer edge.
     outer_x = pl[0] * (z + 492.0) + pl[1]; road_x = pr[0] * (z + 492.0) + pr[1]
-    inner = 720.0 - (outer_x + (road_x - outer_x) * .66)
+    inner = 720.0 - (outer_x + (road_x - outer_x) * .3)
     world_x = -5.0 - 578.0 + (x + .5) / W * 1156.0
     ends = smooth(0.0, 3.0, inner - np.abs(world_x))
     mask = vertical * ends
