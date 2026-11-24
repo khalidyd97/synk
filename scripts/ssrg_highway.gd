@@ -41,6 +41,7 @@ var source_background: Node3D
 var background_bank:Array=[]
 var imported_frames: Array[Texture2D] = []
 var special_frames: Array[Texture2D] = []
+var synk_frames: Array[Texture2D] = []
 
 func _ready() -> void:
 	for index in range(1,12):
@@ -48,6 +49,9 @@ func _ready() -> void:
 		if ResourceLoader.exists(path): imported_frames.append(load(path))
 		var special_path="res://assets/ssrg/imported/Effect_B_%02d.png" % index
 		if ResourceLoader.exists(special_path): special_frames.append(load(special_path))
+		# SYNK mode's own flash, same frame count and rhythm (tools/make_synk_mode_art.py).
+		var synk_path="res://assets/synk_mode/hit_%02d.png" % index
+		if ResourceLoader.exists(synk_path): synk_frames.append(load(synk_path))
 	original_stage=preload("res://scripts/ssrg_stage.gd").new(); add_child(original_stage)
 	source_background=preload("res://scripts/ssrg_background.gd").new();add_child(source_background);source_background.configure(0)
 	background_bank.append(source_background)
@@ -101,6 +105,7 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 	style_hit(h)
 	# B belongs to source special event/item notes. Ordinary taps and sustains use A.
 	var frames=special_frames if kind=="special" else imported_frames
+	if kind!="special" and world.game.synk_mode() and not synk_frames.is_empty(): frames=synk_frames
 	h.frames=frames
 	if not frames.is_empty(): h.material.set_shader_parameter("atlas", frames[0])
 	h.age = 0.0; h.sustain_entry = sustain_entry; h.pointer_id = pointer_id; h.kind = kind

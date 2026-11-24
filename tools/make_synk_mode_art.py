@@ -203,6 +203,62 @@ def pause():
     save(*downsample(rgb, a, w, h), OUT / "pause.png")
 
 
+def hit():
+    """SYNK mode's hit flash: 11 frames on black for additive blending, the same 310 x 186
+    sprite and 33 fps rhythm as SSRG's Effect_A (bloom to a white-hot peak by the third
+    frame, then a spreading ring and drifting shards). Its own character: the bloom is
+    SYNK's four-point sparkle, a cross of light over a flattened shock ring, and the
+    shards are small sparkles. The game recolours it per note from its brightness."""
+    w, h, ss = 310, 186, 2
+    Y, X = np.mgrid[0:h * ss, 0:w * ss].astype(float) / ss
+    cx, cy, half, squash = 155.0, 92.0, 150.0, .6
+    dx, dy = X - cx, Y - cy
+    r = np.hypot(dx, dy / squash) / half          # 0 at the centre, 1 at the sprite's edge
+    rng = np.random.default_rng(7)
+    shards = [(rng.uniform(0, 2 * np.pi), rng.uniform(.45, 1.15), rng.uniform(4.5, 9.5), rng.uniform(0, .5)) for _ in range(18)]
+    for i in range(11):
+        t = i / 10
+        peak = np.exp(-((t - .24) / .24) ** 2)     # the bloom: strongest at frame 3
+        fade = (1 - t) ** 1.1
+        light = np.zeros_like(r)
+        # White-hot core, flattened like the floor it sits on.
+        core_r = .16 + .40 * peak
+        light += np.exp(-(r / core_r) ** 2) * max(1.9 * peak, 1.15 * (1 - t) ** 1.3)
+        light += np.exp(-r / (.2 + .35 * peak)) * (.7 * peak + .25 * fade)
+        # A glowing disc of light on the floor, spreading with the ring and lasting like SSRG's.
+        disc_r = .34 + .5 * (1 - (1 - t) ** 2)
+        light += smooth(disc_r, disc_r * .55, r) * (.7 * peak + .45 * (1 - t) ** 1.2)
+        # Shock ring spreading out, and a fainter one following it.
+        ring_r = .14 + .8 * (1 - (1 - t) ** 2.2)
+        light += np.exp(-((r - ring_r) / (.02 + .06 * (1 - t))) ** 2) * fade * 1.15
+        if t > .1:
+            light += np.exp(-((r - ring_r * .62) / .03) ** 2) * (1 - t) ** 1.4 * .7
+        # The four-point sparkle: a long horizontal flare and a shorter rising one.
+        light += np.exp(-(dy / (1.6 + 3.2 * peak)) ** 2) * np.exp(-np.abs(dx) / (30 + 115 * peak)) * peak * 1.25
+        light += np.exp(-(dx / (1.6 + 2.6 * peak)) ** 2) * np.exp(-np.abs(dy) / (10 + 62 * peak)) * peak * 1.0
+        # Sparkle shards thrown outward, drifting up a little as they fade.
+        for angle, speed, size, lift in shards:
+            d = (.1 + speed * (1 - (1 - t) ** 1.8)) * half * .92
+            sx = cx + np.cos(angle) * d
+            sy = cy + np.sin(angle) * d * squash - lift * d * .3
+            scale = size * (1 - .55 * t) * (.6 + .6 * peak)
+            ax, ay = np.abs(X - sx) / scale, np.abs(Y - sy) / scale
+            star = np.clip(1 - (np.sqrt(ax / 2.2) + np.sqrt(ay / 2.2)), 0, 1)
+            light += (star ** 1.3 * 2.0 + np.exp(-(ax ** 2 + ay ** 2) * 2) * 1.0) * (1 - t) ** .8 * min(1.0, t * 12)
+        # Keep everything inside the sprite.
+        light *= smooth(1.0, .9, r) * smooth(0, 8, np.minimum(Y, h - Y))
+        light = np.clip(light, 0, 2)
+        base = np.clip(light, 0, 1)
+        rgb = CORAL * base[..., None] + (WHITE - CORAL) * np.clip(light - .55, 0, 1)[..., None]
+        img = Image.fromarray(np.clip(rgb * 255 + .5, 0, 255).astype(np.uint8), "RGB").resize((w, h), Image.LANCZOS).convert("RGBA")
+        for attempt in range(8):
+            try:
+                img.save(OUT / f"hit_{i + 1:02d}.png"); break
+            except OSError:
+                if attempt == 7: raise
+                time.sleep(.4)
+
+
 def guide():
     """Lane ring: a cream ellipse with a faint coral glow, the shape of the puck's face."""
     w, h = 212, 116
@@ -294,5 +350,5 @@ def judgment():
 
 if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
-    notes(); flick(); guide(); rail(); judgment(); pause()
+    notes(); flick(); guide(); rail(); judgment(); pause(); hit()
     print("SYNK mode art written to", OUT)
