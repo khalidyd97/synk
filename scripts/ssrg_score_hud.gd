@@ -72,9 +72,8 @@ func _draw() -> void:
 	if value.length()>6:draw_texture_rect(SOURCE.SCORE_COMMA,Rect2(origin+Vector2(99,105)*unit,Vector2(16,19)*unit),false,color)
 
 	if presentation and presentation.active:draw_source_extras(presentation,origin,unit,color)
-# SYNK mode's life bar: a slanted run of segments filling coral to amber, a cream outline,
-# a bright leading segment, LIFE and the percentage above it, and a red pulse when low.
-const SYNK_SEGMENTS=24
+# SYNK mode's life bar: one solid slanted bar, a coral to amber gradient, a cream outline,
+# a bright leading edge, LIFE and the percentage above it, and a red pulse when low.
 const SYNK_SLANT=7.0
 const SYNK_CORAL=Color("ff6b3d")
 const SYNK_AMBER=Color("ffc36b")
@@ -92,27 +91,25 @@ func draw_synk_life(presentation:Node,active:bool,origin:Vector2,unit:float,alph
 	draw_colored_polygon(plate,Color(.07,.05,.09,.82*alpha))
 	var outline=plate.duplicate();outline.append(plate[0])
 	draw_polyline(outline,Color(SYNK_DANGER if low else SYNK_CREAM,(.45+.4*pulse)*alpha),maxf(1.0,1.6*unit),true)
-	# Segments.
-	var inset=3.0*unit;var gap=2.0*unit
+	# The fill: one solid slanted bar, coral at the left warming to amber at the right.
+	var inset=3.0*unit
 	var inner=Vector2(bar.x-2*inset,bar.y-2*inset)
-	var step=(inner.x+gap)/SYNK_SEGMENTS
-	var lit=life*SYNK_SEGMENTS
-	for i in SYNK_SEGMENTS:
-		var amount=clampf(lit-i,0,1)
-		if amount<=0:break
-		var t=float(i)/(SYNK_SEGMENTS-1)
-		var color:Color=SYNK_CORAL.lerp(SYNK_AMBER,t)
-		if low:color=SYNK_DANGER.lerp(SYNK_CREAM,pulse*.35)
-		var leading=lit-i<=1.0
-		if leading:color=color.lerp(SYNK_CREAM,.55)
-		var x0=inset+i*step;var w=(step-gap)*amount
-		var top=at+Vector2(x0+slant*(1-inset/bar.y),inset);var bottom=at+Vector2(x0+slant*(inset/bar.y),bar.y-inset)
-		var cell=PackedVector2Array([top,top+Vector2(w,0),bottom+Vector2(w,0),bottom])
-		draw_colored_polygon(cell,Color(color,alpha))
-	# Soft glow line along the top of the lit part.
-	if lit>0:
-		var end=inset+minf(lit,SYNK_SEGMENTS)*step-gap
-		draw_line(at+Vector2(slant+inset,-1.5*unit),at+Vector2(slant+end,-1.5*unit),Color(SYNK_AMBER if not low else SYNK_DANGER,.35*alpha),2.0*unit)
+	var filled=inner.x*life
+	if filled>0.5:
+		var top=at+Vector2(inset+slant*(1-inset/bar.y),inset);var bottom=at+Vector2(inset+slant*(inset/bar.y),bar.y-inset)
+		var from:Color=SYNK_CORAL;var to:Color=SYNK_CORAL.lerp(SYNK_AMBER,life)
+		if low:
+			from=SYNK_DANGER.lerp(SYNK_CREAM,pulse*.35);to=from
+		from.a=alpha;to.a=alpha
+		draw_polygon(PackedVector2Array([top,top+Vector2(filled,0),bottom+Vector2(filled,0),bottom]),PackedColorArray([from,to,to,from]))
+		# A bright leading edge, and a soft sheen along the top half.
+		var edge=minf(filled,3.0*unit)
+		draw_colored_polygon(PackedVector2Array([top+Vector2(filled-edge,0),top+Vector2(filled,0),bottom+Vector2(filled,0),bottom+Vector2(filled-edge,0)]),Color(SYNK_CREAM,.7*alpha))
+		var mid_shift=Vector2(-slant*.5*(inner.y/bar.y),inner.y*.5)
+		var clear=Color(1,1,1,0);var sheen=Color(1,1,1,.16*alpha)
+		draw_polygon(PackedVector2Array([top,top+Vector2(filled,0),top+Vector2(filled,0)+mid_shift,top+mid_shift]),PackedColorArray([sheen,sheen,clear,clear]))
+		# Soft glow line along the top of the lit part.
+		draw_line(at+Vector2(slant+inset,-1.5*unit),at+Vector2(slant+inset+filled,-1.5*unit),Color(SYNK_AMBER if not low else SYNK_DANGER,.35*alpha),2.0*unit)
 	# LIFE and the percentage, above the bar. (SYNK mode has no rave, so no fever gauge.)
 	var font:Font=game.GAME_FONT
 	var size_px=maxi(10,roundi(13*unit))

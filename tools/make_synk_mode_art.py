@@ -217,11 +217,10 @@ def pause():
 
 def hit():
     """SYNK mode's hit, in the spirit of SSRG's Effect_A: a flat pool of light that swells to
-    a white-hot bloom on the third frame, crossed by a lens streak, then sinks back into
-    rings and leaves a few sparks drifting. Same 310 x 186 sprite, eleven frames, 33 fps.
+    a white-hot bloom on the third frame, crossed by a lens streak, then sinks back to
+    a glint and leaves a few sparks drifting. Same 310 x 186 sprite, eleven frames, 33 fps.
     What makes it SYNK's own: where SSRG swirls discs of light, this opens a six-rayed star
-    lying on the road, wears the note's crisp double rim, and throws kite-shaped sparks
-    upward. Drawn on black for additive blending; the game recolours it per note."""
+    lying on the road and throws kite-shaped sparks upward, with no ring at all. Drawn on black for additive blending; the game recolours it per note."""
     w, h, ss = 310, 186, 2
     Y, X = np.mgrid[0:h * ss, 0:w * ss].astype(float) / ss
     cx, cy, half, squash = 155.0, 92.0, 150.0, .52
@@ -241,27 +240,18 @@ def hit():
         fade = (1 - t) ** 1.2
         light = np.zeros_like(r)
         # The pool: a soft flat bloom with a wide faint skirt.
-        light += np.exp(-(r / (size * .62)) ** 2) * heat * .62
+        light += np.exp(-(r / (size * .66)) ** 2) * heat * .42
         light += np.exp(-r / (size * .7)) * heat * .22
-        # A glassy fill out to the rim, so the whole disc glows as SSRG's does.
-        light += smooth(min(size * .86, .50) * 1.12, min(size * .86, .50) * .45, r) * heat * .34
+        # A soft glassy fill, so the whole pool glows as SSRG's does. No ring: it fades out evenly.
+        light += np.exp(-(r / (size * .60)) ** 2) * heat * .30
         # Its white-hot heart.
-        light += np.exp(-(r / (size * .34)) ** 2) * heat * 1.15
+        light += np.exp(-(r / (size * .30)) ** 2) * heat * .75
         # The star: six soft rays lying on the road, turning slowly, longest at the peak.
         turn = .35 + 1.1 * t
         rays = np.cos(3 * (theta + turn)) ** 2
         fine = np.cos(6 * (theta - turn * .6) + 1.0) ** 2
-        light += rays ** 7 * np.exp(-r / (size * .5)) * heat * .55 * smooth(.02, .12, r)
-        light += fine ** 14 * np.exp(-r / (size * .34)) * heat * .28 * smooth(.02, .10, r)
-        # The note's rim: a crisp double ring riding the edge of the pool, staying compact.
-        rim = min(size * .86, .50)
-        width = .020 * (1 - .4 * t) + .005
-        light += np.exp(-((r - rim) / width) ** 2) * (.30 + .55 * fade) * min(1.0, heat * 1.2)
-        light += np.exp(-((r - rim * .80) / (width * .5)) ** 2) * fade * .40 * min(1.0, heat * 1.2)
-        # Once the bloom sinks, a dark gap opens inside the rim, as SSRG's discs do.
-        if .45 <= t <= .8:
-            gap = np.exp(-((r - rim * .9) / .035) ** 2) * (1 - abs(t - .62) / .2)
-            light *= 1 - .45 * np.clip(gap, 0, 1)
+        light += rays ** 7 * np.exp(-r / (size * .5)) * heat * .38 * smooth(.02, .12, r)
+        light += fine ** 14 * np.exp(-r / (size * .34)) * heat * .18 * smooth(.02, .10, r)
         # The lens streak across the road, widest at the peak.
         light += np.exp(-(dy / (1.0 + 1.6 * heat)) ** 2) * np.exp(-np.abs(dx) / (half * size * 1.25)) * heat * .55
         # Near the end the heart shrinks to a four-point glint.
@@ -285,11 +275,12 @@ def hit():
             else:
                 light += np.exp(-(np.hypot(X - sx, Y - sy) / (sz * .38)) ** 2) * alive * 1.3
                 light += np.exp(-np.hypot(X - sx, Y - sy) / (sz * .9)) * alive * .25
-        # Keep everything inside the sprite.
-        light *= smooth(0, 8, np.minimum(np.minimum(X, w - X), np.minimum(Y, h - Y)))
-        light = np.clip(light, 0, 2.2)
-        base = np.clip(light, 0, 1)
-        rgb = CORAL * base[..., None] + (WHITE - CORAL) * np.clip(light - .7, 0, 1)[..., None]
+        # Fade to nothing well before the sprite's edges, so its rectangle never shows.
+        light *= smooth(1.0, .5, np.maximum(np.abs(dx) / (w * .5), np.abs(dy) / (h * .5)))
+        # A soft shoulder instead of a hard clip: only the very heart reaches full brightness,
+        # so the game's recolouring gives a glow that melts outward rather than a white blob.
+        base = 1 - np.exp(-np.clip(light, 0, 4) * .9)
+        rgb = CORAL * base[..., None] + (WHITE - CORAL) * np.clip((base - .72) / .28, 0, 1)[..., None] * base[..., None]
         img = Image.fromarray(np.clip(rgb * 255 + .5, 0, 255).astype(np.uint8), "RGB").resize((w, h), Image.LANCZOS).convert("RGBA")
         for attempt in range(8):
             try:
