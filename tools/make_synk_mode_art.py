@@ -199,21 +199,27 @@ def guide():
     save(*downsample(rgb, a, w, h), OUT / "guide.png")
 
 
-def rail():
-    """Left rail sprite with the SSRG rail's exact silhouette. The road keeps its black
-    pixels (the stage shader draws them as floor); the rail band becomes a coral glow
-    edge, a bright cream core and an amber inner edge, with a coral haze outside."""
+def rail_edges():
+    """Straight-line fits of the SSRG left rail's outer and road-side edges, in rail
+    sprite pixels: x = slope * y + offset (y runs from the far end, 0, to the near end)."""
     src = np.asarray(Image.open(SSRG / "rail_original.png").convert("RGBA")).astype(float) / 255
-    H, W = src.shape[:2]
-    rgb = src[..., :3].copy(); a = src[..., 3].copy()
-    bright = (src[..., :3].max(2) > .16) & (a > .04)
-    ys = np.arange(H)
-    left = np.full(H, np.nan); right = np.full(H, np.nan)
+    bright = (src[..., :3].max(2) > .16) & (src[..., 3] > .04)
+    ys = np.arange(src.shape[0])
+    left = np.full(len(ys), np.nan); right = np.full(len(ys), np.nan)
     for yy in ys:
         xs = np.where(bright[yy])[0]
         if len(xs) > 3: left[yy], right[yy] = xs.min(), xs.max()
     ok = ~np.isnan(left)
-    pl = np.polyfit(ys[ok], left[ok], 1); pr = np.polyfit(ys[ok], right[ok], 1)
+    return src, bright, np.polyfit(ys[ok], left[ok], 1), np.polyfit(ys[ok], right[ok], 1)
+
+
+def rail():
+    """Left rail sprite with the SSRG rail's exact silhouette. The road keeps its black
+    pixels (the stage shader draws them as floor); the rail band becomes a coral glow
+    edge, a bright cream core and an amber inner edge, with a coral haze outside."""
+    src, bright, pl, pr = rail_edges()
+    H, W = src.shape[:2]
+    rgb = src[..., :3].copy(); a = src[..., 3].copy()
     y, x = np.mgrid[0:H, 0:W].astype(float)
     L = pl[0] * y + pl[1]; R = pr[0] * y + pr[1]
     t = (x - L) / np.maximum(R - L, 1)  # 0 at the outer edge, 1 at the road edge
@@ -233,24 +239,42 @@ def rail():
     save(rgb, a, OUT / "rail.png")
 
 
+# Warm graphite greys for the judgment bar, between the near-black road and the cream lines.
+GRAPHITE_HI = np.array([.44, .42, .46])
+GRAPHITE_LO = np.array([.19, .18, .21])
+GRAPHITE_EDGE = np.array([.66, .64, .67])
+
+
 def judgment():
-    """Judgment bar with the SSRG bar's silhouette: a dark coral-to-violet glass band, a
-    bright cream hit line where notes are judged, and glowing coral ends."""
+    """Judgment bar: a warm graphite glass band with a bright cream hit line, trimmed at
+    each rail's road-side edge so it never runs over the rails.
+
+    Stage geometry (SSRG canvas units, from ssrg_stage.gd): the bar is a 1156 x 130 plane
+    centred at x=-5, z=16; the left rail sprite is 720 x 578 centred at x=-360, z=-203,
+    so its pixel (px, py) is world x = px - 720, z = py - 492; the right rail mirrors it."""
     src = np.asarray(Image.open(SSRG / "judgment_Main_black_BG3.png").convert("RGBA")).astype(float) / 255
     H, W = src.shape[:2]
-    mask = src[..., 3]
     y, x = np.mgrid[0:H, 0:W].astype(float)
-    v = y / H
+    v = (y + .5) / H
+    # Keep the source bar's soft top and bottom, but take its ends from the rails.
+    vertical = src[:, W // 2, 3][:, None] * np.ones((1, W))
+    _, _, _, pr = rail_edges()
+    z = -49.0 + v * 130.0
+    inner = 720.0 - (pr[0] * (z + 492.0) + pr[1]) - 2.0  # road half-width, 2 units inside the rail
+    world_x = -5.0 - 578.0 + (x + .5) / W * 1156.0
+    ends = smooth(0.0, 3.0, inner - np.abs(world_x))
+    mask = vertical * ends
+
     hit = 49.0 / 130.0  # the hit plane, 49 of the band's 130 units down
-    base = CORAL * .55 + (np.array([.35, .16, .55]) - CORAL * .55) * smooth(hit, 1, v)[..., None]
-    fill_a = .38 + .25 * smooth(1, hit, v)
+    base = GRAPHITE_HI + (GRAPHITE_LO - GRAPHITE_HI) * smooth(0, 1, v)[..., None]
+    fill_a = .5 + .2 * smooth(1, hit, v)
     line = np.exp(-((v - hit) / .03) ** 2)
-    glow = np.exp(-((v - hit) / .14) ** 2) * .6
-    rgb = base + (CREAM - base) * np.clip(line + glow * .5, 0, 1)[..., None]
-    alpha = np.clip(fill_a + line * .6 + glow * .3, 0, 1)
-    # Coral light along the top and bottom edges.
-    edge = np.exp(-(v / .05) ** 2) + np.exp(-((1 - v) / .05) ** 2)
-    rgb = rgb + (CORAL - rgb) * np.clip(edge * .8, 0, 1)[..., None]
+    glow = np.exp(-((v - hit) / .14) ** 2) * .5
+    rgb = base + (CREAM - base) * np.clip(line + glow * .45, 0, 1)[..., None]
+    alpha = np.clip(fill_a + line * .5 + glow * .25, 0, 1)
+    # A fine light-grey edge along the top and bottom.
+    edge = np.exp(-(v / .04) ** 2) + np.exp(-((1 - v) / .04) ** 2)
+    rgb = rgb + (GRAPHITE_EDGE - rgb) * np.clip(edge * .8, 0, 1)[..., None]
     save(rgb, alpha * mask, OUT / "judgment.png")
 
 
