@@ -32,10 +32,16 @@ func _draw() -> void:
 	var origin:Vector2=layout.origin
 	var alpha=float(game.score_panel.modulate.a)
 	var color=Color(1,1,1,alpha)
-	draw_texture_rect(backing,Rect2(origin+Vector2(-362,-8)*unit,Vector2(850,158)*unit),false,color)
-	draw_texture_rect(caption,Rect2(origin+Vector2(68,62)*unit,Vector2(92,24)*unit),false,color)
+	if not game.synk_mode():
+		draw_texture_rect(backing,Rect2(origin+Vector2(-362,-8)*unit,Vector2(850,158)*unit),false,color)
+		draw_texture_rect(caption,Rect2(origin+Vector2(68,62)*unit,Vector2(92,24)*unit),false,color)
 	var presentation=game.ssrg_presentation
 	var active= presentation and presentation.active
+	# SYNK mode draws its own life bar, score and best with the game's font.
+	if game.synk_mode():
+		draw_synk_life(presentation,active,origin,unit,alpha)
+		draw_synk_score(presentation,active,origin,unit,alpha)
+		return
 	var ultra=float(presentation.phase_weights[5]) if active else 0.0
 	var gauge_rect=Rect2(origin+Vector2(85,42-2*ultra)*unit,Vector2(282,16+4*ultra)*unit)
 	var fraction=float(presentation.shown_gauge) if active else clampf(float(game.score_panel.shown_energy),0,1)
@@ -109,15 +115,61 @@ func draw_synk_life(presentation:Node,active:bool,origin:Vector2,unit:float,alph
 		var end=inset+minf(lit,SYNK_SEGMENTS)*step-gap
 		draw_line(at+Vector2(slant+inset,-1.5*unit),at+Vector2(slant+end,-1.5*unit),Color(SYNK_AMBER if not low else SYNK_DANGER,.35*alpha),2.0*unit)
 	# LIFE and the percentage, above the bar.
-	var font:Font=preload("res://scripts/arcade_style.gd").HEAD
-	var size_px=maxi(10,roundi(15*unit))
-	draw_string(font,at+Vector2(slant,-6*unit),"LIFE",HORIZONTAL_ALIGNMENT_LEFT,-1,size_px,Color(SYNK_CREAM,.85*alpha))
+	var font:Font=game.GAME_FONT
+	var size_px=maxi(10,roundi(13*unit))
+	spaced(font,at+Vector2(slant,-6*unit),"LIFE",size_px,4*unit,Color(SYNK_CREAM,.85*alpha))
 	draw_string(font,at+Vector2(slant+bar.x-60*unit,-6*unit),"%d%%" % roundi(life*100),HORIZONTAL_ALIGNMENT_RIGHT,60*unit,size_px,Color(SYNK_DANGER if low else SYNK_AMBER,alpha))
 	# Rave: the fever gauge as a thin pink strip under the bar.
 	if active and int(presentation.state)>0:
 		var fever=clampf(float(presentation.shown_gauge),0,1)
 		var strip=Rect2(at+Vector2(0,bar.y+4*unit),Vector2(bar.x*fever,3*unit))
 		draw_rect(strip,Color(Color("ff2d7a"),.9*alpha))
+
+# Text with extra space between its letters, drawn from its left end.
+func spaced(font:Font,at:Vector2,text:String,px:int,gap:float,tint:Color) -> float:
+	var x=at.x
+	for i in text.length():
+		draw_string(font,Vector2(x,at.y),text[i],HORIZONTAL_ALIGNMENT_LEFT,-1,px,tint)
+		x+=font.get_string_size(text[i],HORIZONTAL_ALIGNMENT_LEFT,-1,px).x+gap
+	return x-at.x-gap
+
+# SYNK mode's score: a small spaced label, a clean number with a soft amber glow, and a
+# thin amber rule under it that fades out to the left. The rave bonus sits on its own line
+# beneath, and the best score in the top right.
+const SYNK_SCORE_AMBER=Color("ff9a3c")
+func draw_synk_score(presentation:Node,active:bool,origin:Vector2,unit:float,alpha:float) -> void:
+	var font:Font=game.GAME_FONT
+	var left=origin.x+85*unit
+	var right=left+289*unit
+	var baseline=origin.y+112*unit
+	spaced(font,Vector2(left+7*unit,baseline-2*unit),"SCORE",maxi(10,roundi(13*unit)),5*unit,Color(SYNK_SCORE_AMBER,.9*alpha))
+	var value:String=game.format_score(maxi(0,roundi(game.displayed_score)))
+	var px=maxi(14,roundi(40*unit))
+	var width=font.get_string_size(value,HORIZONTAL_ALIGNMENT_LEFT,-1,px).x
+	var at=Vector2(right-width,baseline)
+	draw_string_outline(font,at,value,HORIZONTAL_ALIGNMENT_LEFT,-1,px,maxi(2,roundi(9*unit)),Color(SYNK_SCORE_AMBER,.14*alpha))
+	draw_string_outline(font,at,value,HORIZONTAL_ALIGNMENT_LEFT,-1,px,maxi(1,roundi(4*unit)),Color(SYNK_SCORE_AMBER,.22*alpha))
+	draw_string(font,at,value,HORIZONTAL_ALIGNMENT_LEFT,-1,px,Color(1,.98,.94,alpha))
+	var rule_y=baseline+10*unit
+	draw_polyline_colors(PackedVector2Array([Vector2(left,rule_y),Vector2(right,rule_y)]),PackedColorArray([Color(SYNK_SCORE_AMBER,0),Color(SYNK_SCORE_AMBER,.95*alpha)]),maxf(1.0,1.6*unit),true)
+	draw_circle(Vector2(right,rule_y),maxf(1.5,2.4*unit),Color(1,.95,.85,alpha))
+	if not active:return
+	# Rave bonus: the multiplier and what it has banked so far.
+	var bonus=int(presentation.score_rules.current_pending_bonus())
+	if bonus>0:
+		var line="RAVE  x%d    +%s" % [clampi(int(presentation.state)-1,1,4),game.format_score(bonus)]
+		var bonus_px=maxi(11,roundi(17*unit))
+		var bonus_width=font.get_string_size(line,HORIZONTAL_ALIGNMENT_LEFT,-1,bonus_px).x
+		draw_string(font,Vector2(right-bonus_width,rule_y+24*unit),line,HORIZONTAL_ALIGNMENT_LEFT,-1,bonus_px,Color(SYNK_AMBER,alpha))
+	# Best score, top right.
+	var edge=size.x-origin.x-120*unit
+	var best:String=game.format_score(presentation.best_score)
+	var best_px=maxi(12,roundi(20*unit))
+	var best_width=font.get_string_size(best,HORIZONTAL_ALIGNMENT_LEFT,-1,best_px).x
+	draw_string(font,Vector2(edge-best_width,47*unit),best,HORIZONTAL_ALIGNMENT_LEFT,-1,best_px,Color(1,.98,.94,alpha))
+	var label_px=maxi(10,roundi(13*unit))
+	var label_width=font.get_string_size("BEST",HORIZONTAL_ALIGNMENT_LEFT,-1,label_px).x+3*5*unit
+	spaced(font,Vector2(edge-best_width-label_width-14*unit,46*unit),"BEST",label_px,5*unit,Color(SYNK_SCORE_AMBER,.9*alpha))
 
 func words(value:String,at:Vector2,font_size:int,tint:Color) -> void:
 	draw_string(ThemeDB.fallback_font,at,value,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,tint)

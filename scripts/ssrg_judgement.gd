@@ -21,8 +21,73 @@ var good_art: Texture2D = preload("res://assets/ssrg/imported/Text_good.png")
 var miss_art: Texture2D = preload("res://assets/ssrg/imported/Text_miss.png")
 var digit_art: Array[Texture2D] = []
 
+# SYNK mode's judgment and combo, drawn with the game's font in place of the SSRG art:
+# the grade in wide-spaced capitals between two lines that fade outward, a large glowing
+# combo count under it, and a thin meter that fills toward every 50th combo.
+# Each grade: its word, its text colour and its glow colour.
+const SYNK_GRADES = {
+	"PERFECT": ["PERFECT+", Color("fff6e6"), Color("ff9a3c")],
+	"GREAT": ["PERFECT", Color("ffdca8"), Color("ff9a3c")],
+	"GOOD": ["GOOD", Color("bff0ff"), Color("3cd8ff")],
+	"MISS": ["MISS", Color("c9c2cf"), Color("ff3c5a")],
+}
+const SYNK_MILESTONE = 50
+func spaced_width(font: Font, text: String, px: int, gap: float) -> float:
+	var width = 0.0
+	for i in text.length(): width += font.get_string_size(text[i], HORIZONTAL_ALIGNMENT_LEFT, -1, px).x + gap
+	return width - gap
+# Wide-spaced text centred on `centre`, with a soft glow behind the letters.
+func spaced_glow(font: Font, centre: Vector2, text: String, px: int, gap: float, fill: Color, glow: Color) -> float:
+	var width = spaced_width(font, text, px, gap)
+	for layer in 2:
+		var x = centre.x - width * .5
+		for i in text.length():
+			var at = Vector2(x, centre.y + px * .36)
+			if layer == 0: draw_string_outline(font, at, text[i], HORIZONTAL_ALIGNMENT_LEFT, -1, px, maxi(2, roundi(px * .28)), Color(glow, glow.a * .3))
+			else: draw_string(font, at, text[i], HORIZONTAL_ALIGNMENT_LEFT, -1, px, fill)
+			x += font.get_string_size(text[i], HORIZONTAL_ALIGNMENT_LEFT, -1, px).x + gap
+	return width
+
+func draw_synk() -> void:
+	var unit = minf(size.x / 1280.0, size.y / 720.0)
+	var font: Font = game.GAME_FONT
+	var centre = Vector2(size.x * .5, size.y * .34)
+	var grade = SYNK_GRADES.get(displayed_grade, null)
+	if grade != null:
+		# The word punches in, holds, then fades.
+		var shown = clampf(1.0 - (since_hit - .5) / .3, 0.0, 1.0)
+		var px = roundi(30 * unit * (1.0 + .2 * pop))
+		var width = spaced_glow(font, centre, grade[0], px, 9 * unit, Color(grade[1], shown), Color(grade[2], shown))
+		for side in [-1, 1]:
+			var from = centre + Vector2(side * (width * .5 + 20 * unit), 0)
+			var to = from + Vector2(side * (90 + 40 * pop) * unit, 0)
+			draw_polyline_colors(PackedVector2Array([from, to]), PackedColorArray([Color(grade[2], shown), Color(grade[2], 0)]), maxf(1.0, 2.0 * unit), true)
+			draw_circle(from, maxf(1.5, 2.6 * unit), Color(grade[1], shown))
+	if game.combo < 2: return
+	# The combo count.
+	var number = str(game.combo)
+	var count_px = roundi(104 * unit * (1.0 + .14 * pop))
+	var count_width = font.get_string_size(number, HORIZONTAL_ALIGNMENT_LEFT, -1, count_px).x
+	var count_at = Vector2(size.x * .5 - count_width * .5, centre.y + 118 * unit)
+	var milestone = game.combo % SYNK_MILESTONE == 0
+	var glow_color: Color = Color("ff9a3c") if not milestone else Color("ffe2b0")
+	draw_string_outline(font, count_at, number, HORIZONTAL_ALIGNMENT_LEFT, -1, count_px, maxi(4, roundi(26 * unit)), Color(glow_color, .10 + .12 * pop))
+	draw_string_outline(font, count_at, number, HORIZONTAL_ALIGNMENT_LEFT, -1, count_px, maxi(2, roundi(10 * unit)), Color(glow_color, .22 + .2 * pop))
+	draw_string(font, count_at, number, HORIZONTAL_ALIGNMENT_LEFT, -1, count_px, Color(1, .98, .94))
+	# COMBO, and the meter toward the next milestone.
+	var label_at = Vector2(size.x * .5, centre.y + 142 * unit)
+	spaced_glow(font, label_at, "COMBO", maxi(10, roundi(14 * unit)), 8 * unit, Color("ffb46a"), Color(0, 0, 0, 0))
+	var half = 86 * unit
+	var meter_y = label_at.y + 20 * unit
+	var filled = 1.0 if milestone else float(game.combo % SYNK_MILESTONE) / SYNK_MILESTONE
+	draw_line(Vector2(size.x * .5 - half, meter_y), Vector2(size.x * .5 + half, meter_y), Color(1, 1, 1, .14), maxf(1.0, 2.0 * unit), true)
+	var meter_color = Color("fff6e6") if milestone else Color("ff9a3c")
+	draw_line(Vector2(size.x * .5 - half * filled, meter_y), Vector2(size.x * .5 + half * filled, meter_y), meter_color, maxf(1.0, 2.4 * unit), true)
+
 func _draw() -> void:
 	if not visible: return
+	if game.synk_mode():
+		draw_synk(); return
 	var unit = minf(size.x / 1280.0, size.y / 720.0)
 	var source_scale=SOURCE_CURVES.judgement_scale(since_hit,word.text=="MISS")
 	var source_offset=SOURCE_CURVES.judgement_offset(since_hit,word.text=="MISS")*unit
@@ -67,6 +132,7 @@ func combo_rects() -> Array[Rect2]:
 	return result
 
 func draw_source_combo(target:CanvasItem,back:bool) -> void:
+	if game.synk_mode():return
 	if not visible or not SOURCE_CURVES.combo_visible(since_hit,game.combo):return
 	if back and displayed_grade!="PERFECT":return
 	var fonts=SOURCE_HUD.SUPER_BACK if back else (SOURCE_HUD.SUPER if displayed_grade=="PERFECT" else (SOURCE_HUD.GOOD if displayed_grade=="GOOD" else SOURCE_HUD.PERFECT))
