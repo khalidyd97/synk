@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter
 
 ROOT = Path(__file__).resolve().parent.parent
 SSRG = ROOT / "assets/ssrg/imported"
@@ -20,7 +20,6 @@ OUT = ROOT / "assets/synk_mode"
 CREAM = np.array([255, 241, 220]) / 255
 CORAL = np.array([255, 107, 61]) / 255
 AMBER = np.array([255, 195, 107]) / 255
-FLICK = np.array([255, 45, 122]) / 255
 WHITE = np.ones(3)
 SS = 4  # supersampling for smooth edges
 
@@ -53,58 +52,11 @@ def save(rgb, a, path, size=None):
             time.sleep(.4)
 
 
-# Puck geometry as fractions of its sprite, matched to the SSRG note sprites it replaces
-# (their outline spans x 2..207, y 10..108 of 212 x 116), so notes meet the lane rings and
-# the judgment line exactly as the SSRG notes do.
-PUCK_RX = .47      # half-width of the face
+# Where a note sits in its sprite, as fractions of the sprite, matched to the SSRG note
+# sprites (their outline spans x 2..207, y 10..108 of 212 x 116), so notes meet the lane
+# rings and the judgment line exactly as the SSRG notes do.
 PUCK_TOP = .435    # centre of the top face, from the sprite's top
-PUCK_RY = .34      # half-height of the face
 PUCK_SIDE = .14    # thickness of the side below the face
-
-
-def puck(w, h, color, heat):
-    """A glass puck seen from the player's angle: top face, a coloured side, a halo,
-    a cream rim, a white-hot core and a small four-point sparkle (the SYNK mark)."""
-    W, H = w * SS, h * SS
-    y, x = np.mgrid[0:H, 0:W].astype(float) / SS
-    cx, rx = w / 2, w * PUCK_RX
-    top_cy, ry = h * PUCK_TOP, h * PUCK_RY
-    side = h * PUCK_SIDE  # thickness of the side below the top face
-    r_top = np.sqrt(((x - cx) / rx) ** 2 + ((y - top_cy) / ry) ** 2)
-    r_low = np.sqrt(((x - cx) / rx) ** 2 + ((y - top_cy - side) / ry) ** 2)
-    rgb = np.zeros((H, W, 3)); a = np.zeros((H, W))
-
-    # Halo around the whole puck, brighter on the beat.
-    r_out = np.minimum(r_top, r_low)
-    halo = np.exp(-np.maximum(r_out - 1, 0) * 7) * (r_out > .95) * (.35 + .45 * heat)
-    rgb, a = over(rgb, a, np.broadcast_to(color, rgb.shape), halo)
-
-    # Side: the puck's coloured edge, darker, with a cream lip along its bottom.
-    side_mask = smooth(1.02, .98, r_low) * (y > top_cy)
-    side_col = color * .55
-    lip = np.exp(-((r_low - .97) / .025) ** 2) * (y > top_cy + ry * .3)
-    side_rgb = side_col + (CREAM - side_col) * (lip * .7)[..., None]
-    rgb, a = over(rgb, a, side_rgb, side_mask)
-
-    # Top face.
-    face = smooth(1.0, .97, r_top)
-    shade = np.clip(.75 + .35 * (top_cy - y) / ry, .5, 1.1)  # lit from above
-    body = np.clip(color * shade[..., None], 0, 1)
-    core_t = smooth(.5, .1, r_top) * (.35 + .6 * heat)
-    body = body + (WHITE - body) * core_t[..., None]
-    rim = np.exp(-((r_top - .93) / .035) ** 2)
-    ring = np.exp(-((r_top - .52) / .025) ** 2) * .8
-    body = body + (CREAM - body) * np.clip(rim + ring, 0, 1)[..., None]
-    # A soft diagonal sheen across the upper left of the face.
-    sheen = np.exp(-(((x - cx) * .45 + (y - top_cy) * 1.6 + ry * .35) / (ry * .28)) ** 2) * smooth(.9, .3, r_top) * .35
-    body = body + (WHITE - body) * sheen[..., None]
-    rgb, a = over(rgb, a, body, face)
-
-    # The SYNK sparkle: a four-point star in the middle of the face.
-    dx, dy = np.abs(x - cx) / (rx * .3), np.abs(y - top_cy) / (ry * .5)
-    star = np.clip(1.15 * (1 - (np.sqrt(dx) + np.sqrt(dy))), 0, 1) ** .8 * (.75 + .25 * heat)
-    rgb, a = over(rgb, a, np.broadcast_to(WHITE, rgb.shape), star * face)
-    return rgb, a
 
 
 def downsample(rgb, a, w, h):
@@ -114,66 +66,105 @@ def downsample(rgb, a, w, h):
     return small[..., :3] / np.maximum(sa, 1e-6)[..., None], sa
 
 
+# --- Notes from the supplied artwork (assets/synk_mode/source) -------------------------
+# ring.png: the gold ring note. flick.png: the ring with three rising chevrons.
+# trail.png: the hold beam. They are fitted to the game's note logic here: the sprite
+# sizes and outlines of the SSRG notes they replace, the six-frame beat pulse, the
+# six-frame rising flick, and a cross-section for the hold trail.
+SOURCE = OUT / "source"
+
+
+def outline(img):
+    """Bounding box (x0, y0, x1, y1) of the solid part of an RGBA image."""
+    alpha = np.asarray(img)[..., 3]
+    ys, xs = np.where(alpha > 127)
+    return xs.min(), ys.min(), xs.max() + 1, ys.max() + 1
+
+
+def place(img, src_box, dst_box, size, shift=(0, 0)):
+    """`img` scaled so that `src_box` lands on `dst_box`, on a transparent canvas."""
+    sx = (dst_box[2] - dst_box[0]) / (src_box[2] - src_box[0])
+    sy = (dst_box[3] - dst_box[1]) / (src_box[3] - src_box[1])
+    scaled = img.convert("RGBa").resize((max(1, round(img.width * sx)), max(1, round(img.height * sy))), Image.LANCZOS).convert("RGBA")
+    ox = round(dst_box[0] - src_box[0] * sx + shift[0]); oy = round(dst_box[1] - src_box[1] * sy + shift[1])
+    canvas = Image.new("RGBA", size, (0, 0, 0, 0))
+    # Crop what falls outside the canvas, then lay it down.
+    left, top = max(0, -ox), max(0, -oy)
+    right, bottom = min(scaled.width, size[0] - ox), min(scaled.height, size[1] - oy)
+    if right > left and bottom > top:
+        canvas.alpha_composite(scaled.crop((left, top, right, bottom)), (ox + left, oy + top))
+    return canvas
+
+
+def pulse(img, heat):
+    """The beat pulse: a soft bloom behind the note and a brighter face, by `heat` (0..1)."""
+    arr = np.asarray(img).astype(float) / 255
+    bloom = np.asarray(img.filter(ImageFilter.GaussianBlur(max(2, img.width / 45)))).astype(float) / 255
+    rgb, a = over(bloom[..., :3], bloom[..., 3] * heat * .85, arr[..., :3], arr[..., 3])
+    rgb = rgb + (1 - rgb) * (.28 * heat)
+    return rgb, a
+
+
 def notes():
-    for prefix, color, (w, h) in [("tap", CORAL, (212, 116)), ("hold", AMBER, (212, 116)), ("tail", AMBER, (132, 72))]:
+    ring = Image.open(SOURCE / "ring.png").convert("RGBA")
+    box = outline(ring)
+    for prefix, size, dst in [("tap", (212, 116), (2, 10, 208, 109)), ("hold", (212, 116), (2, 10, 208, 109)), ("tail", (132, 72), (3, 3, 130, 65))]:
+        fitted = place(ring, box, dst, size)
         for i, heat in enumerate(HEAT, start=1):
-            rgb, a = downsample(*puck(w, h, color, heat), w, h)
-            save(rgb, a, OUT / f"{prefix}{i}.png")
-
-
-def seg_dist(x, y, a, b):
-    """Distance from each pixel to the segment a-b."""
-    ax, ay = a; bx, by = b
-    vx, vy = bx - ax, by - ay
-    t = np.clip(((x - ax) * vx + (y - ay) * vy) / (vx * vx + vy * vy), 0, 1)
-    return np.hypot(x - ax - t * vx, y - ay - t * vy)
-
-
-def chevron(x, y, cx, cy, half, drop, width):
-    """Distance field of an up-pointing chevron (^) with its tip at (cx, cy)."""
-    tip = (cx, cy)
-    return np.minimum(seg_dist(x, y, (cx - half, cy + drop), tip), seg_dist(x, y, tip, (cx + half, cy + drop))) - width / 2
+            save(*pulse(fitted, heat), OUT / f"{prefix}{i}.png")
 
 
 def flick():
-    """The SYNK flick: a hot-pink puck in the tap/hold style, and a cream double chevron
-    in a pink glow that rises over six frames (the game loops them up and down). Same
-    768 px frame as the original flick art: the disc is 636 px wide, centred at y=553."""
-    size, ss = 768, 2
-    # The original flick's disc is 623 px wide, with its outline centred at y=558.5.
-    w = round(623 / (2 * PUCK_RX)); h = round(w * 116 / 212)
-    top_cy = (PUCK_TOP + PUCK_SIDE / 2) * h
+    """Six flick frames in the original flick's 768 px layout (disc 623 px wide, outline
+    centred at y=558.5): the ring, with the supplied chevrons rising out of it frame by
+    frame (the game loops the frames up and down)."""
+    size = (768, 768)
+    ring = Image.open(SOURCE / "ring.png").convert("RGBA")
+    art = Image.open(SOURCE / "flick.png").convert("RGBA")
+    ring_box = outline(ring)
+    disc = (71, 409, 695, 709)
+    base = place(ring, ring_box, disc, size)
+    # The chevrons are what the flick art has beyond the plain ring.
+    a_flick = np.asarray(art).astype(float) / 255
+    chevrons = a_flick.copy()
+    # Keep the art above the ring's top edge and fade it out just inside the ring, so the
+    # chevrons seem to rise out of it without doubling the ring's own rim.
+    rows = np.arange(art.height)[:, None]
+    chevrons[..., 3] = a_flick[..., 3] * smooth(ring_box[1] + 34, ring_box[1] - 6, rows)
+    chevron_img = Image.fromarray(np.clip(chevrons * 255 + .5, 0, 255).astype(np.uint8), "RGBA")
+    # Same width scale as the ring; a little less tall so the stack fits the frame.
+    sx = (disc[2] - disc[0]) / (ring_box[2] - ring_box[0])
+    ring_cx = (ring_box[0] + ring_box[2]) / 2; ring_cy = (ring_box[1] + ring_box[3]) / 2
+    src = (0, 0, art.width, art.height)
+    w, h = art.width * sx, art.height * 1.2
     for i in range(6):
         k = i / 5
-        rgb = np.zeros((size, size, 3)); a = np.zeros((size, size))
-        prgb, pa = downsample(*puck(w, h, FLICK, HEAT[min(i, 2)]), w, h)
-        x0, y0 = round(size / 2 - w / 2), round(558.5 - top_cy)
-        y1 = min(size, y0 + h)
-        crop = y1 - y0
-        sub_rgb = rgb[y0:y1, x0:x0 + w]; sub_a = a[y0:y1, x0:x0 + w]
-        sub_rgb, sub_a = over(sub_rgb, sub_a, prgb[:crop], pa[:crop])
-        rgb[y0:y1, x0:x0 + w] = sub_rgb; a[y0:y1, x0:x0 + w] = sub_a
-
-        # Chevrons, supersampled: the main one rises from the puck's face to well above
-        # it; a fainter one trails below it, so the arrow reads as moving up.
-        Y, X = np.mgrid[0:size * ss, 0:size * ss].astype(float) / ss
-        crgb = np.zeros((size * ss, size * ss, 3)); ca = np.zeros((size * ss, size * ss))
-        tip = 430 - 250 * k
-        for offset, strength, scale in [(95, .45, .8), (0, 1.0, 1.0)]:
-            d = chevron(X, Y, size / 2, tip + offset, 150 * scale, 105 * scale, 34 * scale)
-            glow = np.exp(-np.maximum(d, 0) / 26) * .85 * strength
-            crgb, ca = over(crgb, ca, np.broadcast_to(FLICK, crgb.shape), glow)
-            core = smooth(1.5, -1.5, d) * strength
-            body = CREAM + (WHITE - CREAM) * smooth(0, -10, d)[..., None]
-            crgb, ca = over(crgb, ca, body, core)
-        # A few speed streaks under the chevron.
-        for dx, length in [(-70, 90), (0, 130), (70, 90)]:
-            sx = size / 2 + dx; sy = tip + 120
-            streak = np.exp(-((X - sx) / 4) ** 2) * smooth(sy + length, sy, Y) * (Y > sy) * .5
-            crgb, ca = over(crgb, ca, np.broadcast_to(CREAM, crgb.shape), streak)
-        crgb, ca = downsample(crgb, ca, size, size)
-        rgb, a = over(rgb, a, crgb, ca)
+        ox = 383 - ring_cx * sx; oy = 558.5 - ring_cy * 1.2 + (34 - 84 * k)
+        rising = place(chevron_img, src, (ox, oy, ox + w, oy + h), size)
+        frame = base.copy(); frame.alpha_composite(rising)
+        rgb, a = pulse(frame, HEAT[min(i, 2)] * .6)
         save(rgb, a, OUT / f"flick{i + 1}.png")
+
+
+def trail():
+    """The hold trail's cross-section, from the supplied beam: its colours and opacity
+    from edge to edge (bright rims, darker glassy middle, faint inner streaks), averaged
+    along its length. solid_trail.gdshader stretches it along every hold and slide."""
+    beam = np.asarray(Image.open(SOURCE / "trail.png").convert("RGBA")).astype(float) / 255
+    rows = []
+    for y in range(int(beam.shape[0] * .45), int(beam.shape[0] * .9), 6):
+        xs = np.where(beam[y, :, 3] > .05)[0]
+        if len(xs) < 50: continue
+        strip = beam[y:y + 1, xs.min():xs.max() + 1]
+        strip = np.concatenate([strip[..., :3] * strip[..., 3:], strip[..., 3:]], axis=2)   # premultiplied
+        img = Image.fromarray(np.clip(strip * 255 + .5, 0, 255).astype(np.uint8), "RGBA").resize((256, 1), Image.LANCZOS)
+        rows.append(np.asarray(img).astype(float) / 255)
+    mean = np.mean(rows, axis=0)
+    mean = (mean + mean[:, ::-1]) / 2                       # even on both sides
+    alpha = mean[..., 3]
+    rgb = mean[..., :3] / np.maximum(alpha, 1e-6)[..., None]
+    alpha = alpha * smooth(0, 6, np.minimum(np.arange(256), 255 - np.arange(256)))[None, :]   # soft outer edge
+    save(np.repeat(rgb, 4, axis=0), np.repeat(alpha, 4, axis=0), OUT / "trail_profile.png")
 
 
 def pause():
@@ -362,5 +353,5 @@ def judgment():
 
 if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
-    notes(); flick(); guide(); rail(); judgment(); pause(); hit()
+    notes(); flick(); trail(); guide(); rail(); judgment(); pause(); hit()
     print("SYNK mode art written to", OUT)

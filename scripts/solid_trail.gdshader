@@ -15,6 +15,10 @@ uniform bool ssrg_ribbon=false;
 uniform float ssrg_half_width=0.0;
 uniform float ssrg_line_x_scale=1.3;
 uniform vec4 source_tint : source_color=vec4(1.0);
+// SYNK mode: holds and slides are a wide beam of light drawn from the supplied beam art's
+// cross-section (assets/synk_mode/trail_profile.png), with a few glints along it.
+uniform bool synk_beam=false;
+uniform sampler2D beam_profile : source_color, filter_linear, repeat_disable;
 varying vec3 source_chip;
 varying float source_layer;
 varying float world_z;
@@ -97,6 +101,20 @@ void fragment(){
             color=mix(color,vec3(1.0,.98,.78),core*.72);
             opacity+=core*.10;
         }
+    }
+    if(synk_beam && source_art && !joint){
+        // One face only: the source's three stacked layers would triple the beam.
+        if(source_layer>0.0001) discard;
+        vec4 beam=texture(beam_profile,vec2(UV.x,0.5));
+        color=beam.rgb;
+        opacity=beam.a*.9;
+        // Glints: a few bright specks fixed along the beam, as in the art.
+        vec2 cell=floor(vec2(UV.x*7.0,world_z*1.1));
+        float pick=fract(sin(dot(cell,vec2(127.1,311.7)))*43758.5453);
+        vec2 spot=vec2(fract(UV.x*7.0),fract(world_z*1.1))-.5;
+        float glint=step(.93,pick)*smoothstep(.16,0.0,length(spot));
+        color=mix(color,vec3(1.0,.95,.8),glint);
+        opacity=max(opacity,glint*.9);
     }
     // SKD's l1/l2/l3 chips are fully opaque, uniform 6x6 texels. Their source
     // alpha is supplied by the batch color (.2 per overlapping quad), without

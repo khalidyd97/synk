@@ -545,7 +545,7 @@ func element_color(key: String,fallback: Color) -> Color:
 		return Color.from_string(str(game.hit_color),fallback)
 	return SynkGameplayColors.resolve(game,key,fallback) if game!=null else fallback
 
-const SYNK_MODE_HOLD = Color("ffc36b")
+const SYNK_MODE_HOLD = Color("ffb43c")
 func trail_color(palette: int) -> Color:
 	if game.old_ssrg_ui() and palette in [1,3]: return Color("edb65c")
 	if game.synk_mode() and palette in [1,3]: return SYNK_MODE_HOLD
@@ -1451,6 +1451,9 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 	# note is 148 px times p (0.12 of the 212-unit sprite); drawn a little thicker, at 0.16.
 	if source_visual: half_width = 116.0*.4*.5*SSRG_UNIT*ssrg_art_scale()
 	if old_source: half_width = 116.0*.48*.5*SSRG_UNIT*ssrg_art_scale()
+	# SYNK mode's hold is a beam of light nearly as wide as the ring it rises from.
+	var synk_beam=source_visual and game.synk_mode()
+	if synk_beam: half_width = 212.0*.5*.6*SSRG_UNIT*ssrg_art_scale()/1.3
 	# Recorder holds and slides share SSRG's look on the flat recorder highway: thin gold ribbon,
 	# cream core, a slow shimmer flowing toward the line, and SSRG pucks at every turn.
 	var recorder_slide=recording and note.kind in ["hold","slide"]
@@ -1525,10 +1528,12 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 	var solid=game.trail_style=="solid" or source_visual or recorder_slide
 	var trail_material: ShaderMaterial
 	if solid:
-		trail_material=shared("solid_trail|%s|%s|%s|%s|%s|%s|%s" % [trail_color(palette),half_width,source_visual,enhanced_synk_long_visuals(),game.uses_ssrg_gameplay(),old_source,recorder_slide], func():
+		trail_material=shared("solid_trail|%s|%s|%s|%s|%s|%s|%s|%s" % [trail_color(palette),half_width,source_visual,enhanced_synk_long_visuals(),game.uses_ssrg_gameplay(),old_source,recorder_slide,synk_beam], func():
 			var m=ShaderMaterial.new(); m.shader=preload("res://scripts/solid_trail.gdshader")
 			if uses_projected_highway() and not recording: m.render_priority=-4
 			m.set_shader_parameter("source_art",source_visual)
+			m.set_shader_parameter("synk_beam",synk_beam)
+			if synk_beam: m.set_shader_parameter("beam_profile",preload("res://assets/synk_mode/trail_profile.png"))
 			m.set_shader_parameter("old_ssrg_art",old_source)
 			# SKD submits every linked section as its own RenderLongLine call.  Keeping
 			# the sections independent also preserves the three l1/l2/l3 alpha layers;
