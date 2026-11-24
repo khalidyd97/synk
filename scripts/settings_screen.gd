@@ -26,6 +26,8 @@ var style_tiles: Dictionary = {}
 var old_ssrg_ui_row: PanelContainer
 var old_ssrg_ui_switch: Switch
 var synk_mode_switch: Switch
+var synk_stage_row: PanelContainer
+var synk_stage_buttons: Dictionary = {}
 # The SSRG highway is a fixed flat view: its style hides the angle row.
 var angle_row: PanelContainer
 var color_pickers: Dictionary = {}
@@ -524,6 +526,15 @@ func build_highway(items: VBoxContainer) -> void:
     var synk_row=row(items,"SYNK MODE","SYNK's own highway, rails, judgment bar and notes on the SSRG stage.",112)
     synk_mode_switch=Switch.new();add_control(synk_row,synk_mode_switch,152)
     connect_switch(synk_mode_switch,func(on:bool): game.change_highway_look("style","synk" if on else "ssrg"))
+    # SYNK mode's stage: which backdrop plays behind the highway.
+    var Backdrop=preload("res://scripts/synk_backdrop.gd")
+    synk_stage_row=row(items,"SYNK stage","Waves that sync on the beat, two worlds that snap together, a constellation your hits draw, or strings your hits pluck.")
+    var stages=HBoxContainer.new(); stages.add_theme_constant_override("separation",8); add_control(synk_stage_row,stages,520)
+    for value in Backdrop.STAGES:
+        var key: String=value
+        var b=action(stages,Backdrop.LABELS[key],func():
+            game.prefs.set_value("highway","synk_stage",key); game.prefs.save("user://preferences.cfg"); refresh())
+        b.custom_minimum_size=Vector2(122,72); b.caption_size=17; synk_stage_buttons[key]=b
     old_ssrg_ui_row=row(items,"OLD UI SSRG","STAYC note sprites, guide rings, judgment bar and thin edge rails.",112)
     old_ssrg_ui_switch=Switch.new();add_control(old_ssrg_ui_row,old_ssrg_ui_switch,152)
     connect_switch(old_ssrg_ui_switch,game.change_old_ssrg_ui)
@@ -680,6 +691,10 @@ func refresh() -> void:
     for value in render_scale_buttons: render_scale_buttons[value].set_selected(is_equal_approx(value,game.render_scale()))
     for kind in style_tiles: style_tiles[kind].selected=kind==game.highway_style
     if synk_mode_switch: synk_mode_switch.set_pressed_no_signal(game.highway_style=="synk")
+    if synk_stage_row:
+        synk_stage_row.visible=game.highway_style=="synk"
+        var chosen=preload("res://scripts/synk_backdrop.gd").stage_of(game)
+        for key in synk_stage_buttons: synk_stage_buttons[key].set_selected(key==chosen)
     if old_ssrg_ui_row:
         old_ssrg_ui_row.visible=game.highway_style=="ssrg"
         old_ssrg_ui_switch.set_pressed_no_signal(bool(game.prefs.get_value("highway","old_ssrg_ui",false)))
