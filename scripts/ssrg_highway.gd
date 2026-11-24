@@ -464,8 +464,8 @@ const NOTE_HIT_KEYS = {"tap": "tap", "hold": "hold", "slide": "slide", "flick": 
 # SSRG notes are drawn from their own art, so the flash matches that art's colour
 # (sampled from tap.png, hold.png and the flick puck) rather than the theme palette.
 const SSRG_NOTE_COLORS = {"tap": Color("19acf5"), "hold": Color("ebb521"), "slide": Color("ebb521"), "flick": Color("fa1068")}
-# SYNK mode's notes are all the supplied gold art (assets/synk_mode), so every flash is gold.
-const SYNK_NOTE_COLORS = {"tap": Color("ffb43c"), "hold": Color("ffb43c"), "slide": Color("ffb43c"), "flick": Color("ffb43c")}
+# SYNK mode's note colours (tools/make_synk_mode_art.py): gold taps, cyan holds and slides, pink flicks.
+const SYNK_NOTE_COLORS = {"tap": Color("ffb43c"), "hold": Color("3cd8ff"), "slide": Color("3cd8ff"), "flick": Color("ff3c8c")}
 func hit_tint(kind: String) -> Color:
 	if world.game.hit_color != "": return Color.from_string(world.game.hit_color, Color.WHITE)
 	if world.game.synk_mode(): return SYNK_NOTE_COLORS.get(kind, SYNK_NOTE_COLORS.tap)

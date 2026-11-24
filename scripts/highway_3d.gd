@@ -545,7 +545,7 @@ func element_color(key: String,fallback: Color) -> Color:
 		return Color.from_string(str(game.hit_color),fallback)
 	return SynkGameplayColors.resolve(game,key,fallback) if game!=null else fallback
 
-const SYNK_MODE_HOLD = Color("ffb43c")
+const SYNK_MODE_HOLD = Color("3cd8ff")
 func trail_color(palette: int) -> Color:
 	if game.old_ssrg_ui() and palette in [1,3]: return Color("edb65c")
 	if game.synk_mode() and palette in [1,3]: return SYNK_MODE_HOLD

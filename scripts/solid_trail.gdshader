@@ -113,7 +113,7 @@ void fragment(){
         float pick=fract(sin(dot(cell,vec2(127.1,311.7)))*43758.5453);
         vec2 spot=vec2(fract(UV.x*7.0),fract(world_z*1.1))-.5;
         float glint=step(.93,pick)*smoothstep(.16,0.0,length(spot));
-        color=mix(color,vec3(1.0,.95,.8),glint);
+        color=mix(color,vec3(1.0),glint);
         opacity=max(opacity,glint*.9);
     }
     // SKD's l1/l2/l3 chips are fully opaque, uniform 6x6 texels. Their source

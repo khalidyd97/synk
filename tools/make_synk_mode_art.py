@@ -105,13 +105,34 @@ def pulse(img, heat):
     return rgb, a
 
 
+# One colour per note type, by turning the gold art's hue (gold sits at hue 0.11): the
+# shapes, shading and white highlights stay exactly as supplied.
+HUE_TAP = 0.0       # gold, as supplied
+HUE_HOLD = 0.42     # cyan: holds, slides, their end caps and beams
+HUE_FLICK = -0.17   # hot pink
+
+
+def recolour(rgb, turn, richer=1.0):
+    """Turn the hue of an RGB array (0..1) by `turn` of a full circle."""
+    if turn == 0.0: return rgb
+    mx = rgb.max(-1); mn = rgb.min(-1); span = mx - mn
+    safe = np.maximum(span, 1e-6)
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    hue = np.where(mx == r, ((g - b) / safe) % 6, np.where(mx == g, (b - r) / safe + 2, (r - g) / safe + 4)) / 6
+    sat = np.clip(np.where(mx > 0, span / np.maximum(mx, 1e-6), 0) * richer, 0, 1)
+    hue = (hue + turn) % 1.0
+    k = (np.stack([5, 3, 1], -1) + hue[..., None] * 6) % 6
+    return mx[..., None] * (1 - sat[..., None] * np.clip(np.minimum(k, 4 - k), 0, 1))
+
+
 def notes():
     ring = Image.open(SOURCE / "ring.png").convert("RGBA")
     box = outline(ring)
-    for prefix, size, dst in [("tap", (212, 116), (2, 10, 208, 109)), ("hold", (212, 116), (2, 10, 208, 109)), ("tail", (132, 72), (3, 3, 130, 65))]:
+    for prefix, size, dst, turn in [("tap", (212, 116), (2, 10, 208, 109), HUE_TAP), ("hold", (212, 116), (2, 10, 208, 109), HUE_HOLD), ("tail", (132, 72), (3, 3, 130, 65), HUE_HOLD)]:
         fitted = place(ring, box, dst, size)
         for i, heat in enumerate(HEAT, start=1):
-            save(*pulse(fitted, heat), OUT / f"{prefix}{i}.png")
+            rgb, a = pulse(fitted, heat)
+            save(recolour(rgb, turn), a, OUT / f"{prefix}{i}.png")
 
 
 def flick():
@@ -143,7 +164,7 @@ def flick():
         rising = place(chevron_img, src, (ox, oy, ox + w, oy + h), size)
         frame = base.copy(); frame.alpha_composite(rising)
         rgb, a = pulse(frame, HEAT[min(i, 2)] * .6)
-        save(rgb, a, OUT / f"flick{i + 1}.png")
+        save(recolour(rgb, HUE_FLICK, 1.1), a, OUT / f"flick{i + 1}.png")
 
 
 def trail():
@@ -164,7 +185,7 @@ def trail():
     alpha = mean[..., 3]
     rgb = mean[..., :3] / np.maximum(alpha, 1e-6)[..., None]
     alpha = alpha * smooth(0, 6, np.minimum(np.arange(256), 255 - np.arange(256)))[None, :]   # soft outer edge
-    save(np.repeat(rgb, 4, axis=0), np.repeat(alpha, 4, axis=0), OUT / "trail_profile.png")
+    save(np.repeat(recolour(rgb, HUE_HOLD), 4, axis=0), np.repeat(alpha, 4, axis=0), OUT / "trail_profile.png")
 
 
 def pause():
