@@ -1517,6 +1517,9 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 				# Source l1/l2/l3 are uniform chips. CUSTOM1 retains their colors
 				# and the fixed horizontal 0/1/2-pixel expansions for each quad.
 				st.set_custom(1,Color((7.0 if layer==3 else float(layer))*SSRG_UNIT,color.r,color.g,color.b) if source else Color(0,1,1,1))
+				# SYNK mode's beam has no colour chips: it carries how far this point is from the
+				# trail's far end, and the beam's half-width, so the shader can round that end off.
+				if synk_beam: st.set_custom(1,Color(float(layer)*SSRG_UNIT,absf(centers[centers.size()-1].z-[a.z,b.z,b.z,a.z][index]),half_width,0))
 				st.set_uv2(Vector2([a.z,b.z,b.z,a.z][index],[-1.0,-1.0,1.0,1.0][index]))
 				st.set_custom(0,Color(a.x,a.z,b.x,b.z) if source else Color(0,0,0,0))
 				st.set_custom(2,Color(previous.x,previous.z,following.x,following.z))
