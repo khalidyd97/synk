@@ -25,7 +25,9 @@ const int SHARDS = 5;
 float hash(float n) { return fract(sin(n * 127.1) * 43758.5453); }
 
 void fragment() {
-	vec2 p = (UV - vanish) * vec2(aspect, 1.0);
+	// True screen position (0..1, y down), whatever the backdrop quad's size.
+	vec2 at = SCREEN_UV;
+	vec2 p = (at - vanish) * vec2(aspect, 1.0);
 	float side = p.x < 0.0 ? 0.0 : 1.0;
 	vec2 q = vec2(abs(p.x), p.y);           // x: out from the centre line, y: down the screen
 	float kick = exp(-beat * 5.0);
@@ -33,7 +35,7 @@ void fragment() {
 
 	vec3 col = vec3(0.0);
 	// Background vignette: amber rising from the bottom corners.
-	float corner = length((UV - vec2(side, 1.0)) * vec2(aspect * 0.8, 1.0));
+	float corner = length((at - vec2(side, 1.0)) * vec2(aspect * 0.8, 1.0));
 	col += EMBER * exp(-corner * 2.6) * (0.20 + 0.05 * kick + 0.08 * energy);
 
 	// Arc ribbons.
@@ -87,6 +89,6 @@ void fragment() {
 		}
 	}
 	// Nothing is drawn under the highway.
-	ALBEDO = mix(vec3(0.0), col, road_mask(UV)) * brightness;
+	ALBEDO = mix(vec3(0.0), col, road_mask(at)) * brightness;
 	ALPHA = 1.0;
 }

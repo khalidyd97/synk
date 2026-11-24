@@ -37,7 +37,9 @@ float wave(float x, float z, float phase) {
 }
 
 void fragment() {
-	vec2 uv = UV;
+	// True screen position (0..1, y down), whatever the backdrop quad's size.
+	vec2 at = SCREEN_UV;
+	vec2 uv = at;
 	float s = uv.y - vanish.y;              // drop below the horizon
 	float dx = (uv.x - vanish.x) * aspect;
 	float kick = exp(-beat * 5.0);          // 1 on the beat, decaying through it
@@ -82,6 +84,6 @@ void fragment() {
 		}
 	}
 	// Nothing is drawn under the highway.
-	ALBEDO = mix(ROAD_INK, col, road_mask(UV)) * brightness;
+	ALBEDO = mix(ROAD_INK, col, road_mask(at)) * brightness;
 	ALPHA = 1.0;
 }

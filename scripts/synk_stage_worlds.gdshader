@@ -24,7 +24,9 @@ const vec3 CREAM = vec3(1.0, 0.945, 0.86);
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 
 void fragment() {
-	vec2 p = (UV - vanish) * vec2(aspect, 1.0);
+	// True screen position (0..1, y down), whatever the backdrop quad's size.
+	vec2 at = SCREEN_UV;
+	vec2 p = (at - vanish) * vec2(aspect, 1.0);
 	float side = p.x < 0.0 ? -1.0 : 1.0;
 	float kick = exp(-beat * 5.0);
 	// How far this world is slid from the shared picture: opposite ways on each side.
@@ -62,6 +64,6 @@ void fragment() {
 	// The seam between the worlds, down the middle, flashes when they meet.
 	col += CREAM * exp(-abs(p.x) * 60.0) * lock * kick * 0.25;
 	// Nothing is drawn under the highway.
-	ALBEDO = mix(ROAD_INK, col, road_mask(UV)) * brightness;
+	ALBEDO = mix(ROAD_INK, col, road_mask(at)) * brightness;
 	ALPHA = 1.0;
 }

@@ -146,6 +146,27 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 # The flick splash: short spark streaks sprayed up and out from the judgment bar, like the
 # streaky shards of the Effect_A hit flash. They fan across a wide arc (mostly up, some almost
 # sideways), arc back under gravity, and each is turned along its flight.
+# Spark quads are pooled: a flick needs 26 at once, and building and freeing that many
+# meshes and materials on every flick stutters on phones. All share one mesh; each keeps its
+# own material (its seed, colour and fade are its own) and is sized by its node's scale.
+var flick_spark_pool: Array = []
+var flick_spark_mesh: QuadMesh
+func take_flick_spark(parent: Node3D) -> Dictionary:
+	while not flick_spark_pool.is_empty():
+		var spare: Dictionary = flick_spark_pool.pop_back()
+		if is_instance_valid(spare.node): return spare
+	if flick_spark_mesh == null:
+		flick_spark_mesh = QuadMesh.new()
+		flick_spark_mesh.size = Vector2(0.38, FLICK_SPARK_MAX_LENGTH / 1.3) * world.FIT
+	var mat = ShaderMaterial.new(); mat.shader = FLICK_SPARK_SHADER; mat.render_priority = 9
+	var node = world.mesh_node(flick_spark_mesh, parent, mat)
+	node.visible = false
+	return {"node": node, "material": mat}
+func return_flick_spark(spark: Dictionary) -> void:
+	if not is_instance_valid(spark.node): return
+	spark.node.visible = false
+	flick_spark_pool.append({"node": spark.node, "material": spark.material})
+
 func spawn_flick_sparks(x: float, flash_scale: float = 1.0) -> void:
 	var up = world.camera.basis.y.normalized()
 	var sidev = world.camera.basis.x.normalized()
@@ -163,14 +184,15 @@ func spawn_flick_sparks(x: float, flash_scale: float = 1.0) -> void:
 	var reach = flick_splash_reach(origin, up)
 	var fit = clampf((reach - FLICK_SPARK_MAX_LENGTH * .5 * world.FIT) / (flick_spark_max_rise() * world.FIT), 0.0, 1.0)
 	for i in FLICK_SPARK_COUNT:
-		var mesh = QuadMesh.new()
-		mesh.size = Vector2(0.38, FLICK_SPARK_MAX_LENGTH / 1.3) * (0.7 + randf() * 0.6) * world.FIT
-		var mat = ShaderMaterial.new(); mat.shader = FLICK_SPARK_SHADER; mat.render_priority = 9
+		var spark = take_flick_spark(parent)
+		var node: MeshInstance3D = spark.node
+		var mat: ShaderMaterial = spark.material
 		mat.set_shader_parameter("tint", tint)
 		mat.set_shader_parameter("glow", glow)
 		mat.set_shader_parameter("deep", deep)
 		mat.set_shader_parameter("seed", randf() * 100.0)
-		var node = world.mesh_node(mesh, parent, mat)
+		mat.set_shader_parameter("age", 0.0)
+		var size = 0.7 + randf() * 0.6
 		var spot = Vector2(randf() * 2.0 - 1.0, randf() * 2.0 - 1.0)
 		var base = origin + sidev * (spot.x * absf(spot.x) * disc.x) + up * (spot.y * disc.y)
 		node.position = base
@@ -184,8 +206,8 @@ func spawn_flick_sparks(x: float, flash_scale: float = 1.0) -> void:
 		var side_speed = sin(angle) * speed
 		# Each spark dies at its own random time, so the spray thins out gradually.
 		var life = FLICK_SPARK_LIFE * (0.6 + randf() * 0.4)
-		flick_sparks.append({"node": node, "material": mat, "age": -randf_range(FLICK_SPARK_DELAY.x, FLICK_SPARK_DELAY.y), "life": life, "base": base, "up_speed": up_speed, "side_speed": side_speed, "gravity": FLICK_SPARK_GRAVITY * world.FIT * fit})
-		orient_flick_spark(node, side_speed, up_speed)
+		flick_sparks.append({"node": node, "material": mat, "age": -randf_range(FLICK_SPARK_DELAY.x, FLICK_SPARK_DELAY.y), "life": life, "base": base, "up_speed": up_speed, "side_speed": side_speed, "gravity": FLICK_SPARK_GRAVITY * world.FIT * fit, "size": size})
+		orient_flick_spark(node, side_speed, up_speed, Vector3.ONE * size)
 	spawn_flick_flare(origin, up, tint, parent, minf(reach, FLICK_FLARE_SIZE.y * world.FIT))
 
 # The slice: a blade streak sweeps diagonally up through the flick note, and the note falls
@@ -339,7 +361,7 @@ func advance_flick_sparks(delta: float, playing: bool) -> void:
 		if playing: f.age += delta
 		var a: float = f.age
 		if a >= f.life:
-			f.node.queue_free(); flick_sparks.remove_at(i); continue
+			return_flick_spark(f); flick_sparks.remove_at(i); continue
 		# Waiting for the flash to bloom before bursting out of it.
 		f.node.visible = a >= 0.0
 		if a < 0.0: continue
@@ -348,7 +370,7 @@ func advance_flick_sparks(delta: float, playing: bool) -> void:
 		f.node.position = f.base + up * (f.up_speed * a - gravity * a * a) + sidev * (f.side_speed * a)
 		var k = a / f.life
 		# Streaks shorten to small specks as they cool, like the shards the flash leaves behind.
-		orient_flick_spark(f.node, f.side_speed, f.up_speed - 2.0 * gravity * a, Vector3(1.0 - 0.35 * k, 1.0 - 0.75 * k, 1.0))
+		orient_flick_spark(f.node, f.side_speed, f.up_speed - 2.0 * gravity * a, Vector3(1.0 - 0.35 * k, 1.0 - 0.75 * k, 1.0) * float(f.size))
 		f.material.set_shader_parameter("age", k)
 		f.material.set_shader_parameter("opacity", opacity * (1.0 - k * k))
 
@@ -490,7 +512,7 @@ func clear_hits() -> void:
 	for hit in hits+hit_pool:
 		hit.node.hide();hit.node.queue_free()
 	hits.clear();hit_pool.clear()
-	for f in flick_sparks: f.node.queue_free()
+	for f in flick_sparks: return_flick_spark(f)
 	flick_sparks.clear()
 	for f in flick_flares: f.node.queue_free()
 	flick_flares.clear()
@@ -517,7 +539,17 @@ func late_pieces() -> Array:
 	if original_stage: pieces.append_array(original_stage.receptors + original_stage.feedback_marks)
 	for root in [source_background, hit_layer] + background_bank:
 		if is_instance_valid(root): pieces.append_array(root.find_children("*", "GeometryInstance3D", true, false))
+	# Flick sparks and the slice first appear at the first flick hit, and the SYNK stage when
+	# SYNK mode's backdrop takes over: without this their shaders are prepared mid-song.
+	if warm_materials.is_empty():
+		for shader in [FLICK_SPARK_SHADER, FLICK_SLICE_SHADER]:
+			var mat = ShaderMaterial.new(); mat.shader = shader; warm_materials.append(mat)
+	pieces.append_array(warm_materials)
+	if world.game.highway_style == "synk":
+		update_synk_backdrop(true)
+		if synk_backdrop and synk_backdrop.material: pieces.append(synk_backdrop.material)
 	return pieces
+var warm_materials: Array = []
 
 func prefill(count: int = 16) -> void:
 	while hit_pool.size() + hits.size() < count: hit_pool.append(make_hit())

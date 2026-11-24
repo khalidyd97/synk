@@ -59,7 +59,8 @@ func hit(at: Vector3, kind: String, color: Color) -> void:
 	var point: Vector2 = world.camera.unproject_position(at) / view
 	hits.push_front({"at": point, "age": 0.0, "kind": kind, "color": color})
 	if hits.size() > 8: hits.resize(8)
-	add_star(point, color)
+	# Painting the constellation costs a viewport redraw per hit: only on its own stage.
+	if stage_of(world.game) == "stars": add_star(point, color)
 
 # A new star, in the sky on the hit's side of the highway, near the star before it.
 func add_star(point: Vector2, color: Color) -> void:
@@ -86,7 +87,10 @@ func update(on: bool, delta: float) -> void:
 	if material == null:
 		material = ShaderMaterial.new(); material.render_priority = -20
 	var stage = stage_of(game)
-	if material.shader != SHADERS[stage]: material.shader = SHADERS[stage]
+	if material.shader != SHADERS[stage]:
+		material.shader = SHADERS[stage]
+		# Chosen mid-run: the sky starts empty and fills from here.
+		if stage != "stars" and not constellation.stars.is_empty(): constellation.stars.clear()
 	if backdrop.material_override != material: backdrop.material_override = material
 	backdrop.visible = true
 	var view: Vector2 = world.get_viewport().get_visible_rect().size
