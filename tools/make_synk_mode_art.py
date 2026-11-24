@@ -159,6 +159,33 @@ def flick():
         save(rgb, a, OUT / f"flick{i + 1}.png")
 
 
+def pause():
+    """Pause button: a dark glass tile with one corner cut on the slant, a coral-to-amber
+    rim with a soft glow, and two cream bars. Same 80x85 footprint as the SSRG icon (x2)."""
+    w, h = 160, 170
+    W, H = w * SS, h * SS
+    y, x = np.mgrid[0:H, 0:W].astype(float) / SS
+    pad, cut, rad = 18, 30, 16
+    # Signed distance to a rounded rectangle whose top-right corner is cut off.
+    cx, cy = w / 2, h / 2
+    hx, hy = w / 2 - pad - rad, h / 2 - pad - rad
+    qx, qy = np.abs(x - cx) - hx, np.abs(y - cy) - hy
+    box = np.hypot(np.maximum(qx, 0), np.maximum(qy, 0)) + np.minimum(np.maximum(qx, qy), 0) - rad
+    corner = ((x - (w - pad)) - (y - pad) + cut) / np.sqrt(2)  # > 0 beyond the cut
+    d = np.maximum(box, corner)
+    rgb = np.zeros((H, W, 3)); a = np.zeros((H, W))
+    rim_col = CORAL + (AMBER - CORAL) * smooth(0, w, x + (h - y))[..., None] * .9
+    rgb, a = over(rgb, a, rim_col, np.exp(-np.maximum(d, 0) / 7) * .55)
+    fill = np.array([.07, .05, .09]) + np.array([.08, .04, .06]) * smooth(h, 0, y)[..., None]
+    rgb, a = over(rgb, a, fill, smooth(0.8, -0.8, d) * .92)
+    rgb, a = over(rgb, a, rim_col, np.exp(-(d / 2.2) ** 2))
+    for bx in (cx - 17, cx + 17):
+        bar = np.hypot(np.maximum(np.abs(x - bx) - 4, 0), np.maximum(np.abs(y - cy) - 26, 0)) - 4
+        rgb, a = over(rgb, a, np.broadcast_to(CORAL, rgb.shape), np.exp(-np.maximum(bar, 0) / 6) * .45)
+        rgb, a = over(rgb, a, np.broadcast_to(CREAM, rgb.shape), smooth(0.8, -0.8, bar))
+    save(*downsample(rgb, a, w, h), OUT / "pause.png")
+
+
 def guide():
     """Lane ring: a cream ellipse with a faint coral glow, the shape of the puck's face."""
     w, h = 212, 116
@@ -229,5 +256,5 @@ def judgment():
 
 if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
-    notes(); flick(); guide(); rail(); judgment()
+    notes(); flick(); guide(); rail(); judgment(); pause()
     print("SYNK mode art written to", OUT)

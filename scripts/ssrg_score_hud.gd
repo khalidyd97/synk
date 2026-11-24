@@ -38,9 +38,10 @@ func _draw() -> void:
 	var active= presentation and presentation.active
 	var ultra=float(presentation.phase_weights[5]) if active else 0.0
 	var gauge_rect=Rect2(origin+Vector2(85,42-2*ultra)*unit,Vector2(282,16+4*ultra)*unit)
-	draw_texture_rect(gauge,gauge_rect,false,Color(.22,.22,.22,alpha))
 	var fraction=float(presentation.shown_gauge) if active else clampf(float(game.score_panel.shown_energy),0,1)
-	for phase in 6:
+	if game.synk_mode():draw_synk_life(presentation,active,origin,unit,alpha)
+	else:draw_texture_rect(gauge,gauge_rect,false,Color(.22,.22,.22,alpha))
+	for phase in (0 if game.synk_mode() else 6):
 		var weight=float(presentation.phase_weights[phase]) if active else (1.0 if phase==0 else 0.0)
 		if weight<.001:continue
 		var phase_color=Color(1,1,1,alpha*weight)
@@ -65,6 +66,59 @@ func _draw() -> void:
 	if value.length()>6:draw_texture_rect(SOURCE.SCORE_COMMA,Rect2(origin+Vector2(99,105)*unit,Vector2(16,19)*unit),false,color)
 
 	if presentation and presentation.active:draw_source_extras(presentation,origin,unit,color)
+# SYNK mode's life bar: a slanted run of segments filling coral to amber, a cream outline,
+# a bright leading segment, LIFE and the percentage above it, and a red pulse when low.
+# During rave, a thin pink strip under it shows the fever gauge.
+const SYNK_SEGMENTS=24
+const SYNK_SLANT=7.0
+const SYNK_CORAL=Color("ff6b3d")
+const SYNK_AMBER=Color("ffc36b")
+const SYNK_CREAM=Color("fff1dc")
+const SYNK_DANGER=Color("ff2d4a")
+func draw_synk_life(presentation:Node,active:bool,origin:Vector2,unit:float,alpha:float) -> void:
+	var life=clampf(float(presentation.life)/100.0,0,1) if active else clampf(float(game.score_panel.shown_energy),0,1)
+	var at=origin+Vector2(85,38)*unit
+	var bar=Vector2(282,20)*unit
+	var slant=SYNK_SLANT*unit
+	var low=life<.25
+	var pulse=(.5+.5*sin(game.field.world.animation_time*9.0)) if low else 0.0
+	# Plate and outline.
+	var plate=PackedVector2Array([at+Vector2(slant,0),at+Vector2(bar.x+slant,0),at+Vector2(bar.x,bar.y),at+Vector2(0,bar.y)])
+	draw_colored_polygon(plate,Color(.07,.05,.09,.82*alpha))
+	var outline=plate.duplicate();outline.append(plate[0])
+	draw_polyline(outline,Color(SYNK_DANGER if low else SYNK_CREAM,(.45+.4*pulse)*alpha),maxf(1.0,1.6*unit),true)
+	# Segments.
+	var inset=3.0*unit;var gap=2.0*unit
+	var inner=Vector2(bar.x-2*inset,bar.y-2*inset)
+	var step=(inner.x+gap)/SYNK_SEGMENTS
+	var lit=life*SYNK_SEGMENTS
+	for i in SYNK_SEGMENTS:
+		var amount=clampf(lit-i,0,1)
+		if amount<=0:break
+		var t=float(i)/(SYNK_SEGMENTS-1)
+		var color:Color=SYNK_CORAL.lerp(SYNK_AMBER,t)
+		if low:color=SYNK_DANGER.lerp(SYNK_CREAM,pulse*.35)
+		var leading=lit-i<=1.0
+		if leading:color=color.lerp(SYNK_CREAM,.55)
+		var x0=inset+i*step;var w=(step-gap)*amount
+		var top=at+Vector2(x0+slant*(1-inset/bar.y),inset);var bottom=at+Vector2(x0+slant*(inset/bar.y),bar.y-inset)
+		var cell=PackedVector2Array([top,top+Vector2(w,0),bottom+Vector2(w,0),bottom])
+		draw_colored_polygon(cell,Color(color,alpha))
+	# Soft glow line along the top of the lit part.
+	if lit>0:
+		var end=inset+minf(lit,SYNK_SEGMENTS)*step-gap
+		draw_line(at+Vector2(slant+inset,-1.5*unit),at+Vector2(slant+end,-1.5*unit),Color(SYNK_AMBER if not low else SYNK_DANGER,.35*alpha),2.0*unit)
+	# LIFE and the percentage, above the bar.
+	var font:Font=preload("res://scripts/arcade_style.gd").HEAD
+	var size_px=maxi(10,roundi(15*unit))
+	draw_string(font,at+Vector2(slant,-6*unit),"LIFE",HORIZONTAL_ALIGNMENT_LEFT,-1,size_px,Color(SYNK_CREAM,.85*alpha))
+	draw_string(font,at+Vector2(slant+bar.x-60*unit,-6*unit),"%d%%" % roundi(life*100),HORIZONTAL_ALIGNMENT_RIGHT,60*unit,size_px,Color(SYNK_DANGER if low else SYNK_AMBER,alpha))
+	# Rave: the fever gauge as a thin pink strip under the bar.
+	if active and int(presentation.state)>0:
+		var fever=clampf(float(presentation.shown_gauge),0,1)
+		var strip=Rect2(at+Vector2(0,bar.y+4*unit),Vector2(bar.x*fever,3*unit))
+		draw_rect(strip,Color(Color("ff2d7a"),.9*alpha))
+
 func words(value:String,at:Vector2,font_size:int,tint:Color) -> void:
 	draw_string(ThemeDB.fallback_font,at,value,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,tint)
 func draw_source_extras(presentation:Node,origin:Vector2,unit:float,color:Color) -> void:

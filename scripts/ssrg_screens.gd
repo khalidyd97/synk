@@ -70,6 +70,8 @@ func make_button(parent:Control,value:String,x:float,y:float,w:float,h:float,act
 	button.pressed.connect(action);return button
 func change_speed(step:float) -> void:
 	game.ssrg_playables.change_speed(step)
+const SSRG_PAUSE=preload("res://assets/ssrg/imported/presentation/UI_pause.png")
+const SYNK_PAUSE=preload("res://assets/synk_mode/pause.png")
 func pause_icon_rect() -> Rect2:
 	if not is_instance_valid(score_hud):score_hud=game.ui.find_child("SSRGScoreHud",true,false)
 	var layout=score_hud.hud_layout()
@@ -81,6 +83,9 @@ func _process(delta:float) -> void:
 	var source=game.uses_ssrg_gameplay()
 	var pausing=source and game.mode=="paused"
 	pause_icon.visible=source and game.mode=="play" and not game.finishing and not game.stage_intro.running()
+	# SYNK mode has its own pause button: a dark glass tile with a coral-to-amber rim.
+	var icon:Texture2D=SYNK_PAUSE if game.synk_mode() else SSRG_PAUSE
+	if pause_icon.texture_normal!=icon:pause_icon.texture_normal=icon
 	var safe=game.safe_rect_for(self)
 	var icon_rect=pause_icon_rect()
 	pause_icon.position=icon_rect.position;pause_icon.size=icon_rect.size
