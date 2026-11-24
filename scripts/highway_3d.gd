@@ -1609,6 +1609,8 @@ func solid_trail_offsets(note: Dictionary) -> Array:
 	offsets.sort()
 	return offsets
 
+# How much larger than the tail cap SYNK mode draws a slide's bend marker.
+const SYNK_CONNECTOR_SCALE=1.6
 func make_solid_trail_joints(parent: Node3D,note: Dictionary,palette: int,recording: bool,half_width: float) -> void:
 	var offsets=solid_trail_offsets(note)
 	var material=shared("joint|%s" % trail_color(palette), func():
@@ -1621,6 +1623,13 @@ func make_solid_trail_joints(parent: Node3D,note: Dictionary,palette: int,record
 		if source_long_visuals() or recording:
 			var cap=make_tail_cap(parent,SynkChart.lane_at(note,float(note.time)+float(offset)),float(offset),palette,recording)
 			cap.name="SlideTurnCap"
+			# SYNK mode marks a bend with its own bright diamond, not a smaller copy of the note.
+			if game.synk_mode() and not recording:
+				cap.material_override=shared("synk_connector", func():
+					var m=ShaderMaterial.new(); m.shader=preload("res://scripts/reference_note.gdshader")
+					m.set_shader_parameter("artwork",preload("res://assets/synk_mode/connector.png")); m.set_shader_parameter("approach_glow",false)
+					return m)
+				cap.scale=Vector3.ONE*SYNK_CONNECTOR_SCALE
 			cap.set_meta("solid_trail_joint",true); cap.set_meta("checkpoint_offset",offset)
 			continue
 		var joint=mesh_node(disc,parent,material)

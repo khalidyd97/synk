@@ -290,6 +290,27 @@ def hit():
                 time.sleep(.4)
 
 
+def connector():
+    """The marker at each bend of a slide, in the tail cap's 132 x 72 sprite. Not a small
+    ring like the notes: a white-hot diamond lying on the road with a bright rim, a cyan
+    glow and a short tick to either side, so a bend reads at a glance against the beam."""
+    w, h, ss = 132, 72, 4
+    Y, X = np.mgrid[0:h * ss, 0:w * ss].astype(float) / ss
+    dx, dy = np.abs(X - 66.0), np.abs(Y - 36.0)
+    d = dx / 40.0 + dy / 21.0                               # 1 on the diamond's edge
+    cyan = np.array([60, 216, 255]) / 255
+    inside = smooth(1.0, .93, d)
+    rim = np.exp(-((d - 1.0) / .075) ** 2)
+    inner = np.exp(-((d - .62) / .04) ** 2) * .55            # a fine second facet line
+    glow = np.exp(-np.clip(d - 1.0, 0, None) / .32) * (d > .95) * .8
+    tick = np.exp(-(dy / 1.5) ** 2) * smooth(63, 54, dx) * smooth(40, 44, dx)
+    core = np.clip(1 - d, 0, 1) ** .7
+    white = np.clip(inside * (.72 + .28 * core) + rim + inner + tick, 0, 1)
+    a = np.clip(inside + rim + glow + tick, 0, 1)
+    rgb = cyan + (WHITE - cyan) * white[..., None]
+    save(rgb, a, OUT / "connector.png", (w, h))
+
+
 def guide():
     """Lane ring: a cream ellipse with a faint coral glow, the shape of the puck's face."""
     w, h = 212, 116
@@ -405,5 +426,5 @@ def judgment():
 
 if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
-    notes(); flick(); trail(); guide(); rail(); judgment(); pause(); hit()
+    notes(); flick(); trail(); connector(); guide(); rail(); judgment(); pause(); hit()
     print("SYNK mode art written to", OUT)
