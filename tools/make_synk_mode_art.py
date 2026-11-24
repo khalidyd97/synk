@@ -246,7 +246,7 @@ GRAPHITE_EDGE = np.array([.66, .64, .67])
 
 
 def judgment():
-    """Judgment bar: a warm graphite glass band with a bright cream hit line, trimmed at
+    """Judgment bar: a plain warm graphite glass band (no hit line), trimmed at
     each rail's road-side edge so it never runs over the rails.
 
     Stage geometry (SSRG canvas units, from ssrg_stage.gd): the bar is a 1156 x 130 plane
@@ -266,12 +266,8 @@ def judgment():
     mask = vertical * ends
 
     hit = 49.0 / 130.0  # the hit plane, 49 of the band's 130 units down
-    base = GRAPHITE_HI + (GRAPHITE_LO - GRAPHITE_HI) * smooth(0, 1, v)[..., None]
-    fill_a = .5 + .2 * smooth(1, hit, v)
-    line = np.exp(-((v - hit) / .03) ** 2)
-    glow = np.exp(-((v - hit) / .14) ** 2) * .5
-    rgb = base + (CREAM - base) * np.clip(line + glow * .45, 0, 1)[..., None]
-    alpha = np.clip(fill_a + line * .5 + glow * .25, 0, 1)
+    rgb = GRAPHITE_HI + (GRAPHITE_LO - GRAPHITE_HI) * smooth(0, 1, v)[..., None]
+    alpha = .5 + .2 * smooth(1, hit, v)
     # A fine light-grey edge along the top and bottom.
     edge = np.exp(-(v / .04) ** 2) + np.exp(-((1 - v) / .04) ** 2)
     rgb = rgb + (GRAPHITE_EDGE - rgb) * np.clip(edge * .8, 0, 1)[..., None]
