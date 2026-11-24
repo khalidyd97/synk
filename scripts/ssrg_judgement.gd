@@ -22,8 +22,8 @@ var miss_art: Texture2D = preload("res://assets/ssrg/imported/Text_miss.png")
 var digit_art: Array[Texture2D] = []
 
 # SYNK mode's judgment and combo, drawn with the game's font in place of the SSRG art:
-# the grade in wide-spaced capitals between two lines that fade outward, a large glowing
-# combo count under it, and a thin meter that fills toward every 50th combo.
+# the grade in wide-spaced capitals, a large glowing combo count under it, and a thin
+# meter that fills toward every 50th combo.
 # Each grade: its word, its text colour and its glow colour.
 const SYNK_GRADES = {
 	"PERFECT": ["PERFECT+", Color("fff6e6"), Color("ff9a3c")],
@@ -57,12 +57,7 @@ func draw_synk() -> void:
 		# The word punches in, holds, then fades.
 		var shown = clampf(1.0 - (since_hit - .5) / .3, 0.0, 1.0)
 		var px = roundi(30 * unit * (1.0 + .2 * pop))
-		var width = spaced_glow(font, centre, grade[0], px, 9 * unit, Color(grade[1], shown), Color(grade[2], shown))
-		for side in [-1, 1]:
-			var from = centre + Vector2(side * (width * .5 + 20 * unit), 0)
-			var to = from + Vector2(side * (90 + 40 * pop) * unit, 0)
-			draw_polyline_colors(PackedVector2Array([from, to]), PackedColorArray([Color(grade[2], shown), Color(grade[2], 0)]), maxf(1.0, 2.0 * unit), true)
-			draw_circle(from, maxf(1.5, 2.6 * unit), Color(grade[1], shown))
+		spaced_glow(font, centre, grade[0], px, 9 * unit, Color(grade[1], shown), Color(grade[2], shown))
 	if game.combo < 2: return
 	# The combo count.
 	var number = str(game.combo)
