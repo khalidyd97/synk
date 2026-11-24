@@ -30,6 +30,9 @@ var flick_sparks: Array = []
 const FLICK_SPARK_LIFE = .3   # the longest a spark lives; each one picks its own, shorter or equal
 const FLICK_SPARK_COUNT = 26
 const FLICK_SPARK_SHADER = preload("res://scripts/flick_spark.gdshader")
+const FLICK_RISE_SHADER = preload("res://scripts/flick_rise.gdshader")
+# SYNK mode draws its hit flash this much larger than SSRG's.
+const SYNK_HIT_SCALE = 1.35
 var active = false
 var countdown_sweep_number = -1
 var countdown_sweep_step = -1
@@ -127,7 +130,7 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 		h.material.set_shader_parameter("seed", randf() * 100.0)
 		h.material.set_shader_parameter("particles", world.game.features.effect("Particles"))
 	# Hit effects page: size, and an optional colour over the source art.
-	h.node.scale = Vector3.ONE * world.game.hit_size * (1.0 if world.game.uses_ssrg_gameplay() else SYNK_HIGHWAY_SCALE)
+	h.node.scale = Vector3.ONE * world.game.hit_size * (1.0 if world.game.uses_ssrg_gameplay() else SYNK_HIGHWAY_SCALE) * (SYNK_HIT_SCALE if world.game.synk_mode() else 1.0)
 	h.node.rotation = world.camera.rotation
 	if h.style == "ssrg":
 		# A colour picked on the Hit effects page wins; by default each flash takes its note's
@@ -164,6 +167,8 @@ func return_flick_spark(spark: Dictionary) -> void:
 	flick_spark_pool.append({"node": spark.node, "material": spark.material})
 
 func spawn_flick_sparks(x: float, flash_scale: float = 1.0) -> void:
+	if world.game.synk_mode():
+		spawn_flick_rise(x, flash_scale); return
 	var up = world.camera.basis.y.normalized()
 	var sidev = world.camera.basis.x.normalized()
 	var origin = flash_point(x)
@@ -236,14 +241,39 @@ func spawn_flick_flare(origin: Vector3, up: Vector3, tint: Color, parent: Node3D
 	flick_flares.append({"node": node, "material": mat, "age": 0.0, "base": origin, "up": up, "height": height})
 	advance_flick_flares(0.0, false)
 
+# SYNK mode's flick hit: the note's chevrons released upward through a soft plume, drawn on
+# one quad by flick_rise.gdshader. It replaces the spray of spark streaks there.
+const FLICK_RISE_LIFE = .42
+const FLICK_RISE_HEIGHT = 15.0   # tallest, in FIT units; never past the splash's screen limit
+func spawn_flick_rise(x: float, flash_scale: float) -> void:
+	var up = world.camera.basis.y.normalized()
+	var origin = flash_point(x)
+	var parent: Node3D = hit_layer if hit_layer != null else self
+	var width = 620.0 * world.SSRG_UNIT * HIT_SCALE * flash_scale * .30
+	var height = maxf(width, minf(flick_splash_reach(origin, up), FLICK_RISE_HEIGHT * world.FIT))
+	var mesh = QuadMesh.new(); mesh.size = Vector2(width, height)
+	var mat = ShaderMaterial.new(); mat.shader = FLICK_RISE_SHADER; mat.render_priority = 9
+	mat.set_shader_parameter("glow", hit_tint("flick")); mat.set_shader_parameter("aspect", height / width); mat.set_shader_parameter("seed", randf() * 100.0)
+	var node = world.mesh_node(mesh, parent, mat)
+	node.rotation = world.camera.rotation
+	flick_flares.append({"node": node, "material": mat, "age": 0.0, "base": origin, "up": up, "height": height, "rise": true})
+	advance_flick_flares(0.0, false)
+
 func advance_flick_flares(delta: float, playing: bool) -> void:
 	var opacity = world.game.features.effect("Hit flashes")
 	for i in range(flick_flares.size() - 1, -1, -1):
 		var f: Dictionary = flick_flares[i]
 		if playing: f.age += delta
-		var k = f.age / FLICK_FLARE_LIFE
+		var rising: bool = f.get("rise", false)
+		var k = f.age / (FLICK_RISE_LIFE if rising else FLICK_FLARE_LIFE)
 		if k >= 1.0:
 			f.node.queue_free(); flick_flares.remove_at(i); continue
+		if rising:
+			f.node.position = f.base + f.up * (f.height * .5)
+			f.node.rotation = world.camera.rotation
+			f.material.set_shader_parameter("age", k)
+			f.material.set_shader_parameter("opacity", opacity)
+			continue
 		# Shoots up fast (eased), stretching tall, while it fades.
 		var grow = 1.0 - pow(1.0 - k, 3.0)
 		var length = lerpf(.35, 1.0, grow)
@@ -461,7 +491,7 @@ func late_pieces() -> Array:
 	# Flick sparks first appear at the first flick hit, and the SYNK stage when
 	# SYNK mode's backdrop takes over: without this their shaders are prepared mid-song.
 	if warm_materials.is_empty():
-		for shader in [FLICK_SPARK_SHADER]:
+		for shader in [FLICK_SPARK_SHADER, FLICK_RISE_SHADER]:
 			var mat = ShaderMaterial.new(); mat.shader = shader; warm_materials.append(mat)
 	pieces.append_array(warm_materials)
 	if world.game.highway_style == "synk":
