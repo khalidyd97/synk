@@ -13,14 +13,18 @@ uniform sampler2D ssrg_beam_art : filter_linear, repeat_disable;
 // SYNK mode's beam: a lane glow. Amber light pools on the road at the judgment line under
 // the finger and fades away up the road and out to the sides, with no hard edge anywhere.
 uniform bool synk_glow = false;
-// How far up the beam's quad the judgment line sits, from its near end (0..1).
-uniform float glow_line = 0.142;
+// The beam quad's half-width and how far it extends past the judgment line toward the
+// player, in world units (set from highway_3d.gd).
+uniform float beam_half_width = 2.4;
+uniform float beam_near = 1.64;
+varying float beam_centre;
 
 varying float world_z;
 
 void vertex() {
 	rail_position=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz;
 	world_z = rail_position.z;
+	beam_centre = MODEL_MATRIX[3].x;
 	if(ssrg_warp.x>0.5){
 		float section=max(0.0,1.0+world_z/ssrg_beam_reach);
 		rail_position.x*=section;
@@ -37,8 +41,12 @@ void fragment() {
 	// Keep alpha blending so the light remains coloured beneath bright notes.
 	ALPHA = 0.62 * reach * intensity * release_alpha;
 	if(synk_glow){
-		float across=abs(UV.x-0.5)*2.0;          // 0 down the middle of the lane, 1 at its edge
-		float from_line=(1.0-UV.y)-glow_line;    // 0 at the judgment line, growing up the road
+		// Worked out from this point's real place on the road, not the quad's UV: the quad
+		// is two triangles squeezed into perspective, and UV would break along their seam.
+		float taper=max(0.001,1.0+rail_position.z/ssrg_beam_reach);
+		float across=abs(rail_position.x/taper-beam_centre)/beam_half_width;   // 0 mid-lane, 1 at the quad's edge
+		float from_line=-rail_position.z/(ssrg_beam_reach+beam_near);            // 0 at the judgment line, growing up the road
+		float far_end=smoothstep(1.0,0.7,-rail_position.z/ssrg_beam_reach);     // gone before the highway's far end
 		// Sideways: a soft bell that has melted away well before the quad's edge.
 		float spread=exp(-pow(across/0.42,2.0))*(1.0-smoothstep(0.55,0.95,across));
 		// Up the road: strongest at the line, a long gentle tail beyond it; a short, soft
@@ -48,6 +56,6 @@ void fragment() {
 		float pool=exp(-pow(from_line/0.10,2.0))*exp(-pow(across/0.5,2.0));
 		float light=spread*run*0.42+pool*0.5;
 		ALBEDO=mix(tint,vec3(1.0,0.95,0.85),clamp(pool*0.6,0.0,1.0));
-		ALPHA=clamp(light,0.0,1.0)*intensity*release_alpha*smoothstep(0.0,0.2,reach);
+		ALPHA=clamp(light,0.0,1.0)*intensity*release_alpha*far_end;
 	}
 }

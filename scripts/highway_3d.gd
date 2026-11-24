@@ -1823,6 +1823,9 @@ func update_finger_beams(delta: float = 0.0) -> void:
 			var synk=game.synk_mode()
 			if synk: beam.material_override.set_shader_parameter("tint",element_color("beams",SYNK_BEAM_COLOR))
 			beam.material_override.set_shader_parameter("synk_glow",synk)
+			if synk:
+				beam.material_override.set_shader_parameter("beam_half_width",ssrg_beam_width()*.5)
+				beam.material_override.set_shader_parameter("beam_near",SSRG_BEAM_NEAR)
 			beam.visible=alpha>0.0
 			continue
 		beam.visible=i<touches.size()
