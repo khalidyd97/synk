@@ -287,41 +287,47 @@ def rail_edges():
     return src, bright, np.polyfit(ys[ok], left[ok], 1), np.polyfit(ys[ok], right[ok], 1)
 
 
+# The design guide's amber: a white-hot edge core in an amber glow.
+GLOW_AMBER = np.array([1.0, .55, .18])
+CORE_WARM = np.array([1.0, .86, .62])
+
+
 def rail():
-    """Left rail sprite with the SSRG rail's exact silhouette. The road keeps its black
-    pixels (the stage shader draws them as floor); the rail band becomes a coral glow
-    edge, a bright cream core and an amber inner edge, with a coral haze outside."""
+    """Left rail sprite, after the design guide's layers, on the SSRG rail's silhouette.
+    Edge core: a slim tapered streak, white-hot in the middle with amber edges.
+    Outer glow: soft amber light spilling off both sides of it.
+    The road keeps its black pixels (the stage shader draws them as floor)."""
     src, bright, pl, pr = rail_edges()
     H, W = src.shape[:2]
-    rgb = src[..., :3].copy(); a = src[..., 3].copy()
+    road_a = np.where(bright, 0.0, src[..., 3])        # the road's own coverage
     y, x = np.mgrid[0:H, 0:W].astype(float)
     L = pl[0] * y + pl[1]; R = pr[0] * y + pr[1]
-    t = (x - L) / np.maximum(R - L, 1)  # 0 at the outer edge, 1 at the road edge
-    band = bright | ((t >= 0) & (t <= 1) & (a > .04))
-    col = np.where((t < .3)[..., None], CORAL + (CREAM - CORAL) * smooth(.05, .3, t)[..., None],
-                   CREAM + (AMBER - CREAM) * smooth(.45, .95, t)[..., None])
-    core = np.exp(-((t - .4) / .1) ** 2)
-    col = col + (WHITE - col) * (core * .6)[..., None]
-    # Fade the rail out toward the far end like the source does.
-    far = smooth(0, 90, y)
-    rgb = np.where(band[..., None], col, rgb)
-    a = np.where(band, np.maximum(a, .95) * far, a)
-    # A soft coral haze outside the rail, off the road.
-    outside = np.clip(-t, 0, None) * (R - L)
-    haze = np.exp(-outside / 14) * (t < 0) * .55 * far
-    rgb, a = over(rgb, a * (~(t < 0)), np.broadcast_to(CORAL, rgb.shape), haze)
+    width = np.maximum(R - L, 1)
+    t = (x - L) / width                                 # 0 at the outer edge, 1 at the road edge
+    off = (t - .5) * width                              # pixels from the rail's centre line
+    far = smooth(0, 110, y)                             # the rail thins and fades into the distance
+    core = np.exp(-(off / (width * .13 + .6)) ** 2)     # white-hot middle
+    body = np.exp(-(off / (width * .30 + 1.0)) ** 2)    # amber streak around it
+    glow = np.exp(-np.abs(off) / (width * .55 + 10)) * .5   # outer glow, both sides
+    light = np.clip(body + glow, 0, 1) * far
+    col = GLOW_AMBER + (CORE_WARM - GLOW_AMBER) * np.clip(body * 1.2, 0, 1)[..., None]
+    col = col + (WHITE - col) * np.clip(core * 1.1, 0, 1)[..., None]
+    # Light over the black road (or over nothing, outside it).
+    rgb = np.zeros((H, W, 3)); a = road_a.copy()
+    rgb, a = over(rgb, a, col, light)
     save(rgb, a, OUT / "rail.png")
 
 
-# Warm graphite greys for the judgment bar, between the near-black road and the cream lines.
-GRAPHITE_HI = np.array([.44, .42, .46])
-GRAPHITE_LO = np.array([.19, .18, .21])
-GRAPHITE_EDGE = np.array([.66, .64, .67])
+# The base bar: dark glass, lighter at its top, under a bright hairline.
+BAR_HI = np.array([.26, .26, .30])
+BAR_LO = np.array([.05, .05, .07])
+BAR_LINE = np.array([.92, .93, 1.0])
 
 
 def judgment():
-    """Judgment bar: a plain warm graphite glass band (no hit line), trimmed at
-    each rail's road-side edge so it never runs over the rails.
+    """Judgment bar, the design guide's base bar: dark glass that is lighter toward its
+    top, under a thin bright line along the top edge, trimmed at each rail's road-side edge
+    so it never runs over the rails.
 
     Stage geometry (SSRG canvas units, from ssrg_stage.gd): the bar is a 1156 x 130 plane
     centred at x=-5, z=16; the left rail sprite is 720 x 578 centred at x=-360, z=-203,
@@ -332,19 +338,25 @@ def judgment():
     v = (y + .5) / H
     # Keep the source bar's soft top and bottom, but take its ends from the rails.
     vertical = src[:, W // 2, 3][:, None] * np.ones((1, W))
-    _, _, _, pr = rail_edges()
+    _, _, pl, pr = rail_edges()
     z = -49.0 + v * 130.0
-    inner = 720.0 - (pr[0] * (z + 492.0) + pr[1]) - 2.0  # road half-width, 2 units inside the rail
+    # The bar runs up to the rail's bright core, which sits mid-way across the rail band.
+    outer_x = pl[0] * (z + 492.0) + pl[1]; road_x = pr[0] * (z + 492.0) + pr[1]
+    inner = 720.0 - (outer_x + (road_x - outer_x) * .66)
     world_x = -5.0 - 578.0 + (x + .5) / W * 1156.0
     ends = smooth(0.0, 3.0, inner - np.abs(world_x))
     mask = vertical * ends
 
-    hit = 49.0 / 130.0  # the hit plane, 49 of the band's 130 units down
-    rgb = GRAPHITE_HI + (GRAPHITE_LO - GRAPHITE_HI) * smooth(0, 1, v)[..., None]
-    alpha = .5 + .2 * smooth(1, hit, v)
-    # A fine light-grey edge along the top and bottom.
-    edge = np.exp(-(v / .04) ** 2) + np.exp(-((1 - v) / .04) ** 2)
-    rgb = rgb + (GRAPHITE_EDGE - rgb) * np.clip(edge * .8, 0, 1)[..., None]
+    rgb = BAR_HI + (BAR_LO - BAR_HI) * smooth(0, .8, v)[..., None]
+    alpha = .78 - .2 * smooth(.3, 1, v)
+    # The hairline along the top edge, with a soft bloom under it.
+    line = np.exp(-((v - .06) / .022) ** 2)
+    bloom = np.exp(-np.maximum(v - .06, 0) / .12) * (v > .06) * .35
+    rgb = rgb + (BAR_LINE - rgb) * np.clip(line + bloom, 0, 1)[..., None]
+    alpha = np.clip(alpha + line * .4, 0, 1)
+    # The source bar fades in over its first rows; keep the line crisp there.
+    vertical = np.maximum(vertical, line * (v > .03))
+    mask = vertical * ends
     save(rgb, alpha * mask, OUT / "judgment.png")
 
 

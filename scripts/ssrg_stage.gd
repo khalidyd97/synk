@@ -291,8 +291,8 @@ func warmup(world: Node3D) -> void :
 	receptor.material_override.set_shader_parameter("progress", 1.0);receptor.show()
 
 # SYNK mode's palette (the SYNK logo's coral and amber on near-black, cream highlights).
-const SYNK_FLOOR = Color("0c0911")
-const SYNK_GLOW = Color("8c8691")   # warm grey, like the judgment bar
+const SYNK_FLOOR = Color("000000")   # the guide's road is pure black
+const SYNK_GLOW = Color("3a3a44")   # a dim cool grey under the dark base bar
 const SYNK_SCAN = Color("ffd9a8")
 func configure(world: Node3D) -> void :
 	var stock_road = true
