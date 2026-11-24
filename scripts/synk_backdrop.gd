@@ -102,6 +102,11 @@ func update(on: bool, delta: float) -> void:
 	else:
 		energy = clampf(float(game.combo) / 150.0, 0.0, 1.0) * .6
 	material.set_shader_parameter("vanish", vanish)
+	# The rails' lines on screen, so no stage draws under the highway between them.
+	for side in [-1, 1]:
+		var far: Vector2 = world.camera.unproject_position(Vector3(side * 27.0 * world.SSRG_UNIT, 0, -492.0 * world.SSRG_UNIT)) / view
+		var near: Vector2 = world.camera.unproject_position(Vector3(side * 607.5 * world.SSRG_UNIT, 0, 86.0 * world.SSRG_UNIT)) / view
+		material.set_shader_parameter("road_left" if side < 0 else "road_right", Vector4(far.x, far.y, near.x, near.y))
 	material.set_shader_parameter("aspect", view.x / view.y)
 	material.set_shader_parameter("beat", fposmod(beats, 1.0))
 	material.set_shader_parameter("energy", energy)

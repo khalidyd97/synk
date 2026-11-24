@@ -14,6 +14,7 @@ uniform float brightness = 1.0;
 uniform vec3 newest = vec3(0.0, 0.0, -1.0);   // newest star: screen position and age
 uniform vec3 newest_color : source_color = vec3(1.0);
 global uniform float synk_time;
+#include "res://scripts/synk_stage_mask.gdshaderinc"
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 
@@ -37,6 +38,7 @@ void fragment() {
 		col += newest_color * exp(-d * 28.0) * fade * 0.9;
 		col += newest_color * exp(-pow((d - newest.z * 0.18) / 0.006, 2.0)) * fade * 0.6;
 	}
-	ALBEDO = col * brightness;
+	// Nothing is drawn under the highway.
+	ALBEDO = mix(ROAD_INK, col, road_mask(UV)) * brightness;
 	ALPHA = 1.0;
 }

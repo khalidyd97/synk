@@ -19,6 +19,7 @@ uniform float brightness = 1.0;
 // Recent note hits: screen position (xy) and age in seconds (z); z < 0 is unused.
 uniform vec3 hits[4];
 global uniform float synk_time;
+#include "res://scripts/synk_stage_mask.gdshaderinc"
 
 const vec3 INK = vec3(0.03, 0.022, 0.05);
 const vec3 DUSK = vec3(0.10, 0.045, 0.14);
@@ -80,6 +81,7 @@ void fragment() {
 			col += CREAM * a * b * glow * 0.8;
 		}
 	}
-	ALBEDO = col * brightness;
+	// Nothing is drawn under the highway.
+	ALBEDO = mix(ROAD_INK, col, road_mask(UV)) * brightness;
 	ALPHA = 1.0;
 }

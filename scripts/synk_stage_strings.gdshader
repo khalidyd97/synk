@@ -13,6 +13,7 @@ uniform float brightness = 1.0;
 uniform float pluck[16];                // 0..8 left row (near to far), 8..16 right row
 uniform vec3 tint[16] : source_color;
 global uniform float synk_time;
+#include "res://scripts/synk_stage_mask.gdshaderinc"
 
 const vec3 IDLE = vec3(0.50, 0.44, 0.50);
 const vec3 CREAM = vec3(1.0, 0.945, 0.86);
@@ -52,6 +53,7 @@ void fragment() {
 		float peg = length((UV - vec2(foot_x, foot_y)) * vec2(aspect, 1.0));
 		col += colour * exp(-peg / (0.004 + 0.012 * s)) * (0.35 + power) * depth;
 	}
-	ALBEDO = col * brightness;
+	// Nothing is drawn under the highway.
+	ALBEDO = mix(ROAD_INK, col, road_mask(UV)) * brightness;
 	ALPHA = 1.0;
 }

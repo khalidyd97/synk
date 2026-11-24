@@ -13,6 +13,7 @@ uniform float energy = 0.0;
 uniform float brightness = 1.0;
 uniform float drift = 0.0;              // 0 in sync .. 1 far apart
 global uniform float synk_time;
+#include "res://scripts/synk_stage_mask.gdshaderinc"
 
 const vec3 CORAL = vec3(1.0, 0.38, 0.22);
 const vec3 AMBER = vec3(1.0, 0.72, 0.32);
@@ -60,6 +61,7 @@ void fragment() {
 	col += CREAM * lines * lock * (0.35 + 0.35 * kick);
 	// The seam between the worlds, down the middle, flashes when they meet.
 	col += CREAM * exp(-abs(p.x) * 60.0) * lock * kick * 0.25;
-	ALBEDO = col * brightness;
+	// Nothing is drawn under the highway.
+	ALBEDO = mix(ROAD_INK, col, road_mask(UV)) * brightness;
 	ALPHA = 1.0;
 }
