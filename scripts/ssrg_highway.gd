@@ -496,6 +496,42 @@ func clear_hits() -> void:
 		world.cover_material.set_shader_parameter("ssrg_fever_weights",Vector4.ZERO)
 		world.cover_material.set_shader_parameter("ssrg_fever_dark",0.0)
 
+# SYNK mode's own stage (synk_stage.gdshader): it takes over the screen-filling backdrop
+# quad behind the highway, in place of the song artwork and SSRG's fever backgrounds.
+const SYNK_STAGE_SHADER = preload("res://scripts/synk_stage.gdshader")
+var synk_backdrop_material: ShaderMaterial
+func update_synk_backdrop(on: bool) -> void:
+	var backdrop: MeshInstance3D = world.cover_backdrop
+	if backdrop == null: return
+	if not on:
+		if synk_backdrop_material != null and backdrop.material_override == synk_backdrop_material:
+			backdrop.material_override = world.cover_material
+		return
+	if synk_backdrop_material == null:
+		synk_backdrop_material = ShaderMaterial.new(); synk_backdrop_material.shader = SYNK_STAGE_SHADER
+		synk_backdrop_material.render_priority = -20
+	if backdrop.material_override != synk_backdrop_material: backdrop.material_override = synk_backdrop_material
+	backdrop.visible = true
+	var game = world.game
+	var view: Vector2 = world.get_viewport().get_visible_rect().size
+	if view.y <= 0: return
+	# The highway's far end, where the sunrise sits and the sync waves start.
+	var far: Vector2 = world.camera.unproject_position(Vector3(0, 0, -492.0 * world.SSRG_UNIT))
+	synk_backdrop_material.set_shader_parameter("vanish", far / view)
+	synk_backdrop_material.set_shader_parameter("aspect", view.x / view.y)
+	var beats = (world.render_time() - game.chart_offset()) * game.chart_bpm() / 60.0
+	synk_backdrop_material.set_shader_parameter("beat", fposmod(beats, 1.0))
+	synk_backdrop_material.set_shader_parameter("beat_count", floorf(beats))
+	# Energy: how far into rave the run is, or the combo on runs without rave.
+	var energy = 0.0
+	var presentation = game.ssrg_presentation
+	if presentation and presentation.active:
+		for index in 6: energy += float(presentation.phase_weights[index]) * index / 5.0
+	else:
+		energy = clampf(float(game.combo) / 150.0, 0.0, 1.0) * .6
+	synk_backdrop_material.set_shader_parameter("energy", energy)
+	synk_backdrop_material.set_shader_parameter("brightness", game.features.effect("Background brightness"))
+
 # Hidden when a song starts and shown during it: lane guides, touch marks, the background
 # particles with their fever versions, and the pooled hit flashes.
 func late_pieces() -> Array:
@@ -528,6 +564,7 @@ static func sustain_finger_x(entry:Dictionary,contacts:Dictionary,fallback:float
 	return float(entry.get("ssrg_effect_x",fallback))
 
 func _process(delta: float) -> void:
+	update_synk_backdrop(active and world.game.synk_mode())
 	if not active:
 		# The "SSRG" hit style on SYNK's Gold and Neon highways: only the hit art runs.
 		var game = world.game
@@ -542,9 +579,11 @@ func _process(delta: float) -> void:
 	var using_state=presentation and presentation.active
 	var weights=presentation.weights if using_state else [1.0,0.0,0.0,0.0]
 	var custom=world.custom_color("lasers")
+	# SYNK mode drops SSRG's stage effects (lasers, fever art); its own backdrop replaces them.
+	var synk=game.synk_mode()
 	for index in background_bank.size():
 		var background=background_bank[index]
-		background.intensity=game.features.effect("Lasers")*float(weights[index])
+		background.intensity=0.0 if synk else game.features.effect("Lasers")*float(weights[index])
 		background.tint=custom if custom!=null else Color.WHITE
 		background.visible=game.mode in ["play","paused"] and game.countdown<=0 and not game.finishing and background.intensity>0
 		if background.visible:background.advance(delta,not playing or game.resume_countdown>0)
@@ -552,8 +591,8 @@ func _process(delta: float) -> void:
 		var dark=0.0
 		if using_state:
 			for index in 6:dark+=float(presentation.phase_weights[index])*float(presentation.DATA.PROFILES[index].background_alpha)
-		world.cover_material.set_shader_parameter("ssrg_fever_weights",Vector4(weights[0],weights[1],weights[2],weights[3]) if using_state else Vector4.ZERO)
-		world.cover_material.set_shader_parameter("ssrg_fever_dark",dark)
+		world.cover_material.set_shader_parameter("ssrg_fever_weights",Vector4(weights[0],weights[1],weights[2],weights[3]) if using_state and not synk else Vector4.ZERO)
+		world.cover_material.set_shader_parameter("ssrg_fever_dark",0.0 if synk else dark)
 	if using_state:
 		world.ssrg_finger_beam_material.set_shader_parameter("tint",world.element_color("beams",presentation.beam_color))
 	advance_hits(delta,hit_playing)

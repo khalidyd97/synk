@@ -33,7 +33,8 @@ func update(delta: float) -> void:
     var game=world.game
     var strengths=Vector2(game.features.effect("Flowing edge energy"),game.features.effect("Soft fading glow"))
     var stage=game.mode in ["play","record"] or (game.mode=="paused" and game.paused_mode in ["play","record"])
-    visible=stage and (strengths.x>0 or strengths.y>0)
+    # SYNK mode has no rail energy or soft glow: its own stage replaces them.
+    visible=stage and (strengths.x>0 or strengths.y>0) and not game.synk_mode()
     if not visible: return
     if game.mode in ["play","record"]: clock+=delta
     if strengths!=last_strengths:

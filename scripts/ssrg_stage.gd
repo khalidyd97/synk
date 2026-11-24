@@ -281,7 +281,8 @@ func update_entrance(world: Node3D) -> void:
 	press.material_override.set_shader_parameter("entrance",judgment_in)
 	press_glow.material_override.set_shader_parameter("entrance",judgment_in)
 	judgment_scan.material_override.set_shader_parameter("progress",scan_progress)
-	judgment_scan.material_override.set_shader_parameter("strength",scan_strength)
+	# SYNK mode has no post-countdown scan beam.
+	judgment_scan.material_override.set_shader_parameter("strength",0.0 if world.game.synk_mode() else scan_strength)
 
 func warmup(world: Node3D) -> void :
 	if not visible: return
