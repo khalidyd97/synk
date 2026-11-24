@@ -1780,6 +1780,9 @@ func ssrg_beam_center(lane: float) -> float:
 func ssrg_beam_width() -> float:
 	return 295.0*(520.0/606.0)*SSRG_UNIT
 var ssrg_beam_release: Dictionary={}
+const SYNK_BEAM_COLOR = Color("ff9a3c")
+# Which SYNK beam is drawn: "column" (a soft shaft of light) or "glow" (light on the road).
+var synk_beam_choice = "column"
 func update_finger_beams(delta: float = 0.0) -> void:
 	var touches: Array = game.pointers.values() if game.mode=="play" else (game.capture.gestures.values() if game.mode=="record" and game.capture else [])
 	var ssrg=game.uses_skd_stage()
@@ -1815,6 +1818,10 @@ func update_finger_beams(delta: float = 0.0) -> void:
 			var alpha=SsrgCurves.beam_alpha(age) if game.mode in ["play","record"] and game.countdown<=0 else 0.0
 			beam.material_override.set_shader_parameter("release_alpha",alpha)
 			for parameter in ["tint","intensity"]: beam.material_override.set_shader_parameter(parameter,ssrg_finger_beam_material.get_shader_parameter(parameter))
+			# SYNK mode: its own amber beam, in the chosen shape.
+			var synk=game.synk_mode()
+			if synk: beam.material_override.set_shader_parameter("tint",element_color("beams",SYNK_BEAM_COLOR))
+			beam.material_override.set_shader_parameter("synk_beam_style",(2 if synk_beam_choice=="glow" else 1) if synk else 0)
 			beam.visible=alpha>0.0
 			continue
 		beam.visible=i<touches.size()
