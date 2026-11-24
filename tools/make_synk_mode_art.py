@@ -330,16 +330,16 @@ def rail():
     save(rgb, a, OUT / "rail.png")
 
 
-# The base bar: dark glass, lighter at its top, under a bright hairline.
-BAR_HI = np.array([.26, .26, .30])
-BAR_LO = np.array([.05, .05, .07])
-BAR_LINE = np.array([.92, .93, 1.0])
+# The judgment bar: a strip of nearly clear glass lit from its top line.
+BAR_GLASS = np.array([.05, .06, .09])
+BAR_LINE = np.array([.86, .91, 1.0])
+BAR_LINE_WARM = np.array([1.0, .74, .40])
 
 
 def judgment():
-    """Judgment bar, the design guide's base bar: dark glass that is lighter toward its
-    top, under a thin bright line along the top edge, trimmed at each rail's road-side edge
-    so it never runs over the rails.
+    """Judgment bar: a crisp bright line along the top, warming to amber at the rails,
+    with its light spilling down into nearly clear glass that fades away, and a faint second
+    line at the bottom. It runs on under the rails, which are drawn over it.
 
     Stage geometry (SSRG canvas units, from ssrg_stage.gd): the bar is a 1156 x 130 plane
     centred at x=-5, z=16; the left rail sprite is 720 x 578 centred at x=-360, z=-203,
@@ -348,8 +348,6 @@ def judgment():
     H, W = src.shape[:2]
     y, x = np.mgrid[0:H, 0:W].astype(float)
     v = (y + .5) / H
-    # Keep the source bar's soft top and bottom, but take its ends from the rails.
-    vertical = src[:, W // 2, 3][:, None] * np.ones((1, W))
     _, _, pl, pr = rail_edges()
     z = -49.0 + v * 130.0
     # The bar runs on under the rails, which are drawn over it, and stops at their outer edge.
@@ -357,18 +355,32 @@ def judgment():
     inner = 720.0 - (outer_x + (road_x - outer_x) * .3)
     world_x = -5.0 - 578.0 + (x + .5) / W * 1156.0
     ends = smooth(0.0, 3.0, inner - np.abs(world_x))
-    mask = vertical * ends
 
-    rgb = BAR_HI + (BAR_LO - BAR_HI) * smooth(0, .8, v)[..., None]
-    alpha = .78 - .2 * smooth(.3, 1, v)
-    # The hairline along the top edge, with a soft bloom under it.
-    line = np.exp(-((v - .06) / .022) ** 2)
-    bloom = np.exp(-np.maximum(v - .06, 0) / .12) * (v > .06) * .35
-    rgb = rgb + (BAR_LINE - rgb) * np.clip(line + bloom, 0, 1)[..., None]
-    alpha = np.clip(alpha + line * .4, 0, 1)
-    # The source bar fades in over its first rows; keep the line crisp there.
-    vertical = np.maximum(vertical, line * (v > .03))
-    mask = vertical * ends
+    # How close each pixel is to a rail: 0 across the middle of the bar, 1 at its ends.
+    to_rail = smooth(190.0, 0.0, inner - np.abs(world_x))[..., None]
+    top = .07                                   # where the top line sits
+    below = np.maximum(v - top, 0)
+    # Glass: nearly clear, with a cool dark tint that thins out toward the bottom, so the
+    # bar reads as a strip of light on the road rather than a grey block.
+    rgb = np.broadcast_to(BAR_GLASS, (H, W, 3)).copy()
+    alpha = (.46 * np.exp(-below / .5) + .05) * (v > top - .012)
+    # Light spilling down from the top line into the glass: cool in the middle of the bar,
+    # warming to amber where it meets the rails.
+    line_colour = BAR_LINE + (BAR_LINE_WARM - BAR_LINE) * to_rail
+    spill = np.exp(-below / .15) * (v >= top)
+    rgb = rgb + (line_colour - rgb) * (spill * .5)[..., None]
+    alpha = alpha + spill * .2
+    # The top line: crisp and bright.
+    line = np.exp(-((v - top) / .017) ** 2)
+    rgb = rgb + (line_colour - rgb) * np.clip(line * 1.2, 0, 1)[..., None]
+    rgb = rgb + (1 - rgb) * (np.exp(-((v - top) / .007) ** 2) * .8)[..., None]
+    alpha = np.maximum(alpha, line)
+    # A faint second line closes the strip at the bottom.
+    low = np.exp(-((v - .925) / .011) ** 2)
+    rgb = rgb + (line_colour * .9 - rgb) * (low * .8)[..., None]
+    alpha = np.maximum(alpha, low * .38)
+    alpha = np.clip(alpha, 0, 1) * smooth(1.0, .96, v)
+    mask = ends
     save(rgb, alpha * mask, OUT / "judgment.png")
 
 
