@@ -51,9 +51,6 @@ func _init() -> void :
 		overlay.material_override=mat.duplicate()
 		overlay.material_override.render_priority=-5
 		overlay.material_override.set_shader_parameter("rail_only",true)
-		overlay.material_override.set_shader_parameter("rail_flare",true)
-		# The two rails' flares run a little out of step with each other.
-		overlay.material_override.set_shader_parameter("flare_phase",0.0 if side<0 else 1.1)
 		overlay.visible=false
 		add_child(overlay); rail_overlays.append(overlay)
 		var old_rail=make_old_rail(side,UNIT)
