@@ -40,6 +40,11 @@ uniform bool note_brightness_applies = true;
 // Animated flick frames: the chevron above this UV row is never dimmed by the note
 // brightness setting (it keeps full white like the old flick arrow); the puck below is.
 uniform float full_bright_above_uv = -1.0;
+// SYNK mode: notes start a little muted in the distance and grow richer, brighter and
+// haloed as they come, reaching full glow at the judgment line. 0 turns it off;
+// `approach_span` is how far out (track units) the build-up begins.
+uniform float approach_vibrance = 0.0;
+uniform float approach_span = 36.0;
 void fragment(){
     if((ssrg_warp.x>0.5?centre_z:world_z)>clip_z) discard;
     vec4 art=texture(artwork,UV);
@@ -70,10 +75,29 @@ void fragment(){
         color=mix(color,vec3(1.0),rim/max(0.001,alpha+rim));
         alpha=max(alpha,rim);
     }
+    float burn=1.0;
+    if(approach_vibrance>0.0){
+        float coming=pow(clamp(1.0+centre_z/approach_span,0.0,1.0),1.6)*approach_vibrance;
+        vec3 rich=rgb_to_hsv(color);
+        rich.y=clamp(rich.y*(0.9+0.5*coming),0.0,1.0);
+        rich.z=rich.z*(0.82+0.5*coming);
+        color=hsv_to_rgb(rich);
+        // The glassy middle of the disc fills with the note's own light.
+        vec4 soft=textureLod(artwork,UV,3.0);
+        float fill=coming*soft.a*(1.0-alpha)*0.55;
+        // Halo: the blurred note shape spilling past its edge.
+        vec4 wide=textureLod(artwork,UV,5.0);
+        float halo=coming*wide.a*(1.0-art.a)*0.5;
+        float glow=clamp(fill+halo,0.0,1.0);
+        color=mix(color,soft.rgb*1.25,glow/max(0.001,alpha+glow));
+        alpha=max(alpha,glow);
+        // Near the line the note is never dimmed by the brightness setting.
+        burn=coming;
+    }
     ALBEDO=mix(color,vec3(gray*0.52),desaturate)*source_tint.rgb;
     ALPHA=alpha*opacity*ghost_fade*source_tint.a*smoothstep(-60.0,-55.0,world_z)*ssrg_reveal(centre_z);
 	if(note_brightness_applies){
 		float keep=full_bright_above_uv>0.0?1.0-smoothstep(full_bright_above_uv-0.03,full_bright_above_uv,UV.y):0.0;
-		ALBEDO*=mix(synk_note_brightness,max(synk_note_brightness,1.0),keep);
+		ALBEDO*=mix(synk_note_brightness,max(synk_note_brightness,1.0),max(keep,burn*step(0.001,approach_vibrance)));
 	}
 }

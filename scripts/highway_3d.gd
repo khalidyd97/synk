@@ -1244,6 +1244,8 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 		var m = ShaderMaterial.new(); m.shader = preload("res://scripts/reference_note.gdshader")
 		m.set_shader_parameter("artwork",art); m.set_shader_parameter("approach_glow",false)
 		m.set_meta("ssrg_palette",palette);m.set_meta("ssrg_tail",tail);m.set_meta("ssrg_skin",skin)
+		# SYNK mode's discs grow more vibrant and glowing as they come down the highway.
+		if skin=="synk": m.set_shader_parameter("approach_vibrance",1.0)
 		m.set_shader_parameter("core_tint",Color("4fc8ff") if palette==0 else Color("ffc23a"))
 		# Flicks share the source puck silhouette, but use a vivid rose treatment so
 		# they cannot be mistaken for blue taps during a fast approach.
@@ -1340,6 +1342,7 @@ func flick_frame_material(frame: int) -> ShaderMaterial:
 		material.shader = preload("res://scripts/synk_canvas_note.gdshader") if projected else preload("res://scripts/reference_note.gdshader")
 		material.render_priority = 3
 		material.set_shader_parameter("artwork", (SYNK_FLICK_FRAMES if synk else FLICK_FRAMES)[frame])
+		if synk: material.set_shader_parameter("approach_vibrance",1.0)
 		# Rows above y=380 of the 768 px frame hold only the chevron and its sparks.
 		material.set_shader_parameter("full_bright_above_uv", 380.0 / 768.0)
 		return material)
