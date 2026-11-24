@@ -237,7 +237,7 @@ def hit():
         snap = np.exp(-(t / .16) ** 2)                   # the first instant
         light = np.zeros_like(r)
         # The ring: a bold outer rim and a fine inner one, like the note, thinning as it runs.
-        ring_r = .30 + .64 * ease
+        ring_r = .28 + .27 * ease                        # ends a little over 1.5x the note's width
         width = .030 * (1 - .65 * t) + .006
         light += np.exp(-((r - ring_r) / width) ** 2) * (.55 + .75 * fade) * min(1.0, 1.5 - t)
         light += np.exp(-((r - ring_r * .86) / (width * .45)) ** 2) * fade * .7
@@ -245,7 +245,7 @@ def hit():
         # A second, fainter ring leaves a beat later.
         if t > .2:
             late = (t - .2) / .8
-            light += np.exp(-((r - (.22 + .5 * (1 - (1 - late) ** 2))) / .012) ** 2) * (1 - late) ** 1.5 * .45
+            light += np.exp(-((r - (.20 + .24 * (1 - (1 - late) ** 2))) / .012) ** 2) * (1 - late) ** 1.5 * .45
         # The glass inside the ring flashes once and clears.
         light += smooth(ring_r, ring_r * .5, r) * snap * .5
         # A small hot core, only at the first instant.
@@ -258,10 +258,10 @@ def hit():
         light += column * 1.25
         light += np.exp(-np.abs(dx) / (pillar_w * 3.5)) * (Y <= cy + 2) * smooth(reach, reach * .4, rise) * (1 - t) ** 2 * .22
         # A fine streak along the road through the centre.
-        light += np.exp(-(dy / (1.2 + 2.0 * snap)) ** 2) * np.exp(-np.abs(dx) / (40 + 90 * ease)) * (1 - t) ** 2.2 * .9
+        light += np.exp(-(dy / (1.2 + 2.0 * snap)) ** 2) * np.exp(-np.abs(dx) / (30 + 45 * ease)) * (1 - t) ** 2.2 * .9
         # Shards of glass: kites lit along one edge, flying out, rising and tumbling.
         for angle, speed, size, spin, lift in shards:
-            d = (.22 + speed * ease) * half * .8
+            d = (.20 + speed * .55 * ease) * half * .8
             sx = cx + np.cos(angle) * d
             sy = cy + np.sin(angle) * d * squash - lift * ease * 46
             turn = angle + spin * t
