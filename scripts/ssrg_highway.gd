@@ -136,7 +136,6 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 		h.material.set_shader_parameter("tint", hit_tint(kind) if recolor else Color.WHITE)
 		h.material.set_shader_parameter("recolor", recolor)
 	h.node.visible = true; hits.append(h)
-	if world.game.synk_mode() and synk_backdrop: synk_backdrop.hit(h.node.position, kind, hit_tint(kind))
 	if kind == "flick":
 		spawn_flick_sparks(h.x, h.node.scale.x)
 
