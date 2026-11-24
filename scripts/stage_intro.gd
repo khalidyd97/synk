@@ -2,6 +2,10 @@ extends Control
 
 # Song intro before gameplay: a loading screen built from the cover art and the song's colors,
 # then an entrance where the cover and details slide away over the stationary highway.
+# The loading screen previews the stage being built: the cover sits centred near the top,
+# where it stays during play; two rails of light draw themselves up from the bottom corners
+# toward it as the song loads; the title stands on the road between them; and a line of
+# light grows from the centre outward, like the judgment bar, as the percentage climbs.
 const LOAD_TIME = 5.0
 const ENTER_TIME = 2.40
 # The post-load handoff is deliberately serial: first resolve the full-screen
@@ -83,11 +87,13 @@ func _ready() -> void:
 	var bold = FontVariation.new(); bold.base_font = ThemeDB.fallback_font; bold.variation_embolden = .8
 	var spaced = FontVariation.new(); spaced.base_font = ThemeDB.fallback_font; spaced.variation_embolden = .5; spaced.spacing_glyph = 5
 	eyebrow = caption(19,accent_2,spaced)
-	title = caption(66,Color("f6efff"),bold); title.add_theme_constant_override("outline_size",6)
-	meta_label = caption(21,Color("cbbcff")); meta_label.visible = false
+	var wide = FontVariation.new(); wide.base_font = ThemeDB.fallback_font; wide.variation_embolden = .55; wide.spacing_glyph = 7
+	title = caption(66,Color("fffaf0"),wide); title.add_theme_constant_override("outline_size",6)
+	meta_label = caption(21,Color("e9dccb")); meta_label.visible = false
 	status = caption(17,Color("cfd6ff"),spaced)
 	percent = caption(17,Color("f6efff"),spaced); percent.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	tip = caption(18,Color(.82,.84,.98,.8)); tip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	for label in [eyebrow,title,meta_label,status]: label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	bar = Control.new(); add_child(bar); bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bar.draw.connect(draw_bar)
 	resized.connect(layout)
@@ -203,30 +209,33 @@ func reveal_part(start:float,finish:float) -> float:
 	var raw=clampf((elapsed-load_time-background_wait)/maxf(.001,ENTER_TIME-background_wait),0.0,1.0)
 	return smoothstep(start,finish,raw)
 
-func card_side() -> float: return minf(size.y*.55,size.x*.28)
+func card_side() -> float: return minf(size.y*.40,size.x*.24)
 
-func card_home() -> Vector2: return Vector2(size.x*.64,(size.y-card_side())*.42)
+# Centred near the top: the far end of the highway the rails are drawn toward.
+func card_home() -> Vector2: return Vector2((size.x-card_side())*.5,size.y*.11)
 
 func layout() -> void:
 	var side=card_side()
 	card.size=Vector2(side,side);card.pivot_offset=card.size*.5
 	card_art.material.set_shader_parameter("rect_size",card.size)
 	reflection.size=Vector2(side,side*.3)
-	info_x=size.x*.08;info_width=size.x*.49
-	var top=size.y*.20
-	for label in [eyebrow,title,status,percent]:label.position.x=info_x;label.size=Vector2(info_width,40)
-	eyebrow.position.y=top
-	title.position.y=top+size.y*.09;title.size.y=size.y*.23
+	# Everything is centred on the road between the two rails.
+	info_width=size.x*.56;info_x=(size.x-info_width)*.5
+	for label in [eyebrow,title,meta_label,status,tip]:label.position.x=info_x;label.size=Vector2(info_width,40)
+	eyebrow.position.y=size.y*.035
+	eyebrow.add_theme_font_size_override("font_size",clampi(roundi(size.y*.022),11,19))
+	var below=card_home().y+side
+	title.position.y=below+size.y*.035;title.size.y=size.y*.16
 	title.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
-	title.add_theme_font_size_override("font_size",clampi(roundi(size.y*.085),28,66))
-	meta_label.visible=true;meta_label.position=Vector2(info_x,top+size.y*.34);meta_label.size=Vector2(info_width,40)
-	meta_label.add_theme_font_size_override("font_size",clampi(roundi(size.y*.029),14,21))
-	status.position=Vector2(info_x,size.y*.77);status.size=Vector2(size.x*.58,30)
-	percent.position=Vector2(size.x*.80,size.y*.77);percent.size=Vector2(size.x*.12,30)
-	bar.position=Vector2(info_x,size.y*.85);bar.size=Vector2(size.x*.84,4)
-	tip.position=Vector2(info_x,size.y*.90);tip.size=Vector2(size.x*.84,30)
-	tip.horizontal_alignment=HORIZONTAL_ALIGNMENT_LEFT
-	tip.add_theme_font_size_override("font_size",clampi(roundi(size.y*.025),12,18))
+	title.add_theme_font_size_override("font_size",clampi(roundi(size.y*.062),22,54))
+	meta_label.visible=true;meta_label.position.y=below+size.y*.20
+	meta_label.add_theme_font_size_override("font_size",clampi(roundi(size.y*.026),12,20))
+	status.position.y=size.y*.80
+	status.add_theme_font_size_override("font_size",clampi(roundi(size.y*.022),11,17))
+	percent.visible=false
+	bar.size=Vector2(size.x*.46,4);bar.position=Vector2((size.x-bar.size.x)*.5,size.y*.865)
+	tip.position.y=size.y*.90
+	tip.add_theme_font_size_override("font_size",clampi(roundi(size.y*.024),11,17))
 
 func vanishing_point() -> Vector2:
 	# Far end of the highway, converted from the stage's screen space into this control.
@@ -280,7 +289,7 @@ func animate() -> void:
 		var rest=home_rect(appear); card.size=rest.size; card.pivot_offset=card.size*.5
 		card_art.material.set_shader_parameter("rect_size",card.size)
 		card.position=rest.position+Vector2(e*e*size.x*.35,0)
-		card.rotation=-.025*(1.0-e)
+		card.rotation=0.0
 		card.scale=Vector2.ONE*lerpf(.96,1.0,appear)
 		card.modulate=Color(.9,.9,.9,ui_alpha if not arriving else 1.0-smoothstep(0.0,.8,e))
 	reflection.visible=false
@@ -288,9 +297,8 @@ func animate() -> void:
 		label.modulate.a=ui_alpha;label.position.x=info_x+(1.0-appear)*15
 	for label in [status,percent,tip]:label.modulate.a=ui_alpha
 	bar.modulate=Color(1,1,1,ui_alpha)
-	eyebrow.text="SYNK  /  ON STAGE"
-	status.text="PREPARING YOUR STAGE" if load_progress()<1 else "READY TO PLAY"
-	percent.text="%02d%%" % roundi(load_progress()*100)
+	eyebrow.text="NEXT  TRACK"
+	status.text="BUILDING YOUR STAGE   %d%%" % roundi(load_progress()*100) if load_progress()<1 else "READY"
 	bar.queue_redraw();fx.queue_redraw()
 
 # The cover keeps full opacity and travels on an eased curve from the loading card to the
@@ -308,33 +316,57 @@ func glide_card(appear: float) -> void:
 	card.position=start.position.lerp(end.position,t)
 	# A gentle lift along the way instead of a straight line.
 	card.position.y-=sin(t*PI)*size.y*.04
-	card.rotation=-.025*(1.0-t)*(1.0-t)
+	card.rotation=0.0
 	card.scale=Vector2.ONE*lerpf(.96,1.0,appear)
 	var light=lerpf(.9,1.0,t)
 	card.modulate=Color(light,light,light,1.0 if flying else appear)
 	card_art.material.set_shader_parameter("rect_size",card.size)
+
+# One rail of light from `from` toward `to`, drawn as far as `drawn` (0..1): a faint guide
+# for the whole path, then a soft glow, a body and a white-hot core up to a bright head.
+func draw_rail(from: Vector2, to: Vector2, drawn: float, color: Color, alpha: float) -> void:
+	var unit=size.y/720.0
+	fx.draw_line(from,to,Color(color,.07*alpha),maxf(1.0,1.5*unit),true)
+	if drawn<=0.0:return
+	var head=from.lerp(to,drawn)
+	# A wide soft glow, a tighter one, then the rail's coloured body.
+	for layer in [[34.0,.06],[18.0,.11],[9.0,.2],[4.5,.7]]:
+		fx.draw_line(from,head,Color(color,layer[1]*alpha),layer[0]*unit,true)
+	fx.draw_line(from,head,Color(color.lerp(Color.WHITE,.8),.95*alpha),maxf(1.0,2.2*unit),true)
+	for glow in [[16.0,.10],[9.0,.22]]:
+		fx.draw_circle(head,glow[0]*unit,Color(color,glow[1]*alpha))
+	fx.draw_circle(head,3.4*unit,Color(1,1,1,alpha))
 
 func draw_fx() -> void:
 	var after_load=maxf(0.0,elapsed-load_time)
 	var alpha=0.0 if load_time<=0.0 else (1.0-smoothstep(0.0,LOADING_UI_FADE_TIME,after_load))
 	if alpha<=0:return
 	var w=size.x;var h=size.y
-	# A quiet editorial stage card: oversized artwork, cropped orbital lines,
-	# and one luminous horizon instead of the former moving stripes/equalizer.
-	fx.draw_polygon(PackedVector2Array([Vector2(w*.57,0),Vector2(w,0),Vector2(w,h),Vector2(w*.48,h)]),PackedColorArray([Color(accent,.04*alpha),Color(accent,.16*alpha),Color(accent_2,.04*alpha),Color(accent_2,0)]))
-	var center=card_home()+Vector2.ONE*card_side()*.5
-	for i in 3:
-		var radius=card_side()*(.66+i*.09)
-		fx.draw_arc(center,radius,-PI*.95,PI*.65,96,Color(accent_2,(.16-i*.04)*alpha),1.0,true)
-	fx.draw_line(Vector2(w*.08,h*.12),Vector2(w*.92,h*.12),Color(1,1,1,.12*alpha),1,true)
-	fx.draw_string(ThemeDB.fallback_font,Vector2(w*.08,h*.10),"THE NEXT TRACK",HORIZONTAL_ALIGNMENT_LEFT,-1,maxi(12,roundi(h*.022)),Color(1,1,1,.55*alpha))
-	var travel=fposmod(elapsed*.2,1.0)
-	fx.draw_circle(Vector2(w*.08+w*.84*travel,h*.12),2.5,Color(accent_2,alpha))
+	var side=card_side();var home=card_home()
+	# A floor of light under the road, in the song's colours.
+	fx.draw_polygon(PackedVector2Array([Vector2(0,h),Vector2(w,h),Vector2(w,h*.55),Vector2(0,h*.55)]),PackedColorArray([Color(accent,.16*alpha),Color(accent_2,.16*alpha),Color(accent_2,0),Color(accent,0)]))
+	var centre=home+Vector2.ONE*side*.5
+	# The two rails, from the bottom corners up to the cover's lower corners, drawn as far
+	# as the load has got: the highway is the progress bar.
+	var drawn=load_progress()
+	var foot_y=h*1.02
+	var top_y=home.y+side+h*.012
+	draw_rail(Vector2(w*-.02,foot_y),Vector2(centre.x-side*.46,top_y),drawn,accent,alpha)
+	draw_rail(Vector2(w*1.02,foot_y),Vector2(centre.x+side*.46,top_y),drawn,accent_2,alpha)
 
+# A line of light growing from the centre outward as the load completes, with a bright dot
+# at each end, like the judgment bar.
 func draw_bar() -> void:
-	var width=bar.size.x;var height=bar.size.y;var fill=load_progress()
-	bar.draw_rect(Rect2(0,0,width,height),Color(1,1,1,.12))
+	var width=bar.size.x;var fill=load_progress()
+	var unit=size.y/720.0
+	var mid=Vector2(width*.5,bar.size.y*.5)
+	bar.draw_line(Vector2(0,mid.y),Vector2(width,mid.y),Color(1,1,1,.12),maxf(1.0,1.2*unit),true)
 	if fill<=0:return
-	bar.draw_rect(Rect2(0,-4,width*fill,height+8),Color(accent_2,.10))
-	bar.draw_rect(Rect2(0,0,width*fill,height),accent_2.lerp(Color.WHITE,.4))
-	bar.draw_circle(Vector2(width*fill,height*.5),4,Color.WHITE)
+	var reach=width*.5*fill
+	var warm=accent_2.lerp(Color.WHITE,.25)
+	for layer in [[9.0,.10],[4.0,.22]]:
+		bar.draw_line(mid-Vector2(reach,0),mid+Vector2(reach,0),Color(warm,layer[1]),layer[0]*unit,true)
+	# White across the middle, warming to the song's colour at the ends.
+	bar.draw_polyline_colors(PackedVector2Array([mid-Vector2(reach,0),mid,mid+Vector2(reach,0)]),PackedColorArray([warm,Color.WHITE,warm]),maxf(1.0,2.0*unit),true)
+	for side in [-1,1]:
+		bar.draw_circle(mid+Vector2(side*reach,0),3.2*unit,Color.WHITE)
