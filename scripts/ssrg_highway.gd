@@ -131,6 +131,7 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 		h.material.set_shader_parameter("tint", hit_tint(kind) if recolor else Color.WHITE)
 		h.material.set_shader_parameter("recolor", recolor)
 	h.node.visible = true; hits.append(h)
+	if world.game.synk_mode(): add_synk_ripple(h.node.position)
 	if kind == "flick":
 		spawn_flick_sparks(h.x, h.node.scale.x)
 		# Special item flicks keep their static puck art, so only animated flicks are sliced.
@@ -500,7 +501,16 @@ func clear_hits() -> void:
 # quad behind the highway, in place of the song artwork and SSRG's fever backgrounds.
 const SYNK_STAGE_SHADER = preload("res://scripts/synk_stage.gdshader")
 var synk_backdrop_material: ShaderMaterial
-func update_synk_backdrop(on: bool) -> void:
+# The last few note hits ripple through the wave sea: screen position and age of each.
+var synk_hits: Array = []
+func add_synk_ripple(at: Vector3) -> void:
+	var view: Vector2 = world.get_viewport().get_visible_rect().size
+	if view.y <= 0: return
+	var point: Vector2 = world.camera.unproject_position(at) / view
+	synk_hits.push_front(Vector3(point.x, point.y, 0.0))
+	if synk_hits.size() > 4: synk_hits.resize(4)
+
+func update_synk_backdrop(on: bool, delta: float = 0.0) -> void:
 	var backdrop: MeshInstance3D = world.cover_backdrop
 	if backdrop == null: return
 	if not on:
@@ -515,13 +525,21 @@ func update_synk_backdrop(on: bool) -> void:
 	var game = world.game
 	var view: Vector2 = world.get_viewport().get_visible_rect().size
 	if view.y <= 0: return
-	# The highway's far end, where the sunrise sits and the sync waves start.
+	# The highway's far end: the horizon the wave sea runs to.
 	var far: Vector2 = world.camera.unproject_position(Vector3(0, 0, -492.0 * world.SSRG_UNIT))
 	synk_backdrop_material.set_shader_parameter("vanish", far / view)
 	synk_backdrop_material.set_shader_parameter("aspect", view.x / view.y)
 	var beats = (world.render_time() - game.chart_offset()) * game.chart_bpm() / 60.0
 	synk_backdrop_material.set_shader_parameter("beat", fposmod(beats, 1.0))
-	synk_backdrop_material.set_shader_parameter("beat_count", floorf(beats))
+	synk_backdrop_material.set_shader_parameter("beats", beats)
+	var playing = game.mode == "play" and game.countdown <= 0 and game.resume_countdown <= 0
+	var ripples = PackedVector3Array()
+	for i in 4:
+		if i < synk_hits.size():
+			if playing: synk_hits[i].z += delta
+			ripples.append(synk_hits[i] if synk_hits[i].z < .7 else Vector3(0, 0, -1))
+		else: ripples.append(Vector3(0, 0, -1))
+	synk_backdrop_material.set_shader_parameter("hits", ripples)
 	# Energy: how far into rave the run is, or the combo on runs without rave.
 	var energy = 0.0
 	var presentation = game.ssrg_presentation
@@ -564,7 +582,7 @@ static func sustain_finger_x(entry:Dictionary,contacts:Dictionary,fallback:float
 	return float(entry.get("ssrg_effect_x",fallback))
 
 func _process(delta: float) -> void:
-	update_synk_backdrop(active and world.game.synk_mode())
+	update_synk_backdrop(active and world.game.synk_mode(), delta)
 	if not active:
 		# The "SSRG" hit style on SYNK's Gold and Neon highways: only the hit art runs.
 		var game = world.game
