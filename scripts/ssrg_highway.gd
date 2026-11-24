@@ -131,7 +131,11 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 		h.material.set_shader_parameter("tint", hit_tint(kind) if recolor else Color.WHITE)
 		h.material.set_shader_parameter("recolor", recolor)
 	h.node.visible = true; hits.append(h)
-	if kind == "flick": spawn_flick_sparks(h.x, h.node.scale.x)
+	if kind == "flick":
+		spawn_flick_sparks(h.x, h.node.scale.x)
+		# Special item flicks keep their static puck art, so only animated flicks are sliced.
+		var note: Dictionary = sustain_entry.get("note", {})
+		if not world.game.uses_recorder_colors() and not note.has("ssrg_special"): spawn_flick_slice(lane, flick_swipe_angle(pointer_id))
 
 # The flick splash: short spark streaks sprayed up and out from the judgment bar, like the
 # streaky shards of the Effect_A hit flash. They fan across a wide arc (mostly up, some almost
@@ -177,6 +181,82 @@ func spawn_flick_sparks(x: float, flash_scale: float = 1.0) -> void:
 		flick_sparks.append({"node": node, "material": mat, "age": -randf_range(FLICK_SPARK_DELAY.x, FLICK_SPARK_DELAY.y), "life": life, "base": base, "up_speed": up_speed, "side_speed": side_speed, "gravity": FLICK_SPARK_GRAVITY * world.FIT * fit})
 		orient_flick_spark(node, side_speed, up_speed)
 	spawn_flick_flare(origin, up, tint, parent, minf(reach, FLICK_FLARE_SIZE.y * world.FIT))
+
+# The slice: a blade streak sweeps diagonally up through the flick note, and the note falls
+# apart along the cut. The top half flies up with the flick, the bottom half drops, and both
+# fade with a hot glowing edge where they were cut.
+const FLICK_SLICE_LIFE = .36
+const FLICK_SLASH_LIFE = .24
+const FLICK_SLASH_SWEEP = .045   # seconds for the blade to cross the note
+# With no finger to follow (autoplay), the cut runs up, tilted at most this many degrees.
+const FLICK_SLICE_AUTO_TILT = 15.0
+# The swipe's angle on screen (radians from the right, counter-clockwise: PI/2 is straight
+# up), from where the finger went down to where it is now, so the cut follows the swipe.
+func flick_swipe_angle(pointer_id: int) -> float:
+	var touch: Dictionary = world.game.pointers.get(pointer_id, {})
+	if touch.has("start") and touch.has("position"):
+		var move: Vector2 = (touch.position - touch.start) * world.game.size   # to pixels
+		if move.length() > 1.0: return atan2(-move.y, move.x)
+	return PI * .5 + deg_to_rad(randf_range(-FLICK_SLICE_AUTO_TILT, FLICK_SLICE_AUTO_TILT))
+const FLICK_SLICE_SHADER = preload("res://scripts/flick_slice.gdshader")
+var flick_slices: Array = []
+func spawn_flick_slice(lane: float, angle: float) -> void:
+	var parent: Node3D = hit_layer if hit_layer != null else self
+	var cam: Camera3D = world.camera
+	var right = cam.basis.x.normalized(); var up = cam.basis.y.normalized()
+	var width: float = world.flick_note_width()
+	var centre = Vector3(world.note_x(lane), .38 * world.game.gameplay_note_size(), 0.0)
+	var along = right * cos(angle) + up * sin(angle)       # the cut, along the swipe
+	var normal = -right * sin(angle) + up * cos(angle)     # across the cut
+	var mesh = QuadMesh.new(); mesh.size = Vector2(width, width)
+	mesh.center_offset.y = width * (553.0 / 768.0 - 0.5)  # the disc centre sits on the node
+	var tint = hit_tint("flick")
+	var edge = tint.lerp(Color.WHITE, .6)
+	for side in [-1.0, 1.0]:
+		var mat = ShaderMaterial.new(); mat.shader = FLICK_SLICE_SHADER; mat.render_priority = 7
+		mat.set_shader_parameter("artwork", world.FLICK_FRAMES[0])
+		mat.set_shader_parameter("cut_point", Vector2(.5, 553.0 / 768.0))
+		mat.set_shader_parameter("cut_angle", -angle)
+		mat.set_shader_parameter("side", side)
+		mat.set_shader_parameter("edge_color", edge)
+		var node = world.mesh_node(mesh, parent, mat)
+		# side -1 keeps the half on the `normal` side of the cut. The halves spring apart
+		# across the cut and are carried on along the swipe, each turning away from it.
+		var drift = (normal * -side * .55 + along * .6) * width * .8
+		flick_slices.append({"node": node, "material": mat, "age": 0.0, "base": centre, "drift": drift, "spin": -side * .3, "kind": "half"})
+	# The blade: a thin hot streak whose head runs along the cut in the swipe's direction.
+	var length = width * 2.3
+	var blade = QuadMesh.new(); blade.size = Vector2(width * .32, length)
+	var blade_mat = ShaderMaterial.new(); blade_mat.shader = FLICK_SPARK_SHADER; blade_mat.render_priority = 10
+	blade_mat.set_shader_parameter("tint", Color.WHITE); blade_mat.set_shader_parameter("glow", tint)
+	blade_mat.set_shader_parameter("bend", 0.0); blade_mat.set_shader_parameter("sharpness", 22.0)
+	var blade_node = world.mesh_node(blade, parent, blade_mat)
+	flick_slices.append({"node": blade_node, "material": blade_mat, "age": 0.0, "base": centre - along * length * .5, "along": along, "length": length, "angle": angle, "kind": "blade"})
+	advance_flick_slices(0.0, false)
+
+func advance_flick_slices(delta: float, playing: bool) -> void:
+	var opacity = world.game.features.effect("Hit flashes")
+	for i in range(flick_slices.size() - 1, -1, -1):
+		var f: Dictionary = flick_slices[i]
+		if playing: f.age += delta
+		var life = FLICK_SLASH_LIFE if f.kind == "blade" else FLICK_SLICE_LIFE
+		var k = f.age / life
+		if k >= 1.0:
+			f.node.queue_free(); flick_slices.remove_at(i); continue
+		if f.kind == "blade":
+			# Head races across the note, tail anchored where the cut began, then it fades.
+			var sweep = clampf(f.age / FLICK_SLASH_SWEEP, 0.0, 1.0)
+			sweep = 1.0 - pow(1.0 - sweep, 2.0)
+			face_camera(f.node, f.angle - PI * .5, Vector3(1.0 - .5 * k, maxf(sweep, .01), 1.0))
+			f.node.position = f.base + f.along * (f.length * sweep * .5)
+			f.material.set_shader_parameter("opacity", opacity * (1.0 - k * k))
+		else:
+			# The halves part fast, then coast, turning a little, while the cut cools and fades.
+			var move = 1.0 - pow(1.0 - k, 3.0)
+			f.node.position = f.base + f.drift * move
+			face_camera(f.node, f.spin * move)
+			f.material.set_shader_parameter("heat", 1.0 - k)
+			f.material.set_shader_parameter("opacity", opacity * pow(1.0 - k, 1.5))
 
 # How far up (in world units, along the camera's up) the splash may reach from `origin`
 # before it would pass the middle of the screen.
@@ -236,9 +316,13 @@ const FLICK_SPLASH_TOP = .5
 # Then stretched past that by this much (1.2 = 20% higher than the middle of the screen).
 const FLICK_SPLASH_HEIGHT_SCALE = 1.2
 # Face the camera, then turn the strand so its head points along its current flight.
-func orient_flick_spark(node: Node3D, side_speed: float, up_speed: float) -> void:
-	node.rotation = world.camera.rotation
-	node.rotate_object_local(Vector3.BACK, atan2(-side_speed, up_speed))
+func orient_flick_spark(node: Node3D, side_speed: float, up_speed: float, size: Vector3 = Vector3.ONE) -> void:
+	face_camera(node, atan2(-side_speed, up_speed), size)
+
+# Face the camera, turned `angle` in the screen plane, then sized. Built in one basis: turning
+# a node that is already squashed (rotate_object_local) skews it instead of turning it.
+func face_camera(node: Node3D, angle: float, size: Vector3 = Vector3.ONE) -> void:
+	node.basis = Basis.from_euler(world.camera.rotation) * Basis(Vector3.BACK, angle) * Basis.from_scale(size)
 
 func advance_flick_sparks(delta: float, playing: bool) -> void:
 	var up = world.camera.basis.y.normalized()
@@ -256,10 +340,9 @@ func advance_flick_sparks(delta: float, playing: bool) -> void:
 		var gravity: float = f.gravity
 		# Ballistic arc: fast up, pulled back down so the column peaks tall then falls.
 		f.node.position = f.base + up * (f.up_speed * a - gravity * a * a) + sidev * (f.side_speed * a)
-		orient_flick_spark(f.node, f.side_speed, f.up_speed - 2.0 * gravity * a)
 		var k = a / f.life
 		# Streaks shorten to small specks as they cool, like the shards the flash leaves behind.
-		f.node.scale = Vector3(1.0 - 0.35 * k, 1.0 - 0.75 * k, 1.0)
+		orient_flick_spark(f.node, f.side_speed, f.up_speed - 2.0 * gravity * a, Vector3(1.0 - 0.35 * k, 1.0 - 0.75 * k, 1.0))
 		f.material.set_shader_parameter("age", k)
 		f.material.set_shader_parameter("opacity", opacity * (1.0 - k * k))
 
@@ -402,6 +485,8 @@ func clear_hits() -> void:
 	flick_sparks.clear()
 	for f in flick_flares: f.node.queue_free()
 	flick_flares.clear()
+	for f in flick_slices: f.node.queue_free()
+	flick_slices.clear()
 	for background in background_bank:
 		background.particles.clear();background.elapsed=0.0;background.frame_credit=0.0;background.momentum=0.0; background.hide()
 	if world.cover_material:
@@ -474,6 +559,7 @@ func _process(delta: float) -> void:
 # Independent tap instances intentionally preserve SYNK's uninterrupted dense-hit flow.
 func advance_hits(delta: float, playing: bool) -> void:
 	advance_flick_sparks(delta, playing)
+	advance_flick_slices(delta, playing)
 	advance_flick_flares(delta, playing)
 	var game = world.game
 	for i in range(hits.size() - 1, -1, -1):

@@ -1325,10 +1325,14 @@ func flick_frame_material(frame: int) -> ShaderMaterial:
 		material.set_shader_parameter("full_bright_above_uv", 380.0 / 768.0)
 		return material)
 
+# Width of the square flick frame quad (the 636 px disc spans its 768 px frame).
+func flick_note_width() -> float:
+	var disc_width = 212.0 * SSRG_UNIT * ssrg_art_scale() if game.uses_ssrg_gameplay() else NOTE_WIDTH
+	return disc_width * game.gameplay_note_size() * 768.0 / 636.0
+
 func make_animated_flick(parent: Node3D, lane: float) -> void:
 	var size = game.gameplay_note_size()
-	var disc_width = 212.0 * SSRG_UNIT * ssrg_art_scale() if game.uses_ssrg_gameplay() else NOTE_WIDTH
-	var width = disc_width * size * 768.0 / 636.0
+	var width = flick_note_width()
 	var mesh_key = "flick_animation|%s" % width
 	if not reference_note_meshes.has(mesh_key):
 		var quad = QuadMesh.new()
