@@ -1456,7 +1456,8 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 	if old_source: half_width = 116.0*.48*.5*SSRG_UNIT*ssrg_art_scale()
 	# SYNK mode's hold is a beam of light nearly as wide as the ring it rises from.
 	var synk_beam=source_visual and game.synk_mode()
-	if synk_beam: half_width = 212.0*.5*.6*SSRG_UNIT*ssrg_art_scale()/1.3
+	# (Drawn as one joined ribbon, which takes its half-width as given.)
+	if synk_beam: half_width = 212.0*.5*.6*SSRG_UNIT*ssrg_art_scale()
 	# Recorder holds and slides share SSRG's look on the flat recorder highway: thin gold ribbon,
 	# cream core, a slow shimmer flowing toward the line, and SSRG pucks at every turn.
 	var recorder_slide=recording and note.kind in ["hold","slide"]
@@ -1541,7 +1542,9 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 			# SKD submits every linked section as its own RenderLongLine call.  Keeping
 			# the sections independent also preserves the three l1/l2/l3 alpha layers;
 			# a joined/mitered band changes both the corner silhouette and brightness.
-			m.set_shader_parameter("joined_source",false)
+			# SYNK mode's wide beam is a single face, so it is joined: every bend is one
+			# mitred corner instead of two square-cut pieces meeting.
+			m.set_shader_parameter("joined_source",synk_beam)
 			m.set_shader_parameter("enhanced_synk",enhanced_synk_long_visuals())
 			m.set_shader_parameter("ssrg_line_x_scale",ssrg_art_scale()*1.3 if source_visual else 1.0)
 			m.set_shader_parameter("ssrg_ribbon",recorder_slide)
@@ -1781,8 +1784,6 @@ func ssrg_beam_width() -> float:
 	return 295.0*(520.0/606.0)*SSRG_UNIT
 var ssrg_beam_release: Dictionary={}
 const SYNK_BEAM_COLOR = Color("ff9a3c")
-# Which SYNK beam is drawn: "column" (a soft shaft of light) or "glow" (light on the road).
-var synk_beam_choice = "column"
 func update_finger_beams(delta: float = 0.0) -> void:
 	var touches: Array = game.pointers.values() if game.mode=="play" else (game.capture.gestures.values() if game.mode=="record" and game.capture else [])
 	var ssrg=game.uses_skd_stage()
@@ -1818,10 +1819,10 @@ func update_finger_beams(delta: float = 0.0) -> void:
 			var alpha=SsrgCurves.beam_alpha(age) if game.mode in ["play","record"] and game.countdown<=0 else 0.0
 			beam.material_override.set_shader_parameter("release_alpha",alpha)
 			for parameter in ["tint","intensity"]: beam.material_override.set_shader_parameter(parameter,ssrg_finger_beam_material.get_shader_parameter(parameter))
-			# SYNK mode: its own amber beam, in the chosen shape.
+			# SYNK mode: an amber glow on the road under the finger, in place of the column.
 			var synk=game.synk_mode()
 			if synk: beam.material_override.set_shader_parameter("tint",element_color("beams",SYNK_BEAM_COLOR))
-			beam.material_override.set_shader_parameter("synk_beam_style",(2 if synk_beam_choice=="glow" else 1) if synk else 0)
+			beam.material_override.set_shader_parameter("synk_glow",synk)
 			beam.visible=alpha>0.0
 			continue
 		beam.visible=i<touches.size()

@@ -10,10 +10,11 @@ uniform float intensity = 1.0;
 uniform float release_alpha = 1.0;
 uniform float ssrg_beam_reach=9.90234375;
 uniform sampler2D ssrg_beam_art : filter_linear, repeat_disable;
-// SYNK mode's beam. 0: the flat SSRG column. 1: a light column, a soft shaft with a bright
-// thin core and fine rims, brightest at the finger. 2: a lane glow, light pooling on the
-// road under the finger and fading up it, with no column.
-uniform int synk_beam_style = 0;
+// SYNK mode's beam: a lane glow. Amber light pools on the road at the judgment line under
+// the finger and fades away up the road and out to the sides, with no hard edge anywhere.
+uniform bool synk_glow = false;
+// How far up the beam's quad the judgment line sits, from its near end (0..1).
+uniform float glow_line = 0.142;
 
 varying float world_z;
 
@@ -35,27 +36,18 @@ void fragment() {
 	// Strong coloured lane light, matching the supplied SMTOWN gameplay.
 	// Keep alpha blending so the light remains coloured beneath bright notes.
 	ALPHA = 0.62 * reach * intensity * release_alpha;
-	if(synk_beam_style>0){
+	if(synk_glow){
 		float across=abs(UV.x-0.5)*2.0;          // 0 down the middle of the lane, 1 at its edge
-		float from_finger=1.0-UV.y;              // 0 at the finger, growing up the road
-		if(synk_beam_style==1){
-			float core=exp(-pow(across/0.12,2.0));
-			float body=exp(-pow(across/0.5,2.0));
-			float rims=exp(-pow((across-0.86)/0.045,2.0));
-			float feather=1.0-smoothstep(0.8,1.0,across);
-			// Hottest at the finger, easing off up the shaft.
-			float heat=0.55+0.45*exp(-from_finger*5.0);
-			float light=(body*0.40+core*0.85+rims*0.38)*feather*heat;
-			ALBEDO=mix(tint,vec3(1.0,0.97,0.9),clamp(core*0.85+rims*0.3,0.0,1.0));
-			ALPHA=clamp(light,0.0,1.0)*reach*intensity*release_alpha;
-		}else{
-			float spread=1.0-smoothstep(0.15,1.0,across);
-			// Light lying on the road: strong under the finger, gone a short way up.
-			float run=exp(-from_finger*3.2);
-			float pool=exp(-pow(from_finger/0.11,2.0))*exp(-pow(across/0.7,2.0));
-			float light=spread*run*0.46+pool*0.6;
-			ALBEDO=mix(tint,vec3(1.0,0.95,0.85),clamp(pool*0.7,0.0,1.0));
-			ALPHA=clamp(light,0.0,1.0)*intensity*release_alpha*smoothstep(0.0,0.15,reach);
-		}
+		float from_line=(1.0-UV.y)-glow_line;    // 0 at the judgment line, growing up the road
+		// Sideways: a soft bell that has melted away well before the quad's edge.
+		float spread=exp(-pow(across/0.42,2.0))*(1.0-smoothstep(0.55,0.95,across));
+		// Up the road: strongest at the line, a long gentle tail beyond it; a short, soft
+		// fall-off toward the player so the near end never shows as a cut.
+		float run=from_line>=0.0?exp(-from_line*3.4):exp(-pow(from_line/0.07,2.0));
+		// The pool of light at the line itself, round and soft.
+		float pool=exp(-pow(from_line/0.10,2.0))*exp(-pow(across/0.5,2.0));
+		float light=spread*run*0.42+pool*0.5;
+		ALBEDO=mix(tint,vec3(1.0,0.95,0.85),clamp(pool*0.6,0.0,1.0));
+		ALPHA=clamp(light,0.0,1.0)*intensity*release_alpha*smoothstep(0.0,0.2,reach);
 	}
 }
