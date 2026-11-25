@@ -1457,7 +1457,7 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 	# SYNK mode's hold is a beam of light nearly as wide as the ring it rises from.
 	var synk_beam=source_visual and game.synk_mode()
 	# (Drawn as one joined ribbon, which takes its half-width as given.)
-	if synk_beam: half_width = 212.0*.5*.6*SSRG_UNIT*ssrg_art_scale()
+	if synk_beam: half_width = 212.0*.5*.48*SSRG_UNIT*ssrg_art_scale()
 	# Recorder holds and slides share SSRG's look on the flat recorder highway: thin gold ribbon,
 	# cream core, a slow shimmer flowing toward the line, and SSRG pucks at every turn.
 	var recorder_slide=recording and note.kind in ["hold","slide"]
