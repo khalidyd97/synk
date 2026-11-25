@@ -98,7 +98,8 @@ func refresh() -> void:
 	if original_stage:
 		original_stage.configure(world)
 		for child in get_children():
-			if child != original_stage and child != source_background: child.visible=false
+			# SYNK mode's backdrop is a plain Node with nothing to hide.
+			if child != original_stage and child != source_background and "visible" in child: child.visible=false
 	if source_background:source_background.visible=active and world.game.countdown<=0
 	if world.cover_material: world.cover_material.set_shader_parameter("photo", active)
 
