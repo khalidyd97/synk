@@ -105,16 +105,21 @@ def pulse(img, heat):
     return rgb, a
 
 
-# One colour per note type, by turning the gold art's hue (gold sits at hue 0.11): the
-# shapes, shading and white highlights stay exactly as supplied.
-HUE_TAP = 0.0       # gold, as supplied
-HUE_HOLD = 0.42     # cyan: holds, slides, their end caps and beams
-HUE_FLICK = -0.17   # hot pink
+# One shade of the supplied gold per note type (gold sits at hue 0.11): a small turn of
+# the hue, with the colour made richer or paler and brighter. The shapes, shading and
+# white highlights stay exactly as supplied.
+#               hue turn, richer, brighter
+SHADE_TAP = (0.0, 1.0, 1.0)       # gold, as supplied
+SHADE_HOLD = (-0.05, 1.5, 1.0)    # copper: holds and slides
+SHADE_TRAIL = (-0.045, 1.08, 1.0) # their beams: a little lighter and more orange, to stand off the road
+SHADE_FLICK = (0.01, .5, 1.3)     # champagne: pale, bright gold
+COPPER = np.array([255, 122, 46]) / 255   # the glow of a hold's end cap and bend diamonds
 
 
-def recolour(rgb, turn, richer=1.0):
-    """Turn the hue of an RGB array (0..1) by `turn` of a full circle."""
-    if turn == 0.0: return rgb
+def recolour(rgb, turn, richer=1.0, brighter=1.0):
+    """Turn the hue of an RGB array (0..1) by `turn` of a full circle, and scale its
+    saturation and brightness."""
+    if turn == 0.0 and richer == 1.0 and brighter == 1.0: return rgb
     mx = rgb.max(-1); mn = rgb.min(-1); span = mx - mn
     safe = np.maximum(span, 1e-6)
     r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
@@ -122,17 +127,17 @@ def recolour(rgb, turn, richer=1.0):
     sat = np.clip(np.where(mx > 0, span / np.maximum(mx, 1e-6), 0) * richer, 0, 1)
     hue = (hue + turn) % 1.0
     k = (np.stack([5, 3, 1], -1) + hue[..., None] * 6) % 6
-    return mx[..., None] * (1 - sat[..., None] * np.clip(np.minimum(k, 4 - k), 0, 1))
+    return np.clip(mx * brighter, 0, 1)[..., None] * (1 - sat[..., None] * np.clip(np.minimum(k, 4 - k), 0, 1))
 
 
 def notes():
     ring = Image.open(SOURCE / "ring.png").convert("RGBA")
     box = outline(ring)
-    for prefix, size, dst, turn in [("tap", (212, 116), (2, 10, 208, 109), HUE_TAP), ("hold", (212, 116), (2, 10, 208, 109), HUE_HOLD)]:
+    for prefix, size, dst, shade in [("tap", (212, 116), (2, 10, 208, 109), SHADE_TAP), ("hold", (212, 116), (2, 10, 208, 109), SHADE_HOLD)]:
         fitted = place(ring, box, dst, size)
         for i, heat in enumerate(HEAT, start=1):
             rgb, a = pulse(fitted, heat)
-            save(recolour(rgb, turn), a, OUT / f"{prefix}{i}.png")
+            save(recolour(rgb, *shade), a, OUT / f"{prefix}{i}.png")
 
 
 # How far above the ring's top edge (source px) the flick's chevron stack starts to thin out.
@@ -169,7 +174,7 @@ def flick():
         rising = place(chevron_img, src, (ox, oy, ox + w, oy + h), size)
         frame = base.copy(); frame.alpha_composite(rising)
         rgb, a = pulse(frame, HEAT[min(i, 2)] * .6)
-        save(recolour(rgb, HUE_FLICK, 1.1), a, OUT / f"flick{i + 1}.png")
+        save(recolour(rgb, *SHADE_FLICK), a, OUT / f"flick{i + 1}.png")
 
 
 def trail():
@@ -190,7 +195,7 @@ def trail():
     alpha = mean[..., 3]
     rgb = mean[..., :3] / np.maximum(alpha, 1e-6)[..., None]
     alpha = alpha * smooth(0, 6, np.minimum(np.arange(256), 255 - np.arange(256)))[None, :]   # soft outer edge
-    save(np.repeat(recolour(rgb, HUE_HOLD), 4, axis=0), np.repeat(alpha, 4, axis=0), OUT / "trail_profile.png")
+    save(np.repeat(recolour(rgb, *SHADE_TRAIL), 4, axis=0), np.repeat(alpha, 4, axis=0), OUT / "trail_profile.png")
 
 
 def pause():
@@ -297,12 +302,11 @@ def hit():
 
 def tail():
     """The end of a hold or slide: not a small ring like the notes but a thin flat bar lying
-    across the trail, white-hot along its middle with a cyan glow, tapering to a point at
+    across the trail, white-hot along its middle with a copper glow, tapering to a point at
     each side. Six frames on the notes' beat pulse, in the 132 x 72 tail sprite."""
     w, h, ss = 132, 72, 4
     Y, X = np.mgrid[0:h * ss, 0:w * ss].astype(float) / ss
     dx, dy = np.abs(X - 66.0), np.abs(Y - 36.0)
-    cyan = np.array([60, 216, 255]) / 255
     half = 56.0                                              # half the bar's length
     along = smooth(half, half - 16, dx)                      # tapers to a point at each side
     core = np.exp(-(dy / (1.5 * along + .2)) ** 2) * (dx < half)
@@ -311,19 +315,18 @@ def tail():
         glow = np.exp(-dy / (5.0 + 3.0 * heat)) * smooth(half + 6, half - 22, dx) * (.30 + .30 * heat)
         white = np.clip(core * (.85 + .15 * heat), 0, 1)
         a = np.clip(body + glow, 0, 1) * smooth(0, 5, np.minimum(36.0 - dy, 66.0 - dx))
-        rgb = cyan + (WHITE - cyan) * white[..., None]
+        rgb = COPPER + (WHITE - COPPER) * white[..., None]
         save(rgb, a, OUT / f"tail{i}.png", (w, h))
 
 
 def connector():
     """The marker at each bend of a slide, in the tail cap's 132 x 72 sprite. Not a small
-    ring like the notes: a white-hot diamond lying on the road with a bright rim, a cyan
+    ring like the notes: a white-hot diamond lying on the road with a bright rim, a copper
     glow and a short tick to either side, so a bend reads at a glance against the beam."""
     w, h, ss = 132, 72, 4
     Y, X = np.mgrid[0:h * ss, 0:w * ss].astype(float) / ss
     dx, dy = np.abs(X - 66.0), np.abs(Y - 36.0)
     d = dx / 40.0 + dy / 21.0                               # 1 on the diamond's edge
-    cyan = np.array([60, 216, 255]) / 255
     inside = smooth(1.0, .93, d)
     rim = np.exp(-((d - 1.0) / .075) ** 2)
     inner = np.exp(-((d - .62) / .04) ** 2) * .55            # a fine second facet line
@@ -332,7 +335,7 @@ def connector():
     core = np.clip(1 - d, 0, 1) ** .7
     white = np.clip(inside * (.72 + .28 * core) + rim + inner + tick, 0, 1)
     a = np.clip(inside + rim + glow + tick, 0, 1)
-    rgb = cyan + (WHITE - cyan) * white[..., None]
+    rgb = COPPER + (WHITE - COPPER) * white[..., None]
     save(rgb, a, OUT / "connector.png", (w, h))
 
 
