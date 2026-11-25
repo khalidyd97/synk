@@ -44,7 +44,7 @@ void fragment() {
 		float n = float(i) * 9.1 + 2.0;
 		float clock = synk_time * (0.10 + 0.06 * hash(n)) + hash(n + 1.0) * 40.0 + side * 5.3;
 		// The ribbon's path: a slow S-curve across the space beside the highway.
-		float base = 0.12 + 0.46 * hash(n + 2.0) + 0.05 * sin(clock * 0.8);
+		float base = 0.05 + 0.24 * hash(n + 2.0) + 0.04 * sin(clock * 0.8);   // kept to the upper part of the screen
 		float wave = 1.6 + 1.8 * hash(n + 3.0);
 		float sway = (0.10 + 0.08 * hash(n + 4.0)) * (1.0 + 0.30 * bass);
 		float path = base + sway * sin(q.x * wave + clock * 2.0) + 0.035 * sin(q.x * wave * 2.6 - clock * 3.1)
