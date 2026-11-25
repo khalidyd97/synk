@@ -172,6 +172,9 @@ func make_old_rail_dot(side:int, unit:float) -> MeshInstance3D:
 
 # SSRG's bottom bar is 130 of 640 screen units tall, centred 250 units below the middle
 # (79% to 99% down the screen). Cover that same screen band on the floor, whatever the view.
+# SYNK mode's bar depth in SSRG canvas units (JUDGMENT_DEPTH in tools/make_synk_mode_art.py).
+const SYNK_BAR_DEPTH = 260.0
+const BAR_UNIT = 9.75/512.0
 const BAND_TOP = .5 + 185.0/640.0
 const BAND_BOTTOM = .5 + 315.0/640.0
 func update(world: Node3D) -> void :
@@ -315,6 +318,11 @@ func configure(world: Node3D) -> void :
 	if old_ui: judgment_art=preload("res://assets/ssrg/old_ui/track/Main_black BG3.png")
 	elif synk: judgment_art=preload("res://assets/synk_mode/judgment.png")
 	press.material_override.set_shader_parameter("artwork",judgment_art)
+	# SYNK mode's bar keeps the same top edge but runs on below the screen, so its gradient
+	# never ends in view.
+	var bar_depth=SYNK_BAR_DEPTH if synk else 130.0
+	(press.mesh as PlaneMesh).size=Vector2(1156,bar_depth)*BAR_UNIT
+	press.position.z=(-49.0+bar_depth*.5)*BAR_UNIT
 	entrance_shadow.visible=not old_ui
 	var rail_art:Texture2D=preload("res://assets/synk_mode/rail.png") if synk else preload("res://assets/ssrg/imported/rail_original.png")
 	entrance_shadow.material_override.set_shader_parameter("rail_art",rail_art)

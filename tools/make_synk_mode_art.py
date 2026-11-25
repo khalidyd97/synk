@@ -378,6 +378,9 @@ BAR_LINE = np.array([.86, .91, 1.0])
 BAR_LINE_WARM = np.array([1.0, .74, .40])
 
 
+# SYNK mode's bar plane runs this deep (SSRG canvas units; SSRG's own is 130), so its
+# gradient carries on past the bottom of the screen. Matches SYNK_BAR_DEPTH in ssrg_stage.gd.
+JUDGMENT_DEPTH = 260.0
 # Ember bar colours, toned down from the rails' amber.
 EMBER_EDGE = np.array([.86, .40, .26])
 EMBER_MIDDLE = np.array([.88, .66, .34])
@@ -390,12 +393,15 @@ def judgment():
     It runs on under the rails, which are drawn over it.
 
     Stage geometry (SSRG canvas units, from ssrg_stage.gd): the bar is a 1156 x 130 plane
-    centred at x=-5, z=16; the left rail sprite is 720 x 578 centred at x=-360, z=-203,
+    centred at x=-5, z=16 (SYNK mode's is JUDGMENT_DEPTH deep from the same top edge); the left rail sprite is 720 x 578 centred at x=-360, z=-203,
     so its pixel (px, py) is world x = px - 720, z = py - 492; the right rail mirrors it."""
     src = np.asarray(Image.open(SSRG / "judgment_Main_black_BG3.png").convert("RGBA")).astype(float) / 255
     H, W = src.shape[:2]
+    H = int(H * JUDGMENT_DEPTH / 130.0)
     y, x = np.mgrid[0:H, 0:W].astype(float)
-    v = (y + .5) / H
+    # v counts in bar heights: 0 at the top of SSRG's 130-unit bar, 1 at its bottom (about
+    # the bottom of the screen), and on past it to the end of SYNK mode's deeper plane.
+    v = (y + .5) / H * JUDGMENT_DEPTH / 130.0
     _, _, pl, pr = rail_edges()
     z = -49.0 + v * 130.0
     # The bar runs on under the rails, which are drawn over it, and stops at their outer edge.
@@ -408,8 +414,9 @@ def judgment():
     # The band's colour: muted coral beside the rails, muted gold across the middle.
     middle = np.exp(-(world_x / 360.0) ** 2)[..., None]
     band = EMBER_EDGE + (EMBER_MIDDLE - EMBER_EDGE) * middle
-    # A long fall-off: the gradient carries most of the way down the bar.
-    heat = np.exp(-below / .58) * (v >= top - .01)
+    # A long fall-off that is still alight where it leaves the bottom of the screen, so
+    # the gradient never ends in view.
+    heat = np.exp(-below / .80) * (v >= top - .01)
     rgb = band * (.4 + .6 * heat[..., None])
     alpha = heat * .44
     # The top line: slim, warm white, a little softer than the rails.
@@ -418,7 +425,8 @@ def judgment():
     rgb = rgb + (1 - rgb) * (np.exp(-((v - top) / .006) ** 2) * .6)[..., None]
     alpha = np.maximum(alpha, line * .85)
     alpha = np.maximum(alpha, np.exp(-np.maximum(top - v, 0) / .03) * (v < top) * .3)
-    alpha = np.clip(alpha, 0, 1) * smooth(1.0, .80, v)
+    # The plane ends well below the screen; fade there only so its edge is never hard.
+    alpha = np.clip(alpha, 0, 1) * smooth(JUDGMENT_DEPTH / 130.0, JUDGMENT_DEPTH / 130.0 - .4, v)
     save(rgb, alpha * ends, OUT / "judgment.png")
 
 
