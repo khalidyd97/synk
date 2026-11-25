@@ -128,7 +128,7 @@ def recolour(rgb, turn, richer=1.0):
 def notes():
     ring = Image.open(SOURCE / "ring.png").convert("RGBA")
     box = outline(ring)
-    for prefix, size, dst, turn in [("tap", (212, 116), (2, 10, 208, 109), HUE_TAP), ("hold", (212, 116), (2, 10, 208, 109), HUE_HOLD), ("tail", (132, 72), (3, 3, 130, 65), HUE_HOLD)]:
+    for prefix, size, dst, turn in [("tap", (212, 116), (2, 10, 208, 109), HUE_TAP), ("hold", (212, 116), (2, 10, 208, 109), HUE_HOLD)]:
         fitted = place(ring, box, dst, size)
         for i, heat in enumerate(HEAT, start=1):
             rgb, a = pulse(fitted, heat)
@@ -290,6 +290,26 @@ def hit():
                 time.sleep(.4)
 
 
+def tail():
+    """The end of a hold or slide: not a small ring like the notes but a thin flat bar lying
+    across the trail, white-hot along its middle with a cyan glow, tapering to a point at
+    each side. Six frames on the notes' beat pulse, in the 132 x 72 tail sprite."""
+    w, h, ss = 132, 72, 4
+    Y, X = np.mgrid[0:h * ss, 0:w * ss].astype(float) / ss
+    dx, dy = np.abs(X - 66.0), np.abs(Y - 36.0)
+    cyan = np.array([60, 216, 255]) / 255
+    half = 56.0                                              # half the bar's length
+    along = smooth(half, half - 16, dx)                      # tapers to a point at each side
+    core = np.exp(-(dy / (1.5 * along + .2)) ** 2) * (dx < half)
+    body = np.exp(-(dy / (3.2 * along + .3)) ** 2) * along
+    for i, heat in enumerate(HEAT, start=1):
+        glow = np.exp(-dy / (5.0 + 3.0 * heat)) * smooth(half + 6, half - 22, dx) * (.30 + .30 * heat)
+        white = np.clip(core * (.85 + .15 * heat), 0, 1)
+        a = np.clip(body + glow, 0, 1) * smooth(0, 5, np.minimum(36.0 - dy, 66.0 - dx))
+        rgb = cyan + (WHITE - cyan) * white[..., None]
+        save(rgb, a, OUT / f"tail{i}.png", (w, h))
+
+
 def connector():
     """The marker at each bend of a slide, in the tail cap's 132 x 72 sprite. Not a small
     ring like the notes: a white-hot diamond lying on the road with a bright rim, a cyan
@@ -432,5 +452,5 @@ def judgment():
 
 if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
-    notes(); flick(); trail(); connector(); guide(); rail(); judgment(); pause(); hit()
+    notes(); flick(); trail(); tail(); connector(); guide(); rail(); judgment(); pause(); hit()
     print("SYNK mode art written to", OUT)
