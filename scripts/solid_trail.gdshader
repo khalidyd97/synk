@@ -102,8 +102,6 @@ void fragment(){
             opacity+=core*.10;
         }
     }
-    // SYNK mode's end bar and its glow, lit after the note's own dimming so they stay bright.
-    float end_bar=0.0; float end_glow=0.0;
     if(synk_beam && source_art && !joint){
         // One face only: the source's three stacked layers would triple the beam.
         if(source_layer>0.0001) discard;
@@ -117,17 +115,8 @@ void fragment(){
         float glint=step(.93,pick)*smoothstep(.16,0.0,length(spot));
         color=mix(color,vec3(1.0),glint);
         opacity=max(opacity,glint*.9);
-        // The far end is a square cut closed by a thin white-hot bar, drawn here on the trail
-        // itself so it always spans the beam exactly and follows the cut's slant on a slide.
-        // Its thickness is a fixed share of the beam's width on screen, so it shrinks with
-        // distance like the beam does. (source_chip.y: the beam's half-width.)
-        float end_px=(1.0-UV.y)/max(fwidth(UV.y),0.000001);
-        float bar_px=clamp(0.125/max(fwidth(UV.x),0.000001),2.5,14.0);
-        float across=smoothstep(.01,.12,beam.a);
-        end_bar=(1.0-smoothstep(bar_px*.6,bar_px,end_px))*across;
-        // Its glow: light spilling back down the beam from the bar, strongest beside it.
-        end_glow=exp(-max(end_px-bar_px*.6,0.0)/(bar_px*3.2))*across;
-        opacity=max(opacity,max(end_glow*.85,end_bar));
+        // The far end is a plain square cut: the same diamond that marks a slide's bends sits
+        // on it as the trail's last node (make_ribbon in highway_3d.gd).
         // It melts into the judgment line where it is being played, rather than a hard cut.
         if(ssrg_warp.x>0.5) opacity*=smoothstep(0.0,max(source_chip.y*1.4,0.0001),ssrg_warp_z(clip_z)-rail_position.z);
     }
@@ -153,7 +142,4 @@ void fragment(){
     float missed_alpha=source_tint.a;
     ALPHA=(ssrg_warp.x>0.5 && source_tint.a<1.0?missed_alpha:opacity)*ghost_fade*(ssrg_warp.x>0.5?1.0:smoothstep(-60.0,-55.0,world_z));
 	if(note_brightness_applies) ALBEDO*=synk_note_brightness;
-    float end_lit=1.0-desaturate*.7;
-    ALBEDO=mix(ALBEDO,vec3(.62,.95,1.0)*end_lit,end_glow*.8);
-    ALBEDO=mix(ALBEDO,vec3(1.0)*end_lit,end_bar);
 }

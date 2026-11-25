@@ -1593,8 +1593,8 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 			var bead_mesh = SphereMesh.new(); bead_mesh.radius=.34*FIT; bead_mesh.height=.24*FIT; bead_mesh.radial_segments=16; bead_mesh.rings=6
 			var bead = mesh_node(bead_mesh,parent,dot_material); bead.position = dot_position+Vector3(0,.06,0)
 	var end_cap=make_tail_cap(parent,SynkChart.lane_at(note,note.time+duration),duration,palette,recording)
-	# SYNK mode ends its trail with a bar drawn on the trail itself (solid_trail.gdshader).
-	if synk_beam: end_cap.visible=false
+	# SYNK mode ends its trail with the same diamond that marks a slide's bends.
+	if synk_beam: use_synk_connector(end_cap)
 	if solid:
 		end_cap.set_meta("solid_trail_joint",true); end_cap.set_meta("checkpoint_offset",duration)
 
@@ -1613,6 +1613,12 @@ func solid_trail_offsets(note: Dictionary) -> Array:
 
 # How much larger than the tail cap SYNK mode draws a slide's bend marker.
 const SYNK_CONNECTOR_SCALE=1.6
+func use_synk_connector(cap: MeshInstance3D) -> void:
+	cap.material_override=shared("synk_connector", func():
+		var m=ShaderMaterial.new(); m.shader=preload("res://scripts/reference_note.gdshader")
+		m.set_shader_parameter("artwork",preload("res://assets/synk_mode/connector.png")); m.set_shader_parameter("approach_glow",false)
+		return m)
+	cap.scale=Vector3.ONE*SYNK_CONNECTOR_SCALE
 func make_solid_trail_joints(parent: Node3D,note: Dictionary,palette: int,recording: bool,half_width: float) -> void:
 	var offsets=solid_trail_offsets(note)
 	var material=shared("joint|%s" % trail_color(palette), func():
@@ -1626,12 +1632,7 @@ func make_solid_trail_joints(parent: Node3D,note: Dictionary,palette: int,record
 			var cap=make_tail_cap(parent,SynkChart.lane_at(note,float(note.time)+float(offset)),float(offset),palette,recording)
 			cap.name="SlideTurnCap"
 			# SYNK mode marks a bend with its own bright diamond, not a smaller copy of the note.
-			if game.synk_mode() and not recording:
-				cap.material_override=shared("synk_connector", func():
-					var m=ShaderMaterial.new(); m.shader=preload("res://scripts/reference_note.gdshader")
-					m.set_shader_parameter("artwork",preload("res://assets/synk_mode/connector.png")); m.set_shader_parameter("approach_glow",false)
-					return m)
-				cap.scale=Vector3.ONE*SYNK_CONNECTOR_SCALE
+			if game.synk_mode() and not recording: use_synk_connector(cap)
 			cap.set_meta("solid_trail_joint",true); cap.set_meta("checkpoint_offset",offset)
 			continue
 		var joint=mesh_node(disc,parent,material)
