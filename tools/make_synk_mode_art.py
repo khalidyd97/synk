@@ -341,16 +341,20 @@ def connector():
 
 
 def guide():
-    """Lane ring: a cream ellipse with a faint coral glow, the shape of the puck's face."""
+    """Lane marker on the judgment bar: a glass pad the shape of the puck's face. One fine
+    cream rim with a faint amber fill, both brighter along the edge nearest the player, so
+    it reads as a lit lip rather than a target of rings."""
     w, h = 212, 116
     W, H = w * SS, h * SS
     y, x = np.mgrid[0:H, 0:W].astype(float) / SS
     # Where a note's base lands: the SSRG guide ring spans x 7..202, y 25..108.
-    r = np.sqrt(((x - w / 2) / (w * .485)) ** 2 + ((y - h * (PUCK_TOP + PUCK_SIDE)) / (h * .375)) ** 2)
+    v = (y - h * (PUCK_TOP + PUCK_SIDE)) / (h * .375)
+    r = np.sqrt(((x - w / 2) / (w * .485)) ** 2 + v ** 2)
+    near = smooth(-.2, 1.0, v)                               # 0 at the far edge, 1 at the near lip
     rgb = np.zeros((H, W, 3)); a = np.zeros((H, W))
-    rgb, a = over(rgb, a, np.broadcast_to(CORAL, rgb.shape), np.exp(-((r - .95) / .12) ** 2) * .45)
-    rgb, a = over(rgb, a, np.broadcast_to(CREAM, rgb.shape), np.exp(-((r - .95) / .025) ** 2))
-    rgb, a = over(rgb, a, np.broadcast_to(CREAM, rgb.shape), np.exp(-((r - .55) / .02) ** 2) * .45)
+    rgb, a = over(rgb, a, np.broadcast_to(AMBER, rgb.shape), smooth(1.0, .9, r) * (.07 + .13 * near * r))
+    rgb, a = over(rgb, a, np.broadcast_to(CORAL, rgb.shape), np.exp(-((r - .95) / .11) ** 2) * (.18 + .4 * near))
+    rgb, a = over(rgb, a, np.broadcast_to(CREAM, rgb.shape), np.exp(-((r - .95) / .022) ** 2) * (.45 + .55 * near))
     # Fade to nothing before the sprite's edges, so its rectangle never shows on the bar.
     a = a * smooth(0, 7, np.minimum(np.minimum(x, w - x), np.minimum(y, h - y)))
     save(*downsample(rgb, a, w, h), OUT / "guide.png")
