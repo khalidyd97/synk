@@ -1,8 +1,8 @@
 extends Node
 # SYNK mode's stage: the Aura backdrop (synk_stage_aura.gdshader), drawn on the
 # screen-filling quad behind the highway in place of the song artwork and SSRG's stage
-# effects. Silk ribbons of amber light, glassy shards and an amber glow in the bottom
-# corners, on black; brighter the longer the combo.
+# effects. Silk ribbons of amber light and an amber glow in the bottom corners, on black;
+# they move with the music and grow brighter the longer the combo.
 const SHADER = preload("res://scripts/synk_stage_aura.gdshader")
 var world: Node3D
 var material: ShaderMaterial
@@ -36,4 +36,6 @@ func update(on: bool, delta: float) -> void:
 	material.set_shader_parameter("aspect", view.x / view.y)
 	material.set_shader_parameter("beat", fposmod(beats, 1.0))
 	material.set_shader_parameter("energy", energy)
+	material.set_shader_parameter("bass", world.loudness)
+	material.set_shader_parameter("mids", world.loudness_mids)
 	material.set_shader_parameter("brightness", game.features.effect("Background brightness"))

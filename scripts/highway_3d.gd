@@ -967,7 +967,8 @@ func prefill_hits() -> void:
 var window_bands: Array = []
 var flare = 0.0
 var chords: Array = []
-var loudness = 0.0
+var loudness = 0.0        # the song's bass right now, 0..1
+var loudness_mids = 0.0   # the song's melody range right now, 0..1
 var spectrum: AudioEffectSpectrumAnalyzerInstance
 
 func extras_setting(key: String, fallback: Variant) -> Variant:
@@ -1044,7 +1045,10 @@ func update_play_aids(delta: float) -> void:
 		var low = spectrum.get_magnitude_for_frequency_range(30, 180).length()
 		var target = clampf(low * 6.0, 0.0, 1.0)
 		loudness = lerpf(loudness, target, 1.0 - exp(-delta * (18.0 if target > loudness else 5.0)))
-	else: loudness = lerpf(loudness, 0.0, 1.0 - exp(-delta * 5.0))
+		var mid_target = clampf(spectrum.get_magnitude_for_frequency_range(400, 4000).length() * 9.0, 0.0, 1.0)
+		loudness_mids = lerpf(loudness_mids, mid_target, 1.0 - exp(-delta * (14.0 if mid_target > loudness_mids else 4.0)))
+	else:
+		loudness = lerpf(loudness, 0.0, 1.0 - exp(-delta * 5.0)); loudness_mids = lerpf(loudness_mids, 0.0, 1.0 - exp(-delta * 4.0))
 	# Chord lines follow their notes.
 	if playing:
 		for chord in chords:
