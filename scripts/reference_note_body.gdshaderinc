@@ -45,9 +45,17 @@ uniform float full_bright_above_uv = -1.0;
 // `approach_span` is how far out (track units) the build-up begins.
 uniform float approach_vibrance = 0.0;
 uniform float approach_span = 36.0;
+// Note thickness (Settings > Visuals > Notes, SYNK mode): the quad is made taller by
+// `wall` times the art's height and the note's silhouette is swept down into that space
+// as a side wall, so the disc reads as a solid puck. Rows above `wall_from_uv` cast no
+// wall (the flick's chevrons).
+uniform float wall = 0.0;
+uniform float wall_from_uv = 0.0;
+const int WALL_STEPS = 8;
 void fragment(){
     if((ssrg_warp.x>0.5?centre_z:world_z)>clip_z) discard;
-    vec4 art=texture(artwork,UV);
+    vec2 uv=vec2(UV.x,UV.y*(1.0+wall));
+    vec4 art=uv.y>1.0?vec4(0.0):texture(artwork,uv);
     vec3 hsv=rgb_to_hsv(art.rgb);
     hsv.x=fract(hsv.x+hue_shift);
     hsv.y=clamp(hsv.y*saturation_scale,0.0,1.0);
@@ -70,7 +78,7 @@ void fragment(){
         color=mix(color,core_tint*(0.55+0.45*bright),centre_mask*(1.0-heat)*0.8);
         color=mix(color,vec3(1.0),heat*centre_mask*0.45);
         // Halo: the blurred note shape (a low mip) around the edge, white-tinted.
-        float halo=textureLod(artwork,UV,4.0).a;
+        float halo=textureLod(artwork,uv,4.0).a;
         float rim=heat*halo*(1.0-art.a)*0.30;
         color=mix(color,vec3(1.0),rim/max(0.001,alpha+rim));
         alpha=max(alpha,rim);
@@ -83,10 +91,10 @@ void fragment(){
         rich.z=rich.z*(0.82+0.5*coming);
         color=hsv_to_rgb(rich);
         // The glassy middle of the disc fills with the note's own light.
-        vec4 soft=textureLod(artwork,UV,3.0);
+        vec4 soft=textureLod(artwork,uv,3.0);
         float fill=coming*soft.a*(1.0-alpha)*0.55;
         // Halo: the blurred note shape spilling past its edge.
-        vec4 wide=textureLod(artwork,UV,5.0);
+        vec4 wide=textureLod(artwork,uv,5.0);
         float halo=coming*wide.a*(1.0-art.a)*0.5;
         float glow=clamp(fill+halo,0.0,1.0);
         color=mix(color,soft.rgb*1.25,glow/max(0.001,alpha+glow));
@@ -94,10 +102,28 @@ void fragment(){
         // Near the line the note is never dimmed by the brightness setting.
         burn=coming;
     }
+    if(wall>0.0){
+        // Deepest layer first, so nearer layers of the wall cover it; the top face goes on last.
+        vec3 side=vec3(0.0); float side_alpha=0.0;
+        for(int i=WALL_STEPS;i>=1;i--){
+            float k=float(i)/float(WALL_STEPS);
+            vec2 at=vec2(uv.x,uv.y-wall*k);
+            if(at.y<wall_from_uv || at.y>1.0) continue;
+            vec4 layer=textureLod(artwork,at,1.0);
+            float solid=smoothstep(0.55,0.85,layer.a);
+            // Darker toward the bottom, with a lit lower lip.
+            vec3 shade=i==WALL_STEPS?layer.rgb*0.9+0.08:layer.rgb*(0.55-0.33*k);
+            side=mix(side,shade,solid); side_alpha=max(side_alpha,solid*0.92);
+        }
+        vec3 lit=rgb_to_hsv(side); lit.x=fract(lit.x+hue_shift); side=hsv_to_rgb(lit);
+        color=mix(side,color,alpha/max(0.001,alpha+side_alpha*(1.0-alpha)));
+        alpha=alpha+side_alpha*(1.0-alpha);
+        gray=dot(color,vec3(0.299,0.587,0.114));
+    }
     ALBEDO=mix(color,vec3(gray*0.52),desaturate)*source_tint.rgb;
     ALPHA=alpha*opacity*ghost_fade*source_tint.a*smoothstep(-60.0,-55.0,world_z)*ssrg_reveal(centre_z);
 	if(note_brightness_applies){
-		float keep=full_bright_above_uv>0.0?1.0-smoothstep(full_bright_above_uv-0.03,full_bright_above_uv,UV.y):0.0;
+		float keep=full_bright_above_uv>0.0?1.0-smoothstep(full_bright_above_uv-0.03,full_bright_above_uv,uv.y):0.0;
 		ALBEDO*=mix(synk_note_brightness,max(synk_note_brightness,1.0),max(keep,burn*step(0.001,approach_vibrance)));
 	}
 }

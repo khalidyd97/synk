@@ -279,6 +279,7 @@ var back_button: Button
 var subtab_buttons: Dictionary={}
 var selected_sections: Dictionary={}
 var trail_style_input: OptionButton
+var note_thickness_input: OptionButton
 const PAGE_NAMES={"gameplay":"Gameplay","audio":"Audio & sync","visuals":"Visual effects","editor":"Editor preferences"}
 const SUBPAGES={"gameplay":{"play":"Play","browsing":"Browsing"},"audio":{"timing":"Timing","headset":"Headset"},"visuals":{"highway":"Highway","notes":"Notes","hits":"Hit effects","stage":"Stage effects","colors":"Colors"},"editor":{"recording":"Recording","guides":"Guides & audio"}}
 const SUBPAGE_HINTS={"colors":"Choose Theme in Highway to use custom colors. Adaptive keeps your choices saved.","play":"Tune how notes travel while you play.","browsing":"Choose how the song library behaves.","timing":"Match the judgment timing to your music.","headset":"Compensate for wireless audio delay.","highway":"Choose your rail style and colors. Gameplay uses the SSRG view.","notes":"Choose note shapes, trail styles, and sizes.","hits":"Tune hit feedback and particle intensity.","stage":"Choose your stage atmosphere. Combine effects freely.","recording":"Personal recording aids and playback preferences.","guides":"Listen for the rhythm while you create charts."}
@@ -604,6 +605,16 @@ func build_notes(items: VBoxContainer) -> void:
     add_control(trail,trail_style_input)
     preload("res://scripts/modal_input.gd").register(trail_style_input.get_popup())
     trail_style_input.item_selected.connect(func(index): game.change_trail_style("solid" if index==1 else "neon"))
+    var thickness=row(items,"Note thickness","SYNK mode: give the note discs a solid edge. Applies from the next song.")
+    note_thickness_input=OptionButton.new()
+    for name in ["Flat","Slim","Medium","Chunky"]: note_thickness_input.add_item(name)
+    note_thickness_input.add_theme_font_size_override("font_size",21); note_thickness_input.get_popup().add_theme_font_size_override("font_size",21)
+    note_thickness_input.get_popup().add_theme_constant_override("v_separation",16)
+    note_thickness_input.add_theme_stylebox_override("normal",picker_style)
+    for state in ["focus","hover","pressed"]: note_thickness_input.add_theme_stylebox_override(state,focus)
+    add_control(thickness,note_thickness_input)
+    preload("res://scripts/modal_input.gd").register(note_thickness_input.get_popup())
+    note_thickness_input.item_selected.connect(func(index): game.change_note_thickness(index))
     action(items,"RESET NOTE SIZE",func():
         for control in sizing_inputs.values(): control.value=100)
 func effect_row(items: VBoxContainer,key: String,hint: String) -> void:
@@ -674,6 +685,7 @@ func refresh() -> void:
         color_reset_buttons[key].disabled=picker.disabled
         color_reset_buttons[key].set_selected(not game.gameplay_colors.has(key))
     if trail_style_input: trail_style_input.select(1 if game.trail_style=="solid" else 0)
+    if note_thickness_input: note_thickness_input.select(game.note_thickness)
     for kind in shape_tiles: shape_tiles[kind].selected=kind==game.note_shape
     for key in hit_style_buttons: hit_style_buttons[key].set_selected(key==game.hit_style)
     if hit_size_input: hit_size_input.sync_value(game.hit_size*100)

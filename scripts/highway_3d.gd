@@ -1240,12 +1240,15 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 	var phase=fposmod((render_time()-game.chart_offset())*game.chart_bpm()/60.0,1.0)
 	var skin:String=game.ssrg_skin()
 	var art := ssrg_cap_artwork(palette,tail,phase,skin)
-	var mat = shared("ssrg|%d|%s|%s" % [palette,tail,skin], func():
+	# Note thickness: extra quad height under the art, as a share of the art's height.
+	var wall=0.0 if tail else synk_note_wall()
+	var mat = shared("ssrg|%d|%s|%s|%s" % [palette,tail,skin,wall], func():
 		var m = ShaderMaterial.new(); m.shader = preload("res://scripts/reference_note.gdshader")
 		m.set_shader_parameter("artwork",art); m.set_shader_parameter("approach_glow",false)
 		m.set_meta("ssrg_palette",palette);m.set_meta("ssrg_tail",tail);m.set_meta("ssrg_skin",skin)
 		# SYNK mode's discs grow more vibrant and glowing as they come down the highway.
 		if skin=="synk": m.set_shader_parameter("approach_vibrance",1.0)
+		m.set_shader_parameter("wall",wall)
 		m.set_shader_parameter("core_tint",Color("4fc8ff") if palette==0 else Color("ffc23a"))
 		# Flicks share the source puck silhouette, but use a vivid rose treatment so
 		# they cannot be mistaken for blue taps during a fast approach.
@@ -1255,11 +1258,12 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 			m.set_shader_parameter("value_scale",1.12)
 			m.set_shader_parameter("core_tint",Color("ff4fa8"))
 		return m)
-	var mesh_key = "ssrg|%s|%s|%s|%s|%s" % [size, tail, palette,ssrg_art_scale(),skin]
+	var mesh_key = "ssrg|%s|%s|%s|%s|%s|%s" % [size, tail, palette,ssrg_art_scale(),skin,wall]
 	if not reference_note_meshes.has(mesh_key):
 		# Packaged IngameRenderer maximum sizes, before the shared p^6 scale.
 		var quad = QuadMesh.new()
 		quad.size = (Vector2(132,72) if tail else Vector2(212,116))*SSRG_UNIT*ssrg_art_scale()
+		quad.center_offset.y = -quad.size.y*wall*.5; quad.size.y *= 1.0+wall
 		reference_note_meshes[mesh_key]=quad
 	var head = mesh_node(reference_note_meshes[mesh_key],parent,mat)
 	head.position = Vector3(position_value.x,.13,position_value.z)
@@ -1270,6 +1274,12 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 	head.extra_cull_margin=TRACK_LENGTH+SSRG_STAGE_DISTANCE
 	ssrg_billboards.append(weakref(head))
 	return head
+
+# SYNK mode's note thickness setting, as wall depth in px of the 212 px wide disc art.
+const SYNK_NOTE_WALL_PX = [0.0, 7.5, 13.5, 21.0]
+func synk_note_wall(art_height: float = 116.0, art_disc_width: float = 212.0) -> float:
+	if not game.synk_mode(): return 0.0
+	return SYNK_NOTE_WALL_PX[clampi(game.note_thickness,0,3)]*art_disc_width/212.0/art_height
 
 func ssrg_cap_artwork(palette: int, tail: bool, phase: float, skin: String) -> Texture2D:
 	return SsrgNotes.artwork(palette in [1,3],not tail,phase,skin)
@@ -1337,12 +1347,16 @@ const FLICK_LOOP_STEPS_PER_SECOND = 16.0
 func flick_frame_material(frame: int) -> ShaderMaterial:
 	var projected = uses_projected_highway()
 	var synk = game.synk_mode()
-	return shared("flick_frame|%s|%d|%s" % [projected, frame, synk], func():
+	# The flick's disc is 623 px wide in its 768 px frame.
+	var wall = synk_note_wall(768.0, 623.0)
+	return shared("flick_frame|%s|%d|%s|%s" % [projected, frame, synk, wall], func():
 		var material = ShaderMaterial.new()
 		material.shader = preload("res://scripts/synk_canvas_note.gdshader") if projected else preload("res://scripts/reference_note.gdshader")
 		material.render_priority = 3
 		material.set_shader_parameter("artwork", (SYNK_FLICK_FRAMES if synk else FLICK_FRAMES)[frame])
 		if synk: material.set_shader_parameter("approach_vibrance",1.0)
+		# Only the disc gets a side wall, not the chevrons above it.
+		material.set_shader_parameter("wall",wall); material.set_shader_parameter("wall_from_uv",400.0/768.0)
 		# Rows above y=380 of the 768 px frame hold only the chevron and its sparks.
 		material.set_shader_parameter("full_bright_above_uv", 380.0 / 768.0)
 		return material)
@@ -1355,12 +1369,14 @@ func flick_note_width() -> float:
 func make_animated_flick(parent: Node3D, lane: float) -> void:
 	var size = game.gameplay_note_size()
 	var width = flick_note_width()
-	var mesh_key = "flick_animation|%s" % width
+	var wall = synk_note_wall(768.0, 623.0)
+	var mesh_key = "flick_animation|%s|%s" % [width, wall]
 	if not reference_note_meshes.has(mesh_key):
 		var quad = QuadMesh.new()
 		quad.size = Vector2(width, width)
 		# The disc centre is at y=553 in the 768 px frame.
-		quad.center_offset.y = width * (553.0 / 768.0 - 0.5)
+		quad.center_offset.y = width * (553.0 / 768.0 - 0.5) - width*wall*.5
+		quad.size.y *= 1.0+wall
 		reference_note_meshes[mesh_key] = quad
 	var sprite = mesh_node(reference_note_meshes[mesh_key], parent, flick_frame_material(0))
 	sprite.name = "AnimatedFlick"

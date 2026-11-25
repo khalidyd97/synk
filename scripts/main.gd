@@ -244,6 +244,8 @@ const DEFAULT_NOTE_BRIGHTNESS=.8
 var note_brightness=DEFAULT_NOTE_BRIGHTNESS
 var hold_trail_width=1.0
 var trail_style="neon"
+# SYNK mode: how thick the note discs look. 0 flat, 1 slim, 2 medium, 3 chunky.
+var note_thickness=0
 var resume_grace = 0.0
 var overdub = false
 var ghost_recording=true
@@ -504,6 +506,7 @@ func _ready() -> void:
 	note_brightness=clampf(float(prefs.get_value("gameplay","note_brightness",DEFAULT_NOTE_BRIGHTNESS)),.4,1.2)
 	RenderingServer.global_shader_parameter_set("synk_note_brightness",note_brightness)
 	trail_style=str(prefs.get_value("gameplay","trail_style","neon"))
+	note_thickness=clampi(int(prefs.get_value("gameplay","note_thickness",0)),0,3)
 	if trail_style not in ["neon","solid"]: trail_style="neon"
 	hold_trail_width=1.0
 	features=load("res://scripts/workbench.gd").new(); features.game=self; add_child(features)
@@ -1325,6 +1328,9 @@ func change_note_brightness(value: float) -> void:
 	RenderingServer.global_shader_parameter_set("synk_note_brightness",note_brightness)
 	prefs.set_value("gameplay","note_brightness",note_brightness)
 	prefs.save("user://preferences.cfg")
+
+func change_note_thickness(level: int) -> void:
+	note_thickness=clampi(level,0,3); prefs.set_value("gameplay","note_thickness",note_thickness); prefs.save("user://preferences.cfg")
 
 func change_note_shape(kind: String) -> void:
 	note_shape=kind
