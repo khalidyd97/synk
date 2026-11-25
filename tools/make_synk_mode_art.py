@@ -135,6 +135,10 @@ def notes():
             save(recolour(rgb, turn), a, OUT / f"{prefix}{i}.png")
 
 
+# How far above the ring's top edge (source px) the flick's chevron stack starts to thin out.
+FLICK_FADE = 150
+
+
 def flick():
     """Six flick frames in the original flick's 768 px layout (disc 623 px wide, outline
     centred at y=558.5): the ring, with the supplied chevrons rising out of it frame by
@@ -148,10 +152,11 @@ def flick():
     # The chevrons are what the flick art has beyond the plain ring.
     a_flick = np.asarray(art).astype(float) / 255
     chevrons = a_flick.copy()
-    # Keep the art above the ring's top edge and fade it out just inside the ring, so the
-    # chevrons seem to rise out of it without doubling the ring's own rim.
+    # Keep the art above the ring's top edge. Below the lowest chevron the glassy column
+    # thins out gradually and is gone before the ring, so the stack dissolves into the
+    # ring's glow instead of stopping on a hard shelf.
     rows = np.arange(art.height)[:, None]
-    chevrons[..., 3] = a_flick[..., 3] * smooth(ring_box[1] + 34, ring_box[1] - 6, rows)
+    chevrons[..., 3] = a_flick[..., 3] * smooth(ring_box[1] - 4, ring_box[1] - FLICK_FADE, rows) ** 1.5
     chevron_img = Image.fromarray(np.clip(chevrons * 255 + .5, 0, 255).astype(np.uint8), "RGBA")
     # Same width scale as the ring; a little less tall so the stack fits the frame.
     sx = (disc[2] - disc[0]) / (ring_box[2] - ring_box[0])
