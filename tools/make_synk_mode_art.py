@@ -262,8 +262,9 @@ def hit():
         fine = np.cos(6 * (theta - turn * .6) + 1.0) ** 2
         light += rays ** 7 * np.exp(-r / (size * .5)) * heat * .38 * smooth(.02, .12, r)
         light += fine ** 14 * np.exp(-r / (size * .34)) * heat * .18 * smooth(.02, .10, r)
-        # The lens streak across the road, widest at the peak.
-        light += np.exp(-(dy / (1.0 + 1.6 * heat)) ** 2) * np.exp(-np.abs(dx) / (half * size * 1.25)) * heat * .55
+        # The lens streak across the road, widest at the peak: a short, fine accent that stays
+        # inside the pool rather than a line running out past it.
+        light += np.exp(-(dy / (.9 + .8 * heat)) ** 2) * np.exp(-np.abs(dx) / (half * size * .55)) * heat * .30
         # Near the end the heart shrinks to a four-point glint.
         if t >= .7:
             glint = np.exp(-np.abs(dx) / 16) * np.exp(-(dy / 1.3) ** 2) + np.exp(-np.abs(dy) / 9) * np.exp(-(dx / 1.3) ** 2)
