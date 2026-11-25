@@ -115,8 +115,15 @@ void fragment(){
         float glint=step(.93,pick)*smoothstep(.16,0.0,length(spot));
         color=mix(color,vec3(1.0),glint);
         opacity=max(opacity,glint*.9);
-        // The far end is a square cut, closed by the thin bar that ends the note.
-        // (source_chip.y: the beam's half-width.)
+        // The far end is a square cut closed by a thin white-hot bar, drawn here on the trail
+        // itself so it always spans the beam exactly and follows the cut's slant on a slide.
+        // Its thickness is a fixed share of the beam's width on screen, so it shrinks with
+        // distance like the beam does. (source_chip.y: the beam's half-width.)
+        float end_px=(1.0-UV.y)/max(fwidth(UV.y),0.000001);
+        float bar_px=clamp(0.085/max(fwidth(UV.x),0.000001),2.0,10.0);
+        float end_bar=(1.0-smoothstep(bar_px*.55,bar_px,end_px))*smoothstep(.02,.18,beam.a);
+        color=mix(color,vec3(1.0),end_bar*.92);
+        opacity=max(opacity,end_bar);
         // It melts into the judgment line where it is being played, rather than a hard cut.
         if(ssrg_warp.x>0.5) opacity*=smoothstep(0.0,max(source_chip.y*1.4,0.0001),ssrg_warp_z(clip_z)-rail_position.z);
     }

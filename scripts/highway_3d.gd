@@ -1593,6 +1593,8 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 			var bead_mesh = SphereMesh.new(); bead_mesh.radius=.34*FIT; bead_mesh.height=.24*FIT; bead_mesh.radial_segments=16; bead_mesh.rings=6
 			var bead = mesh_node(bead_mesh,parent,dot_material); bead.position = dot_position+Vector3(0,.06,0)
 	var end_cap=make_tail_cap(parent,SynkChart.lane_at(note,note.time+duration),duration,palette,recording)
+	# SYNK mode ends its trail with a bar drawn on the trail itself (solid_trail.gdshader).
+	if synk_beam: end_cap.visible=false
 	if solid:
 		end_cap.set_meta("solid_trail_joint",true); end_cap.set_meta("checkpoint_offset",duration)
 
