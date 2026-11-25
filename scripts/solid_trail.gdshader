@@ -115,11 +115,9 @@ void fragment(){
         float glint=step(.93,pick)*smoothstep(.16,0.0,length(spot));
         color=mix(color,vec3(1.0),glint);
         opacity=max(opacity,glint*.9);
-        // A rounded far end, tucked inside the tail ring, instead of a square cut.
-        // (source_chip.x: distance to the trail's end; source_chip.y: the beam's half-width.)
-        float cap=clamp(1.0-source_chip.x/max(source_chip.y*1.15,0.0001),0.0,1.0);
-        opacity*=1.0-smoothstep(.72,1.0,length(vec2(cap,UV.x*2.0-1.0)*vec2(1.0,.92)));
-        // And it melts into the judgment line where it is being played, rather than a hard cut.
+        // The far end is a square cut, closed by the thin bar that ends the note.
+        // (source_chip.y: the beam's half-width.)
+        // It melts into the judgment line where it is being played, rather than a hard cut.
         if(ssrg_warp.x>0.5) opacity*=smoothstep(0.0,max(source_chip.y*1.4,0.0001),ssrg_warp_z(clip_z)-rail_position.z);
     }
     // SKD's l1/l2/l3 chips are fully opaque, uniform 6x6 texels. Their source
