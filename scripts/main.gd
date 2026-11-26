@@ -908,8 +908,17 @@ func build_ui() -> void:
 	# Two columns of large buttons: every recording aid is a full-size touch target.
 	record_sidebar = recorder_plate(Rect2(0.5, 0.135, 0.375, 0.695))
 	aids_drawer = Control.new();rect(aids_drawer, record_tools, 0, 0, 1, 1);aids_drawer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# A tap anywhere outside the panel closes it. In Correct mode the button that opened it is
+	# hidden while it is up, so without this (and Close) there was no way back.
+	var aids_outside = Control.new();rect(aids_outside, aids_drawer, 0, 0, 1, 1);aids_outside.mouse_filter = Control.MOUSE_FILTER_STOP
+	aids_outside.gui_input.connect(func(event: InputEvent):
+		if (event is InputEventMouseButton or event is InputEventScreenTouch) and event.pressed and aids_drawer.visible:
+			aids_outside.accept_event();toggle_record_aids())
 	record_sidebar.reparent(aids_drawer)
-	label(aids_drawer, "Recording aids", 0.515, 0.145, 0.87, 0.18, 16).add_theme_color_override("font_color", Color("bcb7ad"))
+	record_sidebar.mouse_filter = Control.MOUSE_FILTER_STOP
+	label(aids_drawer, "Recording aids", 0.515, 0.145, 0.78, 0.18, 16).add_theme_color_override("font_color", Color("bcb7ad"))
+	var aids_close = button(aids_drawer, "CLOSE", 0.79, 0.141, 0.868, 0.184, toggle_record_aids, "tool")
+	aids_close.caption_size = 15;aids_close.tooltip_text = "Close the recording aids"
 	var row = func(i: int) -> Array: return [0.51 + (i % 2) * 0.18, 0.19 + (i / 2) * 0.125, 0.685 + (i % 2) * 0.18, 0.298 + (i / 2) * 0.125]
 	var r = row.call(0);note_lines_button = button(aids_drawer, "", r[0], r[1], r[2], r[3], toggle_note_lines);update_note_lines_button()
 
