@@ -3077,7 +3077,51 @@ func process_ssrg_press_events() -> void:
 		if best.note.kind=="flick": continue
 		judge(best,best_error,best.note.kind not in ["hold","slide"])
 
+# --- Flick judging -----------------------------------------------------------------------
+# A flick is an upward swipe. It is meant to be easy to make with a thumb and playable in
+# fast runs, so:
+#   - a short swipe counts (FLICK_DISTANCE of the screen height), at up to 45 degrees;
+#   - a finger that lifts early still scores if it was clearly going up;
+#   - a finger that stays down can hit the next flick by swiping again, or by simply
+#     carrying on upward, without a new press;
+#   - a flick that was pressed on time but never swiped is a GOOD, not a miss.
+const FLICK_DISTANCE = .03        # upward travel that makes a flick, as a share of the screen height
+const FLICK_SLOPE = 1.0           # upward travel must be at least this many times the sideways travel
+const FLICK_LIFT_DISTANCE = .012  # ... and what is enough when the finger has already lifted
+const FLICK_LIFT_SLOPE = .6
+const FLICK_STROKE_AGE = .18      # seconds a stroke has to cover FLICK_DISTANCE in (a drift is not a flick)
+const FLICK_SWEEP_EARLY = .09     # a finger already swiping may take a flick this long before its time
+# Each finger remembers where its current upward stroke began: the lowest point it has been
+# at lately. Moving down, or dawdling, starts a new stroke.
+func track_flick_strokes() -> void:
+	for id in pointers:
+		var p: Dictionary = pointers[id]
+		var mark: Dictionary = p.get("flick_mark", {})
+		if mark.is_empty() or p.position.y > mark.at.y or song_time - float(mark.time) > FLICK_STROKE_AGE:
+			p.flick_mark = {"at": p.position, "time": song_time}
+func flick_stroke_done(p: Dictionary) -> bool:
+	var mark: Dictionary = p.get("flick_mark", {})
+	if mark.is_empty(): return false
+	var up: float = mark.at.y - p.position.y
+	return up >= FLICK_DISTANCE and up > absf(p.position.x - mark.at.x) * FLICK_SLOPE
+# Whether a finger is over this lane or the one beside it.
+func flick_finger_near(p: Dictionary, lane: float) -> bool:
+	if not ssrg_playable_run: return absf(SynkCapture.lane(p.position.x) - lane) <= 1.2
+	var press: Vector3 = p.get("ssrg_begin_world", p.world)
+	var point = Vector3(p.world.x, press.y, press.z)
+	for near in [lane, lane - 1.0, lane + 1.0]:
+		if near >= 0 and near <= SynkChart.MAX_LANE and ssrg_touch_lane(point, near): return true
+	return false
+# A finger already on the screen that has just made an upward stroke at this flick.
+func flick_sweeper(n: Dictionary) -> int:
+	for id in pointers:
+		var p: Dictionary = pointers[id]
+		if p.get("ssrg_ended", false) or p.get("ssrg_canceled", false): continue
+		if flick_stroke_done(p) and flick_finger_near(p, float(n.lane)): return int(id)
+	return -1
+
 func update_game() -> void:
+	track_flick_strokes()
 	if ssrg_playable_run:
 		prepare_ssrg_input()
 		process_ssrg_press_events()
@@ -3108,6 +3152,14 @@ func update_game() -> void:
 		if entry.done: continue
 		var n: Dictionary=entry.note
 		if not entry.started:
+			# Chains and sweeps: a finger that is down and swiping takes this flick without a new press.
+			if n.kind=="flick" and not auto_play and song_time>=float(n.time)-FLICK_SWEEP_EARLY and song_time<=float(n.time)+hit_good_window("flick"):
+				var sweeper=flick_sweeper(n)
+				if sweeper>=0:
+					entry.started=true;entry.pointer=sweeper;entry.error=absf(song_time-float(n.time));entry.timing_error=song_time-float(n.time)
+					pointers[sweeper].flick_mark={"at":pointers[sweeper].position,"time":song_time}
+					judge(entry,float(entry.error))
+					continue
 			if ssrg_playable_run:
 				var channel=roundi(float(n.lane)*12.0/float(SynkChart.MAX_LANE))
 				var track=ssrg_touch_router.track(channel)
@@ -3132,7 +3184,11 @@ func update_game() -> void:
 		if entry.pointer==-999 and resume_grace>0: continue
 		if ssrg_playable_run and n.kind in ["hold","slide"]:
 			advance_ssrg_sustain(entry);continue
-		if not pointers.has(entry.pointer): judge(entry,-1); continue
+		if not pointers.has(entry.pointer):
+			# A flick that was pressed on time but whose finger is gone before it swiped is a GOOD.
+			if n.kind=="flick" and not auto_play: judge(entry,float(entry.error),true,"GOOD")
+			else: judge(entry,-1)
+			continue
 		var p: Dictionary=pointers[entry.pointer]
 		if n.kind=="flick":
 			var displacement: Vector2=p.position-p.start
@@ -3140,8 +3196,17 @@ func update_game() -> void:
 			# clearly dominates any sideways motion. A left/right (or shallow diagonal) swipe
 			# does not register.
 			var up: float = -displacement.y
-			if up>.05 and up>absf(displacement.x)*1.8: judge(entry,float(entry.error))
-			elif song_time>float(n.time)+(hit_good_window("flick") if ssrg_playable_run else extras.good_window()) or (ssrg_playable_run and p.get("ssrg_ended",false)): judge(entry,-1)
+			var lifted: bool = ssrg_playable_run and p.get("ssrg_ended",false)
+			var swiped: bool = up>=FLICK_DISTANCE and up>absf(displacement.x)*FLICK_SLOPE
+			# A quick flick often leaves the screen before it has gone far: going clearly up is enough.
+			if not swiped and lifted: swiped = up>=FLICK_LIFT_DISTANCE and up>absf(displacement.x)*FLICK_LIFT_SLOPE
+			if swiped:
+				# The next flick needs a stroke of its own.
+				p.flick_mark={"at":p.position,"time":song_time}
+				judge(entry,float(entry.error))
+			elif lifted or song_time>float(n.time)+(hit_good_window("flick") if ssrg_playable_run else extras.good_window()):
+				# Pressed on time, never swiped: a GOOD rather than a miss.
+				judge(entry,float(entry.error),true,"GOOD")
 		elif n.kind in ["hold","slide"] and not process_checkpoints(entry,SynkCapture.lane(p.position.x),false):
 			continue
 		elif n.kind=="slide":
