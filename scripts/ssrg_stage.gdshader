@@ -21,6 +21,7 @@ void vertex(){
 void fragment(){
     vec2 uv=along_rail ? vec2(1.0-UV.y,UV.x) : UV;
     vec4 art=texture(artwork,uv);
+    vec3 painted=art.rgb;
     art.rgb=synk_turn(art.rgb,tone);
     bool road=max(art.r,max(art.g,art.b))<0.05;
     // Draw the rail down its length instead of fading the complete silhouette at once.
@@ -39,7 +40,7 @@ void fragment(){
     }
     if(calm>0.0 && !road){
         // The glow is coloured and the line itself is near white, so keep what is white.
-        float white=min(art.r,min(art.g,art.b));
+        float white=min(painted.r,min(painted.g,painted.b));
         ALPHA*=mix(1.0,smoothstep(0.18,0.7,white),calm);
     }
 }

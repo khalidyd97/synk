@@ -337,6 +337,8 @@ func configure(world: Node3D) -> void :
 		piece.material_override.set_shader_parameter("note_shape",shape); piece.material_override.set_shader_parameter("shape_box",world.SYNK_GUIDE_BOX)
 	# SYNK mode adaptive colours: the stage's gold art turned to the cover's main colour.
 	var tone:Vector3=world.synk_tone("stage") if synk else world.SYNK_PLAIN_TONE
+	# The recorder shows SYNK mode's stage without colour: gray rails, bar and lane markers.
+	if synk and world.game.uses_skd_recorder_surface(): tone=Vector3(0,0,.72)
 	for piece in receptors+feedback_marks+rails+rail_overlays+[press]:piece.material_override.set_shader_parameter("tone",tone)
 	# Source gold tier, unless the player picked a judgment band color. SYNK mode's bar
 	# carries its own colours, so it is drawn untinted.
