@@ -313,7 +313,8 @@ func refresh_home() -> void:
         if covers.size()>=3: break
         covers.append(backdrop_for(str(song.id)) if not (str(song.id)=="eclipse" or game.has_custom_cover(str(song.id))) else game.cover_texture_for_id(str(song.id)))
     play_home_card.covers=covers
-    play_home_card.subtitle="%d song%s to play" % [songs.size(),"" if songs.size()==1 else "s"]
+    var total=all_entries().size()
+    play_home_card.subtitle="%d song%s to play" % [total,"" if total==1 else "s"]
     var last: Dictionary=order[0] if not order.is_empty() and recent.has(str(order[0].id)) else {}
     var hero: Dictionary=last if not last.is_empty() else (order[0] if not order.is_empty() else {})
     if last.is_empty():

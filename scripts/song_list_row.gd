@@ -46,6 +46,7 @@ func layout() -> void:
 func update_entry(value: Dictionary) -> void:
     entry=value; set_meta("song_id",entry.id); set_meta("song_index",entry.index)
     title_label.text=entry.title; artist_label.text=entry.artist+(" · "+str(entry.genre) if not str(entry.genre).is_empty() else "")
+    if lobby and lobby.levels_for(str(entry.id)).is_empty(): artist_label.text+=" · No chart yet"
     cover_rect.texture=lobby.cover_for(entry.id)
     lobby.style_cover(cover_rect,entry.id,12)
     duration_label.text=lobby.duration_text(float(entry.duration))
@@ -79,7 +80,7 @@ func _draw() -> void:
     # Difficulty pips.
     for i in 5:
         var lit=i<intensity
-        draw_circle(Vector2(size.x-234+i*12,56),4.5,Color(Arcade.TEXT,.85) if lit else Color(1,1,1,.14),true,-1.0,true)
+        draw_circle(Vector2(size.x-238+i*14,56),5.5,Color(Arcade.TEXT,.92) if lit else Color(1,1,1,.3),true,-1.0,true)
 func bar_style(tint: Color) -> StyleBoxFlat:
     var style=StyleBoxFlat.new(); style.bg_color=tint; style.set_corner_radius_all(2); return style
 

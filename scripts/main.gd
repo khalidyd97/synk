@@ -55,7 +55,7 @@ var loading_song_index = -1
 var loading_open_editor = false
 var song = {"id":"eclipse", "title":"Eclipse", "bpm":128.0}
 # Play modes: the whole song, or one section bounded by the song's Verse 2 / Bridge marks.
-const SECTION_NAMES = {"full":"FULL SONG","verse1":"VERSE 1","verse2":"VERSE 2","bridge":"BRIDGE"}
+const SECTION_NAMES = {"full":"Full song","verse1":"Verse 1","verse2":"Verse 2","bridge":"Bridge"}
 var play_mode = "full"
 var last_section = "full"
 var play_range = Vector2(0,INF)
@@ -931,7 +931,7 @@ func build_ui() -> void:
 	record_speed_steps = stepper.call(r, func(): step_record_speed(-1), func(): step_record_speed(1))
 	refresh_speed_steppers()
 	record_speed_button.tooltip_text = "Recording playback speed: 1×, 0.75×, 0.5×, 0.25×, 1.25×, 1.5×"
-	r = row.call(7);mr.register_button(button(aids_drawer, "MR OFF", r[0], r[1], r[2], r[3], mr.toggle))
+	r = row.call(7);mr.register_button(button(aids_drawer, "Vocals: on", r[0], r[1], r[2], r[3], mr.toggle))
 	r = row.call(8);record_aids_button = button(aids_drawer, "", r[0], r[1], r[2], r[3], toggle_record_aids_display)
 	update_record_aids_button()
 	r = row.call(9);space_chords_button = button(aids_drawer, "", r[0], r[1], r[2], r[3], toggle_space_close_chords)

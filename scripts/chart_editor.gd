@@ -95,7 +95,7 @@ func _ready() -> void:
     record_button=action(self,"● RECORD",.46,.02,.56,.075,game.record_here,"record")
     action(self,"SETUP",.565,.02,.635,.075,game.recorder.show_setup,"tool")
     # What Record will do, without opening Setup.
-    record_summary=caption(self,"",.40,.076,.70,.1,13); record_summary.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    record_summary=caption(self,"",.38,.074,.72,.102,15); record_summary.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     record_summary.add_theme_color_override("font_color",Color("9a968d")); record_summary.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var gear=preload("res://scripts/gear_button.gd").new(); gear.accent=Arcade.CYAN; place(gear,self,.69,.015,.735,.08)
     gear.pressed.connect(func(): game.open_lobby_settings())
@@ -113,7 +113,7 @@ func _ready() -> void:
     action(self,"SET B",.915,.103,.98,.16,func(): if game.cursor>game.loop_a+.1: game.loop_b=game.cursor; game.refresh_editor())
     var rail=Control.new(); place(rail,self,.02,.19,.105,.91)
     eyebrow(rail,"Tools",0,0,1,.055).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-    var names=[["select","SELECT"],["range","RANGE"],["tap","TAP"],["hold","HOLD"],["slide","SLIDE"],["flick","FLICK"]]
+    var names=[["select","SELECT"],["range","RANGE"],["tap","Tap"],["hold","HOLD"],["slide","SLIDE"],["flick","FLICK"]]
     for i in names.size():
         var kind: String=names[i][0]
         var b=action(rail,names[i][1],0,.075+i*.087,1,.145+i*.087,func(): set_tool(kind))
@@ -173,7 +173,7 @@ func _ready() -> void:
     var range_help=caption(range_panel,"Copy, move the playhead, then use PASTE below the timeline. Copies keep timing, paths and directions.",.06,.86,.94,1.04,13)
     range_help.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
     game.status=caption(self,"",.025,.078,.80,.10,12)
-    game.mr.register_button(action(self,"MR OFF",.49,.955,.60,.995,game.mr.toggle))
+    game.mr.register_button(action(self,"Vocals: on",.49,.955,.60,.995,game.mr.toggle))
     action(self,"TEST FROM HERE",.785,.935,.98,.985,game.test_editor_here,"primary")
     set_tool("select")
     move_child(safe_content,get_child_count()-1)

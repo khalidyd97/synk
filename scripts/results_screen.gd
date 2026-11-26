@@ -194,6 +194,7 @@ func show_results(data: Dictionary) -> void:
     next_button.disabled=practice or bool(info.get("ssrg",false)) or next_candidate().is_empty()
     replay_button.disabled=not bool(info.get("replay",false))
     replay_button.tooltip_text="Watch your last run" if not replay_button.disabled else "No replay for this run"
+    replay_button.text="▶  REPLAY" if not replay_button.disabled else "NO REPLAY"
     practice_button.disabled=automated or not info.get("performance",[]).any(func(s): return float(s.get("weight",1.0))<=0.0)
     var stats: Dictionary=info.get("stats",{})
     var extra: Array=[]
@@ -204,6 +205,7 @@ func show_results(data: Dictionary) -> void:
     if game.extras and game.extras.replaying: extra.append("Replay")
     if not extra.is_empty(): note_label.text+="   ·   "+"  ·  ".join(extra)
     next_button.tooltip_text="Play the next available chart in this song list" if not next_button.disabled else "No other playable song in this list"
+    next_button.text="NEXT SONG  →" if not next_button.disabled else "NO NEXT SONG"
     visible=true; animate()
 func toggle_graph() -> void:
     timing_graph.visible=not timing_graph.visible; accuracy_graph.visible=not timing_graph.visible

@@ -276,6 +276,7 @@ var subtab_buttons: Dictionary={}
 var selected_sections: Dictionary={}
 var trail_style_input: OptionButton
 var note_thickness_input: OptionButton
+var shape_note: Label
 const PAGE_NAMES={"gameplay":"Gameplay","audio":"Audio & sync","visuals":"Visual effects","editor":"Editor preferences"}
 const SUBPAGES={"gameplay":{"play":"Play","browsing":"Browsing"},"audio":{"timing":"Timing","headset":"Headset"},"visuals":{"highway":"Highway","notes":"Notes","hits":"Hit effects","stage":"Stage effects","colors":"Colors"},"editor":{"recording":"Recording","guides":"Guides & audio"}}
 const SUBPAGE_HINTS={"colors":"Choose Theme in Highway to use custom colors. Adaptive keeps your choices saved.","play":"Tune how notes travel while you play.","browsing":"Choose how the song library behaves.","timing":"Match the judgment timing to your music.","headset":"Compensate for wireless audio delay.","highway":"Choose your rail style and colors. Gameplay uses the SSRG view.","notes":"Choose note shapes, trail styles, and sizes.","hits":"Tune hit feedback and particle intensity.","stage":"Choose your stage atmosphere. Combine effects freely.","recording":"Personal recording aids and playback preferences.","guides":"Listen for the rhythm while you create charts."}
@@ -518,10 +519,10 @@ func section(items: VBoxContainer,title: String) -> void:
 func build_highway(items: VBoxContainer) -> void:
     var preview=preload("res://scripts/highway_look_preview.gd").new(); preview.game=game; items.add_child(preview)
     # The SSRG/SKD highway, or SYNK mode: the same stage and rules in SYNK's own artwork.
-    var synk_row=row(items,"SYNK MODE","SYNK's own highway, rails, judgment bar and notes on the SSRG stage.",112)
+    var synk_row=row(items,"SYNK mode","SYNK's own highway, rails, judgment bar and notes on the SSRG stage.",112)
     synk_mode_switch=Switch.new();add_control(synk_row,synk_mode_switch,152)
     connect_switch(synk_mode_switch,func(on:bool): game.change_highway_look("style","synk" if on else "ssrg"))
-    old_ssrg_ui_row=row(items,"OLD UI SSRG","STAYC note sprites, guide rings, judgment bar and thin edge rails.",112)
+    old_ssrg_ui_row=row(items,"Old SSRG look","STAYC note sprites, guide rings, judgment bar and thin edge rails.",112)
     old_ssrg_ui_switch=Switch.new();add_control(old_ssrg_ui_row,old_ssrg_ui_switch,152)
     connect_switch(old_ssrg_ui_switch,game.change_old_ssrg_ui)
     var modes=row(items,"Colors","Theme keeps the style's colors. Adaptive takes them from the song's artwork.",148)
@@ -538,7 +539,7 @@ func build_highway(items: VBoxContainer) -> void:
     highway_opacity_input.value_changed.connect(func(v): game.change_highway_look("opacity",v/100))
     action(items,"RESET HIGHWAY LOOK",game.reset_highway_look)
 func build_colors(items: VBoxContainer) -> void:
-    action(items,"USE CUSTOM COLORS",func(): game.change_highway_look("colors","theme"),true)
+    action(items,"USE CUSTOM COLORS",func(): game.change_highway_look("colors","theme"))
     var rail_hint=label(items,"Choose any color for each element. Defaults follow the theme; rail glow follows the rails.",15,MUTED)
     rail_hint.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
     for group in SynkGameplayColors.GROUPS:
@@ -588,6 +589,8 @@ func build_notes(items: VBoxContainer) -> void:
         var tile=ShapeTile.new(kind,game.SYNK_NOTE_SHAPES.find(kind)); tile_grid.add_child(tile); tile.custom_minimum_size=Vector2(122,100)
         tile.pressed.connect(func(): if not Action.was_dragged(tile): game.change_synk_note_shape(kind))
         shape_tiles[kind]=tile
+    shape_note=label(items,"SYNK mode is off, so this shape shows only in the recorder. Turn SYNK mode on under Highway to play with it.",15,MUTED)
+    shape_note.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
     var preview=preload("res://scripts/note_appearance_preview.gd").new(); preview.game=game; items.add_child(preview)
     sizing_row(items,"note_size","Note size","Adjust the visual size of note heads.",60,125,game.note_size)
     var trail=row(items,"Trail style","A filled band with round connectors at the points you add in the recorder.")
@@ -656,6 +659,8 @@ func build_editor(items: VBoxContainer,guides: VBoxContainer) -> void:
     highway_angle_input=Stepper.new(18,90,1,game.highway_angle,"°",0)
     angle_row=row(items,"Recorder view angle","35° keeps the current perspective; 90° is a flat overhead view. Gameplay stays on its own camera.")
     add_control(angle_row,highway_angle_input)
+    # The recorder's camera is fixed now, so this setting has nothing left to change.
+    angle_row.visible=false
     highway_angle_input.value_changed.connect(game.change_highway_angle)
     metronome_toggle=editor_switch(guides,"metronome","Metronome","Click to the beat while editing or recording.",game.beat_clock.enabled,func(on):
         if game.beat_clock.enabled!=on: game.beat_clock.toggle())
@@ -684,6 +689,7 @@ func refresh() -> void:
     if trail_style_input: trail_style_input.select(1 if game.trail_style=="solid" else 0)
     if note_thickness_input: note_thickness_input.select(game.note_thickness)
     for kind in shape_tiles: shape_tiles[kind].selected=kind==game.synk_note_shape
+    if shape_note: shape_note.visible=game.highway_style!="synk"
     for key in hit_style_buttons: hit_style_buttons[key].set_selected(key==game.hit_style)
     if hit_size_input: hit_size_input.sync_value(game.hit_size*100)
     for value in render_scale_buttons: render_scale_buttons[value].set_selected(is_equal_approx(value,game.render_scale()))

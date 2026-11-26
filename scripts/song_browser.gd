@@ -291,8 +291,10 @@ func update_best() -> void:
     var region=game.section_range(game.play_mode)
     notes=notes.filter(func(n): return float(n.time)>=region.x-.001 and float(n.time)<region.y)
     var key=(str(game.song.id)+JSON.stringify(notes)).sha256_text()
-    best_value.text=str(int(game.prefs.get_value("scores",key,0)))
-    rank_value.text=str(game.prefs.get_value("score_ranks",key,"—"))
+    var best_score=int(game.prefs.get_value("scores",key,0))
+    best_value.text=str(best_score) if best_score>0 else "—"
+    rank_value.text=str(game.prefs.get_value("score_ranks",key,"—")) if best_score>0 else ""
+    if best_score<=0: best_label.text="No score yet"+(" on "+preload("res://scripts/chart_levels.gd").label(variant) if lobby.has_variant(str(game.song.id),variant) else "")
     # Full combo / all perfect badges, play count and any active modifiers.
     if game.extras:
         var stats: Dictionary=game.extras.stats_for(key)

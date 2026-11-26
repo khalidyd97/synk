@@ -186,7 +186,7 @@ func ui_text(parent: Node,text: String,size: int=18) -> Label:
 # Pill tabs like the Settings section tabs: paper white when chosen, frosted otherwise.
 func style_tabs(container: TabContainer) -> void:
     var bar=container.get_tab_bar()
-    bar.add_theme_font_size_override("font_size",17); bar.add_theme_font_override("font",Arcade.sans(600))
+    bar.add_theme_font_size_override("font_size",19); bar.add_theme_font_override("font",Arcade.sans(600))
     bar.add_theme_constant_override("h_separation",8)
     for state in ["tab_selected","tab_unselected","tab_hovered","tab_focus"]:
         var pill=StyleBoxFlat.new(); pill.set_corner_radius_all(999); pill.anti_aliasing=true
@@ -374,12 +374,16 @@ func open_tools(selected_tab: String="Drafts") -> void:
     scope_refresh["Bookmarks"]=func(): populate_bookmarks(bookmark_list)
     ui_text(pages.Song,"SONG DETAILS",24)
     ui_text(pages.Song,str(game.song.title)+" · "+game.album_name(game.song),24)
-    ui_text(pages.Song,"Title, artist, album, track number, album art and gameplay background are shared by this song's chart versions. Edit them with DETAILS in the Chart Studio song list. Chart timing, sections and bookmarks are under THIS CHART.")
+    ui_text(pages.Song,"Title, artist, album, track number, album art and gameplay background are shared by this song's chart versions. Chart timing, sections and bookmarks are under THIS CHART.")
+    ui_button(pages.Song,"OPEN SONG DETAILS",func():
+        var id=str(game.song.id)
+        close_tools(); game.close_editor()
+        if game.mode=="library": game.open_song_details(id))
     ui_text(pages.Authoring,"PERSONAL EDITING PREFERENCES",24)
     ui_text(pages.Authoring,"These preferences apply across charts. They affect your editing/playback experience and are not written into shared chart files. Recorder controls are quick shortcuts to these same preferences.")
     ui_button(pages.Authoring,"RECORDER PREFERENCES",func(): close_tools(); game.recorder.show_setup(true))
-    var mr_button=ui_button(pages.Authoring,"MR ON" if game.mr.enabled else "MR OFF",game.mr.toggle)
-    mr_button.pressed.connect(func(): mr_button.text="MR ON" if game.mr.enabled else "MR OFF")
+    var mr_button=ui_button(pages.Authoring,"Vocals: cut" if game.mr.enabled else "Vocals: on",game.mr.toggle)
+    mr_button.pressed.connect(func(): mr_button.text="Vocals: cut" if game.mr.enabled else "Vocals: on")
     var ghost=ui_button(pages.Authoring,"GHOST GUIDES ON" if game.ghost_recording else "GHOST GUIDES OFF",game.toggle_ghost_recording)
     ghost.pressed.connect(func(): ghost.text="GHOST GUIDES ON" if game.ghost_recording else "GHOST GUIDES OFF")
     var guides=ui_button(pages.Authoring,"ALIGNMENT LINES ON" if game.note_lines else "ALIGNMENT LINES OFF",game.toggle_note_lines)

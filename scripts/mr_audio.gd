@@ -88,9 +88,9 @@ func sync_mode() -> void:
 	if playing: game.audio.play(position)
 	game.audio.stream_paused=paused; game.visual_clock_ready=false
 func refresh_buttons() -> void:
-	var caption="MR OFF"
+	var caption="Vocals: on"
 	if enabled:
-		caption="MR ON" if reduced!=null else ("MR N/A" if not unavailable.is_empty() else "MR %d%%" % roundi(progress*100))
+		caption="Vocals: cut" if reduced!=null else ("Vocals: n/a" if not unavailable.is_empty() else "Vocals %d%%" % roundi(progress*100))
 	for button in buttons:
 		if not is_instance_valid(button): continue
 		button.text=caption; button.set_selected(enabled and reduced!=null)

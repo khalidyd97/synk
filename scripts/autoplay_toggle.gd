@@ -26,4 +26,6 @@ func _draw() -> void:
     var knob_radius=track.size.y*.34
     var knob=Vector2(lerpf(track.position.x+track.size.y*.5,track.end.x-track.size.y*.5,amount),track.get_center().y)
     draw_circle(knob,knob_radius,Color("cfcbd2").lerp(Soft.INK,amount))
-    draw_string(Soft.font_for(self),Vector2(0,size.y*.95),"Auto",HORIZONTAL_ALIGNMENT_CENTER,size.x,15,Color("8f8b94").lerp(Soft.TEXT,amount))
+    var caption="Auto play"; var caption_font=Soft.font_for(self)
+    var caption_width=caption_font.get_string_size(caption,HORIZONTAL_ALIGNMENT_LEFT,-1,14).x
+    draw_string(caption_font,Vector2((size.x-caption_width)*.5,size.y*.95),caption,HORIZONTAL_ALIGNMENT_LEFT,-1,14,Color("8f8b94").lerp(Soft.TEXT,amount))
