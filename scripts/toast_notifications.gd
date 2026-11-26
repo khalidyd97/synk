@@ -89,6 +89,10 @@ func notify(message: String,kind: String="auto",seconds: float=-1.0):
     item.tween=create_tween(); item.tween.tween_property(card,"modulate:a",1.0,.18)
     set_process(true)
 
+# Clears every message at once, for when a dialog opens underneath them.
+func clear() -> void:
+    for item in items.duplicate(): dismiss(item,false)
+
 func dismiss(item: Dictionary,animated: bool=true):
     if not items.has(item) or (item.hiding and animated): return
     if item.tween is Tween and item.tween.is_running(): item.tween.kill()

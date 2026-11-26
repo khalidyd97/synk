@@ -334,6 +334,7 @@ var pause_home: Button
 var pause_settings: Button
 var pause_restart: Button
 var countdown_label: Label
+var countdown_hint: Label
 var actions: Control
 var hud: Label
 var score_panel: SynkScoreHud
@@ -378,6 +379,7 @@ var picker: FileDialog
 var updating = false
 var last_play_notes: Array = []
 var record_info: Label
+var record_types_caption: Label
 var record_help: Label
 var arrange_button: Button
 var kind_buttons: Array[Button] = []
@@ -784,6 +786,8 @@ func build_ui() -> void:
 	# Plain white numbers; a faint dark edge keeps them readable over bright highways.
 	countdown_label.add_theme_color_override("font_color",Color.WHITE)
 	countdown_label.add_theme_color_override("font_outline_color",Color(0,0,0,.35)); countdown_label.add_theme_constant_override("outline_size",6)
+	countdown_hint=label(ui,"",.2,.57,.8,.63,22); countdown_hint.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	countdown_hint.add_theme_color_override("font_color",Color("e8d9c2")); countdown_hint.visible=false; countdown_hint.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	guide_button=button(safe_parent("SafeGuideButton"),"NOTE GUIDE",.84,.16,.98,.22,func(): set_mode("guide"))
 	guide_back=button(safe_parent("SafeGuideBack"),"‹  BACK",.40,.85,.60,.96,func(): set_mode("menu"),"nav")
 	# Song intro sits above the HUD and below the pause/results modal.
@@ -828,6 +832,8 @@ func build_ui() -> void:
 
 
 	record_left_plate = recorder_plate(Rect2(0.012, 0.135, 0.105, 0.5))
+	record_types_caption = label(record_tools, "Listen for", 0.012, 0.108, 0.117, 0.134, 14);record_types_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	record_types_caption.add_theme_color_override("font_color", Color("9a968d"))
 	record_right_plate = recorder_plate(Rect2(0.883, 0.135, 0.105, 0.405))
 	var kinds = ["all", "tap", "hold", "slide", "flick"]
 	for i in kinds.size():
@@ -842,7 +848,7 @@ func build_ui() -> void:
 		kind_buttons[-1].tooltip_text = {"all": "Enable every note type for gesture detection", "tap": "Detect taps", "hold": "Detect holds", "slide": "Detect slides", "flick": "Detect flicks"}[kind]
 	button(record_tools, "STOP & REVIEW", 0.84, 0.022, 0.988, 0.105, stop_take, "record")
 	# Correct mode: back to recording sits beside Stop & review; the side columns step away.
-	resume_record_button = button(record_tools, "RECORD", 0.735, 0.022, 0.83, 0.105, toggle_arrange, "tool")
+	resume_record_button = button(record_tools, "RESUME RECORDING", 0.66, 0.022, 0.83, 0.105, toggle_arrange, "tool")
 	resume_record_button.tooltip_text = "Resume recording from here"; resume_record_button.visible = false
 	recorder_angle_caption = label(record_tools, "Angle", 0.12, 0.035, 0.19, 0.095, 16);recorder_angle_caption.add_theme_color_override("font_color", Color("bcb7ad"))
 	recorder_angle_slider=HSlider.new();rect(recorder_angle_slider,record_tools,0.20,0.047,0.40,0.087)
@@ -857,8 +863,11 @@ func build_ui() -> void:
 	var zoom_out = button(record_tools, "−", 0.175, 0.03, 0.225, 0.1, func(): change_correct_zoom(-1), "tool")
 	correct_zoom_label = label(record_tools, "1×", 0.228, 0.035, 0.288, 0.095, 18);correct_zoom_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var zoom_in = button(record_tools, "+", 0.291, 0.03, 0.341, 0.1, func(): change_correct_zoom(1), "tool")
+	correct_snap = bool(prefs.get_value("editor", "correct_snap", false))
+	correct_snap_button = button(record_tools, "", 0.355, 0.03, 0.455, 0.1, toggle_correct_snap, "tool")
+	correct_snap_button.tooltip_text = "Moved notes land on the recorder's grid"
 	zoom_out.tooltip_text = "Zoom out: see more of the take";zoom_in.tooltip_text = "Zoom in: notes sit further apart, so moves are finer"
-	correct_zoom_controls = [zoom_caption, zoom_out, correct_zoom_label, zoom_in]
+	correct_zoom_controls = [zoom_caption, zoom_out, correct_zoom_label, zoom_in, correct_snap_button]
 	for node in correct_zoom_controls: node.visible = false
 	refresh_correct_zoom()
 	var side = func(i: int) -> Array: return [0.89, 0.15 + i * 0.096, 0.98, 0.228 + i * 0.096]
@@ -875,7 +884,7 @@ func build_ui() -> void:
 	text_slides_field.placeholder_text = "Letters or numbers to draw as slides"
 	text_slides_field.text_submitted.connect(func(value: String): insert_text_slides(value); text_slides_field.text = "")
 
-	record_info = label(record_tools, "", 0.55, 0.03, 0.83, 0.1, 17);record_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	record_info = label(record_tools, "", 0.55, 0.026, 0.83, 0.104, 19);record_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	record_info.add_theme_font_override("font", preload("res://scripts/arcade_style.gd").semi())
 	recorder.progress = ProgressBar.new();rect(recorder.progress, record_tools, 0.12, 0.111, 0.67, 0.116)
 	recorder.progress.show_percentage = false;recorder.progress.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1048,12 +1057,13 @@ func update_recorder_focus() -> void:
 	var correcting = mode == "record" and arranging
 	for node in kind_buttons: node.visible = not correcting
 	record_left_plate.visible = not correcting
+	if record_types_caption: record_types_caption.visible = not correcting
 	for node in [record_right_plate, aids_toggle, arrange_button]: node.visible = not correcting
 	if correcting: take_undo_button.visible = false; take_redo_button.visible = false
 	resume_record_button.visible = correcting
 	for node in correct_zoom_controls: node.visible = correcting
 	text_slides_button.visible = false; text_slides_field.visible = true
-	var info_right = 0.725 if correcting else 0.83
+	var info_right = 0.65 if correcting else 0.83
 	if not is_equal_approx(record_info.anchor_right, info_right): record_info.anchor_right = info_right; record_info.anchor_left = info_right - 0.28
 	var plate_bottom = 0.135 + (0.405 if show_history else 0.213)
 	if not is_equal_approx(record_right_plate.anchor_bottom, plate_bottom): record_right_plate.anchor_bottom = plate_bottom
@@ -1590,8 +1600,42 @@ func change_correct_zoom(step: int) -> void:
 	correct_zoom = CORRECT_ZOOMS[index]
 	refresh_correct_zoom()
 	if field and field.world: field.world.clear_notes()
+# Correct mode: moved notes land on the recorder's grid (its subdivision of the beat).
+var correct_snap = false
+var correct_snap_button: Button
+func toggle_correct_snap() -> void:
+	correct_snap = not correct_snap
+	prefs.set_value("editor", "correct_snap", correct_snap);prefs.save("user://preferences.cfg")
+	refresh_correct_zoom()
+func recorder_grid_step() -> float:
+	return 60.0 / maxf(1.0, float(chart_bpm())) / maxf(1.0, float(recorder.division))
+func snap_to_recorder_grid(at: float) -> float:
+	return chart_offset() + snappedf(at - chart_offset(), recorder_grid_step())
+# Correct mode's nudge buttons: the selected note one grid step earlier or later (landing on
+# the grid on the first press), or one lane left or right.
+func nudge_arrange_note(steps: int, lanes: int) -> void:
+	if not arranging or arrange_selection.is_empty(): return
+	var n: Dictionary = arrange_selection.note
+	if n.kind in recorder.locks(): return
+	var in_document = bool(arrange_selection.get("document", false))
+	if in_document: document.checkpoint()
+	if steps != 0:
+		var step = recorder_grid_step()
+		var along = (float(n.time) - chart_offset()) / step
+		var row = floorf(along + 0.02) + 1.0 if steps > 0 else ceilf(along - 0.02) - 1.0
+		var earliest = recorder.region.x if recorder.active and not in_document else 0.0
+		n.time = clampf(chart_offset() + row * step, earliest, maxf(earliest, maxf(0, length() - float(n.duration))))
+	if lanes != 0:
+		var new_lane = clampi(int(n.lane) + lanes, 0, SynkChart.MAX_LANE)
+		var change = new_lane - int(n.lane)
+		n.lane = new_lane;n.end_lane = clampi(int(n.end_lane) + change, 0, SynkChart.MAX_LANE)
+		for point in n.get("path", []): point.lane = clampf(float(point.lane) + change, 0, SynkChart.MAX_LANE)
+	if in_document: document.dirty = true
+	refresh_arrange_controls();commit_take_history()
+
 func refresh_correct_zoom() -> void:
 	if correct_zoom_label == null: return
+	if correct_snap_button: correct_snap_button.text = "SNAP: ON" if correct_snap else "SNAP: OFF";correct_snap_button.set_selected(correct_snap)
 	correct_zoom_label.text = ("%d×" if is_equal_approx(correct_zoom, roundf(correct_zoom)) else "%.1f×") % correct_zoom
 	correct_zoom_controls[1].disabled = correct_zoom <= CORRECT_ZOOMS[0]
 	correct_zoom_controls[3].disabled = correct_zoom >= CORRECT_ZOOMS[-1]
@@ -2111,7 +2155,7 @@ func refresh_arrange_controls() -> void :
 				record_help.text = "%s, %.2f–%.2f s. %s" % [str(n.kind).capitalize(), float(n.time), float(n.time) + float(n.duration), how]
 			else: record_help.text = "%s, lane %d, %.2f s. Drag to move it." % [str(n.kind).capitalize(), int(n.lane) + 1, float(n.time)]
 	else:
-		record_help.text = "Detecting %s · tap or swipe on the 13 lanes; each gesture becomes the matching note." % ", ".join(record_types.map(func(kind):return str(kind)))
+		record_help.text = "Play the notes on the lanes. Listening for %s." % ", ".join(record_types.map(func(kind):return str(kind)))
 
 func select_all_record_types() -> void:
 	record_types=["tap","hold","slide","flick"].filter(func(kind):return kind not in recorder.locks())
@@ -2168,11 +2212,13 @@ func change_arrange_note_type(kind: String) -> void :
 		if kind == "flick" and int(n.direction) == 2: n.direction = 0
 	refresh_arrange_controls();commit_take_history()
 
-func stage_time_at(p: Vector2) -> float:
+# `height` is the surface the touch is measured on: the track, or the trail's height when the
+# finger is on a hold or slide (far up the track the difference is large).
+func stage_time_at(p: Vector2, height: float = 0.0) -> float:
 	var point=p*Vector2(field.viewport.size)
 	var origin=field.world.camera.project_ray_origin(point)
 	var direction=field.world.camera.project_ray_normal(point)
-	var hit=Plane(Vector3.UP,0).intersects_ray(origin,direction)
+	var hit=Plane(Vector3.UP,height).intersects_ray(origin,direction)
 	if hit!=null: hit=field.world.unwarp_point(hit)
 	return song_time+hit.z/field.world.travel_speed() if hit!=null else song_time
 
@@ -2232,7 +2278,7 @@ func add_point_at(p: Vector2) -> void :
 	# Measure the tap where it lands on the trail itself (any depth on the highway),
 	# not projected onto the lane pad, so far parts of a slide accept connectors too.
 	var lane = arrange_lane_at(p)
-	var at = stage_time_at(p)
+	var at = stage_time_at(p, field.world.trail_height())
 	var snapped = snap_slide_time(at)
 	var offset = snapped - float(selected_note.time)
 	if offset > .02 and offset < float(selected_note.duration) - .02: at = snapped
@@ -2373,6 +2419,7 @@ func arrange_pointer_event(id: int, p: Vector2, began: bool, ended: bool, cancel
 
 		if absf(target_time - float(touch.start_time)) > 0.001:
 			target_time = snap_recorder_move(target_time, minf(song_time, maxf(0, length() - float(n.duration))), n)
+			if correct_snap: target_time = snap_to_recorder_grid(target_time)
 		var lane_delta = clampi(roundi(arrange_lane_at(p) - float(touch.touch_lane)), - SynkChart.MAX_LANE, SynkChart.MAX_LANE)
 		var new_lane = clampi(int(touch.start_lane) + lane_delta, 0, SynkChart.MAX_LANE)
 		if not touch.changed and (absf(float(n.time) - target_time) > 0.001 or int(n.lane) != new_lane):
@@ -2504,6 +2551,11 @@ func _process(delta: float) -> void:
 	combo_glow.set_shader_parameter("boost",displayed_pulse)
 	countdown_label.visible=counting and not intro_running
 	countdown_ring.visible=false  # no ring around the countdown
+	if countdown_hint:
+		countdown_hint.visible=countdown_label.visible and mode=="record"
+		if countdown_hint.visible:
+			var from=recorder.region.x if recorder.active else maxf(0,song_time)
+			countdown_hint.text="Recording resumes" if resume_countdown>0 else "Recording from %.2f s" % from
 	if countdown_label.visible:
 		var number=ceili(resume_countdown if resume_countdown>0 else countdown)
 		if number!=countdown_shown and number>0: countdown_shown=number; UiSound.play(self,"count")
@@ -2551,6 +2603,7 @@ func _process(delta: float) -> void:
 	if combo_art_value!=combo or combo_art_size!=combo_hud.size: update_combo_art()
 	var note_word="note" if capture.notes.size()==1 else "notes"
 	record_info.text=("Paused · correcting  %.1f s\n%d %s" if arranging else "●  Recording  %.1f s\n%d %s · %s") % ([maxf(0,song_time),capture.notes.size(),note_word] if arranging else [maxf(0,song_time),capture.notes.size(),note_word,tool.capitalize()])
+	record_info.add_theme_color_override("font_color", Color("f4f1ea") if arranging else Color("ff8a70"))
 	update_recorder_focus()
 	if mode=="record" and recorder.active:
 		if song_time<recorder.region.x and countdown==0: record_info.text="Pre-roll · listen\nRecording starts at %.2f s" % recorder.region.x

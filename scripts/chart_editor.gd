@@ -33,6 +33,11 @@ var clipboard_span=0.0
 var paste_button: Button
 var range_paste_button: Button
 var record_button: Button
+var record_summary: Label
+func _process(_delta: float) -> void:
+    if record_summary and is_visible_in_tree() and game.recorder:
+        var summary: String=game.recorder.setup_summary()
+        if record_summary.text!=summary: record_summary.text=summary
 var overview: Control
 var group_move_button: Button
 
@@ -89,6 +94,9 @@ func _ready() -> void:
     game.title_label.clip_text=true; game.title_label.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
     record_button=action(self,"● RECORD",.46,.02,.56,.075,game.record_here,"record")
     action(self,"SETUP",.565,.02,.635,.075,game.recorder.show_setup,"tool")
+    # What Record will do, without opening Setup.
+    record_summary=caption(self,"",.40,.076,.70,.1,13); record_summary.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    record_summary.add_theme_color_override("font_color",Color("9a968d")); record_summary.mouse_filter=Control.MOUSE_FILTER_IGNORE
     var gear=preload("res://scripts/gear_button.gd").new(); gear.accent=Arcade.CYAN; place(gear,self,.69,.015,.735,.08)
     gear.pressed.connect(func(): game.open_lobby_settings())
     action(self,"SAVE",.75,.02,.85,.075,game.save_editor,"primary")

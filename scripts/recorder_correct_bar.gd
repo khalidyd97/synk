@@ -17,12 +17,13 @@ const MODES = {"move": "Move", "shape": "Bend", "draw": "Draw", "points": "Conne
 # Column placement (fractions of the screen): the room left of and right of the highway,
 # below the top controls, where the track is still narrow.
 const COLUMN_TOP = .15
-const ROW = .08
+const ROW = .072
 const LEFT_X = [.012, .115]
 const RIGHT_X = [.885, .988]
 const GROUP_GAP = .012
 # Which column a button lives in, top to bottom; "|" marks a gap between groups.
-const LEFT_ORDER = ["tap", "hold", "slide", "flick", "|", "delete", "text", "copy", "paste", "start", "end", "cancel"]
+# Two keys in one entry share a row.
+const LEFT_ORDER = ["tap", "hold", "slide", "flick", "|", ["earlier", "later"], ["lane_left", "lane_right"], "|", "delete", "text", "copy", "paste", "start", "end", "cancel"]
 const RIGHT_ORDER = ["move", "shape", "draw", "points", "more", "letter", "|", "undo", "redo", "|", "overlaps", "aids"]
 var right_plate: Panel
 
@@ -45,6 +46,13 @@ func _ready() -> void:
 	add("overlaps", "", func(): game.overlap_tools.toggle_open())
 	add("aids", "Aids", game.toggle_record_aids)
 	add("delete", "DELETE", game.delete_arrange_note)
+	add("earlier", "Earlier", func(): game.nudge_arrange_note(-1, 0))
+	add("later", "Later", func(): game.nudge_arrange_note(1, 0))
+	add("lane_left", "◂ Lane", func(): game.nudge_arrange_note(0, -1))
+	add("lane_right", "Lane ▸", func(): game.nudge_arrange_note(0, 1))
+	for key in ["earlier", "later", "lane_left", "lane_right"]: buttons[key].caption_size = 14
+	buttons.earlier.tooltip_text = "Move the note one grid step earlier"
+	buttons.later.tooltip_text = "Move the note one grid step later"
 	add("copy", "Copy part", begin_copy)
 	add("start", "Start here", mark_start)
 	add("end", "End here", mark_end)
@@ -87,6 +95,7 @@ func wanted() -> Array:
 		keys.append_array(["|", "aids"])
 		return keys
 	keys.append_array(KINDS)
+	keys.append_array(["earlier", "later", "lane_left", "lane_right"])
 	if note.kind in ["hold", "slide"]:
 		keys.append("|")
 		if game.uses_skd_recorder_surface():
@@ -116,13 +125,17 @@ func arrange(keys: Array) -> void:
 func column(keys: Array, order: Array, x: Array, panel: Panel) -> void:
 	var y = COLUMN_TOP + .008
 	var any = false; var gap = false
-	for k in order:
-		if k == "|": gap = any; continue
-		if k not in keys: continue
+	for entry in order:
+		if entry is String and entry == "|": gap = any; continue
+		var row: Array = (entry if entry is Array else [entry]).filter(func(k): return k in keys)
+		if row.is_empty(): continue
 		if gap: y += GROUP_GAP; gap = false
-		var b: Control = buttons[k]; b.visible = true; any = true
-		b.anchor_left = x[0] + .006; b.anchor_right = x[1] - .006; b.anchor_top = y; b.anchor_bottom = y + ROW - .012
-		b.offset_left = 0; b.offset_right = 0; b.offset_top = 0; b.offset_bottom = 0
+		var width = (x[1] - x[0] - .012) / row.size()
+		for i in row.size():
+			var b: Control = buttons[row[i]]; b.visible = true; any = true
+			b.anchor_left = x[0] + .006 + width * i + (.002 if i > 0 else 0.0); b.anchor_right = x[0] + .006 + width * (i + 1) - (.002 if i < row.size() - 1 else 0.0)
+			b.anchor_top = y; b.anchor_bottom = y + ROW - .012
+			b.offset_left = 0; b.offset_right = 0; b.offset_top = 0; b.offset_bottom = 0
 		y += ROW
 	panel.visible = any
 	panel.anchor_left = x[0]; panel.anchor_right = x[1]; panel.anchor_top = COLUMN_TOP; panel.anchor_bottom = y - .004

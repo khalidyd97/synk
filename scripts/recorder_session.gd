@@ -283,6 +283,7 @@ func toggle(parent: Node, title: String, value: bool, callback: Callable) -> voi
 	b.toggle_mode = true;b.button_pressed = value;b.set_selected(value)
 	b.toggled.connect( func(on): b.text = title + (" · ON" if on else " · OFF");b.set_selected(on);callback.call(on))
 func shell(title: String, narrow: bool = false) -> Dictionary:
+	if game.toast_layer: game.toast_layer.clear()
 	var root = Control.new();game.ui.add_child(root);root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	# The app's menu look: Inter Tight, sentence-case captions, frosted controls.
 	root.theme = preload("res://scripts/game_theme.gd").arcade()
@@ -342,6 +343,13 @@ func setup_switch(parent: Node, title: String, hint: String, value: bool, callba
 	b.toggled.connect( func(on): b.text = "On" if on else "Off";b.set_selected(on);callback.call(on))
 	setup_line(parent, title, hint, b, 130);return b
 
+func setup_summary() -> String:
+	var parts = ["Selected range" if use_range else "From the playhead"]
+	parts.append({"free": "Free timing", "soft": "Soft snap", "strict": "Strict snap"}.get(quantize, "Free timing"))
+	parts.append("No count-in" if pre_roll <= 0 else "%d bar count-in" % pre_roll)
+	if replace: parts.append("Replaces notes")
+	return " · ".join(parts)
+
 func show_setup(global_only: bool = false) -> void :
 	if setup: return
 	if game.mode == "record": game.toggle_pause()
@@ -383,6 +391,7 @@ func show_setup(global_only: bool = false) -> void :
 func show_review() -> void :
 	if takes.is_empty(): return
 	close_review()
+	if game.toast_layer: game.toast_layer.clear()
 	game.seek_to(region.x)
 	if game.timeline: game.timeline.reveal_time(region.x)
 	review = Control.new();game.ui.add_child(review);review.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -421,14 +430,17 @@ func show_review() -> void :
 		button(splice, "Apply combined take", func():
 			var combined = combine(first.selected, second.selected, split.value)
 			apply_take(combined);update_review();compare_label.text = "COMBINED · %d notes\n" % combined.size() + compare_label.text)
-	game.label(review_panel, "Keeping adds this take to your draft. Save the chart in the editor when you are ready.", 0.035, 0.755, 0.965, 0.8, 17).add_theme_color_override("font_color", Color("bcb7ad"))
+	game.label(review_panel, "Keep take adds it to your draft only. Keep and save also saves the chart.", 0.035, 0.755, 0.965, 0.8, 17).add_theme_color_override("font_color", Color("bcb7ad"))
 	# Keep is the main action; the others are quieter, and discarding sits apart on the left.
-	review_action("DISCARD TAKE", 0.035, 0.2, func(): undo_take();close_review();game.tell("Take discarded."), "danger")
-	review_action("RECORD AGAIN", 0.4, 0.58, retry, "secondary")
-	review_action("LISTEN BACK", 0.595, 0.775, preview, "secondary")
-	review_action("KEEP TAKE", 0.79, 0.965, keep, "primary")
-	replay_return = Action.new();replay_return.text = "BACK TO TAKE REVIEW";replay_return.variant = "secondary";replay_return.caption_size = 21
-	game.rect(replay_return, safe, 0.33, 0.015, 0.67, 0.09);replay_return.pressed.connect(stop_preview);replay_return.visible = false
+	review_action("DISCARD TAKE", 0.035, 0.175, func(): undo_take();close_review();game.tell("Take discarded."), "danger")
+	review_action("RECORD AGAIN", 0.29, 0.445, retry, "secondary")
+	review_action("LISTEN BACK", 0.455, 0.61, preview, "secondary")
+	review_action("KEEP TAKE", 0.62, 0.765, keep, "secondary")
+	# Keeps the take and saves the chart in one step, so the save is not forgotten.
+	review_action("KEEP AND SAVE", 0.775, 0.965, func(): keep();game.save_editor(), "primary")
+	replay_return = Action.new();replay_return.text = "BACK TO TAKE REVIEW";replay_return.variant = "primary";replay_return.caption_size = 21
+	# Solid, and wide enough to cover Chart tools, Record and Setup behind it while listening back.
+	game.rect(replay_return, safe, 0.315, 0.012, 0.645, 0.085);replay_return.pressed.connect(stop_preview);replay_return.visible = false
 	preload("res://scripts/interface_life.gd").mount(review_panel)
 	Motion.pop(review_panel)
 	update_review()
