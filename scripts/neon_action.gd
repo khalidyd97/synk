@@ -110,6 +110,10 @@ func _process(_delta: float) -> void:
 		disabled_tween.tween_method(func(amount: float): art_material.set_shader_parameter("disabled_amount",amount),float(art_material.get_shader_parameter("disabled_amount")),1.0 if disabled else 0.0,.18)
 		previous_disabled=disabled
 		refresh_caption_color()
+	# The caption's colour depends on both states. A button that was selected while still
+	# disabled, then enabled while hidden (hidden buttons do not update), kept the faint
+	# disabled colour on its bright selected plate, so its text vanished.
+	if caption_state!=Vector2i(int(disabled),int(selected)): refresh_caption_color()
 	if not text.is_empty() and raw_caption!=text: caption.text=shown_caption(text)
 	if caption.text+str(size)+str(caption_size)!=fitted_for: fit_caption()
 	queue_redraw()
@@ -198,11 +202,14 @@ func set_selected(value: bool) -> void:
 		selection_tween.tween_method(func(amount: float): art_material.set_shader_parameter("selected_amount",amount),float(art_material.get_shader_parameter("selected_amount")),1.0 if value else 0.0,.22).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	refresh_caption_color()
 
+# The (disabled, selected) pair the caption colour was last set for.
+var caption_state=Vector2i(-1,-1)
 func refresh_caption_color() -> void:
 	# Filled-when-selected chips need brighter text to stay readable on the fill.
 	if caption==null: return
 	caption.add_theme_font_override("font",Soft.font_for(self))
 	caption.add_theme_color_override("font_color",Soft.text_color(soft_role(),1.0 if selected else 0.0,disabled,self))
+	caption_state=Vector2i(int(disabled),int(selected))
 
 func animate_hover(value: float) -> void:
 	if hover_tween and hover_tween.is_running(): hover_tween.kill()
@@ -212,4 +219,7 @@ func animate_hover(value: float) -> void:
 
 # Hidden widgets stop their per-frame update (screens keep many of them alive offscreen).
 func _notification(what: int) -> void:
-	if what==NOTIFICATION_VISIBILITY_CHANGED or what==NOTIFICATION_READY: set_process(is_visible_in_tree())
+	if what==NOTIFICATION_VISIBILITY_CHANGED or what==NOTIFICATION_READY:
+		set_process(is_visible_in_tree())
+		# Coming back into view: take whatever changed while hidden.
+		if what==NOTIFICATION_VISIBILITY_CHANGED and is_visible_in_tree() and caption!=null: refresh_caption_color()
