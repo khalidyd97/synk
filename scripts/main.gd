@@ -178,6 +178,10 @@ func old_ssrg_ui() -> bool:
 	return uses_ssrg_gameplay() and not synk_mode() and bool(prefs.get_value("highway","old_ssrg_ui",false))
 # SYNK mode: the SSRG stage, projection, timing and rules, drawn with SYNK's own highway,
 # rails, judgment bar and notes (assets/synk_mode, made by tools/make_synk_mode_art.py).
+# The stage art (rails, judgment bar, lane markers): SYNK mode in play, and in the recorder
+# too when SYNK mode is the chosen highway, so the track looks the same while charting.
+func synk_stage() -> bool:
+	return synk_mode() or (highway_style=="synk" and uses_skd_recorder_surface())
 func synk_mode() -> bool:
 	return uses_ssrg_gameplay() and highway_style=="synk"
 # Which artwork the SSRG stage draws: "synk", "old" (the 2014 UI) or "" (the stock SSRG art).

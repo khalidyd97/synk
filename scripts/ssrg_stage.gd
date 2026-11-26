@@ -296,7 +296,7 @@ func update_entrance(world: Node3D) -> void:
 	press_glow.material_override.set_shader_parameter("entrance",judgment_in)
 	judgment_scan.material_override.set_shader_parameter("progress",scan_progress)
 	# SYNK mode has no post-countdown scan beam.
-	judgment_scan.material_override.set_shader_parameter("strength",0.0 if world.game.synk_mode() else scan_strength)
+	judgment_scan.material_override.set_shader_parameter("strength",0.0 if world.game.synk_stage() else scan_strength)
 
 func warmup(world: Node3D) -> void :
 	if not visible: return
@@ -311,7 +311,7 @@ const SYNK_SCAN = Color("ffd9a8")
 func configure(world: Node3D) -> void :
 	var stock_road = true
 	var old_ui=world.game.old_ssrg_ui()
-	var synk=world.game.synk_mode()
+	var synk=world.game.synk_stage()
 	press.visible = stock_road
 	press_glow.visible = stock_road
 	var judgment_art:Texture2D=preload("res://assets/ssrg/imported/judgment_Main_black_BG3.png")
@@ -347,7 +347,7 @@ func configure(world: Node3D) -> void :
 	press_glow.material_override.set_shader_parameter("glow_color",Color(SYNK_GLOW,150.0/255.0) if synk and band == null else Color(band_color,150.0/255.0))
 	judgment_scan.material_override.set_shader_parameter("color",SYNK_SCAN if synk else Color8(255,220,65))
 	# The recorder keeps the line readable without the loud gold: a faint cream strip.
-	if world.game.uses_skd_recorder_surface():
+	if world.game.uses_skd_recorder_surface() and not synk:
 		press.material_override.set_shader_parameter("base_color",RECORDER_BAND)
 		press_glow.visible=false
 	var rail_tint = world.custom_color("rail_color")

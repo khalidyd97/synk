@@ -594,7 +594,7 @@ func rail_glow_colors() -> Array:
 	var left: Color=custom if custom!=null else (JUDGMENT_GOLD if gold and not cover_palette_active else colors[0])
 	var right: Color=custom if custom!=null else (JUDGMENT_GOLD if gold and not cover_palette_active else colors[1])
 	# SYNK mode's rails glow in its own coral and amber, not the song cover's colours.
-	if game.synk_mode() and custom==null: left=synk_toned("stage",SYNK_MODE_RAIL_GLOW[0]); right=synk_toned("stage",SYNK_MODE_RAIL_GLOW[1])
+	if game.synk_stage() and custom==null: left=synk_toned("stage",SYNK_MODE_RAIL_GLOW[0]); right=synk_toned("stage",SYNK_MODE_RAIL_GLOW[1])
 	return [element_color("glow",left),element_color("glow",right)]
 const SYNK_MODE_RAIL_GLOW = [Color("ff6b3d"), Color("ffc36b")]
 

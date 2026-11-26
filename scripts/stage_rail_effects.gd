@@ -34,7 +34,7 @@ func update(delta: float) -> void:
     var strengths=Vector2(game.features.effect("Flowing edge energy"),game.features.effect("Soft fading glow"))
     var stage=game.mode in ["play","record"] or (game.mode=="paused" and game.paused_mode in ["play","record"])
     # SYNK mode has no rail energy or soft glow: its own stage replaces them.
-    visible=stage and (strengths.x>0 or strengths.y>0) and not game.synk_mode()
+    visible=stage and (strengths.x>0 or strengths.y>0) and not game.synk_stage()
     if not visible: return
     if game.mode in ["play","record"]: clock+=delta
     if strengths!=last_strengths:
@@ -45,7 +45,7 @@ func update(delta: float) -> void:
         last_strengths=strengths
     var custom=world.custom_color("rail_color")
     var colors=[custom if custom!=null else (world.colors[0] if world.cover_palette_active else Color("39d9ff")),custom if custom!=null else (world.colors[1] if world.cover_palette_active else Color("ed45f5"))]
-    if world.game.synk_mode() and custom==null: colors=[world.synk_toned("stage",world.SYNK_MODE_RAIL_GLOW[0]),world.synk_toned("stage",world.SYNK_MODE_RAIL_GLOW[1])]
+    if world.game.synk_stage() and custom==null: colors=[world.synk_toned("stage",world.SYNK_MODE_RAIL_GLOW[0]),world.synk_toned("stage",world.SYNK_MODE_RAIL_GLOW[1])]
     var glow_colors=world.rail_glow_colors()
     if colors+glow_colors!=last_colors:
         for i in 2:
