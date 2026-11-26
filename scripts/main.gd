@@ -488,6 +488,7 @@ func _ready() -> void:
 	ghost_recording=bool(prefs.get_value("editor","ghost_recording",true))
 	space_close_chords=bool(prefs.get_value("editor","space_close_chords",true))
 	recorder_real_notes=bool(prefs.get_value("editor","recorder_real_notes",false))
+	record_lane_assist=bool(prefs.get_value("editor","lane_assist",false))
 	recorder_note_speed=clampf(snappedf(float(prefs.get_value("editor","note_speed",1.0)),.1),.1,5.0)
 	record_speed=float(prefs.get_value("editor","record_speed",1.0))
 	if record_speed not in RECORD_SPEEDS: record_speed=1.0
@@ -1606,6 +1607,11 @@ func change_correct_zoom(step: int) -> void:
 	if field and field.world: field.world.clear_notes()
 # Correct mode: moved notes land on the recorder's grid (its subdivision of the beat).
 var correct_snap = false
+# Recording aid: a touch that lands between two lanes continues the staircase being played.
+var record_lane_assist = false
+func change_record_lane_assist(on: bool) -> void:
+	record_lane_assist = on
+	prefs.set_value("editor", "lane_assist", on);prefs.save("user://preferences.cfg")
 var correct_snap_button: Button
 func toggle_correct_snap() -> void:
 	correct_snap = not correct_snap
@@ -1615,6 +1621,33 @@ func recorder_grid_step() -> float:
 	return 60.0 / maxf(1.0, float(chart_bpm())) / maxf(1.0, float(recorder.division))
 func snap_to_recorder_grid(at: float) -> float:
 	return chart_offset() + snappedf(at - chart_offset(), recorder_grid_step())
+# Step entry (correct mode): a tap on an empty lane places a tap note at the line, on the
+# recorder's grid, and the take moves one grid step on. Patterns such as stairs are tapped in
+# without having to play them in time.
+var step_entry = false
+func toggle_step_entry() -> void:
+	step_entry = not step_entry
+	if step_entry: arrange_selection.clear()
+	refresh_arrange_controls()
+func step_entry_advance(steps: int) -> void:
+	if not arranging: return
+	song_time = clampf(snap_to_recorder_grid(song_time) + steps * recorder_grid_step(), 0, length())
+	visual_song_time = song_time;visual_clock_ready = false
+	refresh_arrange_controls()
+func step_entry_place(lane_value: float) -> void:
+	if not arranging or not step_entry: return
+	if "tap" in recorder.locks() or recorder.current_pass() not in ["all", "tap"]: tell("Taps can't be added in this pass.");return
+	var at = snap_to_recorder_grid(song_time)
+	if recorder.active and (at < recorder.region.x - 0.001 or at > recorder.region.y + 0.001): tell("That is outside the part you are recording.");return
+	var lane = clampi(roundi(lane_value), 0, SynkChart.MAX_LANE)
+	for other in capture.notes:
+		if absf(float(other.time) - at) < 0.002 and int(other.lane) == lane: step_entry_advance(1);return
+	capture.notes.append(SynkChart.note(at, lane))
+	capture.notes.sort_custom(func(a, b): return float(a.time) < float(b.time))
+	commit_take_history()
+	if overlap_tools: overlap_tools.refresh()
+	step_entry_advance(1)
+
 # Correct mode's nudge buttons: the selected note one grid step earlier or later (landing on
 # the grid on the first press), or one lane left or right.
 func nudge_arrange_note(steps: int, lanes: int) -> void:
@@ -2107,6 +2140,7 @@ func toggle_arrange() -> void :
 	if mode != "record": return
 	arrange_preview.stop();recorder_beam_touches.clear()
 	arranging = not arranging;arrange_touches.clear();arrange_selection.clear();capture.gestures.clear()
+	step_entry = false
 	arrange_button.text = "RECORD" if arranging else "CORRECT"
 	refresh_correct_view()
 	refresh_arrange_controls()
@@ -2152,6 +2186,7 @@ func refresh_arrange_controls() -> void :
 		if arrange_selection.is_empty():
 			var copied = correct_bar.clipboard.size() if correct_bar else 0
 			record_help.text = "%d note%s copied. Scroll to a new place and tap Paste here." % [copied, "" if copied == 1 else "s"] if copied > 0 else "Tap a note to select it. Drag empty space to scroll."
+			if step_entry: record_help.text = "Step entry: tap a lane to place a note at the line. Each tap moves one grid step on."
 		else:
 			var n: Dictionary = arrange_selection.note
 			if n.kind in ["hold", "slide"]:
@@ -2389,8 +2424,9 @@ func arrange_pointer_event(id: int, p: Vector2, began: bool, ended: bool, cancel
 			arrange_touches[id] = {"kind": "note", "note": selected.note, "document": selected.document, "changed": false, "start_time": float(selected.note.time), "start_lane": int(selected.note.lane), "touch_time": stage_time_at(p), "touch_lane": arrange_lane_at(p), "start_p": p, "gesture": ""}
 	if canceled or ended:
 		var finished: Dictionary = arrange_touches.get(id, {})
-		if ended and not canceled and finished.get("tap_clears", false) and p.distance_to(finished.start_p) < 0.012 and not arrange_selection.is_empty():
-			arrange_selection.clear();refresh_arrange_controls()
+		if ended and not canceled and finished.get("tap_clears", false) and p.distance_to(finished.start_p) < 0.012:
+			if not arrange_selection.is_empty(): arrange_selection.clear();refresh_arrange_controls()
+			elif step_entry and not outside_highway(p): step_entry_place(arrange_lane_at(p))
 		arrange_touches.erase(id);commit_take_history();return
 	if not arrange_touches.has(id): return
 	var touch: Dictionary = arrange_touches[id]
@@ -2743,6 +2779,7 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 		if began:
 			capture.minimum_lane_gap=chord_lane_gap()
 			capture.onset_bounds=recorder.region
+			capture.lane_assist=record_lane_assist
 			capture.begin(id,song_time,p,recorder.capture_tool(),recorder.spacing_blockers(),recorder.allowed_types())
 		capture.move(id,song_time,p)
 		if ended:

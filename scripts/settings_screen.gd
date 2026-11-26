@@ -670,6 +670,7 @@ func build_editor(items: VBoxContainer,guides: VBoxContainer) -> void:
         if game.ghost_recording!=on: game.toggle_ghost_recording())
     editor_switch(items,"lines","Alignment lines","Show note alignment guides in the recorder.",game.note_lines,func(on):
         if game.note_lines!=on: game.toggle_note_lines())
+    editor_switch(items,"laneassist","Lane assist","While you play a staircase, a touch between two lanes takes the one that continues it.",game.record_lane_assist,game.change_record_lane_assist)
     editor_switch(items,"realnotes","Realistic notes","Record and correct with the real gameplay note faces instead of flat recorder notes.",game.recorder_real_notes,func(on):
         if game.recorder_real_notes!=on: game.toggle_recorder_real_notes())
     speed_button=action(items,"RECORD SPEED  ·  "+str(game.record_speed)+"×",func():

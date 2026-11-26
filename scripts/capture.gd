@@ -9,12 +9,32 @@ var last_spacing_resolved=true
 var onset_bounds=Vector2(0,INF)
 const CHORD_WINDOW=.06
 
+# Lane assist (Settings > Editor preferences > Recording): while a staircase is being played,
+# a touch that lands between two lanes takes the one that continues it. A touch placed
+# clearly on a lane is never changed.
+var lane_assist = false
+var onsets: Array = []        # the last two note starts: {time, lane}
+const ASSIST_GAP = .6         # seconds: only notes played in a run count as a staircase
+const ASSIST_EDGE = .22       # how close to the middle of a lane a touch must be to be left alone
+func assisted_lane(raw: float, nearest: int, time: float) -> int:
+	if not lane_assist or onsets.size() < 2: return nearest
+	var before: Dictionary = onsets[0]; var last: Dictionary = onsets[1]
+	var step = int(last.lane) - int(before.lane)
+	if absi(step) != 1 or time - float(last.time) > ASSIST_GAP or float(last.time) - float(before.time) > ASSIST_GAP: return nearest
+	if absf(raw - nearest) <= ASSIST_EDGE: return nearest
+	var next = int(last.lane) + step
+	if next < 0 or next > SynkChart.MAX_LANE or absf(raw - next) > .85: return nearest
+	return next
+
 static func lane(x: float) -> float:
 	return clampf((x - .07) / .86 * SynkChart.LANES - .5, 0, SynkChart.MAX_LANE)
 
 func begin(id: int, time: float, p: Vector2, tool = "auto",fixed: Array=[], allowed_types: Array=[]) -> bool:
 	if time < 0 or p.x < .07 or p.x > .93 or p.y < .6 or p.y > .92 or gestures.has(id): return false
 	var note_lane = roundi(lane(p.x))
+	note_lane = assisted_lane(lane(p.x), note_lane, time)
+	onsets.append({"time": time, "lane": note_lane})
+	if onsets.size() > 2: onsets.pop_front()
 	var raw_time=time
 	# Use the original onset, not release order. Never chain an entire fast roll into one chord.
 	chord_starts=chord_starts.filter(func(entry): return absf(raw_time-float(entry.input_time))<=CHORD_WINDOW and current_note(entry.note))

@@ -23,7 +23,7 @@ const RIGHT_X = [.885, .988]
 const GROUP_GAP = .012
 # Which column a button lives in, top to bottom; "|" marks a gap between groups.
 # Two keys in one entry share a row.
-const LEFT_ORDER = ["tap", "hold", "slide", "flick", "|", ["earlier", "later"], ["lane_left", "lane_right"], "|", "delete", "text", "copy", "paste", "start", "end", "cancel"]
+const LEFT_ORDER = ["tap", "hold", "slide", "flick", "|", ["earlier", "later"], ["lane_left", "lane_right"], "|", "delete", "text", "copy", "stagger", "paste", "|", "step", ["back", "rest"], "start", "end", "up", "down", "zigzag", "alternate", "|", "cancel"]
 const RIGHT_ORDER = ["move", "shape", "draw", "points", "more", "letter", "|", "undo", "redo", "|", "overlaps", "aids"]
 var right_plate: Panel
 
@@ -58,6 +58,21 @@ func _ready() -> void:
 	add("end", "End here", mark_end)
 	add("paste", "Paste here", paste_here)
 	add("cancel", "Cancel", cancel_copy)
+	# Step entry: tap lanes to place notes one grid step apart, with no timing needed.
+	add("step", "Step entry", func(): game.toggle_step_entry())
+	add("back", "Back", func(): game.step_entry_advance(-1))
+	add("rest", "Rest", func(): game.step_entry_advance(1))
+	for key in ["back", "rest"]: buttons[key].caption_size = 15
+	buttons.step.tooltip_text = "Tap a lane to place a note at the line; each tap moves one grid step on"
+	buttons.back.tooltip_text = "Go back one grid step"
+	buttons.rest.tooltip_text = "Skip one grid step without a note"
+	# Stagger: keep the timing of a marked part and lay its notes out as a pattern.
+	add("stagger", "Stagger part", begin_stagger)
+	add("up", "Stairs up", func(): apply_pattern("up"))
+	add("down", "Stairs down", func(): apply_pattern("down"))
+	add("zigzag", "Zigzag", func(): apply_pattern("zigzag"))
+	add("alternate", "Alternate", func(): apply_pattern("alternate"))
+	buttons.stagger.tooltip_text = "Mark a part, then turn its notes into stairs, a zigzag or alternating lanes"
 	buttons.copy.tooltip_text = "Copy a part: mark its start and end at the line"
 	buttons.paste.tooltip_text = "Paste the copied part so it starts at the line"
 	buttons.text.tooltip_text = "Insert typed letters or numbers as shaped slides"
@@ -83,14 +98,19 @@ func wanted() -> Array:
 	var note = selected_note()
 	var overlaps = not game.overlap_tools.groups.is_empty()
 	var keys: Array = ["undo", "redo", "|"]
+	if copy_stage == "pattern":
+		keys.append_array(["up", "down", "zigzag", "alternate", "|", "cancel"])
+		return keys
 	if copy_stage != "":
 		keys.append("start" if copy_stage == "start" else "end")
 		keys.append_array(["|", "cancel"])
 		return keys
 	if note.is_empty():
 		keys.append("text")
-		keys.append_array(["|", "copy"])
+		keys.append_array(["|", "copy", "stagger"])
 		if not clipboard.is_empty(): keys.append("paste")
+		keys.append_array(["|", "step"])
+		if game.step_entry: keys.append_array(["back", "rest"])
 		if overlaps: keys.append_array(["|", "overlaps"])
 		keys.append_array(["|", "aids"])
 		return keys
@@ -154,10 +174,71 @@ func here() -> float: return float(game.song_time)
 
 func begin_copy() -> void:
 	game.arrange_selection = {}
-	copy_stage = "start"; game.refresh_arrange_controls()
+	mark_purpose = "copy"; copy_stage = "start"; game.refresh_arrange_controls()
 
 func cancel_copy() -> void:
-	copy_stage = ""; game.refresh_arrange_controls()
+	copy_stage = ""; stagger_notes = []; game.refresh_arrange_controls()
+
+# --- Stagger a part ---------------------------------------------------------------------
+# Mark a part the same way as for a copy, then pick a pattern. The notes keep their times;
+# only their lanes change, so a rhythm that was played right can be laid out as stairs.
+var mark_purpose = "copy"     # what the start and end marks are for: "copy" or "stagger"
+var stagger_notes: Array = [] # the marked notes themselves (not copies), in time order
+func begin_stagger() -> void:
+	game.arrange_selection = {}
+	mark_purpose = "stagger"; copy_stage = "start"; game.refresh_arrange_controls()
+
+# Notes that start together (a chord) move as one step of the pattern.
+func stagger_groups() -> Array:
+	var groups: Array = []
+	for note in stagger_notes:
+		if groups.is_empty() or float(note.time) - float(groups[-1][0].time) > .012: groups.append([note])
+		else: groups[-1].append(note)
+	return groups
+
+# Lane of step `i` for a pattern that starts on `base`.
+func pattern_lane(kind: String, base: int, i: int, second: int) -> int:
+	var top = SynkChart.MAX_LANE
+	if kind == "alternate":
+		var other = second if second != base else (base + 2 if base + 2 <= top else base - 2)
+		return base if i % 2 == 0 else other
+	if kind == "zigzag":
+		# Three lanes out and back: 0 1 2 3 2 1 0 ..., toward whichever side has the room.
+		var along = i % 6
+		var offset = along if along <= 3 else 6 - along
+		return base + offset if base + 3 <= top else base - offset
+	# Stairs run to the edge of the highway and come back.
+	var walk = posmod(base + (i if kind == "up" else -i), top * 2)
+	return walk if walk <= top else top * 2 - walk
+
+func apply_pattern(kind: String) -> void:
+	var groups = stagger_groups()
+	if groups.is_empty(): cancel_copy(); return
+	var lowest = func(group: Array) -> int:
+		var low = SynkChart.MAX_LANE
+		for note in group: low = mini(low, int(note.lane))
+		return low
+	var base: int = lowest.call(groups[0])
+	var second: int = lowest.call(groups[1]) if groups.size() > 1 else base
+	var in_document = false
+	for note in stagger_notes:
+		if game.document.notes.any(func(other): return is_same(other, note)): in_document = true
+	if in_document: game.document.checkpoint()
+	for i in groups.size():
+		var change = pattern_lane(kind, base, i, second) - int(lowest.call(groups[i]))
+		for note in groups[i]:
+			# Keep every note of a chord on the highway.
+			var shift = clampi(change, -int(note.lane), SynkChart.MAX_LANE - int(note.lane))
+			note.lane = int(note.lane) + shift
+			note.end_lane = clampi(int(note.end_lane) + shift, 0, SynkChart.MAX_LANE)
+			for point in note.get("path", []): point.lane = clampf(float(point.lane) + shift, 0, SynkChart.MAX_LANE)
+	if in_document: game.document.dirty = true
+	var count = stagger_notes.size()
+	copy_stage = ""; stagger_notes = []
+	game.commit_take_history()
+	if game.overlap_tools: game.overlap_tools.refresh()
+	game.refresh_arrange_controls()
+	game.tell("%d note%s laid out as %s." % [count, "" if count == 1 else "s", {"up": "stairs up", "down": "stairs down", "zigzag": "a zigzag", "alternate": "alternating lanes"}[kind]])
 
 func mark_start() -> void:
 	copy_start = here(); copy_stage = "end"; game.refresh_arrange_controls()
@@ -165,6 +246,14 @@ func mark_start() -> void:
 func mark_end() -> void:
 	var from = minf(copy_start, here()); var to = maxf(copy_start, here())
 	if to - from < .05: game.tell("Scroll to the end of the part first."); return
+	if mark_purpose == "stagger":
+		stagger_notes = []
+		for note in game.capture.notes + game.document.notes:
+			if float(note.time) >= from - .001 and float(note.time) <= to + .001 and game.recorder.writable(note): stagger_notes.append(note)
+		if stagger_notes.size() < 2: stagger_notes = []; game.tell("Mark a part with at least two notes to stagger."); return
+		stagger_notes.sort_custom(func(a, b): return float(a.time) < float(b.time))
+		copy_start = from; copy_stage = "pattern"
+		game.refresh_arrange_controls(); return
 	var found: Array = []
 	for note in game.capture.notes + game.document.notes:
 		if float(note.time) >= from - .001 and float(note.time) <= to + .001:
@@ -203,6 +292,7 @@ func paste_here() -> void:
 
 # The help line while copying, or "" when not copying.
 func copy_help() -> String:
+	if copy_stage == "pattern": return "%d notes marked. Choose a pattern; their timing stays as recorded." % stagger_notes.size()
 	if copy_stage == "start": return "Scroll so the start of the part is on the line, then tap Start here."
 	if copy_stage == "end": return "Start at %.2f s. Scroll to the end of the part, then tap End here." % copy_start
 	return ""
@@ -211,6 +301,7 @@ func refresh() -> void:
 	buttons.undo.disabled = game.take_undo.is_empty()
 	buttons.redo.disabled = game.take_redo.is_empty()
 	buttons.aids.set_selected(game.aids_drawer.visible)
+	buttons.step.set_selected(game.step_entry)
 	var tools = game.overlap_tools
 	var n = tools.groups.size()
 	buttons.overlaps.text = "%d overlap%s" % [n, "" if n == 1 else "s"]
