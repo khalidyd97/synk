@@ -279,7 +279,7 @@ func ask_level(action: String) -> void:
     if selected_entry().is_empty(): return
     level_action=action
     show_available_levels(occupied_levels())
-    level_title.text="Chart level for “%s”" % str(selected_entry().title)
+    level_title.text=str(selected_entry().title)
     update_level_hint(); level_popup.visible=true
 func show_available_levels(taken:Array)->void:
     var suggestion=1
@@ -290,9 +290,28 @@ func show_available_levels(taken:Array)->void:
     selected_level=0
     if Levels.key(suggestion) not in taken: select_level(suggestion)
     update_level_hint()
+# The five intensity bands a level falls in (six levels each), as the song list's dots show them.
+const LEVEL_BANDS=[
+    {"name":"Easy","color":Color("7fe3b0"),"about":"Relaxed. Mostly single taps, with room to breathe."},
+    {"name":"Normal","color":Color("6cc7ff"),"about":"Steady. Holds and simple slides join in."},
+    {"name":"Hard","color":Color("ffd166"),"about":"Busy. Faster runs, chords and flicks."},
+    {"name":"Expert","color":Color("ff8a5c"),"about":"Demanding. Dense patterns and quick slides."},
+    {"name":"Master","color":Color("ff6f91"),"about":"Everything at once, for players who know the song by heart."}]
 func update_level_hint() -> void:
-    level_hint.text="All %d levels are used for this song." % Levels.MAX_LEVEL if selected_level==0 else "Lv %d selected · occupied levels are unavailable." % selected_level
-    if level_create_button: level_create_button.disabled=selected_level==0
+    var full=selected_level==0
+    if level_create_button:
+        level_create_button.disabled=full
+        level_create_button.text="NO LEVEL LEFT" if full else "CREATE LEVEL %d CHART" % selected_level
+    if level_number==null: return
+    level_hint.text="Every level of this song already has a chart." if full else "Dimmed levels already have a chart."
+    level_number.text="—" if full else "Lv %d" % selected_level
+    var band: Dictionary=LEVEL_BANDS[clampi(floori(float(maxi(selected_level,1)-1)/6.0),0,4)]
+    var index=LEVEL_BANDS.find(band)
+    level_band.text="" if full else str(band.name)
+    level_band.add_theme_color_override("font_color",band.color)
+    level_dots.text="" if full else "●".repeat(index+1)+"○".repeat(4-index)
+    level_dots.add_theme_color_override("font_color",band.color)
+    level_about.text="" if full else str(band.about)
 func select_level(level: int) -> void:
     if level<1 or level>Levels.MAX_LEVEL or level_buttons[level-1].disabled:return
     selected_level=level
@@ -307,29 +326,52 @@ func confirm_level() -> void:
     if selected_level==0 or occupied_levels().has(Levels.key(selected_level)):update_level_hint();return
     level_popup.visible=false
     selected_variant=Levels.key(selected_level); open_selected(level_action)
+var level_number: Label
+var level_band: Label
+var level_dots: Label
+var level_about: Label
+# New chart: the chosen level, large, with what that intensity means on the left; all thirty
+# levels on the right, one row per intensity band.
 func build_level_popup() -> void:
     level_popup=Control.new(); fraction_place(level_popup,canvas,0,0,1,1); level_popup.mouse_filter=Control.MOUSE_FILTER_STOP
     preload("res://scripts/modal_input.gd").register(level_popup)
-    var dim=ColorRect.new(); fraction_place(dim,level_popup,0,0,1,1); dim.color=Color(0.006,0.006,0.006,.72); dim.mouse_filter=Control.MOUSE_FILTER_IGNORE
-    var card=Panel.new(); fraction_place(card,level_popup,.08,.08,.92,.92)
-    var style=StyleBoxFlat.new(); style.bg_color=Color(.04,.04,.04,.97); style.border_color=Color(1,1,1,.12)
-    style.set_border_width_all(1); style.set_corner_radius_all(24); style.shadow_color=Color(0,0,0,.55); style.shadow_size=24
+    var dim=ColorRect.new(); fraction_place(dim,level_popup,0,0,1,1); dim.color=Color(0.006,0.006,0.006,.78); dim.mouse_filter=Control.MOUSE_FILTER_IGNORE
+    var card=Panel.new(); fraction_place(card,level_popup,.06,.07,.94,.93)
+    var style=StyleBoxFlat.new(); style.bg_color=Color("17181b"); style.border_color=Color(1,1,1,.08)
+    style.set_border_width_all(1); style.set_corner_radius_all(26); style.shadow_color=Color(0,0,0,.55); style.shadow_size=24
     card.add_theme_stylebox_override("panel",style)
-    fraction_label(card,"Chart level",.08,.04,.92,.12,16,Color("bcb7ad")).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-    level_title=fraction_label(card,"",.06,.12,.94,.23,23); level_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-    var choices=Control.new();fraction_place(choices,card,.07,.27,.93,.77)
-    var gap=.012
-    for level in range(1,Levels.MAX_LEVEL+1):
-        var column=(level-1)%6;var row_index=floori(float(level-1)/6.0)
-        var width=(1.0-gap*7.0)/6.0;var height=(1.0-gap*6.0)/5.0
-        var left=gap+column*(width+gap);var top=gap+row_index*(height+gap)
-        var choice=ButtonArt.new();choice.text=str(level);choice.caption_size=24;choice.menu_motion=true
-        fraction_place(choice,choices,left,top,left+width,top+height)
-        choice.pressed.connect(Callable(self,"select_level").bind(level))
-        level_buttons.append(choice)
-    level_hint=fraction_label(card,"",.06,.78,.94,.84,16,Color("bcb7ad")); level_hint.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-    level_create_button=fraction_button(card,"CREATE LEVEL",.08,.87,.58,.96,confirm_level,"primary")
-    fraction_button(card,"CANCEL",.62,.87,.92,.96,func(): level_popup.visible=false,"nav")
+    # Left: what is being made.
+    var side=Panel.new(); fraction_place(side,card,.03,.05,.33,.95)
+    var side_style=StyleBoxFlat.new(); side_style.bg_color=Color("212226"); side_style.set_corner_radius_all(20)
+    side.add_theme_stylebox_override("panel",side_style); side.mouse_filter=Control.MOUSE_FILTER_IGNORE
+    fraction_label(side,"New chart",.1,.06,.9,.13,16,Color("bcb7ad"))
+    level_title=fraction_label(side,"",.1,.13,.9,.27,22); level_title.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+    level_title.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS; level_title.max_lines_visible=2
+    level_number=fraction_label(side,"",.1,.32,.9,.56,84); level_number.add_theme_font_override("font",preload("res://scripts/arcade_style.gd").SERIF)
+    level_band=fraction_label(side,"",.1,.58,.6,.66,24)
+    level_dots=fraction_label(side,"",.6,.58,.9,.66,20); level_dots.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
+    level_about=fraction_label(side,"",.1,.68,.9,.92,17,Color("bcb7ad")); level_about.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+    level_about.vertical_alignment=VERTICAL_ALIGNMENT_TOP
+    # Right: the thirty levels, six to a band.
+    fraction_label(card,"Pick a level",.37,.05,.97,.12,22)
+    var choices=Control.new();fraction_place(choices,card,.37,.14,.97,.74)
+    var name_width=.16; var gap=.012
+    for row_index in LEVEL_BANDS.size():
+        var band: Dictionary=LEVEL_BANDS[row_index]
+        var height=(1.0-gap*4.0)/5.0; var top=row_index*(height+gap)
+        var caption=fraction_label(choices,str(band.name),0,top,name_width-.02,top+height,17,band.color)
+        caption.vertical_alignment=VERTICAL_ALIGNMENT_CENTER
+        for column in 6:
+            var level=row_index*6+column+1
+            var width=(1.0-name_width-gap*5.0)/6.0
+            var left=name_width+column*(width+gap)
+            var choice=ButtonArt.new();choice.text=str(level);choice.caption_size=22;choice.menu_motion=true
+            fraction_place(choice,choices,left,top,left+width,top+height)
+            choice.pressed.connect(Callable(self,"select_level").bind(level))
+            level_buttons.append(choice)
+    level_hint=fraction_label(card,"",.37,.75,.97,.81,15,Color("9a968d"))
+    fraction_button(card,"CANCEL",.37,.845,.55,.95,func(): level_popup.visible=false,"nav")
+    level_create_button=button(card,"CREATE CHART",.57*1456,.845*819,.40*1456,.105*819,confirm_level,Vector2(1456,819),true)
     level_popup.visible=false
 func open_selected(action: String) -> void:
     if selected_entry().is_empty() or not pending_action.is_empty(): return
