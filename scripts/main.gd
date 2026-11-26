@@ -852,6 +852,15 @@ func build_ui() -> void:
 	recorder_angle_slider.value_changed.connect(change_highway_angle)
 	recorder_angle_label=label(record_tools,"%d°" % roundi(highway_angle),0.405,0.035,0.465,0.095,16)
 	recorder_angle_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	# Correct mode: zoom the track in to place notes more precisely.
+	var zoom_caption = label(record_tools, "Zoom", 0.12, 0.035, 0.17, 0.095, 16);zoom_caption.add_theme_color_override("font_color", Color("bcb7ad"))
+	var zoom_out = button(record_tools, "−", 0.175, 0.03, 0.225, 0.1, func(): change_correct_zoom(-1), "tool")
+	correct_zoom_label = label(record_tools, "1×", 0.228, 0.035, 0.288, 0.095, 18);correct_zoom_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var zoom_in = button(record_tools, "+", 0.291, 0.03, 0.341, 0.1, func(): change_correct_zoom(1), "tool")
+	zoom_out.tooltip_text = "Zoom out: see more of the take";zoom_in.tooltip_text = "Zoom in: notes sit further apart, so moves are finer"
+	correct_zoom_controls = [zoom_caption, zoom_out, correct_zoom_label, zoom_in]
+	for node in correct_zoom_controls: node.visible = false
+	refresh_correct_zoom()
 	var side = func(i: int) -> Array: return [0.89, 0.15 + i * 0.096, 0.98, 0.228 + i * 0.096]
 	var b = side.call(0);aids_toggle = button(record_tools, "AIDS  ◂", b[0], b[1], b[2], b[3], toggle_record_aids, "tool")
 	b = side.call(1);arrange_button = button(record_tools, "CORRECT", b[0], b[1], b[2], b[3], toggle_arrange)
@@ -1034,7 +1043,7 @@ func update_recorder_focus() -> void:
 	var history = not take_undo.is_empty() or not take_redo.is_empty()
 	var show_history = not focus or history
 	take_undo_button.visible = show_history;take_redo_button.visible = show_history
-	# Correct mode keeps every tool on its one bottom toolbar (recorder_correct_bar.gd):
+	# Correct mode keeps every tool in its own two side columns (recorder_correct_bar.gd):
 	# the type column, the side column and their plates step away.
 	var correcting = mode == "record" and arranging
 	for node in kind_buttons: node.visible = not correcting
@@ -1042,6 +1051,7 @@ func update_recorder_focus() -> void:
 	for node in [record_right_plate, aids_toggle, arrange_button]: node.visible = not correcting
 	if correcting: take_undo_button.visible = false; take_redo_button.visible = false
 	resume_record_button.visible = correcting
+	for node in correct_zoom_controls: node.visible = correcting
 	text_slides_button.visible = false; text_slides_field.visible = true
 	var info_right = 0.725 if correcting else 0.83
 	if not is_equal_approx(record_info.anchor_right, info_right): record_info.anchor_right = info_right; record_info.anchor_left = info_right - 0.28
@@ -1566,8 +1576,25 @@ func space_authored_notes(incoming: Array,fixed: Array) -> bool:
 func note_travel_seconds() -> float:
 	# APK default basicTime=3.5; normalized 1x corresponds to original UI speed 3.
 	if ssrg_playable_run: return 3.5/ssrg_note_speed()
-	if uses_recorder_colors(): return (3.5 if recorder_skd_view else 2.6)/recorder_note_speed
+	# Correct mode's zoom spreads the notes further apart along the track.
+	if uses_recorder_colors(): return (3.5 if recorder_skd_view else 2.6)/recorder_note_speed/(correct_zoom if arranging else 1.0)
 	return 3.5/note_speed
+
+# Correct mode zoom: how far apart notes sit along the track, for finer moves.
+const CORRECT_ZOOMS = [1.0, 1.5, 2.0, 3.0, 4.0]
+var correct_zoom = 1.0
+var correct_zoom_label: Label
+var correct_zoom_controls: Array = []
+func change_correct_zoom(step: int) -> void:
+	var index = clampi(CORRECT_ZOOMS.find(correct_zoom) + step, 0, CORRECT_ZOOMS.size() - 1)
+	correct_zoom = CORRECT_ZOOMS[index]
+	refresh_correct_zoom()
+	if field and field.world: field.world.clear_notes()
+func refresh_correct_zoom() -> void:
+	if correct_zoom_label == null: return
+	correct_zoom_label.text = ("%d×" if is_equal_approx(correct_zoom, roundf(correct_zoom)) else "%.1f×") % correct_zoom
+	correct_zoom_controls[1].disabled = correct_zoom <= CORRECT_ZOOMS[0]
+	correct_zoom_controls[3].disabled = correct_zoom >= CORRECT_ZOOMS[-1]
 
 func cycle_recorder_note_speed() -> void:
 	recorder_note_speed=snappedf(recorder_note_speed+.1,.1)

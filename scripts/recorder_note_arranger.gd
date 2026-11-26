@@ -23,6 +23,8 @@ func _ready() -> void :
 	plate_style.border_color = Color(1, 1, 1, 0.07);plate_style.set_border_width_all(1);plate_style.set_corner_radius_all(22)
 	plate_style.shadow_color = Color(0, 0, 0, 0.45);plate_style.shadow_size = 18
 	plate.add_theme_stylebox_override("panel", plate_style)
+	inner_plate = Panel.new();add_child(inner_plate);inner_plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	inner_plate.add_theme_stylebox_override("panel", plate_style)
 	# Three rows of six: tools · point and path edits · one-tap shapes.
 	# Row 1: how a touch on the highway edits the note, plus snapping and point delete.
 	for i in 4:
@@ -48,7 +50,7 @@ func _ready() -> void :
 		b.pressed.connect( func(): reshape(operation));shape_buttons[operation] = b
 	for i in 2:
 		var endpoint = "start" if i == 0 else "end"
-		var b = tool_button("GO TO " + endpoint.to_upper(), 1, 3 + i)
+		var b = tool_button("TO " + endpoint.to_upper(), 1, 3 + i)
 		b.pressed.connect( func(): focus_endpoint(endpoint));endpoint_buttons[endpoint] = b
 	# Row 3: one-tap shapes, then mirror and flip, all fine-tuned afterwards by dragging.
 	var preset_names = ["zigzag", "wave", "s_curve", "sweep", "mirror", "flip"]
@@ -59,43 +61,27 @@ func _ready() -> void :
 var snap_button: Button
 var curve_button: Button
 var endpoint_buttons: Dictionary = {}
-# What More opens: one compact row just above Correct mode's toolbar, holding only the
-# buttons that apply to the selected note, in groups: where to look, reshape, delete a point.
-const MORE_BOTTOM = 0.834
-const MORE_ROW = 0.078
-const MORE_GAP = 0.012
-const MORE_PER_ROW = 8
-func more_groups() -> Array:
-	return [[endpoint_buttons.get("start"), endpoint_buttons.get("end")],
-		[shape_buttons.get("straighten"), shape_buttons.get("smooth"), curve_button, preset_buttons.get("zigzag"), preset_buttons.get("wave"), preset_buttons.get("s_curve"), preset_buttons.get("sweep"), preset_buttons.get("mirror"), preset_buttons.get("flip")],
-		[snap_button, delete_point_button]]
-func lay_out_more() -> void:
-	# Rows of visible buttons; a null marks a gap between groups.
-	var rows: Array = [[]]
-	for group in more_groups():
-		var shown = group.filter(func(b): return b != null and b.visible)
-		if shown.is_empty(): continue
-		var row: Array = rows[-1]
-		if row.filter(func(b): return b != null).size() + shown.size() > MORE_PER_ROW: rows.append([]); row = rows[-1]
-		if not row.is_empty(): row.append(null)
-		row.append_array(shown)
-	var widest = 0.0
-	for r in rows.size():
-		var row: Array = rows[r]
-		var count = row.filter(func(b): return b != null).size()
-		var total = count * COLUMN_STEP + (row.size() - count) * MORE_GAP
-		widest = maxf(widest, total)
-		var x = 0.5 - total * 0.5
-		# The first row sits lowest, next to the toolbar.
-		var top = MORE_BOTTOM - 0.01 - (r + 1) * MORE_ROW
-		for b in row:
-			if b == null: x += MORE_GAP; continue
-			b.anchor_left = x + 0.003;b.anchor_right = x + COLUMN_STEP - 0.003
-			b.anchor_top = top + 0.006;b.anchor_bottom = top + MORE_ROW - 0.006
-			x += COLUMN_STEP
-	plate.anchor_left = 0.5 - widest * 0.5 - 0.008;plate.anchor_right = 0.5 + widest * 0.5 + 0.008
-	plate.anchor_bottom = MORE_BOTTOM;plate.anchor_top = MORE_BOTTOM - 0.02 - rows.size() * MORE_ROW
 var preset_buttons: Dictionary = {}
+# What More opens: short rows beside Correct mode's right column, clear of the highway.
+# Where to look sits in the inner column (the track is narrow that high up), the reshaping
+# tools and Delete point in the outer one. Only what applies to the selected note shows.
+const MORE_TOP = 0.197
+const MORE_ROW = 0.058
+const MORE_OUTER = [0.772, 0.872]
+const MORE_INNER = [0.694, 0.764]
+var inner_plate: Panel
+func more_column(list: Array, x: Array, panel: Panel) -> void:
+	var shown = list.filter(func(b): return b != null and b.visible)
+	var y = MORE_TOP + 0.006
+	for b in shown:
+		b.anchor_left = x[0] + 0.005;b.anchor_right = x[1] - 0.005
+		b.anchor_top = y;b.anchor_bottom = y + MORE_ROW - 0.008
+		y += MORE_ROW
+	panel.visible = not shown.is_empty()
+	panel.anchor_left = x[0];panel.anchor_right = x[1];panel.anchor_top = MORE_TOP;panel.anchor_bottom = y
+func lay_out_more() -> void:
+	more_column([shape_buttons.get("straighten"), shape_buttons.get("smooth"), curve_button, preset_buttons.get("zigzag"), preset_buttons.get("wave"), preset_buttons.get("s_curve"), preset_buttons.get("sweep"), preset_buttons.get("mirror"), preset_buttons.get("flip"), snap_button, delete_point_button], MORE_OUTER, plate)
+	more_column([endpoint_buttons.get("start"), endpoint_buttons.get("end")], MORE_INNER, inner_plate)
 const COLUMN_LEFT = 0.14
 const COLUMN_STEP = 0.0865
 func tool_button(text: String, row: int, column: int) -> Button:
@@ -128,7 +114,7 @@ func _process(_delta: float) -> void :
 	var writable = game.recorder.writable(note) and drags.is_empty() and draw_touches.is_empty()
 	var slide = note.kind == "slide"
 	var skd_nodes=game.uses_skd_recorder_surface()
-	plate.visible = expanded
+	plate.visible = expanded;inner_plate.visible = expanded
 	# On the SKD grid snapping is fixed, so there is nothing to choose.
 	snap_button.visible = expanded and not skd_nodes
 	for b in extra_buttons: b.visible = expanded

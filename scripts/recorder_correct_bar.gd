@@ -1,8 +1,9 @@
 extends Control
-# Correct mode's one toolbar, along the bottom. It changes with what is selected:
-#   nothing     → Undo · Redo · Type text · overlaps (only when there are some) · Aids
-#   a note      → Undo · Redo · Tap Hold Slide Flick · [hold/slide: Move Bend Draw Connector
-#                 More Letter] · overlaps · Delete
+# Correct mode's tools, in two columns beside the highway so nothing covers the track.
+# They change with what is selected:
+#   nothing     → left: Type text · Copy part · Paste here      right: Undo Redo · overlaps · Aids
+#   a note      → left: Tap Hold Slide Flick · Delete            right: [hold/slide: Move Bend
+#                 Draw Connector More Letter] · Undo Redo · overlaps
 # Every button calls the recorder's existing actions; this file only decides what shows.
 
 const ACTION = preload("res://scripts/recorder_action.gd")
@@ -13,19 +14,27 @@ var buttons: Dictionary = {}
 var layout_key = ""
 const KINDS = ["tap", "hold", "slide", "flick"]
 const MODES = {"move": "Move", "shape": "Bend", "draw": "Draw", "points": "Connector"}
-# Bar placement (fractions of the screen) and the room between groups.
-const TOP = .842
-const BOTTOM = .918
+# Column placement (fractions of the screen): the room left of and right of the highway,
+# below the top controls, where the track is still narrow.
+const COLUMN_TOP = .15
+const ROW = .08
+const LEFT_X = [.012, .115]
+const RIGHT_X = [.885, .988]
 const GROUP_GAP = .012
+# Which column a button lives in, top to bottom; "|" marks a gap between groups.
+const LEFT_ORDER = ["tap", "hold", "slide", "flick", "|", "delete", "text", "copy", "paste", "start", "end", "cancel"]
+const RIGHT_ORDER = ["move", "shape", "draw", "points", "more", "letter", "|", "undo", "redo", "|", "overlaps", "aids"]
+var right_plate: Panel
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	plate = Panel.new(); add_child(plate); plate.mouse_filter = Control.MOUSE_FILTER_STOP
 	var style = StyleBoxFlat.new(); style.bg_color = Color(.05, .05, .06, .92)
 	style.border_color = Color(1, 1, 1, .07); style.set_border_width_all(1); style.set_corner_radius_all(22)
-	style.shadow_color = Color(0, 0, 0, .45); style.shadow_size = 16
+	plate = Panel.new(); add_child(plate); plate.mouse_filter = Control.MOUSE_FILTER_STOP
 	plate.add_theme_stylebox_override("panel", style)
+	right_plate = Panel.new(); add_child(right_plate); right_plate.mouse_filter = Control.MOUSE_FILTER_STOP
+	right_plate.add_theme_stylebox_override("panel", style)
 	add("undo", "Undo", game.undo_record_note)
 	add("redo", "Redo", game.redo_record_note)
 	add("text", "Type text", game.open_text_slides)
@@ -100,21 +109,24 @@ func _process(_delta: float) -> void:
 
 func arrange(keys: Array) -> void:
 	for b in buttons.values(): b.visible = false
-	var count = keys.filter(func(k): return k != "|").size()
-	var gaps = keys.size() - count
-	# Buttons are as wide as the room allows, up to a comfortable pill.
-	var unit = minf(.082, (.9 - gaps * GROUP_GAP) / maxf(1, count))
-	var total = unit * count + gaps * GROUP_GAP
-	var x = .5 - total * .5
-	for k in keys:
-		if k == "|": x += GROUP_GAP; continue
-		var b: Control = buttons[k]; b.visible = true
-		b.anchor_left = x + .003; b.anchor_right = x + unit - .003; b.anchor_top = TOP + .012; b.anchor_bottom = BOTTOM - .012
+	column(keys, LEFT_ORDER, LEFT_X, plate)
+	column(keys, RIGHT_ORDER, RIGHT_X, right_plate)
+
+# Stacks the wanted buttons of one column and fits its plate around them.
+func column(keys: Array, order: Array, x: Array, panel: Panel) -> void:
+	var y = COLUMN_TOP + .008
+	var any = false; var gap = false
+	for k in order:
+		if k == "|": gap = any; continue
+		if k not in keys: continue
+		if gap: y += GROUP_GAP; gap = false
+		var b: Control = buttons[k]; b.visible = true; any = true
+		b.anchor_left = x[0] + .006; b.anchor_right = x[1] - .006; b.anchor_top = y; b.anchor_bottom = y + ROW - .012
 		b.offset_left = 0; b.offset_right = 0; b.offset_top = 0; b.offset_bottom = 0
-		x += unit
-	plate.anchor_left = .5 - total * .5 - .008; plate.anchor_right = .5 + total * .5 + .008
-	plate.anchor_top = TOP; plate.anchor_bottom = BOTTOM
-	plate.offset_left = 0; plate.offset_right = 0; plate.offset_top = 0; plate.offset_bottom = 0
+		y += ROW
+	panel.visible = any
+	panel.anchor_left = x[0]; panel.anchor_right = x[1]; panel.anchor_top = COLUMN_TOP; panel.anchor_bottom = y - .004
+	panel.offset_left = 0; panel.offset_right = 0; panel.offset_top = 0; panel.offset_bottom = 0
 
 # --- Copy a part and paste it somewhere else --------------------------------------------
 # Correct mode's line is "here": scroll so the start of the part is on the line and mark it,

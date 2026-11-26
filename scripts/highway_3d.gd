@@ -1753,7 +1753,7 @@ func build_note_node(key: String, note: Dictionary, recording = false) -> void:
 		mat.set_shader_parameter("artwork",game.ssrg_presentation.special_art(int(note.ssrg_special),int(note.get("ssrg_item",0)),0.0))
 	var lines: Array = []
 	if recording: lines = make_alignment_lines(node,note,palette)
-	var signature = (hash(note) if recording or game.mode=="record" else 0)^hash([game.note_speed,game.ssrg_speed_setting() if game.ssrg_playable_run else 0,game.note_shape,game.gameplay_note_size(),game.trail_style,game.uses_ssrg_gameplay(),game.ssrg_skin(),game.uses_skd_recorder_surface(),game.uses_even_correct_view()])
+	var signature = (hash(note) if recording or game.mode=="record" else 0)^hash([game.note_speed,game.ssrg_speed_setting() if game.ssrg_playable_run else 0,game.note_shape,game.gameplay_note_size(),game.trail_style,game.uses_ssrg_gameplay(),game.ssrg_skin(),game.uses_skd_recorder_surface(),game.uses_even_correct_view(),game.note_travel_seconds()])
 	if uses_projected_highway() and not recording:
 		for child in node.get_children():
 			if child is GeometryInstance3D:
@@ -1811,7 +1811,7 @@ func sync_note(key: String, note: Dictionary, visible_keys: Dictionary, recordin
 	visible_keys[key] = true
 	if look_signature_frame != Engine.get_process_frames():
 		look_signature_frame = Engine.get_process_frames()
-		look_signature = hash([game.note_speed,game.ssrg_speed_setting() if game.ssrg_playable_run else 0,game.note_shape,game.gameplay_note_size(),game.trail_style,game.uses_ssrg_gameplay(),game.ssrg_skin(),game.uses_skd_recorder_surface(),game.uses_even_correct_view()])
+		look_signature = hash([game.note_speed,game.ssrg_speed_setting() if game.ssrg_playable_run else 0,game.note_shape,game.gameplay_note_size(),game.trail_style,game.uses_ssrg_gameplay(),game.ssrg_skin(),game.uses_skd_recorder_surface(),game.uses_even_correct_view(),game.note_travel_seconds()])
 	var signature = (hash(note) if recording or game.mode=="record" else 0)^look_signature
 	if notes.has(key) and notes[key].signature != signature:
 		notes[key].node.queue_free(); notes.erase(key)
