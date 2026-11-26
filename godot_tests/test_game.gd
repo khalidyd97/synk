@@ -122,10 +122,10 @@ func run() -> void:
 	check(is_equal_approx(game.effective_timing_ms(),game.timing_ms) and not game.bluetooth_latency_input.editable,"Disabling Bluetooth mode restores regular timing")
 	game.bluetooth_latency_input.value=initial_bluetooth_latency
 	game.bluetooth_toggle.button_pressed=initial_bluetooth_mode
-	var original_shape=game.note_shape
-	game.settings_panel.shape_tiles["circle"].pressed.emit()
-	check(game.note_shape=="circle" and game.settings_panel.shape_tiles["circle"].selected and not game.settings_panel.shape_tiles["rectangle"].selected,"Settings switch notes to circles")
-	game.change_note_shape(original_shape)
+	var original_shape=game.synk_note_shape
+	game.settings_panel.shape_tiles["cut"].pressed.emit()
+	check(game.synk_note_shape=="cut" and game.settings_panel.shape_tiles["cut"].selected and not game.settings_panel.shape_tiles["round"].selected,"Settings switch SYNK notes to cut corners")
+	game.change_synk_note_shape(original_shape)
 	var saved_mode=game.bluetooth_mode; var saved_latency=game.bluetooth_latency_ms
 	game.open_sync_helper()
 	check(game.sync_helper.visible and not game.settings_panel.visible and game.sync_helper.player.playing,"Sync helper opens as its own page and starts the metronome")

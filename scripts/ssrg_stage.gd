@@ -331,6 +331,10 @@ func configure(world: Node3D) -> void :
 	elif synk: guide=preload("res://assets/synk_mode/guide.png")
 	for ring in receptors:ring.material_override.set_shader_parameter("artwork",guide)
 	for mark in feedback_marks:mark.material_override.set_shader_parameter("artwork",guide)
+	# SYNK mode note shape: the lane markers take the same outline as the notes.
+	var shape:int=world.game.synk_note_shape_index() if synk else 0
+	for piece in receptors+feedback_marks:
+		piece.material_override.set_shader_parameter("note_shape",shape); piece.material_override.set_shader_parameter("shape_box",world.SYNK_GUIDE_BOX)
 	# SYNK mode adaptive colours: the stage's gold art turned to the cover's main colour.
 	var tone:Vector3=world.synk_tone("stage") if synk else world.SYNK_PLAIN_TONE
 	for piece in receptors+feedback_marks+rails+rail_overlays+[press]:piece.material_override.set_shader_parameter("tone",tone)

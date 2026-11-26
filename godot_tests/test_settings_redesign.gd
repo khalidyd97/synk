@@ -19,7 +19,7 @@ func run() -> void:
     s.note_speed_input.value=3; check(s.note_speed_input.plus.disabled,"Stepper disables at upper bound")
     s.note_speed_input.value=.5; check(s.note_speed_input.minus.disabled,"Stepper disables at lower bound")
     s.highway_angle_input.plus.pressed.emit(); check(g.highway_angle==31,"Angle increases by exactly two degrees")
-    s.shape_tiles.rectangle.pressed.emit(); check(g.note_shape=="rectangle" and s.shape_tiles.rectangle.selected,"Shape selection applies immediately")
+    s.shape_tiles.sharp.pressed.emit(); check(g.synk_note_shape=="sharp" and s.shape_tiles.sharp.selected,"Shape selection applies immediately")
     s.nav_buttons.audio.pressed.emit()
     check(s.selected_page=="audio" and s.pages.audio.root.visible and not s.pages.gameplay.root.visible,"Tabs switch the visible page")
     check(s.pages.audio.sections.timing.root.modulate.a<1,"Page transition animates rather than jumping")

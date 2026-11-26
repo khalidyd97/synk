@@ -51,11 +51,15 @@ uniform float approach_span = 36.0;
 // wall (the flick's chevrons).
 uniform float wall = 0.0;
 uniform float wall_from_uv = 0.0;
+#include "res://scripts/synk_note_shape.gdshaderinc"
 const int WALL_STEPS = 8;
 void fragment(){
     if((ssrg_warp.x>0.5?centre_z:world_z)>clip_z) discard;
     vec2 uv=vec2(UV.x,UV.y*(1.0+wall));
-    vec4 art=uv.y>1.0?vec4(0.0):texture(artwork,uv);
+    // The art is read through the note shape; the plain UV keeps the mip level steady across its corners.
+    vec2 flat_uv=uv;
+    uv=synk_shape_uv(uv);
+    vec4 art=flat_uv.y>1.0?vec4(0.0):textureGrad(artwork,uv,dFdx(flat_uv),dFdy(flat_uv));
     vec3 hsv=rgb_to_hsv(art.rgb);
     hsv.x=fract(hsv.x+hue_shift);
     hsv.y=clamp(hsv.y*saturation_scale,0.0,1.0);
@@ -107,9 +111,9 @@ void fragment(){
         vec3 side=vec3(0.0); float side_alpha=0.0;
         for(int i=WALL_STEPS;i>=1;i--){
             float k=float(i)/float(WALL_STEPS);
-            vec2 at=vec2(uv.x,uv.y-wall*k);
+            vec2 at=vec2(flat_uv.x,flat_uv.y-wall*k);
             if(at.y<wall_from_uv || at.y>1.0) continue;
-            vec4 layer=textureLod(artwork,at,1.0);
+            vec4 layer=textureLod(artwork,synk_shape_uv(at),1.0);
             float solid=smoothstep(0.55,0.85,layer.a);
             // Darker toward the bottom, with a lit lower lip.
             vec3 shade=i==WALL_STEPS?layer.rgb*0.9+0.08:layer.rgb*(0.55-0.33*k);
@@ -123,7 +127,7 @@ void fragment(){
     ALBEDO=mix(color,vec3(gray*0.52),desaturate)*source_tint.rgb;
     ALPHA=alpha*opacity*ghost_fade*source_tint.a*smoothstep(-60.0,-55.0,world_z)*ssrg_reveal(centre_z);
 	if(note_brightness_applies){
-		float keep=full_bright_above_uv>0.0?1.0-smoothstep(full_bright_above_uv-0.03,full_bright_above_uv,uv.y):0.0;
+		float keep=full_bright_above_uv>0.0?1.0-smoothstep(full_bright_above_uv-0.03,full_bright_above_uv,flat_uv.y):0.0;
 		ALBEDO*=mix(synk_note_brightness,max(synk_note_brightness,1.0),max(keep,burn*step(0.001,approach_vibrance)));
 	}
 }

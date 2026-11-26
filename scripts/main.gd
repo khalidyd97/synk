@@ -246,6 +246,10 @@ var hold_trail_width=1.0
 var trail_style="neon"
 # SYNK mode: how thick the note discs look. 0 flat, 1 slim, 2 medium, 3 chunky.
 var note_thickness=0
+# SYNK mode: the outline of the notes and lane markers (Settings > Visuals > Notes).
+const SYNK_NOTE_SHAPES = ["round","soft","sharp","bar","cut","pill","tile","hex"]
+var synk_note_shape = "round"
+func synk_note_shape_index() -> int: return maxi(0, SYNK_NOTE_SHAPES.find(synk_note_shape))
 var resume_grace = 0.0
 var overdub = false
 var ghost_recording=true
@@ -507,6 +511,8 @@ func _ready() -> void:
 	RenderingServer.global_shader_parameter_set("synk_note_brightness",note_brightness)
 	trail_style=str(prefs.get_value("gameplay","trail_style","neon"))
 	note_thickness=clampi(int(prefs.get_value("gameplay","note_thickness",0)),0,3)
+	synk_note_shape=str(prefs.get_value("gameplay","synk_note_shape","round"))
+	if synk_note_shape not in SYNK_NOTE_SHAPES: synk_note_shape="round"
 	if trail_style not in ["neon","solid"]: trail_style="neon"
 	hold_trail_width=1.0
 	features=load("res://scripts/workbench.gd").new(); features.game=self; add_child(features)
@@ -1331,6 +1337,12 @@ func change_note_brightness(value: float) -> void:
 
 func change_note_thickness(level: int) -> void:
 	note_thickness=clampi(level,0,3); prefs.set_value("gameplay","note_thickness",note_thickness); prefs.save("user://preferences.cfg")
+
+func change_synk_note_shape(kind: String) -> void:
+	synk_note_shape=kind if kind in SYNK_NOTE_SHAPES else "round"
+	prefs.set_value("gameplay","synk_note_shape",synk_note_shape); prefs.save("user://preferences.cfg")
+	field.world.clear_notes(); field.world.refresh_highway_look()
+	if settings_panel: settings_panel.refresh()
 
 func change_note_shape(kind: String) -> void:
 	note_shape=kind

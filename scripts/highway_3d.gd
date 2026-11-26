@@ -365,6 +365,13 @@ func blurred_cover(texture: Texture2D) -> Texture2D:
 # judgment bar, lane markers, backdrop) follows the first.
 const SYNK_ART_HUES = {"tap": .09, "hold": .05, "flick": .10, "stage": .075}
 const SYNK_PLAIN_TONE = Vector3(0, 1, 1)
+# Where the round note sits in its sprite (centre x, centre y, radius x, radius y, in UV),
+# for the note shapes (scripts/synk_note_shape.gdshaderinc). Taps and holds span
+# x 2..208, y 10..109 of 212 x 116; a flick's disc spans x 71..695, y 409..709 of 768 x 768;
+# a lane marker is drawn around (106, 66.7) with radii 102.8 x 43.5.
+const SYNK_NOTE_BOX = Vector4(105.0/212.0, 59.5/116.0, 103.0/212.0, 49.5/116.0)
+const SYNK_FLICK_BOX = Vector4(383.0/768.0, 559.0/768.0, 312.0/768.0, 150.0/768.0)
+const SYNK_GUIDE_BOX = Vector4(.5, .575, .485, .375)
 # role -> (hue turn, saturation scale, value scale); empty while the gold is used as painted.
 var synk_tones: Dictionary = {}
 func synk_tone(role: String) -> Vector3:
@@ -1276,13 +1283,16 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 	var wall=0.0 if tail else synk_note_wall()
 	# SYNK mode adaptive colours: the gold art turned to this note type's colour.
 	var tone:Vector3=synk_tone(["tap","hold","flick","hold"][palette]) if skin=="synk" else SYNK_PLAIN_TONE
-	var mat = shared("ssrg|%d|%s|%s|%s|%s" % [palette,tail,skin,wall,tone], func():
+	# SYNK mode note shape: heads are bent into the chosen outline; the slim end caps are not.
+	var shape:int=game.synk_note_shape_index() if skin=="synk" and not tail else 0
+	var mat = shared("ssrg|%d|%s|%s|%s|%s|%d" % [palette,tail,skin,wall,tone,shape], func():
 		var m = ShaderMaterial.new(); m.shader = preload("res://scripts/reference_note.gdshader")
 		m.set_shader_parameter("artwork",art); m.set_shader_parameter("approach_glow",false)
 		m.set_meta("ssrg_palette",palette);m.set_meta("ssrg_tail",tail);m.set_meta("ssrg_skin",skin)
 		# SYNK mode's discs grow more vibrant and glowing as they come down the highway.
 		if skin=="synk": m.set_shader_parameter("approach_vibrance",1.0)
 		m.set_shader_parameter("wall",wall)
+		m.set_shader_parameter("note_shape",shape); m.set_shader_parameter("shape_box",SYNK_NOTE_BOX)
 		m.set_shader_parameter("core_tint",Color("4fc8ff") if palette==0 else Color("ffc23a"))
 		# Flicks share the source puck silhouette, but use a vivid rose treatment so
 		# they cannot be mistaken for blue taps during a fast approach.
@@ -1386,13 +1396,16 @@ func flick_frame_material(frame: int) -> ShaderMaterial:
 	# The flick's disc is 623 px wide in its 768 px frame.
 	var wall = synk_note_wall(768.0, 623.0)
 	var tone: Vector3 = synk_tone("flick") if synk else SYNK_PLAIN_TONE
-	return shared("flick_frame|%s|%d|%s|%s|%s" % [projected, frame, synk, wall, tone], func():
+	var shape: int = game.synk_note_shape_index() if synk else 0
+	return shared("flick_frame|%s|%d|%s|%s|%s|%d" % [projected, frame, synk, wall, tone, shape], func():
 		var material = ShaderMaterial.new()
 		material.shader = preload("res://scripts/synk_canvas_note.gdshader") if projected else preload("res://scripts/reference_note.gdshader")
 		material.render_priority = 3
 		material.set_shader_parameter("artwork", (SYNK_FLICK_FRAMES if synk else FLICK_FRAMES)[frame])
 		if synk: material.set_shader_parameter("approach_vibrance",1.0)
 		material.set_shader_parameter("hue_shift",tone.x); material.set_shader_parameter("saturation_scale",tone.y); material.set_shader_parameter("value_scale",tone.z)
+		# The disc takes the note shape; the chevrons above it keep theirs.
+		material.set_shader_parameter("note_shape",shape); material.set_shader_parameter("shape_box",SYNK_FLICK_BOX); material.set_shader_parameter("shape_keep_above",1.0)
 		# Only the disc gets a side wall, not the chevrons above it.
 		material.set_shader_parameter("wall",wall); material.set_shader_parameter("wall_from_uv",400.0/768.0)
 		# Rows above y=380 of the 768 px frame hold only the chevron and its sparks.
