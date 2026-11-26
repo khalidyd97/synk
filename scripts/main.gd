@@ -1056,7 +1056,11 @@ func update_recorder_focus() -> void:
 	if record_overview:record_overview.visible=true
 	var history = not take_undo.is_empty() or not take_redo.is_empty()
 	var show_history = not focus or history
-	take_undo_button.visible = show_history;take_redo_button.visible = show_history
+	# Decided once: showing these and hiding them again in the same frame, every frame, restarted
+	# their state while correcting.
+	var show_undo = show_history and not (mode == "record" and arranging)
+	if take_undo_button.visible != show_undo: take_undo_button.visible = show_undo
+	if take_redo_button.visible != show_undo: take_redo_button.visible = show_undo
 	# Correct mode keeps every tool in its own two side columns (recorder_correct_bar.gd):
 	# the type column, the side column and their plates step away.
 	var correcting = mode == "record" and arranging
@@ -1064,7 +1068,6 @@ func update_recorder_focus() -> void:
 	record_left_plate.visible = not correcting
 	if record_types_caption: record_types_caption.visible = not correcting
 	for node in [record_right_plate, aids_toggle, arrange_button]: node.visible = not correcting
-	if correcting: take_undo_button.visible = false; take_redo_button.visible = false
 	resume_record_button.visible = correcting
 	for node in correct_zoom_controls: node.visible = correcting
 	text_slides_button.visible = false; text_slides_field.visible = true
