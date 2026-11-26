@@ -246,15 +246,27 @@ func update_panel() -> void:
     var found=data.versions.any(func(v): return v.key==selected_variant)
     if not found:
         selected_variant=data.versions[0].key if not data.versions.is_empty() else ""
-    for child in versions.get_children(): versions.remove_child(child); child.queue_free()
+    # Keep the level buttons that are still wanted. Rebuilding them all on every update made
+    # them play their entrance again, which showed as a blink.
+    var wanted_keys: Array=data.versions.map(func(v): return str(v.key))
+    var kept: Dictionary={}
+    for child in versions.get_children():
+        var level_key=str(child.get_meta("level","")) if child.get_meta("song","")==selected_id else ""
+        if level_key!="" and level_key in wanted_keys and not kept.has(level_key): kept[level_key]=child
+        else: versions.remove_child(child); child.queue_free()
     var current: Dictionary={}
-    for version in data.versions:
+    for i in data.versions.size():
+        var version: Dictionary=data.versions[i]
         var key: String=version.key
-        var n=ButtonArt.new(); n.menu_motion=true; versions.add_child(n); n.custom_minimum_size=Vector2(0,74)
-        n.text=Levels.label(key); n.tab=true
+        var n=kept.get(key)
+        if n==null:
+            n=ButtonArt.new(); n.menu_motion=true; versions.add_child(n); n.custom_minimum_size=Vector2(0,74)
+            n.set_meta("level",key); n.set_meta("song",selected_id); n.tab=true; n.caption_size=22
+            n.pressed.connect(func(): if not DragScroll.was_dragged(version_scroll): selected_variant=key; update_panel())
+        versions.move_child(n,i)
+        n.text=Levels.label(key)
         n.subtitle="%d note%s  ·  %s" % [version.notes.size(),"" if version.notes.size()==1 else "s",("Unsaved edits" if version.live else ("Draft" if version.draft else "Saved"))]
-        n.caption_size=22; n.set_selected(key==selected_variant)
-        n.pressed.connect(func(): if not DragScroll.was_dragged(version_scroll): selected_variant=key; update_panel())
+        n.set_selected(key==selected_variant)
         if key==selected_variant: current=version
     if data.versions.is_empty():
         var hint=Label.new(); versions.add_child(hint); hint.text="No charts yet. Record or edit to begin, and choose its level."; hint.add_theme_font_size_override("font_size",16)

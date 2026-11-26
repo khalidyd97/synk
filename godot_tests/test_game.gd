@@ -98,7 +98,7 @@ func run() -> void:
 	var ui_sound=game.get_tree().get_first_node_in_group("ui_sound")
 	game.lobby.settings_button.button_down.emit()
 	game.lobby.play_button.button_down.emit()
-	check(ui_sound!=null and ui_sound.last_played.has("click") and ui_sound.last_played.has("play"),"Buttons play their UI sounds")
+	check(ui_sound!=null and not ui_sound.last_played.has("click") and not ui_sound.last_played.has("play"),"Buttons are silent when pressed")
 	check(ui_sound.sound_for(game.lobby.all_tab)=="toggle" and ui_sound.sound_for(game.lobby.create_chart_button)=="confirm","Button roles choose matching sounds")
 	check(game.lobby.get_child(3).anchor_left<.05,"Lobby cover uses the space previously occupied by the left button rail")
 	game.lobby.play_button.animate_hover(1.0)

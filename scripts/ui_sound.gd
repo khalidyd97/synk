@@ -19,6 +19,9 @@ const SOUNDS = {
 }
 # Each button role in the design system (NeonAction.VARIANTS) has its own sound.
 const VARIANT_SOUNDS = {"primary":"confirm","record":"record","secondary":"click","tool":"toggle","danger":"danger","nav":"back"}
+# Buttons are silent: the sounds a press used to make. The countdown, the start cue, screen
+# changes and the score bonus still sound.
+const SILENT = ["click", "toggle", "confirm", "record", "back", "danger", "play"]
 const VOLUME_DB = -6.0
 const VOICES = 4
 
@@ -35,7 +38,7 @@ func _ready() -> void:
 		players.append(player)
 
 func emit_sound(sound: String) -> void:
-	if not SOUNDS.has(sound): return
+	if not SOUNDS.has(sound) or sound in SILENT: return
 	# A sound retriggered within 40 ms (e.g. a press that also changes screen) is skipped.
 	var now = Time.get_ticks_msec()
 	if now - int(last_played.get(sound, -1000)) < 40: return
