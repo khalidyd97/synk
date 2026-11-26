@@ -358,6 +358,33 @@ func blurred_cover(texture: Texture2D) -> Texture2D:
 	blurred_covers[key] = ImageTexture.create_from_image(image)
 	return blurred_covers[key]
 
+# --- SYNK mode adaptive colours ---
+# SYNK mode's art is painted in shades of gold. With adaptive colours and a real cover, each
+# piece is turned from its own gold to the colour the cover gives its role: taps take the
+# cover's first colour, holds and slides the second, flicks the third, and the stage (rails,
+# judgment bar, lane markers, backdrop) follows the first.
+const SYNK_ART_HUES = {"tap": .09, "hold": .05, "flick": .10, "stage": .075}
+const SYNK_PLAIN_TONE = Vector3(0, 1, 1)
+# role -> (hue turn, saturation scale, value scale); empty while the gold is used as painted.
+var synk_tones: Dictionary = {}
+func synk_tone(role: String) -> Vector3:
+	return synk_tones.get(role, SYNK_PLAIN_TONE)
+# A gold colour constant, turned the same way as the art of that role.
+func synk_toned(role: String, gold: Color) -> Color:
+	var tone: Vector3 = synk_tone(role)
+	if tone == SYNK_PLAIN_TONE: return gold
+	return Color.from_hsv(fposmod(gold.h + tone.x, 1.0), clampf(gold.s * tone.y, 0.0, 1.0), minf(gold.v * tone.z, 1.0), gold.a)
+func update_synk_tones() -> void:
+	synk_tones.clear()
+	if game == null or game.highway_style != "synk" or not cover_palette_active or game.uses_recorder_colors(): return
+	var targets = {"tap": colors[0], "hold": colors[1], "flick": colors[2], "stage": colors[0]}
+	for role in targets:
+		var target: Color = targets[role]
+		# Blues and violets are dark at full strength: ease them toward white so they glow like the gold does.
+		var cool = clampf(1.0 - absf(wrapf(target.h - .68, -.5, .5)) / .16, 0.0, 1.0)
+		var richness = (2.0 if role == "flick" else 1.0) * (1.0 - .28 * cool)
+		synk_tones[role] = Vector3(wrapf(target.h - SYNK_ART_HUES[role], -.5, .5), richness, 1.0)
+
 # Recolors notes, rails, the judgment bar, track and sky to the cover's colors.
 func apply_palette(palette: Dictionary) -> void:
 	# Cached hit materials belong to the previous palette.
@@ -366,6 +393,7 @@ func apply_palette(palette: Dictionary) -> void:
 	if colors.size()==3: colors.append(colors[1])
 	cover_palette_active = palette.from_cover
 	stage_color = palette.stage
+	update_synk_tones()
 	materials.clear(); note_meshes.clear()
 	for color in colors:
 		materials.append(material(color))
@@ -548,7 +576,7 @@ func element_color(key: String,fallback: Color) -> Color:
 const SYNK_MODE_HOLD = Color("ff7a2e")
 func trail_color(palette: int) -> Color:
 	if game.old_ssrg_ui() and palette in [1,3]: return Color("edb65c")
-	if game.synk_mode() and palette in [1,3]: return SYNK_MODE_HOLD
+	if game.synk_mode() and palette in [1,3]: return synk_toned("hold",SYNK_MODE_HOLD)
 	if source_long_visuals() and palette in [1,3]: return Color("f9d568")
 	if palette in [1,3] and game.uses_recorder_colors(): return Color("f9d568")
 	return element_color("slide_trail" if palette==3 else "hold_trail",colors[palette])
@@ -559,7 +587,7 @@ func rail_glow_colors() -> Array:
 	var left: Color=custom if custom!=null else (JUDGMENT_GOLD if gold and not cover_palette_active else colors[0])
 	var right: Color=custom if custom!=null else (JUDGMENT_GOLD if gold and not cover_palette_active else colors[1])
 	# SYNK mode's rails glow in its own coral and amber, not the song cover's colours.
-	if game.synk_mode() and custom==null: left=SYNK_MODE_RAIL_GLOW[0]; right=SYNK_MODE_RAIL_GLOW[1]
+	if game.synk_mode() and custom==null: left=synk_toned("stage",SYNK_MODE_RAIL_GLOW[0]); right=synk_toned("stage",SYNK_MODE_RAIL_GLOW[1])
 	return [element_color("glow",left),element_color("glow",right)]
 const SYNK_MODE_RAIL_GLOW = [Color("ff6b3d"), Color("ffc36b")]
 
@@ -1246,7 +1274,9 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 	var art := ssrg_cap_artwork(palette,tail,phase,skin)
 	# Note thickness: extra quad height under the art, as a share of the art's height.
 	var wall=0.0 if tail else synk_note_wall()
-	var mat = shared("ssrg|%d|%s|%s|%s" % [palette,tail,skin,wall], func():
+	# SYNK mode adaptive colours: the gold art turned to this note type's colour.
+	var tone:Vector3=synk_tone(["tap","hold","flick","hold"][palette]) if skin=="synk" else SYNK_PLAIN_TONE
+	var mat = shared("ssrg|%d|%s|%s|%s|%s" % [palette,tail,skin,wall,tone], func():
 		var m = ShaderMaterial.new(); m.shader = preload("res://scripts/reference_note.gdshader")
 		m.set_shader_parameter("artwork",art); m.set_shader_parameter("approach_glow",false)
 		m.set_meta("ssrg_palette",palette);m.set_meta("ssrg_tail",tail);m.set_meta("ssrg_skin",skin)
@@ -1261,6 +1291,8 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 			m.set_shader_parameter("saturation_scale",1.25)
 			m.set_shader_parameter("value_scale",1.12)
 			m.set_shader_parameter("core_tint",Color("ff4fa8"))
+		if tone!=SYNK_PLAIN_TONE:
+			m.set_shader_parameter("hue_shift",tone.x); m.set_shader_parameter("saturation_scale",tone.y); m.set_shader_parameter("value_scale",tone.z)
 		return m)
 	var mesh_key = "ssrg|%s|%s|%s|%s|%s|%s" % [size, tail, palette,ssrg_art_scale(),skin,wall]
 	if not reference_note_meshes.has(mesh_key):
@@ -1353,12 +1385,14 @@ func flick_frame_material(frame: int) -> ShaderMaterial:
 	var synk = game.synk_mode()
 	# The flick's disc is 623 px wide in its 768 px frame.
 	var wall = synk_note_wall(768.0, 623.0)
-	return shared("flick_frame|%s|%d|%s|%s" % [projected, frame, synk, wall], func():
+	var tone: Vector3 = synk_tone("flick") if synk else SYNK_PLAIN_TONE
+	return shared("flick_frame|%s|%d|%s|%s|%s" % [projected, frame, synk, wall, tone], func():
 		var material = ShaderMaterial.new()
 		material.shader = preload("res://scripts/synk_canvas_note.gdshader") if projected else preload("res://scripts/reference_note.gdshader")
 		material.render_priority = 3
 		material.set_shader_parameter("artwork", (SYNK_FLICK_FRAMES if synk else FLICK_FRAMES)[frame])
 		if synk: material.set_shader_parameter("approach_vibrance",1.0)
+		material.set_shader_parameter("hue_shift",tone.x); material.set_shader_parameter("saturation_scale",tone.y); material.set_shader_parameter("value_scale",tone.z)
 		# Only the disc gets a side wall, not the chevrons above it.
 		material.set_shader_parameter("wall",wall); material.set_shader_parameter("wall_from_uv",400.0/768.0)
 		# Rows above y=380 of the 768 px frame hold only the chevron and its sparks.
@@ -1560,7 +1594,7 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 			if uses_projected_highway() and not recording: m.render_priority=-4
 			m.set_shader_parameter("source_art",source_visual)
 			m.set_shader_parameter("synk_beam",synk_beam)
-			if synk_beam: m.set_shader_parameter("beam_profile",preload("res://assets/synk_mode/trail_profile.png"))
+			if synk_beam: m.set_shader_parameter("beam_profile",preload("res://assets/synk_mode/trail_profile.png")); m.set_shader_parameter("beam_tone",synk_tone("hold"))
 			m.set_shader_parameter("old_ssrg_art",old_source)
 			# SKD submits every linked section as its own RenderLongLine call.  Keeping
 			# the sections independent also preserves the three l1/l2/l3 alpha layers;
@@ -1634,9 +1668,11 @@ func solid_trail_offsets(note: Dictionary) -> Array:
 # How much larger than the tail cap SYNK mode draws a slide's bend marker.
 const SYNK_CONNECTOR_SCALE=1.6
 func use_synk_connector(cap: MeshInstance3D) -> void:
-	cap.material_override=shared("synk_connector", func():
+	var tone:Vector3=synk_tone("hold")
+	cap.material_override=shared("synk_connector|%s" % tone, func():
 		var m=ShaderMaterial.new(); m.shader=preload("res://scripts/reference_note.gdshader")
 		m.set_shader_parameter("artwork",preload("res://assets/synk_mode/connector.png")); m.set_shader_parameter("approach_glow",false)
+		m.set_shader_parameter("hue_shift",tone.x); m.set_shader_parameter("saturation_scale",tone.y); m.set_shader_parameter("value_scale",tone.z)
 		return m)
 	cap.scale=Vector3.ONE*SYNK_CONNECTOR_SCALE
 func make_solid_trail_joints(parent: Node3D,note: Dictionary,palette: int,recording: bool,half_width: float) -> void:

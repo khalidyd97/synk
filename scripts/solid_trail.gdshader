@@ -19,6 +19,8 @@ uniform vec4 source_tint : source_color=vec4(1.0);
 // cross-section (assets/synk_mode/trail_profile.png), with a few glints along it.
 uniform bool synk_beam=false;
 uniform sampler2D beam_profile : source_color, filter_linear, repeat_disable;
+uniform vec3 beam_tone = vec3(0.0, 1.0, 1.0);   // SYNK mode adaptive colours
+#include "res://scripts/synk_tone.gdshaderinc"
 varying vec3 source_chip;
 varying float source_layer;
 varying float world_z;
@@ -106,7 +108,7 @@ void fragment(){
         // One face only: the source's three stacked layers would triple the beam.
         if(source_layer>0.0001) discard;
         vec4 beam=texture(beam_profile,vec2(UV.x,0.5));
-        color=beam.rgb;
+        color=synk_turn(beam.rgb,beam_tone);
         opacity=beam.a*.9;
         // Glints: a few bright specks fixed along the beam, as in the art.
         vec2 cell=floor(vec2(UV.x*7.0,world_z*1.1));

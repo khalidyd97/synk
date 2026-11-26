@@ -10,6 +10,8 @@ uniform float floor_entrance : hint_range(0.0,1.0) = 1.0;
 uniform float rail_side = 1.0;
 // A second copy of the rail drawn above the judgment bar: the rail's light only, no road.
 uniform bool rail_only = false;
+uniform vec3 tone = vec3(0.0, 1.0, 1.0);   // SYNK mode adaptive colours
+#include "res://scripts/synk_tone.gdshaderinc"
 void vertex(){
     // Each half arrives gently from its outer edge while its rail is being drawn.
     VERTEX.x+=rail_side*(1.0-rail_entrance)*.72;
@@ -17,6 +19,7 @@ void vertex(){
 void fragment(){
     vec2 uv=along_rail ? vec2(1.0-UV.y,UV.x) : UV;
     vec4 art=texture(artwork,uv);
+    art.rgb=synk_turn(art.rgb,tone);
     bool road=max(art.r,max(art.g,art.b))<0.05;
     // Draw the rail down its length instead of fading the complete silhouette at once.
     float rail_wipe=1.0-smoothstep(rail_entrance,rail_entrance+.075,UV.y);

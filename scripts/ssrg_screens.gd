@@ -86,6 +86,10 @@ func _process(delta:float) -> void:
 	# SYNK mode has its own pause button: a dark glass tile with a coral-to-amber rim.
 	var icon:Texture2D=SYNK_PAUSE if game.synk_mode() else SSRG_PAUSE
 	if pause_icon.texture_normal!=icon:pause_icon.texture_normal=icon
+	# SYNK mode adaptive colours: the gold button follows the song cover.
+	if pause_icon.material==null:
+		pause_icon.material=ShaderMaterial.new();pause_icon.material.shader=preload("res://scripts/synk_tone_canvas.gdshader")
+	pause_icon.material.set_shader_parameter("tone",game.field.world.synk_tone("stage") if game.synk_mode() else Vector3(0,1,1))
 	var safe=game.safe_rect_for(self)
 	var icon_rect=pause_icon_rect()
 	pause_icon.position=icon_rect.position;pause_icon.size=icon_rect.size

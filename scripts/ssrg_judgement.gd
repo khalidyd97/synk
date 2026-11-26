@@ -48,6 +48,10 @@ func spaced_glow(font: Font, centre: Vector2, text: String, px: int, gap: float,
 			x += font.get_string_size(text[i], HORIZONTAL_ALIGNMENT_LEFT, -1, px).x + gap
 	return width
 
+# With adaptive colours SYNK mode's gold follows the song cover.
+func toned(gold: Color) -> Color:
+	return game.field.world.synk_toned("stage", gold)
+
 func draw_synk() -> void:
 	var unit = minf(size.x / 1280.0, size.y / 720.0)
 	var font: Font = game.GAME_FONT
@@ -57,7 +61,9 @@ func draw_synk() -> void:
 		# The word punches in, holds, then fades.
 		var shown = clampf(1.0 - (since_hit - .5) / .3, 0.0, 1.0)
 		var px = roundi(30 * unit * (1.0 + .2 * pop))
-		spaced_glow(font, centre, grade[0], px, 9 * unit, Color(grade[1], shown), Color(grade[2], shown))
+		# The two perfect grades wear the stage's gold, which follows the cover with adaptive colours.
+		var golden = displayed_grade in ["PERFECT", "GREAT"]
+		spaced_glow(font, centre, grade[0], px, 9 * unit, Color(toned(grade[1]) if golden else grade[1], shown), Color(toned(grade[2]) if golden else grade[2], shown))
 	if game.combo < 2: return
 	# The combo count.
 	var number = str(game.combo)
@@ -65,18 +71,18 @@ func draw_synk() -> void:
 	var count_width = font.get_string_size(number, HORIZONTAL_ALIGNMENT_LEFT, -1, count_px).x
 	var count_at = Vector2(size.x * .5 - count_width * .5, centre.y + 118 * unit)
 	var milestone = game.combo % SYNK_MILESTONE == 0
-	var glow_color: Color = Color("ff9a3c") if not milestone else Color("ffe2b0")
+	var glow_color: Color = toned(Color("ff9a3c") if not milestone else Color("ffe2b0"))
 	draw_string_outline(font, count_at, number, HORIZONTAL_ALIGNMENT_LEFT, -1, count_px, maxi(4, roundi(26 * unit)), Color(glow_color, .10 + .12 * pop))
 	draw_string_outline(font, count_at, number, HORIZONTAL_ALIGNMENT_LEFT, -1, count_px, maxi(2, roundi(10 * unit)), Color(glow_color, .22 + .2 * pop))
 	draw_string(font, count_at, number, HORIZONTAL_ALIGNMENT_LEFT, -1, count_px, Color(1, .98, .94))
 	# COMBO, and the meter toward the next milestone.
 	var label_at = Vector2(size.x * .5, centre.y + 142 * unit)
-	spaced_glow(font, label_at, "COMBO", maxi(10, roundi(14 * unit)), 8 * unit, Color("ffb46a"), Color(0, 0, 0, 0))
+	spaced_glow(font, label_at, "COMBO", maxi(10, roundi(14 * unit)), 8 * unit, toned(Color("ffb46a")), Color(0, 0, 0, 0))
 	var half = 86 * unit
 	var meter_y = label_at.y + 20 * unit
 	var filled = 1.0 if milestone else float(game.combo % SYNK_MILESTONE) / SYNK_MILESTONE
 	draw_line(Vector2(size.x * .5 - half, meter_y), Vector2(size.x * .5 + half, meter_y), Color(1, 1, 1, .14), maxf(1.0, 2.0 * unit), true)
-	var meter_color = Color("fff6e6") if milestone else Color("ff9a3c")
+	var meter_color = toned(Color("fff6e6") if milestone else Color("ff9a3c"))
 	draw_line(Vector2(size.x * .5 - half * filled, meter_y), Vector2(size.x * .5 + half * filled, meter_y), meter_color, maxf(1.0, 2.4 * unit), true)
 
 func _draw() -> void:

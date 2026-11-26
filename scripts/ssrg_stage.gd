@@ -331,6 +331,9 @@ func configure(world: Node3D) -> void :
 	elif synk: guide=preload("res://assets/synk_mode/guide.png")
 	for ring in receptors:ring.material_override.set_shader_parameter("artwork",guide)
 	for mark in feedback_marks:mark.material_override.set_shader_parameter("artwork",guide)
+	# SYNK mode adaptive colours: the stage's gold art turned to the cover's main colour.
+	var tone:Vector3=world.synk_tone("stage") if synk else world.SYNK_PLAIN_TONE
+	for piece in receptors+feedback_marks+rails+rail_overlays+[press]:piece.material_override.set_shader_parameter("tone",tone)
 	# Source gold tier, unless the player picked a judgment band color. SYNK mode's bar
 	# carries its own colours, so it is drawn untinted.
 	var band = world.custom_color("band_color")

@@ -15,6 +15,8 @@ uniform float energy = 0.0;
 uniform float bass = 0.0;    // 0..1, the song's low end right now
 uniform float mids = 0.0;    // 0..1, the song's melody range right now
 uniform float brightness = 1.0;
+uniform vec3 tone = vec3(0.0, 1.0, 1.0);   // SYNK mode adaptive colours
+#include "res://scripts/synk_tone.gdshaderinc"
 global uniform float synk_time;
 #include "res://scripts/synk_stage_mask.gdshaderinc"
 
@@ -68,6 +70,6 @@ void fragment() {
 	}
 
 	// Nothing is drawn under the highway.
-	ALBEDO = mix(vec3(0.0), col, road_mask(at)) * brightness;
+	ALBEDO = synk_turn(mix(vec3(0.0), col, road_mask(at)), tone) * brightness;
 	ALPHA = 1.0;
 }

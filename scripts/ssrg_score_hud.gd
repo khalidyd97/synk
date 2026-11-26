@@ -79,6 +79,9 @@ const SYNK_CORAL=Color("ff6b3d")
 const SYNK_AMBER=Color("ffc36b")
 const SYNK_CREAM=Color("fff1dc")
 const SYNK_DANGER=Color("ff2d4a")
+# With adaptive colours the gold follows the song cover (the danger red stays).
+func toned(gold:Color) -> Color:
+	return game.field.world.synk_toned("stage",gold)
 func draw_synk_life(presentation:Node,active:bool,origin:Vector2,unit:float,alpha:float) -> void:
 	var life=clampf(float(presentation.life)/100.0,0,1) if active else clampf(float(game.score_panel.shown_energy),0,1)
 	var at=origin+Vector2(85,38)*unit
@@ -90,31 +93,31 @@ func draw_synk_life(presentation:Node,active:bool,origin:Vector2,unit:float,alph
 	var plate=PackedVector2Array([at+Vector2(slant,0),at+Vector2(bar.x+slant,0),at+Vector2(bar.x,bar.y),at+Vector2(0,bar.y)])
 	draw_colored_polygon(plate,Color(.07,.05,.09,.82*alpha))
 	var outline=plate.duplicate();outline.append(plate[0])
-	draw_polyline(outline,Color(SYNK_DANGER if low else SYNK_CREAM,(.45+.4*pulse)*alpha),maxf(1.0,1.6*unit),true)
+	draw_polyline(outline,Color(SYNK_DANGER if low else toned(SYNK_CREAM),(.45+.4*pulse)*alpha),maxf(1.0,1.6*unit),true)
 	# The fill: one solid slanted bar, coral at the left warming to amber at the right.
 	var inset=3.0*unit
 	var inner=Vector2(bar.x-2*inset,bar.y-2*inset)
 	var filled=inner.x*life
 	if filled>0.5:
 		var top=at+Vector2(inset+slant*(1-inset/bar.y),inset);var bottom=at+Vector2(inset+slant*(inset/bar.y),bar.y-inset)
-		var from:Color=SYNK_CORAL;var to:Color=SYNK_CORAL.lerp(SYNK_AMBER,life)
+		var from:Color=toned(SYNK_CORAL);var to:Color=toned(SYNK_CORAL).lerp(toned(SYNK_AMBER),life)
 		if low:
-			from=SYNK_DANGER.lerp(SYNK_CREAM,pulse*.35);to=from
+			from=SYNK_DANGER.lerp(toned(SYNK_CREAM),pulse*.35);to=from
 		from.a=alpha;to.a=alpha
 		draw_polygon(PackedVector2Array([top,top+Vector2(filled,0),bottom+Vector2(filled,0),bottom]),PackedColorArray([from,to,to,from]))
 		# A bright leading edge, and a soft sheen along the top half.
 		var edge=minf(filled,3.0*unit)
-		draw_colored_polygon(PackedVector2Array([top+Vector2(filled-edge,0),top+Vector2(filled,0),bottom+Vector2(filled,0),bottom+Vector2(filled-edge,0)]),Color(SYNK_CREAM,.7*alpha))
+		draw_colored_polygon(PackedVector2Array([top+Vector2(filled-edge,0),top+Vector2(filled,0),bottom+Vector2(filled,0),bottom+Vector2(filled-edge,0)]),Color(toned(SYNK_CREAM),.7*alpha))
 		var mid_shift=Vector2(-slant*.5*(inner.y/bar.y),inner.y*.5)
 		var clear=Color(1,1,1,0);var sheen=Color(1,1,1,.16*alpha)
 		draw_polygon(PackedVector2Array([top,top+Vector2(filled,0),top+Vector2(filled,0)+mid_shift,top+mid_shift]),PackedColorArray([sheen,sheen,clear,clear]))
 		# Soft glow line along the top of the lit part.
-		draw_line(at+Vector2(slant+inset,-1.5*unit),at+Vector2(slant+inset+filled,-1.5*unit),Color(SYNK_AMBER if not low else SYNK_DANGER,.35*alpha),2.0*unit)
+		draw_line(at+Vector2(slant+inset,-1.5*unit),at+Vector2(slant+inset+filled,-1.5*unit),Color(toned(SYNK_AMBER) if not low else SYNK_DANGER,.35*alpha),2.0*unit)
 	# LIFE and the percentage, above the bar. (SYNK mode has no rave, so no fever gauge.)
 	var font:Font=game.GAME_FONT
 	var size_px=maxi(10,roundi(13*unit))
-	spaced(font,at+Vector2(slant,-6*unit),"LIFE",size_px,4*unit,Color(SYNK_CREAM,.85*alpha))
-	draw_string(font,at+Vector2(slant+bar.x-60*unit,-6*unit),"%d%%" % roundi(life*100),HORIZONTAL_ALIGNMENT_RIGHT,60*unit,size_px,Color(SYNK_DANGER if low else SYNK_AMBER,alpha))
+	spaced(font,at+Vector2(slant,-6*unit),"LIFE",size_px,4*unit,Color(toned(SYNK_CREAM),.85*alpha))
+	draw_string(font,at+Vector2(slant+bar.x-60*unit,-6*unit),"%d%%" % roundi(life*100),HORIZONTAL_ALIGNMENT_RIGHT,60*unit,size_px,Color(SYNK_DANGER if low else toned(SYNK_AMBER),alpha))
 
 # Text with extra space between its letters, drawn from its left end.
 func spaced(font:Font,at:Vector2,text:String,px:int,gap:float,tint:Color) -> float:
@@ -132,16 +135,16 @@ func draw_synk_score(presentation:Node,active:bool,origin:Vector2,unit:float,alp
 	var left=origin.x+85*unit
 	var right=left+289*unit
 	var baseline=origin.y+112*unit
-	spaced(font,Vector2(left+7*unit,baseline-2*unit),"SCORE",maxi(10,roundi(13*unit)),5*unit,Color(SYNK_SCORE_AMBER,.9*alpha))
+	spaced(font,Vector2(left+7*unit,baseline-2*unit),"SCORE",maxi(10,roundi(13*unit)),5*unit,Color(toned(SYNK_SCORE_AMBER),.9*alpha))
 	var value:String=game.format_score(maxi(0,roundi(game.displayed_score)))
 	var px=maxi(14,roundi(40*unit))
 	var width=font.get_string_size(value,HORIZONTAL_ALIGNMENT_LEFT,-1,px).x
 	var at=Vector2(right-width,baseline)
-	draw_string_outline(font,at,value,HORIZONTAL_ALIGNMENT_LEFT,-1,px,maxi(2,roundi(9*unit)),Color(SYNK_SCORE_AMBER,.14*alpha))
-	draw_string_outline(font,at,value,HORIZONTAL_ALIGNMENT_LEFT,-1,px,maxi(1,roundi(4*unit)),Color(SYNK_SCORE_AMBER,.22*alpha))
+	draw_string_outline(font,at,value,HORIZONTAL_ALIGNMENT_LEFT,-1,px,maxi(2,roundi(9*unit)),Color(toned(SYNK_SCORE_AMBER),.14*alpha))
+	draw_string_outline(font,at,value,HORIZONTAL_ALIGNMENT_LEFT,-1,px,maxi(1,roundi(4*unit)),Color(toned(SYNK_SCORE_AMBER),.22*alpha))
 	draw_string(font,at,value,HORIZONTAL_ALIGNMENT_LEFT,-1,px,Color(1,.98,.94,alpha))
 	var rule_y=baseline+10*unit
-	draw_polyline_colors(PackedVector2Array([Vector2(left,rule_y),Vector2(right,rule_y)]),PackedColorArray([Color(SYNK_SCORE_AMBER,0),Color(SYNK_SCORE_AMBER,.95*alpha)]),maxf(1.0,1.6*unit),true)
+	draw_polyline_colors(PackedVector2Array([Vector2(left,rule_y),Vector2(right,rule_y)]),PackedColorArray([Color(toned(SYNK_SCORE_AMBER),0),Color(toned(SYNK_SCORE_AMBER),.95*alpha)]),maxf(1.0,1.6*unit),true)
 	draw_circle(Vector2(right,rule_y),maxf(1.5,2.4*unit),Color(1,.95,.85,alpha))
 	if not active:return
 	# Best score, top right.
@@ -152,7 +155,7 @@ func draw_synk_score(presentation:Node,active:bool,origin:Vector2,unit:float,alp
 	draw_string(font,Vector2(edge-best_width,47*unit),best,HORIZONTAL_ALIGNMENT_LEFT,-1,best_px,Color(1,.98,.94,alpha))
 	var label_px=maxi(10,roundi(13*unit))
 	var label_width=font.get_string_size("BEST",HORIZONTAL_ALIGNMENT_LEFT,-1,label_px).x+3*5*unit
-	spaced(font,Vector2(edge-best_width-label_width-14*unit,46*unit),"BEST",label_px,5*unit,Color(SYNK_SCORE_AMBER,.9*alpha))
+	spaced(font,Vector2(edge-best_width-label_width-14*unit,46*unit),"BEST",label_px,5*unit,Color(toned(SYNK_SCORE_AMBER),.9*alpha))
 
 func words(value:String,at:Vector2,font_size:int,tint:Color) -> void:
 	draw_string(ThemeDB.fallback_font,at,value,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,tint)

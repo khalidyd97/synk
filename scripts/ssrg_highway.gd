@@ -442,7 +442,7 @@ const SSRG_NOTE_COLORS = {"tap": Color("19acf5"), "hold": Color("ebb521"), "slid
 const SYNK_NOTE_COLORS = {"tap": Color("ffb43c"), "hold": Color("ff7a2e"), "slide": Color("ff7a2e"), "flick": Color("ffe9c0")}
 func hit_tint(kind: String) -> Color:
 	if world.game.hit_color != "": return Color.from_string(world.game.hit_color, Color.WHITE)
-	if world.game.synk_mode(): return SYNK_NOTE_COLORS.get(kind, SYNK_NOTE_COLORS.tap)
+	if world.game.synk_mode(): return world.synk_toned("hold" if kind in ["hold","slide"] else ("flick" if kind=="flick" else "tap"), SYNK_NOTE_COLORS.get(kind, SYNK_NOTE_COLORS.tap))
 	if world.game.uses_ssrg_gameplay(): return SSRG_NOTE_COLORS.get(kind, SSRG_NOTE_COLORS.tap)
 	return world.element_color(NOTE_HIT_KEYS.get(kind, "tap"), LUMEN_COLORS.get(kind, LUMEN_COLORS.tap))
 

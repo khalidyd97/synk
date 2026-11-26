@@ -36,6 +36,7 @@ func update(on: bool, delta: float) -> void:
 	material.set_shader_parameter("aspect", view.x / view.y)
 	material.set_shader_parameter("beat", fposmod(beats, 1.0))
 	material.set_shader_parameter("energy", energy)
+	material.set_shader_parameter("tone", world.synk_tone("stage"))
 	material.set_shader_parameter("bass", world.loudness)
 	material.set_shader_parameter("mids", world.loudness_mids)
 	material.set_shader_parameter("brightness", game.features.effect("Background brightness"))
