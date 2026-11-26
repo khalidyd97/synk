@@ -318,36 +318,66 @@ func setup_group(parent: Node, title: String) -> VBoxContainer:
 	var heading = text(contents, Icons.menu_case(title), 17);heading.add_theme_color_override("font_color", Color("bcb7ad"))
 	return contents
 
+# --- Recording setup: one line per setting, the everyday ones first -----------------------
+# A setting on one line: its name (and a short hint) on the left, its control on the right.
+func setup_line(parent: Node, title: String, hint: String, control: Control, width: float = 330) -> void:
+	var line = HBoxContainer.new();parent.add_child(line);line.add_theme_constant_override("separation", 18)
+	var captions = VBoxContainer.new();line.add_child(captions);captions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	captions.size_flags_vertical = Control.SIZE_SHRINK_CENTER;captions.add_theme_constant_override("separation", 2)
+	text(captions, title, 20)
+	if hint != "": text(captions, hint, 15).add_theme_color_override("font_color", Color("9a968d"))
+	line.add_child(control);control.custom_minimum_size = Vector2(width, 54);control.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+func setup_choice(parent: Node, title: String, hint: String, items: Array, current: int, callback: Callable) -> OptionButton:
+	var picker = OptionButton.new()
+	picker.add_theme_font_size_override("font_size", 19);picker.get_popup().add_theme_font_size_override("font_size", 20)
+	picker.get_popup().add_theme_constant_override("v_separation", 16)
+	for item in items: picker.add_item(str(item))
+	picker.select(clampi(current, 0, items.size() - 1));picker.item_selected.connect(callback)
+	setup_line(parent, title, hint, picker);return picker
+# An On / Off pill.
+func setup_switch(parent: Node, title: String, hint: String, value: bool, callback: Callable) -> Button:
+	var b = Action.new();b.text = "On" if value else "Off";b.variant = "secondary";b.caption_size = 19
+	b.toggle_mode = true;b.button_pressed = value;b.set_selected(value)
+	b.toggled.connect( func(on): b.text = "On" if on else "Off";b.set_selected(on);callback.call(on))
+	setup_line(parent, title, hint, b, 130);return b
+
 func show_setup(global_only: bool = false) -> void :
 	if setup: return
 	if game.mode == "record": game.toggle_pause()
 	if reviewing_audio: game.stop_audition();reviewing_audio = false
 	var s = shell("Recording setup");setup = s.root; var box: VBoxContainer = s.box
-	text(box, "Global recorder preferences" if global_only else "Applies to your next new session. For punch-in, select a range in the editor or set A / B. Types and locks remain fixed across loop takes.")
+	var main = setup_group(box, "RECORDER PREFERENCES" if global_only else "YOUR NEXT TAKE")
 	if not global_only:
-		var session = setup_group(box, "SESSION RANGE")
-		toggle(session, "PUNCH IN · USE SELECTED RANGE / A–B", use_range, func(on): use_range = on)
-		choice(session, "Existing notes in the section", ["Layer · keep existing notes", "Replace · overwrite unlocked pass types"], 1 if replace else 0, func(i): replace = i == 1)
-		toggle(session, "Loop takes · stop to review up to 32 attempts", loop_takes, func(on): loop_takes = on)
-	var timing = setup_group(box, "TIMING & GRID")
-	choice(timing, "Audible pre-roll · bars of 4 beats", ["Off", "1 bar", "2 bars", "3 bars", "4 bars"], pre_roll, func(i): pre_roll = i;persist("pre_roll", i))
-	choice(timing, "Resume lead-in · play-in before the chart runs out", ["1 second", "2 seconds", "3 seconds"], resume_lead - 1, func(i): resume_lead = i + 1;persist("resume_lead", i + 1))
-	choice(timing, "Recording timing", ["Free · preserve your timing", "Soft snap · 50% toward grid", "Strict snap · align to grid"], ["free", "soft", "strict"].find(quantize), func(i): quantize = ["free", "soft", "strict"][i];persist("quantize", quantize))
-	choice(timing, "Grid subdivision per beat", ["1 · quarter notes", "2 · eighth notes", "4 · sixteenth notes", "8 · thirty-second notes"], [1, 2, 4, 8].find(division), func(i): division = [1, 2, 4, 8][i];persist("division", division))
+		setup_switch(main, "Record only the selected range", "Select a range in the editor, or set A and B.", use_range, func(on): use_range = on)
+		setup_choice(main, "Notes already in that part", "", ["Keep them", "Replace them"], 1 if replace else 0, func(i): replace = i == 1)
+	setup_choice(main, "Count-in", "Bars you hear before recording starts.", ["Off", "1 bar", "2 bars", "3 bars", "4 bars"], pre_roll, func(i): pre_roll = i;persist("pre_roll", i))
+	setup_choice(main, "Timing", "How closely your notes are pulled to the grid.", ["Free", "Soft snap", "Strict snap"], ["free", "soft", "strict"].find(quantize), func(i): quantize = ["free", "soft", "strict"][i];persist("quantize", quantize))
+	setup_choice(main, "Grid", "", ["Quarter notes", "Eighth notes", "Sixteenth notes", "Thirty-second notes"], [1, 2, 4, 8].find(division), func(i): division = [1, 2, 4, 8][i];persist("division", division))
+	# Everything else stays folded away until asked for.
+	var more = setup_group(box, "MORE OPTIONS");more.get_parent().visible = false
+	var opener = button(box, "More options", func(): pass)
+	opener.pressed.connect( func(): more.get_parent().visible = not more.get_parent().visible;opener.text = "Fewer options" if more.get_parent().visible else "More options")
 	if not global_only:
-		var types = setup_group(box, "NOTE TYPES & PROTECTION")
-		choice(types, "Recording pass", ["All types", "Taps only", "Holds only", "Slides only", "Flicks only"], ["all", "tap", "hold", "slide", "flick"].find(pass_kind), func(i): pass_kind = ["all", "tap", "hold", "slide", "flick"][i])
-		text(types, "Lock completed types · protects them from replacement and correction", 16)
+		setup_switch(more, "Loop takes", "Record the part again and again, then pick the best take.", loop_takes, func(on): loop_takes = on)
+		setup_choice(more, "Record one note type", "A pass that only listens for that type.", ["All types", "Taps only", "Holds only", "Slides only", "Flicks only"], ["all", "tap", "hold", "slide", "flick"].find(pass_kind), func(i): pass_kind = ["all", "tap", "hold", "slide", "flick"][i])
+		var chips = HBoxContainer.new();chips.add_theme_constant_override("separation", 8)
 		for kind in SynkChart.TYPES:
-			toggle(types, "Lock " + str(kind) + "s", kind in locked, func(on):
+			var chip = Action.new();chip.text = str(kind).capitalize() + "s";chip.variant = "secondary";chip.caption_size = 17
+			chip.toggle_mode = true;chip.button_pressed = kind in locked;chip.set_selected(kind in locked)
+			chip.custom_minimum_size = Vector2(88, 50);chips.add_child(chip)
+			chip.toggled.connect( func(on):
+				chip.set_selected(on)
 				if on and kind not in locked: locked.append(kind)
 				elif not on: locked.erase(kind))
-	var guide = setup_group(box, "RHYTHM GUIDE")
-	toggle(guide, "Rhythm guide · accented downbeat", game.beat_clock.enabled, func(on):
+		setup_line(more, "Lock finished types", "Locked types can't be replaced or corrected.", chips, 376)
+	setup_choice(more, "Lead-in after Correct", "Music you hear before recording resumes.", ["1 second", "2 seconds", "3 seconds"], resume_lead - 1, func(i): resume_lead = i + 1;persist("resume_lead", i + 1))
+	setup_switch(more, "Rhythm guide", "A click on the beat, accented on the downbeat.", game.beat_clock.enabled, func(on):
 		game.beat_clock.enabled = on;game.beat_clock.last_time = -1;game.prefs.set_value("editor", "metronome", on);game.prefs.save("user://preferences.cfg"))
-	choice(guide, "Guide subdivisions", ["Beats", "Eighths", "Sixteenths"], [1, 2, 4].find(game.beat_clock.subdivision), func(i): game.beat_clock.subdivision = [1, 2, 4][i];persist("guide_subdivision", game.beat_clock.subdivision))
-	number(guide, "Guide volume · dB", game.beat_clock.guide_db, -30, 0, 1, func(v): game.beat_clock.guide_db = v;persist("guide_db", v))
-	button(box, "DONE", func(): setup.queue_free();setup = null, "primary")
+	setup_choice(more, "Guide clicks on", "", ["Beats", "Eighths", "Sixteenths"], [1, 2, 4].find(game.beat_clock.subdivision), func(i): game.beat_clock.subdivision = [1, 2, 4][i];persist("guide_subdivision", game.beat_clock.subdivision))
+	var volume = SpinBox.new();volume.min_value = -30;volume.max_value = 0;volume.step = 1;volume.value = game.beat_clock.guide_db;volume.suffix = "dB"
+	volume.add_theme_font_size_override("font_size", 19)
+	volume.value_changed.connect( func(v): game.beat_clock.guide_db = v;persist("guide_db", v))
+	setup_line(more, "Guide volume", "", volume, 200)
 
 func show_review() -> void :
 	if takes.is_empty(): return
