@@ -1222,9 +1222,10 @@ const RECORDER_CALM_SCALE = .62
 func make_calm_cap(parent: Node3D, position_value: Vector3, palette: int, size = 1.0) -> MeshInstance3D:
 	var tail = size < game.gameplay_note_size()*.99
 	var tint: Color = RECORDER_CALM_COLORS[clampi(palette,0,3)]
-	var mat = shared("recorder_calm|%d" % palette, func():
+	var shape:int=game.synk_note_shape_index()
+	var mat = shared("recorder_calm|%d|%d" % [palette,shape], func():
 		var m = ShaderMaterial.new(); m.shader = preload("res://scripts/recorder_calm_note.gdshader"); m.render_priority = 3
-		m.set_shader_parameter("tint",tint); return m)
+		m.set_shader_parameter("tint",tint); m.set_shader_parameter("note_shape",shape); return m)
 	var mesh_key = "recorder_calm|%s|%s|%s" % [size,tail,ssrg_art_scale()]
 	if not reference_note_meshes.has(mesh_key):
 		var quad = QuadMesh.new()
@@ -1277,7 +1278,7 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 	var tail = size < game.gameplay_note_size()*.99
 	# Connector pucks along slides (and the end puck) are the head note's own art at 60%.
 	var phase=fposmod((render_time()-game.chart_offset())*game.chart_bpm()/60.0,1.0)
-	var skin:String=game.ssrg_skin()
+	var skin:String=game.note_skin()
 	var art := ssrg_cap_artwork(palette,tail,phase,skin)
 	# Note thickness: extra quad height under the art, as a share of the art's height.
 	var wall=0.0 if tail else synk_note_wall()
@@ -1296,7 +1297,7 @@ func make_ssrg_cap(parent: Node3D, position_value: Vector3, palette: int, size =
 		m.set_shader_parameter("core_tint",Color("4fc8ff") if palette==0 else Color("ffc23a"))
 		# Flicks share the source puck silhouette, but use a vivid rose treatment so
 		# they cannot be mistaken for blue taps during a fast approach.
-		if palette==2:
+		if palette==2 and skin!="synk":
 			m.set_shader_parameter("hue_shift",.37)
 			m.set_shader_parameter("saturation_scale",1.25)
 			m.set_shader_parameter("value_scale",1.12)

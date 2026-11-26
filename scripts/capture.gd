@@ -115,7 +115,12 @@ const MOVE_LANES=.5
 # A rest: the finger stays within REST_LANES for at least REST_TIME. Each rest becomes a flat
 # run with a corner (a connector) where the finger arrived and where it left.
 const REST_LANES=.18
-const REST_TIME=.12
+const REST_TIME=.07
+# A slow steady slide also stays within REST_LANES for a while, but it keeps travelling: the
+# run is cut back to the samples near its middle lane (REST_TRIM) and counts as a rest only
+# if the finger ends up where it began (REST_NET).
+const REST_TRIM=.063
+const REST_NET=.09
 const REST_GAP=.08
 # A rest corner this close to the straight line between its neighbours is only a slow drift.
 const REST_BEND=.3
@@ -183,8 +188,18 @@ static func snap_path(path:Array,duration:float)->Array:
 			var next=float(filtered[last+1].lane)
 			if maxf(high,next)-minf(low,next)>REST_LANES:break
 			low=minf(low,next);high=maxf(high,next);last+=1
-		if float(filtered[last].offset)-float(filtered[first].offset)<REST_TIME:
+		var run_lanes:Array=[]
+		for i in range(first,last+1):run_lanes.append(float(filtered[i].lane))
+		run_lanes.sort()
+		var middle=float(run_lanes[run_lanes.size()/2])
+		var from=first;var to=last
+		while to>from and absf(float(filtered[to].lane)-middle)>REST_TRIM:to-=1
+		while from<to and absf(float(filtered[from].lane)-middle)>REST_TRIM:from+=1
+		if float(filtered[to].offset)-float(filtered[from].offset)<REST_TIME or absf(float(filtered[to].lane)-float(filtered[from].lane))>REST_NET:
 			first+=1;continue
+		first=from;last=to
+		low=float(filtered[first].lane);high=low
+		for i in range(first,last+1):low=minf(low,float(filtered[i].lane));high=maxf(high,float(filtered[i].lane))
 		# The run sits on one lane: the slide's own first or last lane, or where the finger lay.
 		var level=(low+high)*.5
 		if first==0:level=float(filtered[0].lane)

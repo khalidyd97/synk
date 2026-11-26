@@ -11,11 +11,13 @@ varying float centre_z;
 #include "res://scripts/ssrg_warp.gdshaderinc"
 void vertex(){ world_z=(MODEL_MATRIX*vec4(VERTEX,1.0)).z; centre_z=MODEL_MATRIX[3].z; VERTEX=ssrg_warp_rigid(VERTEX,MODEL_MATRIX); }
 global uniform float synk_note_brightness;
+// The recorder's notes take the note shape chosen for SYNK mode.
+#include "res://scripts/synk_note_shape.gdshaderinc"
 void fragment(){
     if((ssrg_warp.x>0.5?centre_z:world_z)>clip_z) discard;
-    // An ellipse filling the quad (the quad already has the disc's foreshortened shape).
+    // The note shape filling the quad (the quad already has the disc's foreshortened shape).
     vec2 p=(UV-0.5)*2.0;
-    float r=length(p);
+    float r=synk_shape_size(p);
     float edge=fwidth(r)*1.2+0.002;
     float body=1.0-smoothstep(1.0-edge,1.0,r);
     // A thin lighter rim keeps the edge readable on the dark track; a faint lighter top

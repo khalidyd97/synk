@@ -183,6 +183,10 @@ func synk_mode() -> bool:
 # Which artwork the SSRG stage draws: "synk", "old" (the 2014 UI) or "" (the stock SSRG art).
 func ssrg_skin() -> String:
 	return "synk" if synk_mode() else ("old" if old_ssrg_ui() else "")
+# The note art itself: the recorder's "Realistic notes" wear SYNK mode's notes too when
+# SYNK mode is the chosen highway style.
+func note_skin() -> String:
+	return "synk" if highway_style=="synk" and uses_recorder_real_notes() else ssrg_skin()
 func change_old_ssrg_ui(on: bool) -> void:
 	prefs.set_value("highway","old_ssrg_ui",on);prefs.save("user://preferences.cfg")
 	if field and field.world:

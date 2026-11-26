@@ -48,8 +48,8 @@ func _ready() -> void :
 		b.pressed.connect( func(): reshape(operation));shape_buttons[operation] = b
 	for i in 2:
 		var endpoint = "start" if i == 0 else "end"
-		var b = tool_button("GO " + endpoint.to_upper(), 1, 3 + i)
-		b.pressed.connect( func(): focus_endpoint(endpoint))
+		var b = tool_button("GO TO " + endpoint.to_upper(), 1, 3 + i)
+		b.pressed.connect( func(): focus_endpoint(endpoint));endpoint_buttons[endpoint] = b
 	# Row 3: one-tap shapes, then mirror and flip, all fine-tuned afterwards by dragging.
 	var preset_names = ["zigzag", "wave", "s_curve", "sweep", "mirror", "flip"]
 	for i in preset_names.size():
@@ -58,6 +58,43 @@ func _ready() -> void :
 		b.pressed.connect( func(): apply_preset(preset));preset_buttons[preset] = b
 var snap_button: Button
 var curve_button: Button
+var endpoint_buttons: Dictionary = {}
+# What More opens: one compact row just above Correct mode's toolbar, holding only the
+# buttons that apply to the selected note, in groups: where to look, reshape, delete a point.
+const MORE_BOTTOM = 0.834
+const MORE_ROW = 0.078
+const MORE_GAP = 0.012
+const MORE_PER_ROW = 8
+func more_groups() -> Array:
+	return [[endpoint_buttons.get("start"), endpoint_buttons.get("end")],
+		[shape_buttons.get("straighten"), shape_buttons.get("smooth"), curve_button, preset_buttons.get("zigzag"), preset_buttons.get("wave"), preset_buttons.get("s_curve"), preset_buttons.get("sweep"), preset_buttons.get("mirror"), preset_buttons.get("flip")],
+		[snap_button, delete_point_button]]
+func lay_out_more() -> void:
+	# Rows of visible buttons; a null marks a gap between groups.
+	var rows: Array = [[]]
+	for group in more_groups():
+		var shown = group.filter(func(b): return b != null and b.visible)
+		if shown.is_empty(): continue
+		var row: Array = rows[-1]
+		if row.filter(func(b): return b != null).size() + shown.size() > MORE_PER_ROW: rows.append([]); row = rows[-1]
+		if not row.is_empty(): row.append(null)
+		row.append_array(shown)
+	var widest = 0.0
+	for r in rows.size():
+		var row: Array = rows[r]
+		var count = row.filter(func(b): return b != null).size()
+		var total = count * COLUMN_STEP + (row.size() - count) * MORE_GAP
+		widest = maxf(widest, total)
+		var x = 0.5 - total * 0.5
+		# The first row sits lowest, next to the toolbar.
+		var top = MORE_BOTTOM - 0.01 - (r + 1) * MORE_ROW
+		for b in row:
+			if b == null: x += MORE_GAP; continue
+			b.anchor_left = x + 0.003;b.anchor_right = x + COLUMN_STEP - 0.003
+			b.anchor_top = top + 0.006;b.anchor_bottom = top + MORE_ROW - 0.006
+			x += COLUMN_STEP
+	plate.anchor_left = 0.5 - widest * 0.5 - 0.008;plate.anchor_right = 0.5 + widest * 0.5 + 0.008
+	plate.anchor_bottom = MORE_BOTTOM;plate.anchor_top = MORE_BOTTOM - 0.02 - rows.size() * MORE_ROW
 var preset_buttons: Dictionary = {}
 const COLUMN_LEFT = 0.14
 const COLUMN_STEP = 0.0865
@@ -91,9 +128,9 @@ func _process(_delta: float) -> void :
 	var writable = game.recorder.writable(note) and drags.is_empty() and draw_touches.is_empty()
 	var slide = note.kind == "slide"
 	var skd_nodes=game.uses_skd_recorder_surface()
-	plate.anchor_bottom = 0.453
 	plate.visible = expanded
-	snap_button.visible = expanded
+	# On the SKD grid snapping is fixed, so there is nothing to choose.
+	snap_button.visible = expanded and not skd_nodes
 	for b in extra_buttons: b.visible = expanded
 	delete_point_button.visible = slide and expanded
 	delete_point_button.disabled = selected_point_index <= 0 or not writable
@@ -110,8 +147,9 @@ func _process(_delta: float) -> void :
 	curve_button.text = "POINT CURVE" if selected_point_index > 0 else "CURVE ALL"
 	curve_button.set_selected(not inner.is_empty() and curved(note, inner))
 	for preset in preset_buttons:
-		preset_buttons[preset].visible=expanded and (not skd_nodes or preset in ["zigzag","mirror","flip"])
-		preset_buttons[preset].disabled = not writable or (preset == "flip" and not slide)
+		preset_buttons[preset].visible=expanded and (not skd_nodes or preset in ["zigzag","mirror","flip"]) and (slide or preset != "flip")
+		preset_buttons[preset].disabled = not writable
+	if expanded: lay_out_more()
 	queue_redraw()
 func marker_point(note: Dictionary, at: float) -> Variant:
 	var w = game.field.world
