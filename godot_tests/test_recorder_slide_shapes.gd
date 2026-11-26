@@ -69,4 +69,20 @@ func _initialize():
  check(managed.path.size()==3 and managed.checkpoints==[.75],"Deleting a shape anchor keeps other connectors")
  capture.begin(4,10,position(2),"slide");capture.move(4,10.5,position(7));var canceled=capture.end(4,10.6,position(8),true)
  check(canceled.is_empty(),"Cancellation never saves a partial slide")
+ # Sliding quickly to a new position and resting there leaves a flat run at that position,
+ # with a connector where the finger arrived and where it left, for every step.
+ for dense in [false,true]:
+  var steps=SynkCapture.new();steps.begin(5,0,position(2),"slide")
+  var at=0.0;var from=2.0
+  for target in [5.0,8.0,11.0]:
+   # A resting finger may send nothing at all (dense=false) or keep reporting small jitter.
+   if dense:
+    for i in 24:steps.move(5,at+float(i+1)/60,position(from+sin(i*1.7)*.05))
+   at+=.4
+   for i in 5:steps.move(5,at+.08*float(i+1)/5,position(lerpf(from,target,float(i+1)/5)))
+   at+=.08;from=target
+  var stairs=steps.end(5,at+.4,position(11))
+  check(stairs.path.size()==8 and stairs.get("checkpoints",[]).size()==6,"Each quick step of a slide keeps its rest and connectors (dense=%s, got %d points)" % [dense,stairs.path.size()])
+  for step in 4:
+   check(absf(SynkChart.lane_at(stairs,step*.48+.2)-(2+step*3))<.01,"The slide lies flat on lane %d while the finger rests there" % (2+step*3))
  print("Recorder clean hold/slide shapes failures: ",failures);quit(failures)

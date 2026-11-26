@@ -45,9 +45,11 @@ func run() -> void:
 	check(game.toggle_checkpoint(slide,1.5,false) and not slide.has("checkpoints") and slide.path.size() == 2, "Removing a straight connector removes its redundant anchor")
 	var capture=SynkCapture.new()
 	var left=Vector2(.07+.86*2.5/13.0,.8);var right=Vector2(.07+.86*8.5/13.0,.8)
-	capture.begin(3,2.0,left,"slide");capture.move(3,2.5,right)
+	# A moving finger reports every frame; a silence would be read as a rest.
+	capture.begin(3,2.0,left,"slide")
+	for frame in 60:capture.move(3,2.0+(frame+1)/60.0,left.lerp(right,(frame+1)/60.0))
 	var recorded=capture.end(3,3.0,right)
-	check(not recorded.has("checkpoints"),"Recorded slide has no automatic connectors")
+	check(not recorded.has("checkpoints"),"A straight recorded slide has no automatic connectors")
 	game.field.world.build_note_node("recorder_no_connectors",recorded,true)
 	var plain=game.field.world.notes.recorder_no_connectors.node
 	check(plain.get_children().filter(func(child):return child.name=="SlideTurnCap").is_empty(),"Recorder trail has no internal connector caps")

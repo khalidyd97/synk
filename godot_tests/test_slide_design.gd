@@ -70,8 +70,12 @@ func run() -> void:
 	check(not note.has("checkpoints"), "A straight slide has no connectors")
 	var capture = SynkCapture.new()
 	capture.begin(7, 5.0, Vector2(.07 + .86 * 2.5 / 13.0, .8), "slide")
-	capture.move(7, 5.3, Vector2(.07 + .86 * 8.5 / 13.0, .8))
-	capture.move(7, 5.6, Vector2(.07 + .86 * 3.5 / 13.0, .8))
+	# A moving finger reports every frame; a silence would be read as a rest.
+	var stops = [2.5, 8.5, 3.5, 9.5]
+	for leg in 3:
+		for frame in 18:
+			var lane = lerpf(stops[leg], stops[leg + 1], (frame + 1) / 18.0)
+			capture.move(7, 5.0 + leg * .3 + (frame + 1) / 60.0, Vector2(.07 + .86 * lane / 13.0, .8))
 	var recorded = capture.end(7, 5.9, Vector2(.07 + .86 * 9.5 / 13.0, .8))
 	check(recorded.kind == "slide" and recorded.path.size() >= 3 and recorded.get("checkpoints", []).size() == recorded.path.size() - 2, "Recorded slide turns are connectors")
 	check(SynkChart.valid([recorded]), "Recorded slide with connectors stays valid")

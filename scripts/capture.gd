@@ -61,7 +61,11 @@ func move(id: int, time: float, p: Vector2) -> void:
 	var mapped_lane=clampf(lane(p.x)+float(g.get("lane_shift",0)),0,SynkChart.MAX_LANE)
 	n.duration = maxf(float(n.duration),maxf(0,time-float(n.time)));n.end_lane=roundi(mapped_lane)
 	var samples:Array=g.samples
-	if n.duration>float(samples[-1].offset)+.0001:samples.append({"offset":n.duration,"lane":mapped_lane})
+	if n.duration>float(samples[-1].offset)+.0001:
+		# A resting finger sends nothing. After a silence, note that it stayed where it was
+		# until just before this event, so the rest keeps its true length.
+		if n.duration-float(samples[-1].offset)>REST_GAP:samples.append({"offset":n.duration-.016,"lane":float(samples[-1].lane)})
+		samples.append({"offset":n.duration,"lane":mapped_lane})
 	elif samples.size()>1:samples[-1].lane=mapped_lane
 	n.kind = str(g.tool) if g.tool in ["hold","slide"] else ("slide" if g.max_delta>=.8 else "hold")
 	if n.kind=="slide" and n.duration>.04:
@@ -108,6 +112,13 @@ func end(id: int, time: float, p: Vector2, canceled = false) -> Dictionary:
 # straight spans; it does not trace easing or small side-to-side finger motion.
 const TURN_LANES=.8
 const MOVE_LANES=.5
+# A rest: the finger stays within REST_LANES for at least REST_TIME. Each rest becomes a flat
+# run with a corner (a connector) where the finger arrived and where it left.
+const REST_LANES=.18
+const REST_TIME=.12
+const REST_GAP=.08
+# A rest corner this close to the straight line between its neighbours is only a slow drift.
+const REST_BEND=.3
 
 static func snap_path(path:Array,duration:float)->Array:
 	if path.is_empty():return []
@@ -161,6 +172,44 @@ static func snap_path(path:Array,duration:float)->Array:
 		while still<filtered.size()-1 and absf(float(filtered[still].lane)-float(filtered[-1].lane))>.15:still+=1
 		if duration-float(filtered[still].offset)>=.12:keep[still]=true
 		break
+	# Rests anywhere along the slide: sliding quickly to a new position and staying there
+	# leaves a flat run at that position, however many such steps the slide has.
+	var rest_corners={}
+	var first=0
+	while first<filtered.size()-1:
+		var last=first
+		var low=float(filtered[first].lane);var high=low
+		while last+1<filtered.size():
+			var next=float(filtered[last+1].lane)
+			if maxf(high,next)-minf(low,next)>REST_LANES:break
+			low=minf(low,next);high=maxf(high,next);last+=1
+		if float(filtered[last].offset)-float(filtered[first].offset)<REST_TIME:
+			first+=1;continue
+		# The run sits on one lane: the slide's own first or last lane, or where the finger lay.
+		var level=(low+high)*.5
+		if first==0:level=float(filtered[0].lane)
+		elif last==filtered.size()-1:level=float(filtered[-1].lane)
+		elif absf(level-roundf(level))<=.22:level=roundf(level)
+		for i in range(first,last+1):
+			filtered[i].lane=level
+			# A turn found inside the rest is the rest itself.
+			if i>first and i<last:keep.erase(i)
+		for corner in [first,last]:
+			if not keep.has(corner):rest_corners[corner]=true
+			keep[corner]=true
+		first=last+1
+	# Drop rest corners that barely bend the trail, the least significant first.
+	while not rest_corners.is_empty():
+		var kept:Array=keep.keys();kept.sort()
+		var weakest=-1;var weakest_bend=REST_BEND
+		for k in range(1,kept.size()-1):
+			if not rest_corners.has(kept[k]):continue
+			var before:Dictionary=filtered[kept[k-1]];var after:Dictionary=filtered[kept[k+1]];var here:Dictionary=filtered[kept[k]]
+			var along=(float(here.offset)-float(before.offset))/maxf(.0001,float(after.offset)-float(before.offset))
+			var bend=absf(float(here.lane)-lerpf(float(before.lane),float(after.lane),along))
+			if bend<weakest_bend:weakest_bend=bend;weakest=kept[k]
+		if weakest<0:break
+		keep.erase(weakest);rest_corners.erase(weakest)
 	var result:Array=[]
 	for i in filtered.size():
 		if not keep.has(i):continue
