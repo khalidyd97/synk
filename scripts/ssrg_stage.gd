@@ -358,6 +358,9 @@ func configure(world: Node3D) -> void :
 		rail.material_override.set_shader_parameter("tint", rail_tint)
 		rail.material_override.set_shader_parameter("floor_opacity",clampf(float(world.game.highway_opacity),.3,1.6))
 		rail.material_override.set_shader_parameter("floor_tint",world.element_color("track",SYNK_FLOOR if synk else Color.BLACK))
+	# The recorder keeps SYNK mode's rails as plain lines of light, without their glow.
+	var calm = 1.0 if synk and world.game.uses_skd_recorder_surface() else 0.0
+	for piece in rails+rail_overlays: piece.material_override.set_shader_parameter("calm",calm)
 	for overlay in rail_overlays:
 		overlay.visible = stock_road and synk
 		overlay.material_override.set_shader_parameter("artwork", rail_art)

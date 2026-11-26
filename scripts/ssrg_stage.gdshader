@@ -10,6 +10,8 @@ uniform float floor_entrance : hint_range(0.0,1.0) = 1.0;
 uniform float rail_side = 1.0;
 // A second copy of the rail drawn above the judgment bar: the rail's light only, no road.
 uniform bool rail_only = false;
+// The recorder: 1 keeps only the rail's bright line and drops the glow around it.
+uniform float calm = 0.0;
 uniform vec3 tone = vec3(0.0, 1.0, 1.0);   // SYNK mode adaptive colours
 #include "res://scripts/synk_tone.gdshaderinc"
 void vertex(){
@@ -34,5 +36,10 @@ void fragment(){
         ALBEDO=art.rgb/max(light,0.001)*tint.rgb*(1.0+leading_edge*1.65);
         // Fade the faintest glow out smoothly, so it leaves no edge across the bar.
         ALPHA=art.a*tint.a*rail_wipe*smoothstep(0.0,.16,rail_entrance)*light*smoothstep(0.02,0.22,light);
+    }
+    if(calm>0.0 && !road){
+        // The glow is coloured and the line itself is near white, so keep what is white.
+        float white=min(art.r,min(art.g,art.b));
+        ALPHA*=mix(1.0,smoothstep(0.18,0.7,white),calm);
     }
 }
