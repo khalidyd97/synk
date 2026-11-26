@@ -19,7 +19,18 @@ jobs:
           xcode=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
           sudo xcode-select -s "$xcode"
           xcodebuild -version
+      # Caches are shared only between runs on the same branch, so builds run from the one
+      # fixed branch codex/ios-build rather than from a new branch each time.
+      - name: Restore Godot and the iOS export template
+        id: godot-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            /tmp/godot
+            ~/Library/Application Support/Godot/export_templates/4.7.2.stable
+          key: godot-4.7.2-stable-macos-ios-template-v1
       - name: Install Godot and export templates
+        if: steps.godot-cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -28,8 +39,17 @@ jobs:
           curl -fL --retry 3 https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz -o /tmp/templates.zip
           unzip -q /tmp/templates.zip -d /tmp/templates
           mkdir -p "$HOME/Library/Application Support/Godot/export_templates/4.7.2.stable"
-          cp -R /tmp/templates/templates/. "$HOME/Library/Application Support/Godot/export_templates/4.7.2.stable/"
+          # Only the iOS template is needed (and cached); the others are several times its size.
+          cp /tmp/templates/templates/ios.zip /tmp/templates/templates/version.txt "$HOME/Library/Application Support/Godot/export_templates/4.7.2.stable/"
+      # The extension only changes with its own source; building it compiles all of godot-cpp.
+      - name: Restore iOS file picker extension
+        id: picker-cache
+        uses: actions/cache@v4
+        with:
+          path: addons/synk_ios_picker
+          key: ios-file-picker-${{ hashFiles('tools/ios_file_picker/**') }}-v1
       - name: Build iOS file picker extension
+        if: steps.picker-cache.outputs.cache-hit != 'true'
         shell: bash
         run: bash tools/ios_file_picker/build.sh "$PWD"
       - name: Remove music recognition from iOS
@@ -46,6 +66,8 @@ jobs:
           text=p.read_text().replace('[preset.2.options]', '[preset.2.options]\napplication/app_store_team_id="0000000000"')
           p.write_text(text)
           PY
+          test -f addons/synk_ios_picker/synk_ios_picker.gdextension
+          test -d addons/synk_ios_picker/synk_ios_picker.xcframework
           /tmp/godot/Godot.app/Contents/MacOS/Godot --headless --editor --path . --import
           /tmp/godot/Godot.app/Contents/MacOS/Godot --headless --path . --export-release iOS builds/ios-unsigned/SYNK.zip
           if ! find builds/ios-unsigned -name '*.xcodeproj' | grep -q .; then
