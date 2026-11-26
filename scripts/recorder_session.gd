@@ -33,6 +33,7 @@ var review: Control
 var setup: Control
 var take_picker: OptionButton
 var compare_label: Label
+var headline_label: Label
 var warnings_label: Label
 var highlights: Dictionary = {}
 var selected_take = 0
@@ -397,30 +398,35 @@ func show_review() -> void :
 	sheet_title(game.label(review_panel, "Take review", 0.035, 0.015, 0.8, 0.105, 42))
 	var where = game.label(review_panel, "%.2f–%.2f s  ·  %s  ·  %s" % [region.x, region.y, "Replace" if bool(config.get("replace", replace)) else "Layer", current_pass().capitalize()], 0.035, 0.105, 0.965, 0.16, 17)
 	where.add_theme_color_override("font_color", Color("bcb7ad"))
-	var left = review_column(review_panel, Rect2(0.035, 0.2, 0.445, 0.58), "TAKE SUMMARY")
-	var right = review_column(review_panel, Rect2(0.51, 0.2, 0.455, 0.58), "TAKE SELECTION")
-	compare_label = text(left, "", 20)
-	warnings_label = text(left, "", 17)
+	# One card: what the take did, any timing flags, and (with several takes) which one to keep.
+	var card = review_column(review_panel, Rect2(0.035, 0.19, 0.93, 0.545), "THIS TAKE")
+	headline_label = text(card, "", 30)
+	compare_label = text(card, "", 20)
+	warnings_label = text(card, "", 17);warnings_label.add_theme_color_override("font_color", Color("bcb7ad"))
 	var titles: Array = []
 	for i in takes.size(): titles.append("Take %d · %d notes" % [i + 1, takes[i].notes.size()])
-	take_picker = choice(right, "Choose the attempt to keep", titles, selected_take, select_take)
-	take_picker.disabled = takes.size() < 2
+	take_picker = null
 	if takes.size() > 1:
-		text(right, "Combine two takes", 17)
-		var first = choice(right, "First half", titles, 0, func(_i): pass)
-		var second = choice(right, "Second half", titles, selected_take, func(_i): pass)
-		var split = number(right, "Splice at song time · seconds", (region.x + region.y) * 0.5, region.x, region.y, 0.001, func(_v): pass)
-		button(right, "APPLY COMBINED TAKE", func():
+		take_picker = setup_choice(card, "Take to keep", "You recorded %d takes of this part." % takes.size(), titles, selected_take, select_take)
+		# Splicing two takes is rare, so it stays folded away.
+		var splice = VBoxContainer.new();splice.add_theme_constant_override("separation", 12);splice.visible = false
+		var opener = button(card, "Combine two takes", func(): pass)
+		opener.pressed.connect( func(): splice.visible = not splice.visible;opener.text = "Hide combine" if splice.visible else "Combine two takes")
+		card.add_child(splice)
+		var first = setup_choice(splice, "First part from", "", titles, 0, func(_i): pass)
+		var second = setup_choice(splice, "Second part from", "", titles, selected_take, func(_i): pass)
+		var split = SpinBox.new();split.min_value = region.x;split.max_value = region.y;split.step = 0.001;split.value = (region.x + region.y) * 0.5;split.suffix = "s"
+		split.add_theme_font_size_override("font_size", 19)
+		setup_line(splice, "Switch takes at", "Song time where the second take takes over.", split, 200)
+		button(splice, "Apply combined take", func():
 			var combined = combine(first.selected, second.selected, split.value)
 			apply_take(combined);update_review();compare_label.text = "COMBINED · %d notes\n" % combined.size() + compare_label.text)
-	else:
-		text(right, "Replay to check your timing. Retry to record another attempt in the same section.", 18)
-		text(right, "Keep Take returns to the editor. Save there when you are ready to publish your chart.", 18)
-	game.label(review_panel, "Your take stays in the draft until you save the chart.", 0.035, 0.795, 0.965, 0.835, 17).add_theme_color_override("font_color", Color("bcb7ad"))
-	review_action("UNDO TAKE", 0.035, 0.255, func(): undo_take();close_review();game.tell("Take undone."), "danger")
-	review_action("RETRY SECTION", 0.275, 0.495, retry, "record")
-	review_action("REPLAY TAKE", 0.515, 0.735, preview, "secondary")
-	review_action("KEEP TAKE", 0.755, 0.965, keep, "primary")
+	game.label(review_panel, "Keeping adds this take to your draft. Save the chart in the editor when you are ready.", 0.035, 0.755, 0.965, 0.8, 17).add_theme_color_override("font_color", Color("bcb7ad"))
+	# Keep is the main action; the others are quieter, and discarding sits apart on the left.
+	review_action("DISCARD TAKE", 0.035, 0.2, func(): undo_take();close_review();game.tell("Take discarded."), "danger")
+	review_action("RECORD AGAIN", 0.4, 0.58, retry, "secondary")
+	review_action("LISTEN BACK", 0.595, 0.775, preview, "secondary")
+	review_action("KEEP TAKE", 0.79, 0.965, keep, "primary")
 	replay_return = Action.new();replay_return.text = "BACK TO TAKE REVIEW";replay_return.variant = "secondary";replay_return.caption_size = 21
 	game.rect(replay_return, safe, 0.33, 0.015, 0.67, 0.09);replay_return.pressed.connect(stop_preview);replay_return.visible = false
 	preload("res://scripts/interface_life.gd").mount(review_panel)
@@ -429,7 +435,7 @@ func show_review() -> void :
 
 func review_action(title: String, left: float, right: float, callback: Callable, role: String) -> void :
 	var action = Action.new();action.text = title;action.variant = role;action.caption_size = 21
-	game.rect(action, review_panel, left, 0.86, right, 0.965);action.pressed.connect(callback)
+	game.rect(action, review_panel, left, 0.84, right, 0.955);action.pressed.connect(callback)
 
 func review_column(parent: Control, bounds: Rect2, title: String) -> VBoxContainer:
 	var panel = Panel.new();game.rect(panel, parent, bounds.position.x, bounds.position.y, bounds.end.x, bounds.end.y)
@@ -445,6 +451,7 @@ func update_review() -> void :
 	if not review: return
 	var selected: Array = review_notes
 	var replacing = bool(config.get("replace", replace))
+	if headline_label: headline_label.text = "No notes recorded" if selected.is_empty() else "%d note%s recorded" % [selected.size(), "" if selected.size() == 1 else "s"]
 	# Against the chart, only notes this take replaces can count as removed or moved; a layered take adds to them.
 	var prior: Array = takes[selected_take - 1].notes if selected_take > 0 else (baseline.filter( func(n): return writable(n) and float(n.time) >= region.x and float(n.time) < region.y) if replacing else [])
 	var diff = comparison(prior, selected)
