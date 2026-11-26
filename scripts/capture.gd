@@ -139,6 +139,11 @@ const REST_TIME=.07
 # A slow steady slide also stays within REST_LANES for a while, but it keeps travelling: the
 # run is cut back to the samples near its middle lane (REST_TRIM) and counts as a rest only
 # if the finger ends up where it began (REST_NET).
+# A finger pauses for a moment as it lands and again before it lifts. That is part of making
+# the swipe, not a rest: at the very start or end of a slide only a longer pause is one.
+const REST_EDGE_TIME=.22
+# A slide shorter than this is one swipe: start to end, with no corners at all.
+const SWIPE_TIME=.3
 const REST_TRIM=.063
 const REST_NET=.09
 const REST_GAP=.08
@@ -189,13 +194,13 @@ static func snap_path(path:Array,duration:float)->Array:
 		if absf(float(filtered[i].lane)-float(filtered[0].lane))<MOVE_LANES:continue
 		var still=i-1
 		while still>0 and absf(float(filtered[still].lane)-float(filtered[0].lane))>.15:still-=1
-		if float(filtered[still].offset)>=.12:keep[still]=true
+		if float(filtered[still].offset)>=REST_EDGE_TIME and duration>=SWIPE_TIME:keep[still]=true
 		break
 	for i in range(filtered.size()-2,0,-1):
 		if absf(float(filtered[i].lane)-float(filtered[-1].lane))<MOVE_LANES:continue
 		var still=i+1
 		while still<filtered.size()-1 and absf(float(filtered[still].lane)-float(filtered[-1].lane))>.15:still+=1
-		if duration-float(filtered[still].offset)>=.12:keep[still]=true
+		if duration-float(filtered[still].offset)>=REST_EDGE_TIME and duration>=SWIPE_TIME:keep[still]=true
 		break
 	# Rests anywhere along the slide: sliding quickly to a new position and staying there
 	# leaves a flat run at that position, however many such steps the slide has.
@@ -215,7 +220,8 @@ static func snap_path(path:Array,duration:float)->Array:
 		var from=first;var to=last
 		while to>from and absf(float(filtered[to].lane)-middle)>REST_TRIM:to-=1
 		while from<to and absf(float(filtered[from].lane)-middle)>REST_TRIM:from+=1
-		if float(filtered[to].offset)-float(filtered[from].offset)<REST_TIME or absf(float(filtered[to].lane)-float(filtered[from].lane))>REST_NET:
+		var at_edge=from==0 or to==filtered.size()-1
+		if duration<SWIPE_TIME or float(filtered[to].offset)-float(filtered[from].offset)<(REST_EDGE_TIME if at_edge else REST_TIME) or absf(float(filtered[to].lane)-float(filtered[from].lane))>REST_NET:
 			first+=1;continue
 		first=from;last=to
 		low=float(filtered[first].lane);high=low
