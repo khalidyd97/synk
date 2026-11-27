@@ -1525,7 +1525,7 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 	# SYNK mode's hold is a beam of light nearly as wide as the ring it rises from.
 	var synk_beam=source_visual and game.synk_mode()
 	# (Drawn as one joined ribbon, which takes its half-width as given.)
-	if synk_beam: half_width = 212.0*.5*.36*SSRG_UNIT*ssrg_art_scale()
+	if synk_beam: half_width = 212.0*.5*.24*SSRG_UNIT*ssrg_art_scale()
 	# Recorder holds and slides share SSRG's look on the flat recorder highway: thin gold ribbon,
 	# cream core, a slow shimmer flowing toward the line, and SSRG pucks at every turn.
 	var recorder_slide=recording and note.kind in ["hold","slide"]
@@ -1661,7 +1661,7 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 			var bead_mesh = SphereMesh.new(); bead_mesh.radius=.34*FIT; bead_mesh.height=.24*FIT; bead_mesh.radial_segments=16; bead_mesh.rings=6
 			var bead = mesh_node(bead_mesh,parent,dot_material); bead.position = dot_position+Vector3(0,.06,0)
 	var end_cap=make_tail_cap(parent,SynkChart.lane_at(note,note.time+duration),duration,palette,recording)
-	# SYNK mode ends its trail with the same diamond that marks a slide's bends.
+	# SYNK mode ends its trail with the same round marker that marks a slide's bends.
 	if synk_beam: use_synk_connector(end_cap)
 	if solid:
 		end_cap.set_meta("solid_trail_joint",true); end_cap.set_meta("checkpoint_offset",duration)
@@ -1701,7 +1701,7 @@ func make_solid_trail_joints(parent: Node3D,note: Dictionary,palette: int,record
 		if source_long_visuals() or recording:
 			var cap=make_tail_cap(parent,SynkChart.lane_at(note,float(note.time)+float(offset)),float(offset),palette,recording)
 			cap.name="SlideTurnCap"
-			# SYNK mode marks a bend with its own bright diamond, not a smaller copy of the note.
+			# SYNK mode marks a bend with its own bright round marker, not a smaller copy of the note.
 			if game.synk_mode() and not recording: use_synk_connector(cap)
 			cap.set_meta("solid_trail_joint",true); cap.set_meta("checkpoint_offset",offset)
 			continue
