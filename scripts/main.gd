@@ -263,7 +263,6 @@ const SYNK_RAIL_DESIGNS = {"kerb":"Kerb","hairline":"Hairline","dashes":"Dashes"
 var synk_rail_design = "kerb"
 # Prototypes to try in play (Settings > Visual effects > Highway).
 var road_bends = false
-var rail_notes_on = false
 func synk_note_shape_index() -> int: return maxi(0, SYNK_NOTE_SHAPES.find(synk_note_shape))
 var resume_grace = 0.0
 var overdub = false
@@ -534,7 +533,6 @@ func _ready() -> void:
 	synk_rail_design=str(prefs.get_value("gameplay","synk_rail_design","kerb"))
 	if not SYNK_RAIL_DESIGNS.has(synk_rail_design): synk_rail_design="kerb"
 	road_bends=bool(prefs.get_value("gameplay","road_bends",false))
-	rail_notes_on=bool(prefs.get_value("gameplay","rail_notes",false))
 	if trail_style not in ["neon","solid"]: trail_style="neon"
 	hold_trail_width=1.0
 	features=load("res://scripts/workbench.gd").new(); features.game=self; add_child(features)
@@ -1398,7 +1396,6 @@ func change_synk_note_shape(kind: String) -> void:
 
 func change_prototype(key: String, on: bool) -> void:
 	if key=="road_bends": road_bends=on
-	else: rail_notes_on=on
 	prefs.set_value("gameplay",key,on); prefs.save("user://preferences.cfg")
 	if settings_panel: settings_panel.refresh()
 
@@ -1763,7 +1760,7 @@ func total_judgements() -> int:
 			if entry.note.kind=="hold" or (ssrg_playable_run and entry.note.kind=="slide"): judgement_total_cache+=1
 			judgement_total_cache+=entry.note.get("checkpoints",[]).size()
 		judgement_total_size=live.size()
-	return judgement_total_cache+field.world.rail_notes.total()
+	return judgement_total_cache
 
 # Checkpoint dots: when one reaches the bar, the finger must be over the trail's lane.
 # Returns false if the hold or slide broke on a missed dot.
@@ -1875,7 +1872,6 @@ func start_game(notes: Array,automated: bool = false,section: String = "",is_pra
 			if n.kind=="slide": n.ssrg_path=true
 			if n.kind=="flick" and int(n.direction)==2: n.direction=0
 	last_play_notes=sorted.duplicate(true)
-	field.world.rail_notes.start(sorted,play_range.x,play_range.y)
 	# A section ends at its boundary, or once its last note (and hold tail) has passed.
 	play_finish_time=INF
 	if play_range.y<INF:
@@ -2809,8 +2805,6 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 				arrange_preview.request(preview_at)
 		return
 	var touch_world=field.touch_world_position(p)
-	# Rail notes (prototype): a touch outside the road that hits one never reaches the lanes.
-	if mode=="play" and field.world.rail_notes.pointer(id,touch_world,began,ended or canceled,input_time): return
 	p = field.input_position(p)
 	if mode=="record":
 		if not recorder.can_capture(song_time): return
@@ -2921,7 +2915,6 @@ func pointer_event(id: int,p: Vector2,began: bool,ended: bool,canceled: bool,fro
 				if entry.pointer==id and not entry.done: judge(entry,-1)
 
 func update_autoplay() -> void:
-	field.world.rail_notes.judge_frame(song_time,true)
 	for live_index in range(first_live_index(),live.size()):
 		var entry: Dictionary=live[live_index]
 		if float(entry.note.time)>song_time: break
@@ -3148,7 +3141,6 @@ func flick_sweeper(n: Dictionary) -> int:
 	return -1
 
 func update_game() -> void:
-	field.world.rail_notes.judge_frame(song_time,false)
 	track_flick_strokes()
 	if ssrg_playable_run:
 		prepare_ssrg_input()

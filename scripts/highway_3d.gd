@@ -65,7 +65,6 @@ var ssrg_shake_x=0.0
 var cover_backdrop: MeshInstance3D
 var rail_atmosphere: Node3D
 var concept_theme:Node3D
-var rail_notes: Node3D
 var ssrg_theme: Node3D
 var cover_material: ShaderMaterial
 var rail_edge_materials: Array = []
@@ -346,7 +345,6 @@ func _ready() -> void:
 		note_meshes.append(make_note_mesh(color))
 	build_track()
 	ssrg_theme=preload("res://scripts/ssrg_highway.gd").new(); ssrg_theme.world=self; add_child(ssrg_theme)
-	rail_notes=preload("res://scripts/rail_notes.gd").new(); rail_notes.world=self; rail_notes.game=game; add_child(rail_notes)
 	build_effects()
 	laser_streaks=preload("res://scripts/laser_streaks.gd").new(); add_child(laser_streaks); laser_streaks.build(self)
 	build_play_aids()
@@ -1180,7 +1178,6 @@ func animate_effects(delta: float) -> void:
 	# Every highway shader reads this one global clock (project setting shader_globals/synk_time).
 	RenderingServer.global_shader_parameter_set("synk_time",animation_time)
 	update_ssrg_warp()
-	if rail_notes: rail_notes.draw(delta)
 
 func artwork(parent: Node3D, name: String, palette: int, position_value: Vector3, dimensions: Vector2, region = Vector4(0,0,1,1), opacity = 1.0) -> MeshInstance3D:
 	var quad = QuadMesh.new(); quad.size = dimensions

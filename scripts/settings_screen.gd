@@ -26,7 +26,6 @@ var old_ssrg_ui_row: PanelContainer
 var old_ssrg_ui_switch: Switch
 var synk_mode_switch: Switch
 var road_bends_switch: Switch
-var rail_notes_switch: Switch
 # The SSRG highway is a fixed flat view: its style hides the angle row.
 var angle_row: PanelContainer
 var color_pickers: Dictionary = {}
@@ -506,9 +505,6 @@ func build_highway(items: VBoxContainer) -> void:
     var bends_row=row(items,"Bending road (test)","The road swings sideways in an S every 16 beats and the lanes move with it.",112)
     road_bends_switch=Switch.new();add_control(bends_row,road_bends_switch,152)
     connect_switch(road_bends_switch,func(on:bool): game.change_prototype("road_bends",on))
-    var rails_row=row(items,"Rail notes (test)","Extra notes ride on the two rails. Touch outside the road on that side to hit them.",112)
-    rail_notes_switch=Switch.new();add_control(rails_row,rail_notes_switch,152)
-    connect_switch(rail_notes_switch,func(on:bool): game.change_prototype("rail_notes",on))
     old_ssrg_ui_row=row(items,"Old SSRG look","STAYC note sprites, guide rings, judgment bar and thin edge rails.",112)
     old_ssrg_ui_switch=Switch.new();add_control(old_ssrg_ui_row,old_ssrg_ui_switch,152)
     connect_switch(old_ssrg_ui_switch,game.change_old_ssrg_ui)
@@ -674,7 +670,6 @@ func refresh() -> void:
     for kind in style_tiles: style_tiles[kind].selected=kind==game.highway_style
     if synk_mode_switch: synk_mode_switch.set_pressed_no_signal(game.highway_style=="synk")
     if road_bends_switch: road_bends_switch.set_pressed_no_signal(game.road_bends)
-    if rail_notes_switch: rail_notes_switch.set_pressed_no_signal(game.rail_notes_on)
     if old_ssrg_ui_row:
         old_ssrg_ui_row.visible=game.highway_style=="ssrg"
         old_ssrg_ui_switch.set_pressed_no_signal(bool(game.prefs.get_value("highway","old_ssrg_ui",false)))
