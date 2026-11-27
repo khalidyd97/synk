@@ -65,6 +65,7 @@ var ssrg_shake_x=0.0
 var cover_backdrop: MeshInstance3D
 var rail_atmosphere: Node3D
 var concept_theme:Node3D
+var rail_notes: Node3D
 var ssrg_theme: Node3D
 var cover_material: ShaderMaterial
 var rail_edge_materials: Array = []
@@ -217,6 +218,36 @@ func update_ssrg_warp() -> void:
 	RenderingServer.global_shader_parameter_set("ssrg_warp",Vector4(on,approach_power(),SSRG_STAGE_DISTANCE,TRACK_LENGTH))
 	RenderingServer.global_shader_parameter_set("ssrg_reveal_from",stage_reveal_from(reveal_progress()))
 	RenderingServer.global_shader_parameter_set("ssrg_even",EVEN_FAR_SCALE if even_view() and uses_projected_highway() else 0.0)
+	bend=bend_state()
+	RenderingServer.global_shader_parameter_set("ssrg_bend",bend)
+	var shift=bend_at(1.0)
+	if ssrg_theme:
+		if ssrg_theme.original_stage: ssrg_theme.original_stage.position.x=shift
+		if ssrg_theme.hit_layer: ssrg_theme.hit_layer.position.x=shift
+# --- Bending road (prototype) ----------------------------------------------------------
+# Every BEND_EVERY beats the road swings sideways in an S, one way then the other, and comes
+# back to the middle over BEND_BEATS beats. The screen shows BEND_SHOW seconds of road ahead,
+# so the curve is seen coming down before the judgment line itself moves. Notes, rails, hit
+# flashes and touches all move with the road: a lane is always where it is drawn.
+const BEND_EVERY = 16.0
+const BEND_BEATS = 8.0
+const BEND_SHOW = 1.1
+const BEND_LANES = 1.25
+var bend = Vector4(0,0,1,1)
+func bend_state() -> Vector4:
+	if game == null or not game.road_bends or not game.uses_skd_stage() or game.mode not in ["play","paused"] or not uses_projected_highway() or even_view():
+		return Vector4(0,0,1,1)
+	var beat=60.0/maxf(30.0,game.chart_bpm())
+	var period=BEND_EVERY*beat; var length=BEND_BEATS*beat; var now=render_time()
+	var index=floori((now+BEND_SHOW)/period)
+	if index<1 or now>index*period+length: return Vector4(0,0,1,1)
+	return Vector4(BEND_LANES*SSRG_STEP*(1.0 if index%2==1 else -1.0),index*period-now,length,BEND_SHOW)
+# Mirrors ssrg_bend_at() in ssrg_warp.gdshaderinc.
+func bend_at(q: float) -> float:
+	if bend.x==0.0: return 0.0
+	var u=((1.0-minf(q,1.0))*bend.w-bend.y)/bend.z
+	if u<=0.0 or u>=1.0: return 0.0
+	return bend.x*1.299*sin(TAU*u)*sin(PI*u)
 # Chart progress (0 far end .. 1 judgment) where notes become visible. SKD gameplay
 # reveals at 0.5 behind its album cover; the recorder has no cover, so notes stop
 # where the recovered rail art begins instead of drifting above it.
@@ -243,7 +274,7 @@ func reveal_progress() -> float:
 func warp_point(p: Vector3) -> Vector3:
 	if not uses_projected_highway(): return p
 	var q=ssrg_approach(p.z)
-	return Vector3(p.x*q,p.y,ssrg_warped_z(p.z))
+	return Vector3(p.x*q+bend_at(q),p.y,ssrg_warped_z(p.z))
 func unwarp_point(p: Vector3) -> Vector3:
 	if not uses_projected_highway(): return p
 	var q=maxf(1.0+p.z/SSRG_STAGE_DISTANCE,0.0)
@@ -313,6 +344,7 @@ func _ready() -> void:
 		note_meshes.append(make_note_mesh(color))
 	build_track()
 	ssrg_theme=preload("res://scripts/ssrg_highway.gd").new(); ssrg_theme.world=self; add_child(ssrg_theme)
+	rail_notes=preload("res://scripts/rail_notes.gd").new(); rail_notes.world=self; rail_notes.game=game; add_child(rail_notes)
 	build_effects()
 	laser_streaks=preload("res://scripts/laser_streaks.gd").new(); add_child(laser_streaks); laser_streaks.build(self)
 	build_play_aids()
@@ -1146,6 +1178,7 @@ func animate_effects(delta: float) -> void:
 	# Every highway shader reads this one global clock (project setting shader_globals/synk_time).
 	RenderingServer.global_shader_parameter_set("synk_time",animation_time)
 	update_ssrg_warp()
+	if rail_notes: rail_notes.draw(delta)
 
 func artwork(parent: Node3D, name: String, palette: int, position_value: Vector3, dimensions: Vector2, region = Vector4(0,0,1,1), opacity = 1.0) -> MeshInstance3D:
 	var quad = QuadMesh.new(); quad.size = dimensions

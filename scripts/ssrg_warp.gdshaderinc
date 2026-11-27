@@ -8,6 +8,18 @@ global uniform float ssrg_reveal_from;
 // stage. Time maps linearly to height and size from this scale up to 1 at the judgment
 // line, so notes stay on the rails, evenly spaced, and never shrink to a point.
 global uniform float ssrg_even;
+// Bending road (prototype): the road swings sideways in an S and comes back. x is the swing
+// in world units (0 = straight), y the seconds until the swing reaches the judgment line,
+// z how long it lasts, w how many seconds of road the screen shows ahead of the line.
+global uniform vec4 ssrg_bend;
+// Sideways shift of the road at canvas height q (0 = far end, 1 = judgment line). Mirrored
+// by bend_at() in highway_3d.gd.
+float ssrg_bend_at(float q){
+    if(ssrg_bend.x==0.0) return 0.0;
+    float u=((1.0-min(q,1.0))*ssrg_bend.w-ssrg_bend.y)/ssrg_bend.z;
+    if(u<=0.0||u>=1.0) return 0.0;
+    return ssrg_bend.x*1.299*sin(6.2831853*u)*sin(3.1415927*u);
+}
 float ssrg_progress(float z){ return max(1.0+z/ssrg_warp.w,0.0); }
 // Height on the canvas for a chart progress p.
 float ssrg_depth_of(float p){ return ssrg_even>0.0?mix(ssrg_even,1.0,p):pow(p,ssrg_warp.y); }
@@ -28,7 +40,7 @@ vec3 ssrg_warp_rigid(vec3 vertex, mat4 model){
     vec3 centre=model[3].xyz;
     float q=ssrg_scale(centre.z);
     vec3 point=(model*vec4(vertex,1.0)).xyz;
-    vec3 target=vec3(centre.x*q,centre.y,ssrg_warp_z(centre.z));
+    vec3 target=vec3(centre.x*q+ssrg_bend_at(q),centre.y,ssrg_warp_z(centre.z));
     return vertex+inverse(mat3(model))*(target-centre+(point-centre)*(q-1.0));
 }
 // A connector is straight between projected cross-sections, with the same
@@ -38,7 +50,7 @@ vec3 ssrg_warp_section(vec3 vertex, float section_z, mat4 model){
     vec3 point=(model*vec4(vertex,1.0)).xyz;
     float centre=(model*vec4(vertex.x,vertex.y,section_z,1.0)).z;
     float q=ssrg_scale(centre);
-    vec3 target=vec3(point.x*q,point.y,ssrg_warp_z(centre)+(point.z-centre)*q);
+    vec3 target=vec3(point.x*q+ssrg_bend_at(q),point.y,ssrg_warp_z(centre)+(point.z-centre)*q);
     return vertex+inverse(mat3(model))*(target-point);
 }
 
@@ -47,6 +59,6 @@ vec3 ssrg_warp_canvas(vec3 vertex, mat4 model){
     if(ssrg_warp.x<0.5) return vertex;
     vec3 point=(model*vec4(vertex,1.0)).xyz;
     float q=ssrg_scale(point.z);
-    vec3 target=vec3(point.x*q,point.y,ssrg_warp_z(point.z));
+    vec3 target=vec3(point.x*q+ssrg_bend_at(q),point.y,ssrg_warp_z(point.z));
     return inverse(mat3(model))*(target-model[3].xyz);
 }

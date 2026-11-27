@@ -71,6 +71,10 @@ ssrg_reveal_from={
 "type": "float",
 "value": 0.5
 }
+ssrg_bend={
+"type": "vec4",
+"value": Vector4(0, 0, 1, 1)
+}
 ssrg_warp={
 "type": "vec4",
 "value": Vector4(0, 3.3, 15, 60)

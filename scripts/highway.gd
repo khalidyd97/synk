@@ -111,7 +111,8 @@ func depth(time: float) -> float: return (time-game.song_time)/game.note_travel_
 func project(lane: float, d: float) -> Vector2:
 	if world.uses_projected_highway():
 		var raw=-d*world.visible_length()
-		return world.camera.unproject_position(Vector3(world.note_x(lane)*world.ssrg_approach(raw),.035,world.ssrg_warped_z(raw)))
+		var q=world.ssrg_approach(raw)
+		return world.camera.unproject_position(Vector3(world.note_x(lane)*q+world.bend_at(q),.035,world.ssrg_warped_z(raw)))
 	return world.camera.unproject_position(Vector3(world.lane_x(lane),.035,-d*world.visible_length()))
 
 func touch_world_position(p: Vector2) -> Vector3:
@@ -119,6 +120,8 @@ func touch_world_position(p: Vector2) -> Vector3:
 	var hit=Plane(Vector3.UP,.035).intersects_ray(world.camera.project_ray_origin(point),world.camera.project_ray_normal(point))
 	# Native miss shake moves the drawn objects, not calibrated channel rectangles.
 	if hit!=null and game.uses_ssrg_gameplay():hit.x+=world.ssrg_shake_x
+	# Bending road: the lanes have moved with the road, so measure the finger from the road.
+	if hit!=null: hit.x-=world.bend_at(1.0)
 	return hit if hit!=null else Vector3(0,.035,0)
 
 func input_position(p: Vector2) -> Vector2:
@@ -142,6 +145,7 @@ func input_position(p: Vector2) -> Vector2:
 		direction=world.camera.project_ray_normal(screen_point)
 		hit=Plane(Vector3.UP,0).intersects_ray(origin,direction)
 	if hit!=null and game.uses_ssrg_gameplay():hit.x+=world.ssrg_shake_x
+	if hit!=null: hit.x-=world.bend_at(1.0)
 	# SYNK's band now follows the road taper. Resolve its cross-section back
 	# to the centerline so a lane keeps the same hit area across the full band.
 	if on_pad and world.uses_projected_highway() and not game.uses_skd_stage():
