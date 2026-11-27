@@ -308,6 +308,11 @@ func warmup(world: Node3D) -> void :
 const SYNK_FLOOR = Color("000000")   # the guide's road is pure black
 const SYNK_GLOW = Color("3a3a44")   # a dim cool grey under the dark base bar
 const SYNK_SCAN = Color("ffd9a8")
+# SYNK mode's rail designs (tools/make_synk_mode_art.py), by the game's synk_rail_design.
+const SYNK_RAILS={"beam":preload("res://assets/synk_mode/rail.png"),"kerb":preload("res://assets/synk_mode/rail_kerb.png"),
+	"hairline":preload("res://assets/synk_mode/rail_hairline.png"),"dashes":preload("res://assets/synk_mode/rail_dashes.png"),
+	"beads":preload("res://assets/synk_mode/rail_beads.png"),"chevrons":preload("res://assets/synk_mode/rail_chevrons.png"),
+	"glass":preload("res://assets/synk_mode/rail_glass.png")}
 func configure(world: Node3D) -> void :
 	var stock_road = true
 	var old_ui=world.game.old_ssrg_ui()
@@ -324,7 +329,7 @@ func configure(world: Node3D) -> void :
 	(press.mesh as PlaneMesh).size=Vector2(1156,bar_depth)*BAR_UNIT
 	press.position.z=(-49.0+bar_depth*.5)*BAR_UNIT
 	entrance_shadow.visible=not old_ui
-	var rail_art:Texture2D=preload("res://assets/synk_mode/rail.png") if synk else preload("res://assets/ssrg/imported/rail_original.png")
+	var rail_art:Texture2D=SYNK_RAILS.get(world.game.synk_rail_design,SYNK_RAILS.kerb) if synk else preload("res://assets/ssrg/imported/rail_original.png")
 	entrance_shadow.material_override.set_shader_parameter("rail_art",rail_art)
 	var guide:Texture2D=preload("res://assets/ssrg/imported/guide_original.png")
 	if old_ui: guide=preload("res://assets/ssrg/old_ui/track/note_guide 01.png")

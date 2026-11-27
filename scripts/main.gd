@@ -258,6 +258,9 @@ var note_thickness=0
 # Notes have one outline: the original art. (Other outlines were removed.)
 const SYNK_NOTE_SHAPES = ["round"]
 var synk_note_shape = "round"
+# SYNK mode's rail design (Settings > Visual effects > Highway): key -> name in the picker.
+const SYNK_RAIL_DESIGNS = {"kerb":"Kerb","hairline":"Hairline","dashes":"Dashes","beads":"Beads","chevrons":"Chevrons","glass":"Glass","beam":"Beam (first)"}
+var synk_rail_design = "kerb"
 func synk_note_shape_index() -> int: return maxi(0, SYNK_NOTE_SHAPES.find(synk_note_shape))
 var resume_grace = 0.0
 var overdub = false
@@ -525,6 +528,8 @@ func _ready() -> void:
 	note_thickness=clampi(int(prefs.get_value("gameplay","note_thickness",0)),0,3)
 	synk_note_shape=str(prefs.get_value("gameplay","synk_note_shape","round"))
 	if synk_note_shape not in SYNK_NOTE_SHAPES: synk_note_shape="round"
+	synk_rail_design=str(prefs.get_value("gameplay","synk_rail_design","kerb"))
+	if not SYNK_RAIL_DESIGNS.has(synk_rail_design): synk_rail_design="kerb"
 	if trail_style not in ["neon","solid"]: trail_style="neon"
 	hold_trail_width=1.0
 	features=load("res://scripts/workbench.gd").new(); features.game=self; add_child(features)
@@ -1384,6 +1389,12 @@ func change_synk_note_shape(kind: String) -> void:
 	synk_note_shape=kind if kind in SYNK_NOTE_SHAPES else "round"
 	prefs.set_value("gameplay","synk_note_shape",synk_note_shape); prefs.save("user://preferences.cfg")
 	field.world.clear_notes(); field.world.refresh_highway_look()
+	if settings_panel: settings_panel.refresh()
+
+func change_synk_rail_design(kind: String) -> void:
+	synk_rail_design=kind if SYNK_RAIL_DESIGNS.has(kind) else "kerb"
+	prefs.set_value("gameplay","synk_rail_design",synk_rail_design); prefs.save("user://preferences.cfg")
+	if field and field.world: field.world.refresh_highway_look()
 	if settings_panel: settings_panel.refresh()
 
 func change_note_shape(kind: String) -> void:

@@ -239,6 +239,8 @@ var back_button: Button
 var subtab_buttons: Dictionary={}
 var selected_sections: Dictionary={}
 var trail_style_input: OptionButton
+var rail_design_input: OptionButton
+var rail_design_row: Control
 var note_thickness_input: OptionButton
 const PAGE_NAMES={"gameplay":"Gameplay","audio":"Audio & sync","visuals":"Visual effects","editor":"Editor preferences"}
 const SUBPAGES={"gameplay":{"play":"Play","browsing":"Browsing"},"audio":{"timing":"Timing","headset":"Headset"},"visuals":{"highway":"Highway","notes":"Notes","hits":"Hit effects","stage":"Stage effects","colors":"Colors"},"editor":{"recording":"Recording","guides":"Guides & audio"}}
@@ -485,6 +487,19 @@ func build_highway(items: VBoxContainer) -> void:
     var synk_row=row(items,"SYNK mode","SYNK's own highway, rails, judgment bar and notes on the SSRG stage.",112)
     synk_mode_switch=Switch.new();add_control(synk_row,synk_mode_switch,152)
     connect_switch(synk_mode_switch,func(on:bool): game.change_highway_look("style","synk" if on else "ssrg"))
+    rail_design_row=row(items,"Rail design","SYNK mode: the look of the two rails beside the road.")
+    rail_design_input=OptionButton.new()
+    for key in game.SYNK_RAIL_DESIGNS: rail_design_input.add_item(game.SYNK_RAIL_DESIGNS[key])
+    rail_design_input.add_theme_font_size_override("font_size",21); rail_design_input.get_popup().add_theme_font_size_override("font_size",21)
+    rail_design_input.get_popup().add_theme_constant_override("v_separation",16)
+    var rail_picker_style=style(Color(1,1,1,.06),Color("373c55"),14)
+    rail_picker_style.content_margin_left=18; rail_picker_style.content_margin_right=18
+    rail_design_input.add_theme_stylebox_override("normal",rail_picker_style)
+    var rail_picker_focus=rail_picker_style.duplicate(); rail_picker_focus.border_color=ACCENT
+    for state in ["focus","hover","pressed"]: rail_design_input.add_theme_stylebox_override(state,rail_picker_focus)
+    add_control(rail_design_row,rail_design_input)
+    preload("res://scripts/modal_input.gd").register(rail_design_input.get_popup())
+    rail_design_input.item_selected.connect(func(index): game.change_synk_rail_design(game.SYNK_RAIL_DESIGNS.keys()[index]))
     old_ssrg_ui_row=row(items,"Old SSRG look","STAYC note sprites, guide rings, judgment bar and thin edge rails.",112)
     old_ssrg_ui_switch=Switch.new();add_control(old_ssrg_ui_row,old_ssrg_ui_switch,152)
     connect_switch(old_ssrg_ui_switch,game.change_old_ssrg_ui)
@@ -641,6 +656,8 @@ func refresh() -> void:
         color_reset_buttons[key].disabled=picker.disabled
         color_reset_buttons[key].set_selected(not game.gameplay_colors.has(key))
     if trail_style_input: trail_style_input.select(1 if game.trail_style=="solid" else 0)
+    if rail_design_input: rail_design_input.select(game.SYNK_RAIL_DESIGNS.keys().find(game.synk_rail_design))
+    if rail_design_row: rail_design_row.visible=game.highway_style=="synk"
     if note_thickness_input: note_thickness_input.select(game.note_thickness)
     for key in hit_style_buttons: hit_style_buttons[key].set_selected(key==game.hit_style)
     if hit_size_input: hit_size_input.sync_value(game.hit_size*100)

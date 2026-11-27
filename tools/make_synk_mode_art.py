@@ -379,18 +379,10 @@ GLOW_AMBER = np.array([1.0, .55, .18])
 CORE_WARM = np.array([1.0, .86, .62])
 
 
-# The kerb's glass, between its lit steps.
-KERB_GLASS = np.array([.20, .09, .05])
-KERB_STEPS = 26          # steps along the rail
-KERB_BAR = 4             # every fourth step is a brighter one
-
-
-def rail():
-    """Left rail sprite: a stepped kerb, on the SSRG rail's silhouette.
-    Not a beam of light. From the road outward: a crisp cream hairline along the road's
-    edge, a dark gap, then a strip of dark amber glass cut into steps like the frames of a
-    film strip. Each step is lit along its near edge, every fourth one brightly, and a
-    faint amber line closes the outer side. It thins and fades into the distance.
+def rail_beam():
+    """Left rail sprite, after the design guide's layers, on the SSRG rail's silhouette.
+    Edge core: a slim tapered streak, white-hot in the middle with amber edges.
+    Outer glow: soft amber light spilling off both sides of it.
     The road keeps its black pixels (the stage shader draws them as floor)."""
     src, bright, pl, pr = rail_edges()
     H, W = src.shape[:2]
@@ -399,35 +391,147 @@ def rail():
     L = pl[0] * y + pl[1]; R = pr[0] * y + pr[1]
     width = np.maximum(R - L, 1)
     t = (x - L) / width                                 # 0 at the outer edge, 1 at the road edge
-    far = smooth(0, 150, y)                             # fades into the distance
-    px = width                                          # one unit of t, in pixels
-
-    def band(lo, hi, soft=1.2):                         # 1 inside lo..hi (in t), soft edges in pixels
-        return smooth(0, soft, (t - lo) * px) * smooth(0, soft, (hi - t) * px)
-
-    # Steps: evenly spaced on the road, so they bunch up toward the far end.
-    along = KERB_STEPS * (y / H) ** .55
-    step = np.floor(along); within = along - step       # 0 at a step's far edge, 1 at its near edge
-    span = 1 / np.maximum(np.gradient(along, axis=0), 1e-6)   # a step's length here, in pixels
-    gap = smooth(0, 1.5, within * span - 1.0) * smooth(0, 1.5, (1 - within) * span - 1.0)
-    bar = (np.mod(step, KERB_BAR) == KERB_BAR - 1).astype(float)
-    lip = np.exp(-(((1 - within) * span - 2.5) / 2.2) ** 2)   # the lit near edge of a step
-    strip = band(.10, .66) * gap
-    glass = strip * (.50 + .28 * bar)
-    sheen = strip * within ** 2 * (.16 + .30 * bar)     # the glass brightens toward its lit edge
-    lit = strip * lip * (.55 + .45 * bar)
-
-    hair = np.exp(-(((t - .90) * px) / 1.7) ** 2)       # the road-side hairline
-    hair_glow = np.exp(-np.abs(t - .90) * px / 7.0) * .30
-    outer = np.exp(-(((t - .035) * px) / 1.3) ** 2) * .55
-
+    off = (t - .5) * width                              # pixels from the rail's centre line
+    far = smooth(0, 110, y)                             # the rail thins and fades into the distance
+    core = np.exp(-(off / (width * .13 + .6)) ** 2)     # white-hot middle
+    body = np.exp(-(off / (width * .30 + 1.0)) ** 2)    # amber streak around it
+    glow = np.exp(-np.abs(off) / (width * .55 + 10)) * .5   # outer glow, both sides
+    light = np.clip(body + glow, 0, 1) * far
+    col = GLOW_AMBER + (CORE_WARM - GLOW_AMBER) * np.clip(body * 1.2, 0, 1)[..., None]
+    col = col + (WHITE - col) * np.clip(core * 1.1, 0, 1)[..., None]
+    # Light over the black road (or over nothing, outside it).
     rgb = np.zeros((H, W, 3)); a = road_a.copy()
-    rgb, a = over(rgb, a, np.broadcast_to(KERB_GLASS, rgb.shape), glass * far)
-    rgb, a = over(rgb, a, np.broadcast_to(GLOW_AMBER, rgb.shape), sheen * far)
-    rgb, a = over(rgb, a, np.broadcast_to(CORE_WARM, rgb.shape), lit * far)
-    rgb, a = over(rgb, a, np.broadcast_to(GLOW_AMBER, rgb.shape), np.clip(outer + hair_glow, 0, 1) * far)
-    rgb, a = over(rgb, a, np.broadcast_to(CREAM, rgb.shape), hair * far)
-    save(rgb, a, OUT / "rail.png")
+    rgb, a = over(rgb, a, col, light)
+    return rgb, a
+
+
+# --- Rail designs (Settings > Visual effects > Highway > Rail design) -------------------
+# Every design is drawn on the SSRG rail's silhouette, so the road, the notes and the
+# judgment bar meet it in the same place. "beam" above is the first SYNK rail.
+KERB_GLASS = np.array([.20, .09, .05])   # the kerb's glass, between its lit steps
+
+
+class RailSpace:
+    """The left rail sprite's coordinates: `t` across the rail (0 outer edge, 1 road edge),
+    `px` pixels per unit of t, and steps along it that are evenly spaced on the road, so
+    they bunch up toward the far end."""
+    def __init__(self, steps):
+        self.src, bright, pl, pr = rail_edges()
+        H, W = self.src.shape[:2]
+        self.road_a = np.where(bright, 0.0, self.src[..., 3])
+        y, x = np.mgrid[0:H, 0:W].astype(float)
+        L = pl[0] * y + pl[1]; R = pr[0] * y + pr[1]
+        self.px = np.maximum(R - L, 1)
+        self.slant = (pl[0] + pr[0]) * .5
+        self.t = (x - L) / self.px
+        self.far = smooth(0, 150, y)
+        along = steps * (y / H) ** .55
+        self.step = np.floor(along); self.within = along - self.step     # 0 far edge of a step, 1 near edge
+        self.span = 1 / np.maximum(np.gradient(along, axis=0), 1e-6)     # a step's length here, in pixels
+        # Pixels across the rail from its middle, measured at the near edge of this pixel's
+        # step, so a shape drawn inside a step is not sheared by the rail's slant.
+        self.across = (self.t - .5) * self.px - self.slant * (1 - self.within) * self.span
+        self.rgb = np.zeros((H, W, 3)); self.a = self.road_a.copy()
+
+    def band(self, lo, hi, soft=1.2):
+        return smooth(0, soft, (self.t - lo) * self.px) * smooth(0, soft, (hi - self.t) * self.px)
+
+    def line(self, at, sigma):
+        return np.exp(-(((self.t - at) * self.px) / sigma) ** 2)
+
+    def halo(self, at, reach):
+        return np.exp(-np.abs(self.t - at) * self.px / reach)
+
+    def every(self, n):
+        return (np.mod(self.step, n) == n - 1).astype(float)
+
+    def paint(self, colour, amount):
+        self.rgb, self.a = over(self.rgb, self.a, np.broadcast_to(colour, self.rgb.shape), np.clip(amount, 0, 1) * self.far)
+
+    def done(self):
+        return self.rgb, self.a
+
+
+def rail_kerb():
+    """A strip of dark amber glass cut into steps like the frames of a film strip, each lit
+    along its near edge (every fourth brightly), beside a cream hairline on the road's edge."""
+    r = RailSpace(26); bar = r.every(4)
+    gap = smooth(0, 1.5, r.within * r.span - 1.0) * smooth(0, 1.5, (1 - r.within) * r.span - 1.0)
+    lip = np.exp(-(((1 - r.within) * r.span - 2.5) / 2.2) ** 2)
+    strip = r.band(.10, .66) * gap
+    r.paint(KERB_GLASS, strip * (.50 + .28 * bar))
+    r.paint(GLOW_AMBER, strip * r.within ** 2 * (.16 + .30 * bar))
+    r.paint(CORE_WARM, strip * lip * (.55 + .45 * bar))
+    r.paint(GLOW_AMBER, r.line(.035, 1.3) * .55 + r.halo(.90, 7.0) * .30)
+    r.paint(CREAM, r.line(.90, 1.7))
+    return r.done()
+
+
+def rail_hairline():
+    """Three fine lines and nothing else: cream on the road's edge, amber beside it, and a
+    faint one further out. No glow."""
+    r = RailSpace(1)
+    r.paint(GLOW_AMBER, r.line(.06, 1.1) * .40)
+    r.paint(GLOW_AMBER, r.line(.50, 1.3) * .80)
+    r.paint(CREAM, r.line(.90, 1.6))
+    return r.done()
+
+
+def rail_dashes():
+    """A road marking: one line of long cream dashes with a little warmth around them."""
+    r = RailSpace(20)
+    dash = smooth(0, 1.5, r.within * r.span - 0.5) * smooth(0, 1.5, (.62 - r.within) * r.span)
+    strip = r.band(.58, .94, 1.5) * dash
+    r.paint(GLOW_AMBER, r.halo(.76, 9.0) * dash * .38)
+    r.paint(CREAM, strip)
+    return r.done()
+
+
+def rail_beads():
+    """A string of lights, like the lamps along a runway; every fourth one is larger."""
+    r = RailSpace(34); big = r.every(4)
+    radius = r.px * (.16 + .05 * big) + 1.0
+    d = np.hypot((r.across + r.slant * .5 * r.span - .22 * r.px) / radius, (r.within - .5) * r.span / (radius * .55))
+    r.paint(GLOW_AMBER, np.exp(-d ** 2 / 2.2) * (.42 + .2 * big))
+    r.paint(CORE_WARM, np.exp(-d ** 2 / .9))
+    r.paint(WHITE, np.exp(-d ** 2 / .22))
+    return r.done()
+
+
+def rail_chevrons():
+    """Arrowheads running down the rail toward the player; every fourth one is brighter."""
+    r = RailSpace(24); bar = r.every(4)
+    reach = r.within * r.span + np.abs(r.across) * .55      # equal along a V whose point is nearest the player
+    start = r.span * .70; thick = 1.6 + r.span * .13
+    stroke = smooth(0, 1.4, reach - start) * smooth(0, 1.4, start + thick - reach) * smooth(0, 1.5, r.px * .44 - np.abs(r.across))
+    soft = np.exp(-np.abs(reach - start - thick * .5) / (thick * 1.6)) * smooth(0, 4.0, r.px * .5 - np.abs(r.across))
+    r.paint(GLOW_AMBER, soft * (.10 + .12 * bar))
+    r.paint(GLOW_AMBER, stroke * (.85 - .0 * bar))
+    r.paint(CREAM, stroke * (.25 + .75 * bar))
+    return r.done()
+
+
+def rail_glass():
+    """A wall of light with no hard beam: brightest against the road and fading outward,
+    coral at its foot and amber beyond, closed by a fine cream line on the road's edge."""
+    r = RailSpace(1)
+    out = np.clip(.93 - r.t, 0, None) * r.px                       # pixels outward from the road's edge
+    wall = np.exp(-out / (r.px * .75 + 8)) * smooth(0, 2.0, (.95 - r.t) * r.px)
+    r.paint(GLOW_AMBER, wall * .34)
+    r.paint(CORAL, np.exp(-out / (r.px * .22 + 3)) * smooth(0, 2.0, (.95 - r.t) * r.px) * .55)
+    r.paint(CREAM, r.line(.93, 1.4) * .95)
+    return r.done()
+
+
+RAIL_DESIGNS = {"beam": rail_beam, "kerb": rail_kerb, "hairline": rail_hairline, "dashes": rail_dashes,
+                "beads": rail_beads, "chevrons": rail_chevrons, "glass": rail_glass}
+
+
+def rail():
+    """One left rail sprite per design: rail.png is the beam, rail_<design>.png the others."""
+    for name, draw in RAIL_DESIGNS.items():
+        rgb, a = draw()
+        save(rgb, a, OUT / ("rail.png" if name == "beam" else "rail_%s.png" % name))
 
 
 # The judgment bar: a strip of nearly clear glass lit from its top line.
