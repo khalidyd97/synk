@@ -26,6 +26,12 @@ float ssrg_depth_of(float p){ return ssrg_even>0.0?mix(ssrg_even,1.0,p):pow(p,ss
 float ssrg_reveal_z(){ return ssrg_warp.z*(ssrg_depth_of(ssrg_reveal_from)-1.0); }
 // Width and size scale: the same q as the height (q=p^6 in SKD), so lanes stay straight.
 float ssrg_scale(float z){ return ssrg_depth_of(ssrg_progress(z)); }
+// A point at track position (x, z) across on the drawn canvas: narrowed by the perspective
+// and moved with the bending road.
+float ssrg_canvas_x(float x, float z){
+    float q=ssrg_scale(z);
+    return x*q+ssrg_bend_at(q);
+}
 float ssrg_warp_z(float z){
     if(ssrg_warp.x<0.5) return z;
     return ssrg_warp.z*(ssrg_depth_of(ssrg_progress(z))-1.0);

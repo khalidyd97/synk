@@ -233,6 +233,8 @@ const BEND_EVERY = 16.0
 const BEND_BEATS = 8.0
 const BEND_SHOW = 1.1
 const BEND_LANES = 1.25
+# Longest straight piece of a hold or slide trail while the road bends, in track units.
+const BEND_PIECE = .75
 var bend = Vector4(0,0,1,1)
 func bend_state() -> Vector4:
 	if game == null or not game.road_bends or not game.uses_skd_stage() or game.mode not in ["play","paused"] or not uses_projected_highway() or even_view():
@@ -1601,6 +1603,15 @@ func make_ribbon(parent: Node3D, note: Dictionary, palette: int, recording = fal
 		for offset in [0.0]+solid_trail_offsets(note):
 			centers.append(Vector3(note_x(float(note.lane)),trail_height(),-float(offset)*travel_speed()))
 		count=centers.size()-1;sides=connector_sides(centers)
+	# Bending road: a straight span is drawn straight between its two ends, so it would cut
+	# across the curve. Split every span into short pieces that each follow the road.
+	if source_visual and game.road_bends and centers.size()>1:
+		var dense:Array=[centers[0]]
+		for i in range(1,centers.size()):
+			var from: Vector3=centers[i-1]; var to: Vector3=centers[i]
+			var pieces=clampi(ceili(absf(to.z-from.z)/BEND_PIECE),1,64)
+			for step in range(1,pieces+1): dense.append(from.lerp(to,float(step)/pieces))
+		centers=dense; count=centers.size()-1; sides=connector_sides(centers)
 	for i in count:
 		var a: Vector3 = centers[i]; var b: Vector3 = centers[i+1]
 		var sa: Vector3 = sides[i]; var sb: Vector3 = sides[i+1]

@@ -37,9 +37,9 @@ void vertex(){
         float section=MODEL_MATRIX[3].z+UV2.x;
         bool at_start=abs(UV2.x-CUSTOM0.y)<0.00001;
         float center_x=at_start?CUSTOM0.x:CUSTOM0.z;
-        vec2 center=vec2(center_x*ssrg_scale(section),ssrg_warp_z(section));
-        vec2 previous=vec2(CUSTOM2.x*ssrg_scale(MODEL_MATRIX[3].z+CUSTOM2.y),ssrg_warp_z(MODEL_MATRIX[3].z+CUSTOM2.y));
-        vec2 following=vec2(CUSTOM2.z*ssrg_scale(MODEL_MATRIX[3].z+CUSTOM2.w),ssrg_warp_z(MODEL_MATRIX[3].z+CUSTOM2.w));
+        vec2 center=vec2(ssrg_canvas_x(center_x,section),ssrg_warp_z(section));
+        vec2 previous=vec2(ssrg_canvas_x(CUSTOM2.x,MODEL_MATRIX[3].z+CUSTOM2.y),ssrg_warp_z(MODEL_MATRIX[3].z+CUSTOM2.y));
+        vec2 following=vec2(ssrg_canvas_x(CUSTOM2.z,MODEL_MATRIX[3].z+CUSTOM2.w),ssrg_warp_z(MODEL_MATRIX[3].z+CUSTOM2.w));
         vec2 incoming=center-previous;
         vec2 outgoing=following-center;
         if(length(incoming)<0.00001) incoming=outgoing;
@@ -54,8 +54,8 @@ void vertex(){
         VERTEX=inverse(mat3(MODEL_MATRIX))*(target-MODEL_MATRIX[3].xyz);
     }else if(!joint && ssrg_warp.x>0.5 && length(CUSTOM0)>0.0){
         // Original RenderLongLine measures its normal AFTER projecting endpoints.
-        vec2 a=vec2(CUSTOM0.x*ssrg_scale(MODEL_MATRIX[3].z+CUSTOM0.y),ssrg_warp_z(MODEL_MATRIX[3].z+CUSTOM0.y));
-        vec2 b=vec2(CUSTOM0.z*ssrg_scale(MODEL_MATRIX[3].z+CUSTOM0.w),ssrg_warp_z(MODEL_MATRIX[3].z+CUSTOM0.w));
+        vec2 a=vec2(ssrg_canvas_x(CUSTOM0.x,MODEL_MATRIX[3].z+CUSTOM0.y),ssrg_warp_z(MODEL_MATRIX[3].z+CUSTOM0.y));
+        vec2 b=vec2(ssrg_canvas_x(CUSTOM0.z,MODEL_MATRIX[3].z+CUSTOM0.w),ssrg_warp_z(MODEL_MATRIX[3].z+CUSTOM0.w));
         vec2 delta=b-a;
         vec2 normal=length(delta)>0.00001?normalize(vec2(-delta.y,delta.x)):vec2(1.0,0.0);
         float section=MODEL_MATRIX[3].z+UV2.x;
