@@ -255,7 +255,8 @@ var trail_style="neon"
 # SYNK mode: how thick the note discs look. 0 flat, 1 slim, 2 medium, 3 chunky.
 var note_thickness=0
 # SYNK mode: the outline of the notes and lane markers (Settings > Visuals > Notes).
-const SYNK_NOTE_SHAPES = ["round","soft","sharp","bar","cut","pill","tile","hex"]
+# Notes have one outline: the original art. (Other outlines were removed.)
+const SYNK_NOTE_SHAPES = ["round"]
 var synk_note_shape = "round"
 func synk_note_shape_index() -> int: return maxi(0, SYNK_NOTE_SHAPES.find(synk_note_shape))
 var resume_grace = 0.0

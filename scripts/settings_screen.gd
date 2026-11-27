@@ -16,7 +16,6 @@ var bluetooth_toggle: Switch
 var bluetooth_latency_input: Stepper
 var song_preview_toggle: Switch
 var metronome_toggle: Switch
-var shape_tiles: Dictionary = {}
 var render_scale_buttons: Dictionary = {}
 var hit_style_buttons: Dictionary = {}
 var look_color_pickers:Dictionary={}
@@ -223,41 +222,6 @@ class ModeTile extends Button:
         var width = font.get_string_size(caption,HORIZONTAL_ALIGNMENT_LEFT,-1,18).x
         draw_string(font,Vector2((size.x-width)*.5,size.y*.86),caption,HORIZONTAL_ALIGNMENT_LEFT,-1,18,Color.WHITE if selected else Color(1,1,1,.65))
 
-# One SYNK mode note shape: the gold tap note drawn in that outline.
-class ShapeTile extends Button:
-    const NAMES = {"round":"ROUND","soft":"SOFT","sharp":"SHARP","bar":"BAR","cut":"CUT","pill":"PILL","tile":"TILE","hex":"POINTED"}
-    var shape = "round"
-    var selected = false:
-        set(v): selected = v; queue_redraw()
-    var selected_amount=0.0
-    var art: TextureRect
-    func _process(delta: float) -> void:
-        if not is_visible_in_tree(): return
-        selected_amount=lerpf(selected_amount,1.0 if selected else 0.0,1-exp(-delta*16)); queue_redraw()
-        var w=size.x*.86; art.size=Vector2(w,w*116.0/212.0); art.position=Vector2((size.x-w)*.5,size.y*.38-art.size.y*.5)
-    func _init(kind: String, index: int) -> void:
-        shape = kind; focus_mode = Control.FOCUS_ALL
-        mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-        for state in ["normal","hover","pressed","disabled","focus","hover_pressed"]: add_theme_stylebox_override(state,StyleBoxEmpty.new())
-        art=TextureRect.new(); add_child(art); art.mouse_filter=Control.MOUSE_FILTER_IGNORE
-        art.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; art.stretch_mode=TextureRect.STRETCH_SCALE
-        art.texture=preload("res://assets/synk_mode/tap1.png")
-        var m=ShaderMaterial.new(); m.shader=preload("res://scripts/synk_note_preview.gdshader"); art.material=m
-        m.set_shader_parameter("note_shape",index); m.set_shader_parameter("shape_box",Vector4(105.0/212.0,59.5/116.0,103.0/212.0,49.5/116.0))
-    func _draw() -> void:
-        var style = StyleBoxFlat.new(); style.set_corner_radius_all(16)
-        style.bg_color = Color(1,1,1,.06).lerp(Color(1,1,1,.13),selected_amount)
-        style.border_color = Color("34353a").lerp(Color("f4f1ea"),selected_amount)
-        if preload("res://scripts/ui_motion.gd").hovered(self) or has_focus(): style.border_color=Color("d9d4ca")
-        style.set_border_width_all(2 if selected else 1)
-        draw_style_box(style,Rect2(Vector2.ZERO,size))
-        var font = preload("res://scripts/arcade_style.gd").HEAD
-        var caption: String = NAMES.get(shape,shape.to_upper())
-        var font_size = 15
-        var width = font.get_string_size(caption,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x
-        draw_string(font,Vector2((size.x-width)*.5,size.y*.88),caption,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,Color.WHITE if selected else Color(1,1,1,.65))
-
-
 var canvas: Control
 var page_host: Panel
 var pages: Dictionary={}
@@ -276,10 +240,9 @@ var subtab_buttons: Dictionary={}
 var selected_sections: Dictionary={}
 var trail_style_input: OptionButton
 var note_thickness_input: OptionButton
-var shape_note: Label
 const PAGE_NAMES={"gameplay":"Gameplay","audio":"Audio & sync","visuals":"Visual effects","editor":"Editor preferences"}
 const SUBPAGES={"gameplay":{"play":"Play","browsing":"Browsing"},"audio":{"timing":"Timing","headset":"Headset"},"visuals":{"highway":"Highway","notes":"Notes","hits":"Hit effects","stage":"Stage effects","colors":"Colors"},"editor":{"recording":"Recording","guides":"Guides & audio"}}
-const SUBPAGE_HINTS={"colors":"Choose Theme in Highway to use custom colors. Adaptive keeps your choices saved.","play":"Tune how notes travel while you play.","browsing":"Choose how the song library behaves.","timing":"Match the judgment timing to your music.","headset":"Compensate for wireless audio delay.","highway":"Choose your rail style and colors. Gameplay uses the SSRG view.","notes":"Choose note shapes, trail styles, and sizes.","hits":"Tune hit feedback and particle intensity.","stage":"Choose your stage atmosphere. Combine effects freely.","recording":"Personal recording aids and playback preferences.","guides":"Listen for the rhythm while you create charts."}
+const SUBPAGE_HINTS={"colors":"Choose Theme in Highway to use custom colors. Adaptive keeps your choices saved.","play":"Tune how notes travel while you play.","browsing":"Choose how the song library behaves.","timing":"Match the judgment timing to your music.","headset":"Compensate for wireless audio delay.","highway":"Choose your rail style and colors. Gameplay uses the SSRG view.","notes":"Choose trail styles and sizes.","hits":"Tune hit feedback and particle intensity.","stage":"Choose your stage atmosphere. Combine effects freely.","recording":"Personal recording aids and playback preferences.","guides":"Listen for the rhythm while you create charts."}
 const PAGE_HINTS={"gameplay":"Tune your highway and browsing experience.","audio":"Match your taps to the music and your headset.","visuals":"Customize the highway, note sizes and stage effects.","editor":"Personal preferences for every chart you create."}
 
 func style(fill: Color=Color(1,1,1,.05),edge: Color=Color("34353a"),radius: int=22) -> StyleBoxFlat:
@@ -581,16 +544,6 @@ class ColorChip extends Button:
         draw_string(Soft.font_for(self),Vector2(62,size.y*.5+6),code,HORIZONTAL_ALIGNMENT_LEFT,size.x-68,16,Soft.text_color("quiet",0.0,disabled))
 
 func build_notes(items: VBoxContainer) -> void:
-    var shapes=row(items,"Note shape","The outline of notes in SYNK mode and in the recorder.",236)
-    var tile_grid=GridContainer.new(); tile_grid.columns=4
-    tile_grid.add_theme_constant_override("h_separation",10); tile_grid.add_theme_constant_override("v_separation",10)
-    add_control(shapes,tile_grid,520)
-    for kind in game.SYNK_NOTE_SHAPES:
-        var tile=ShapeTile.new(kind,game.SYNK_NOTE_SHAPES.find(kind)); tile_grid.add_child(tile); tile.custom_minimum_size=Vector2(122,100)
-        tile.pressed.connect(func(): if not Action.was_dragged(tile): game.change_synk_note_shape(kind))
-        shape_tiles[kind]=tile
-    shape_note=label(items,"SYNK mode is off, so this shape shows only in the recorder. Turn SYNK mode on under Highway to play with it.",15,MUTED)
-    shape_note.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
     var preview=preload("res://scripts/note_appearance_preview.gd").new(); preview.game=game; items.add_child(preview)
     sizing_row(items,"note_size","Note size","Adjust the visual size of note heads.",60,125,game.note_size)
     var trail=row(items,"Trail style","A filled band with round connectors at the points you add in the recorder.")
@@ -689,8 +642,6 @@ func refresh() -> void:
         color_reset_buttons[key].set_selected(not game.gameplay_colors.has(key))
     if trail_style_input: trail_style_input.select(1 if game.trail_style=="solid" else 0)
     if note_thickness_input: note_thickness_input.select(game.note_thickness)
-    for kind in shape_tiles: shape_tiles[kind].selected=kind==game.synk_note_shape
-    if shape_note: shape_note.visible=game.highway_style!="synk"
     for key in hit_style_buttons: hit_style_buttons[key].set_selected(key==game.hit_style)
     if hit_size_input: hit_size_input.sync_value(game.hit_size*100)
     for value in render_scale_buttons: render_scale_buttons[value].set_selected(is_equal_approx(value,game.render_scale()))
