@@ -128,27 +128,106 @@ func end(id: int, time: float, p: Vector2, canceled = false) -> Dictionary:
 	if n.kind!="slide":n.erase("ssrg_path");n.erase("checkpoints")
 	notes.append(n); space_chord(n,g.get("fixed",[])); return n
 
-# Finger samples only locate meaningful turns. The saved trail consists of
-# straight spans; it does not trace easing or small side-to-side finger motion.
-const TURN_LANES=.8
-const MOVE_LANES=.5
-# A rest: the finger stays within REST_LANES for at least REST_TIME. Each rest becomes a flat
-# run with a corner (a connector) where the finger arrived and where it left.
+# --- The shape of a recorded slide ----------------------------------------------------------
+# A slide is saved as a few points joined by straight spans. Between two points the finger is
+# taken to make one move: anything from a steady glide to the natural "start slowly, speed
+# up, slow down" of a hand. A point is added only where the finger did something a single
+# move cannot explain by more than SLIDE_FIT lanes: it turned round, or it stayed put and
+# then went on. So the same gesture gives the same shape however the finger eased into it,
+# and small differences in the touch samples do not add or remove corners.
+const SLIDE_FIT=.4
+# ... or by being this many seconds early or late: a fast move covers a lane in a few
+# milliseconds, so its exact timing is not a shape.
+const SLIDE_SLACK=.04
+# A move that does nearly all of its travelling in under this share of its time is a step:
+# the finger waited, crossed over quickly, and waited again. (An eased move takes over half.)
+const STEP_SHARE=.35
+# Points this close in lane are the two ends of a rest: a flat run.
+const FLAT_LANES=.4
+# A rest part-way along a move: the finger stays within REST_LANES for at least REST_TIME,
+# and at the pace of the whole move it would have gone REST_MISSED lanes further meanwhile.
 const REST_LANES=.18
-const REST_TIME=.07
-# A slow steady slide also stays within REST_LANES for a while, but it keeps travelling: the
-# run is cut back to the samples near its middle lane (REST_TRIM) and counts as a rest only
-# if the finger ends up where it began (REST_NET).
+const REST_TIME=.08
+const REST_MISSED=.45
 # A finger pauses for a moment as it lands and again before it lifts. That is part of making
 # the swipe, not a rest: at the very start or end of a slide only a longer pause is one.
-const REST_EDGE_TIME=.22
-# A slide shorter than this is one swipe: start to end, with no corners at all.
+const REST_EDGE_TIME=.16
+# A slide shorter than this is one swipe: it has turns, but no rests.
 const SWIPE_TIME=.3
-const REST_TRIM=.063
-const REST_NET=.09
+# A resting finger sends nothing: a silence this long in the samples was a rest.
 const REST_GAP=.08
-# A rest corner this close to the straight line between its neighbours is only a slow drift.
+# A corner this close to the straight line between its neighbours is dropped.
 const REST_BEND=.3
+
+static func eased(t:float)->float:return t*t*t*(10.0+t*(6.0*t-15.0))
+# How far sample k lies outside a single move from sample a to sample b (signed, in lanes).
+static func off_move(points:Array,a:int,b:int,k:int)->float:
+	var span=maxf(.0001,float(points[b].offset)-float(points[a].offset))
+	var at=float(points[k].offset)-float(points[a].offset)
+	var early=clampf((at-SLIDE_SLACK)/span,0,1);var late=clampf((at+SLIDE_SLACK)/span,0,1)
+	var from=float(points[a].lane);var to=float(points[b].lane)
+	var ends=[lerpf(from,to,early),lerpf(from,to,eased(early)),lerpf(from,to,late),lerpf(from,to,eased(late))]
+	var value=float(points[k].lane)
+	if value>float(ends.max()):return value-float(ends.max())
+	if value<float(ends.min()):return value-float(ends.min())
+	return 0.0
+# Marks the samples between a and b that one move cannot explain.
+static func fit_moves(points:Array,a:int,b:int,keep:Dictionary)->void:
+	if b-a<2:return
+	var worst=0.0;var at=-1
+	for k in range(a+1,b):
+		var off=absf(off_move(points,a,b,k))
+		if off>worst:worst=off;at=k
+	if worst<SLIDE_FIT:
+		fit_step(points,a,b,keep);return
+	# A rest is equally far off all along: take its middle, so the split does not depend on
+	# which sample happened to be a hair further out.
+	var side=signf(off_move(points,a,b,at));var first=at;var last=at
+	while first-1>a and off_move(points,a,b,first-1)*side>=worst-.12:first-=1
+	while last+1<b and off_move(points,a,b,last+1)*side>=worst-.12:last+=1
+	var middle=(float(points[first].offset)+float(points[last].offset))*.5
+	for k in range(first,last+1):
+		if absf(float(points[k].offset)-middle)<absf(float(points[at].offset)-middle):at=k
+	keep[at]=true
+	fit_moves(points,a,at,keep);fit_moves(points,at,b,keep)
+
+# Marks where the finger left and where it arrived, if the move from a to b is a step.
+static func fit_step(points:Array,a:int,b:int,keep:Dictionary)->void:
+	var from=float(points[a].lane);var travel=float(points[b].lane)-from
+	if absf(travel)<.7:return
+	var left=a;var arrived=b;var moving=false
+	for k in range(a+1,b):
+		var progress=(float(points[k].lane)-from)/travel
+		if not moving and progress<=.1:left=k
+		elif progress>.1:moving=true
+		if progress>=.9:arrived=k;break
+	var span=float(points[b].offset)-float(points[a].offset)
+	if float(points[arrived].offset)-float(points[left].offset)>=span*STEP_SHARE:
+		fit_rest(points,a,b,keep);return
+	keep[left]=true;keep[arrived]=true
+
+# Marks the longest rest part-way along the move from a to b (a staircase has one per step),
+# then looks at the two moves on either side of it.
+static func fit_rest(points:Array,a:int,b:int,keep:Dictionary)->void:
+	var from=float(points[a].lane);var to=float(points[b].lane)
+	var pace=absf(to-from)/maxf(.0001,float(points[b].offset)-float(points[a].offset))
+	if pace*REST_TIME<.01:return
+	var best=0.0;var best_first=-1;var best_last=-1
+	var first=a+1
+	while first<b:
+		var low=float(points[first].lane);var high=low;var last=first
+		while last+1<b:
+			var next=float(points[last+1].lane)
+			if maxf(high,next)-minf(low,next)>REST_LANES:break
+			low=minf(low,next);high=maxf(high,next);last+=1
+		var length=float(points[last].offset)-float(points[first].offset)
+		var level=(low+high)*.5
+		if length>best and length>=REST_TIME and length*pace>=REST_MISSED and absf(level-from)>FLAT_LANES and absf(level-to)>FLAT_LANES:
+			best=length;best_first=first;best_last=last
+		first+=1
+	if best_first<0:return
+	keep[best_first]=true;keep[best_last]=true
+	fit_moves(points,a,best_first,keep);fit_moves(points,best_last,b,keep)
 
 static func snap_path(path:Array,duration:float)->Array:
 	if path.is_empty():return []
@@ -172,92 +251,57 @@ static func snap_path(path:Array,duration:float)->Array:
 		if absf(before-after)<.22 and spike>.45 and spike<.75:
 			filtered[i].lane=(before+after)*.5
 	var keep={0:true,filtered.size()-1:true}
-	var direction=0
-	var extreme=0
-	for i in range(1,filtered.size()):
-		var value=float(filtered[i].lane)
-		var peak=float(filtered[extreme].lane)
-		if direction==0:
-			var delta=value-float(filtered[0].lane)
-			if absf(delta)>=MOVE_LANES:
-				direction=1 if delta>0 else -1
-				extreme=i
-		elif direction>0:
-			if value>peak:extreme=i
-			elif peak-value>=TURN_LANES:
-				keep[extreme]=true;direction=-1;extreme=i
-		elif value<peak:extreme=i
-		elif value-peak>=TURN_LANES:
-			keep[extreme]=true;direction=1;extreme=i
-	# A genuine stationary lead-in or tail-out gets a corner too.
-	for i in range(1,filtered.size()-1):
-		if absf(float(filtered[i].lane)-float(filtered[0].lane))<MOVE_LANES:continue
-		var still=i-1
-		while still>0 and absf(float(filtered[still].lane)-float(filtered[0].lane))>.15:still-=1
-		if float(filtered[still].offset)>=REST_EDGE_TIME and duration>=SWIPE_TIME:keep[still]=true
-		break
-	for i in range(filtered.size()-2,0,-1):
-		if absf(float(filtered[i].lane)-float(filtered[-1].lane))<MOVE_LANES:continue
-		var still=i+1
-		while still<filtered.size()-1 and absf(float(filtered[still].lane)-float(filtered[-1].lane))>.15:still+=1
-		if duration-float(filtered[still].offset)>=REST_EDGE_TIME and duration>=SWIPE_TIME:keep[still]=true
-		break
-	# Rests anywhere along the slide: sliding quickly to a new position and staying there
-	# leaves a flat run at that position, however many such steps the slide has.
-	var rest_corners={}
-	var first=0
-	while first<filtered.size()-1:
-		var last=first
-		var low=float(filtered[first].lane);var high=low
-		while last+1<filtered.size():
-			var next=float(filtered[last+1].lane)
-			if maxf(high,next)-minf(low,next)>REST_LANES:break
-			low=minf(low,next);high=maxf(high,next);last+=1
-		var run_lanes:Array=[]
-		for i in range(first,last+1):run_lanes.append(float(filtered[i].lane))
-		run_lanes.sort()
-		var middle=float(run_lanes[run_lanes.size()/2])
-		var from=first;var to=last
-		while to>from and absf(float(filtered[to].lane)-middle)>REST_TRIM:to-=1
-		while from<to and absf(float(filtered[from].lane)-middle)>REST_TRIM:from+=1
-		var at_edge=from==0 or to==filtered.size()-1
-		if duration<SWIPE_TIME or float(filtered[to].offset)-float(filtered[from].offset)<(REST_EDGE_TIME if at_edge else REST_TIME) or absf(float(filtered[to].lane)-float(filtered[from].lane))>REST_NET:
-			first+=1;continue
-		first=from;last=to
-		low=float(filtered[first].lane);high=low
-		for i in range(first,last+1):low=minf(low,float(filtered[i].lane));high=maxf(high,float(filtered[i].lane))
-		# The run sits on one lane: the slide's own first or last lane, or where the finger lay.
-		var level=(low+high)*.5
-		if first==0:level=float(filtered[0].lane)
-		elif last==filtered.size()-1:level=float(filtered[-1].lane)
-		elif absf(level-roundf(level))<=.22:level=roundf(level)
-		for i in range(first,last+1):
-			filtered[i].lane=level
-			# A turn found inside the rest is the rest itself.
-			if i>first and i<last:keep.erase(i)
-		for corner in [first,last]:
-			if not keep.has(corner):rest_corners[corner]=true
-			keep[corner]=true
-		first=last+1
-	# Drop rest corners that barely bend the trail, the least significant first.
-	while not rest_corners.is_empty():
-		var kept:Array=keep.keys();kept.sort()
+	fit_moves(filtered,0,filtered.size()-1,keep)
+	var kept:Array=keep.keys();kept.sort()
+	var result:Array=[]
+	for index in kept:result.append({"offset":float(filtered[index].offset),"lane":float(filtered[index].lane)})
+	# Level the rests: neighbouring points on (nearly) the same lane become a flat run on one
+	# lane: the slide's own first or last lane, or the lane the finger lay on.
+	var start=0
+	while start<result.size():
+		var stop=start
+		while stop+1<result.size() and absf(float(result[stop+1].lane)-float(result[start].lane))<=FLAT_LANES:stop+=1
+		var level=0.0
+		for i in range(start,stop+1):level+=float(result[i].lane)
+		level/=stop-start+1
+		if start==0:level=float(result[0].lane)
+		elif stop==result.size()-1:level=float(result[-1].lane)
+		elif absf(level-roundf(level))<=.3:level=roundf(level)
+		elif stop==start:
+			# A turn: the finger went a little past the last sample before it came back.
+			var outward=signf(level-float(result[start-1].lane))
+			var beyond=ceilf(level) if outward>0 else floorf(level)
+			if absf(beyond-level)<=.45:level=beyond
+		for i in range(start,stop+1):result[i].lane=level
+		# Only the two ends of a flat run are corners.
+		while stop-start>1:result.remove_at(start+1);stop-=1
+		start=stop+1
+	# Rests too short to mean anything. At an end of the slide the pause is the landing or the
+	# lift; in the middle it is a turn.
+	var changed=true
+	while changed:
+		changed=false
+		for i in result.size()-1:
+			if float(result[i].lane)!=float(result[i+1].lane):continue
+			var length=float(result[i+1].offset)-float(result[i].offset)
+			if i==0 and i+1==result.size()-1:break
+			if i==0:
+				if length<REST_EDGE_TIME or duration<SWIPE_TIME:result.remove_at(1);changed=true;break
+			elif i+1==result.size()-1:
+				if length<REST_EDGE_TIME or duration<SWIPE_TIME:result.remove_at(i);changed=true;break
+			elif length<REST_TIME or duration<SWIPE_TIME:
+				result[i].offset=(float(result[i].offset)+float(result[i+1].offset))*.5
+				result.remove_at(i+1);changed=true;break
+	# Drop corners that barely bend the trail, the least significant first.
+	while result.size()>2:
 		var weakest=-1;var weakest_bend=REST_BEND
-		for k in range(1,kept.size()-1):
-			if not rest_corners.has(kept[k]):continue
-			var before:Dictionary=filtered[kept[k-1]];var after:Dictionary=filtered[kept[k+1]];var here:Dictionary=filtered[kept[k]]
+		for k in range(1,result.size()-1):
+			var before:Dictionary=result[k-1];var after:Dictionary=result[k+1];var here:Dictionary=result[k]
 			var along=(float(here.offset)-float(before.offset))/maxf(.0001,float(after.offset)-float(before.offset))
 			var bend=absf(float(here.lane)-lerpf(float(before.lane),float(after.lane),along))
-			if bend<weakest_bend:weakest_bend=bend;weakest=kept[k]
+			if bend<weakest_bend:weakest_bend=bend;weakest=k
 		if weakest<0:break
-		keep.erase(weakest);rest_corners.erase(weakest)
-	var result:Array=[]
-	for i in filtered.size():
-		if not keep.has(i):continue
-		var point:Dictionary=filtered[i]
-		var nearest=float(roundi(point.lane))
-		if absf(point.lane-nearest)<=.22:point.lane=nearest
-		result.append(point)
+		result.remove_at(weakest)
 	return result
 
 # Evenly spaced samples of a slide's current shape, used before reshaping it.

@@ -85,4 +85,30 @@ func _initialize():
   check(stairs.path.size()==8 and stairs.get("checkpoints",[]).size()==6,"Each quick step of a slide keeps its rest and connectors (dense=%s, got %d points)" % [dense,stairs.path.size()])
   for step in 4:
    check(absf(SynkChart.lane_at(stairs,step*.48+.2)-(2+step*3))<.01,"The slide lies flat on lane %d while the finger rests there" % (2+step*3))
+ # The same gesture gives the same shape, however the finger eases into it, wherever it lands
+ # in the lane and however often the screen reports it.
+ var ease=func(t:float)->float:return t*t*t*(10.0+t*(6.0*t-15.0))
+ for hz in [60,120]:
+  for landing in [-.35,0.0,.35]:
+   for seconds in [.2,.5,1.2]:
+    var sweep=SynkCapture.new();sweep.begin(6,0,position(3+landing),"slide")
+    var frames=int((seconds+.06)*hz)
+    for i in frames:
+     var t=float(i+1)/hz
+     sweep.move(6,t,position(3+landing+4.0*ease.call(clampf((t-.03)/seconds,0,1))+sin(i*1.3+hz)*.04))
+    var swept=sweep.end(6,seconds+.06,position(7+landing))
+    check(swept.path.size()==2 and not swept.has("checkpoints"),"One sweep of %.1f s is one straight span (%d Hz, landing %.2f, got %d points)" % [seconds,hz,landing,swept.path.size()])
+   var waited=SynkCapture.new();waited.begin(7,0,position(3+landing),"slide")
+   for i in int(.8*hz):
+    var t=float(i+1)/hz
+    waited.move(7,t,position(3+landing+3.0*ease.call(clampf((t-.4)/.15,0,1))+sin(i*1.3+hz)*.04))
+   var stepped=waited.end(7,.8,position(6+landing))
+   check(stepped.path.size()==4 and absf(SynkChart.lane_at(stepped,.3)-3)<.01 and absf(SynkChart.lane_at(stepped,.65)-6)<.01,"Wait, step across, wait keeps both rests (%d Hz, landing %.2f, got %d points)" % [hz,landing,stepped.path.size()])
+   var back=SynkCapture.new();back.begin(8,0,position(3+landing),"slide")
+   for i in int(.6*hz):
+    var t=float(i+1)/hz
+    var there=3.0*ease.call(clampf(t/.3,0,1)) if t<=.3 else 3.0-3.0*ease.call(clampf((t-.3)/.3,0,1))
+    back.move(8,t,position(3+landing+there+sin(i*1.3+hz)*.04))
+   var turned=back.end(8,.6,position(3+landing))
+   check(turned.path.size()==3 and float(turned.path[1].lane)==6.0,"There and back is one pointed turn, not a flat top (%d Hz, landing %.2f, got %d points)" % [hz,landing,turned.path.size()])
  print("Recorder clean hold/slide shapes failures: ",failures);quit(failures)
