@@ -196,6 +196,12 @@ def apply_highway_s():
     layer.save(brand / "icon_foreground_432.png")
     mono_alpha = np.asarray(layer).astype(float)[..., 3] / 255
     rgba(np.ones((432, 432, 3)), mono_alpha).save(brand / "icon_monochrome_432.png")
+    # Start-up splash (project.godot boot_splash/image; iOS shows it on the launch screen):
+    # the letter alone on the splash's black, with room around it.
+    inner = round(SIZE * .5)
+    splash = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 255))
+    splash.alpha_composite(letter.convert("RGBa").resize((inner, inner), Image.LANCZOS).convert("RGBA"), ((SIZE - inner) // 2, (SIZE - inner) // 2))
+    splash.save(brand / "synk_logo.png")
     print("highway S icon applied to", brand)
 
 
