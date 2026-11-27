@@ -112,7 +112,7 @@ func project(lane: float, d: float) -> Vector2:
 	if world.uses_projected_highway():
 		var raw=-d*world.visible_length()
 		var q=world.ssrg_approach(raw)
-		return world.camera.unproject_position(Vector3(world.note_x(lane)*q+world.bend_at(q),.035,world.ssrg_warped_z(raw)))
+		return world.camera.unproject_position(Vector3(world.note_x(lane)*world.width_at(q)+world.bend_at(q),.035,world.ssrg_warped_z(raw)))
 	return world.camera.unproject_position(Vector3(world.lane_x(lane),.035,-d*world.visible_length()))
 
 func touch_world_position(p: Vector2) -> Vector3:

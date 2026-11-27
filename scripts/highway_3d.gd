@@ -219,6 +219,8 @@ func update_ssrg_warp() -> void:
 	RenderingServer.global_shader_parameter_set("ssrg_even",EVEN_FAR_SCALE if even_view() and uses_projected_highway() else 0.0)
 	bend=bend_state()
 	RenderingServer.global_shader_parameter_set("ssrg_bend",bend)
+	road_flare=FLARE if curved_road_on() else 0.0
+	RenderingServer.global_shader_parameter_set("ssrg_flare",road_flare)
 	var shift=bend_at(1.0)
 	if ssrg_theme:
 		if ssrg_theme.original_stage: ssrg_theme.original_stage.position.x=shift
@@ -235,6 +237,21 @@ const BEND_LANES = 1.25
 # Longest straight piece of a hold or slide trail while the road bends, in track units.
 const BEND_PIECE = .75
 var bend = Vector4(0,0,1,1)
+# --- Curved highway (test) -------------------------------------------------------------
+# The road's edges rise almost straight up far away and flare out toward the player: lanes
+# sit at x times width_at(q) instead of x times q. Note sizes and heights are unchanged.
+const FLARE = 1.85
+const FLARE_FAR = .068
+var road_flare = 0.0
+var curved_road: Node3D
+func curved_road_on() -> bool:
+	return game != null and game.curved_road and game.uses_skd_stage() and not game.old_ssrg_ui() \
+		and not game.uses_skd_recorder_surface() and uses_projected_highway() and not even_view()
+# Mirrors ssrg_width() in ssrg_warp.gdshaderinc.
+func width_at(q: float) -> float:
+	if road_flare<=0.0: return q
+	if q>=1.0: return 1.0+(q-1.0)*(1.0-FLARE_FAR)*road_flare
+	return FLARE_FAR+(1.0-FLARE_FAR)*pow(maxf(q,0.0),road_flare)
 func bend_state() -> Vector4:
 	if game == null or not game.road_bends or not game.uses_skd_stage() or game.mode not in ["play","paused"] or not uses_projected_highway() or even_view():
 		return Vector4(0,0,1,1)
@@ -275,12 +292,12 @@ func reveal_progress() -> float:
 func warp_point(p: Vector3) -> Vector3:
 	if not uses_projected_highway(): return p
 	var q=ssrg_approach(p.z)
-	return Vector3(p.x*q+bend_at(q),p.y,ssrg_warped_z(p.z))
+	return Vector3(p.x*width_at(q)+bend_at(q),p.y,ssrg_warped_z(p.z))
 func unwarp_point(p: Vector3) -> Vector3:
 	if not uses_projected_highway(): return p
 	var q=maxf(1.0+p.z/SSRG_STAGE_DISTANCE,0.0)
 	if even_view(): return Vector3(p.x/maxf(q,.0001),p.y,TRACK_LENGTH*(inverse_lerp(EVEN_FAR_SCALE,1.0,q)-1.0))
-	return Vector3(p.x/maxf(q,.0001),p.y,TRACK_LENGTH*(pow(q,1.0/approach_power())-1.0))
+	return Vector3(p.x/maxf(width_at(q),.0001),p.y,TRACK_LENGTH*(pow(q,1.0/approach_power())-1.0))
 # Whether an unwarped depth is on the visible part of the highway.
 func depth_visible(z: float) -> bool:
 	return z>=-TRACK_LENGTH*(1.0-reveal_progress()) if uses_projected_highway() else z>=-TRACK_LENGTH
@@ -345,6 +362,7 @@ func _ready() -> void:
 		note_meshes.append(make_note_mesh(color))
 	build_track()
 	ssrg_theme=preload("res://scripts/ssrg_highway.gd").new(); ssrg_theme.world=self; add_child(ssrg_theme)
+	curved_road=preload("res://scripts/curved_road.gd").new(); curved_road.world=self; add_child(curved_road)
 	build_effects()
 	laser_streaks=preload("res://scripts/laser_streaks.gd").new(); add_child(laser_streaks); laser_streaks.build(self)
 	build_play_aids()
@@ -1178,6 +1196,7 @@ func animate_effects(delta: float) -> void:
 	# Every highway shader reads this one global clock (project setting shader_globals/synk_time).
 	RenderingServer.global_shader_parameter_set("synk_time",animation_time)
 	update_ssrg_warp()
+	if curved_road: curved_road.draw()
 
 func artwork(parent: Node3D, name: String, palette: int, position_value: Vector3, dimensions: Vector2, region = Vector4(0,0,1,1), opacity = 1.0) -> MeshInstance3D:
 	var quad = QuadMesh.new(); quad.size = dimensions
@@ -1892,7 +1911,7 @@ func sync_note(key: String, note: Dictionary, visible_keys: Dictionary, recordin
 			# x by depth. Pre-scale the arrow's x so its projected position stays over the note.
 			if uses_projected_highway():
 				var q_arrow = ssrg_approach(note_z + pos.z)
-				if q_arrow > .0001: pos.x = fb.x * ssrg_approach(note_z) / q_arrow
+				if q_arrow > .0001: pos.x = fb.x * width_at(ssrg_approach(note_z)) / width_at(q_arrow)
 			arrow.position = pos
 			if arrow.material_override is ShaderMaterial: arrow.material_override.set_shader_parameter("pulse",pulse01)
 

@@ -20,6 +20,17 @@ float ssrg_bend_at(float q){
     if(u<=0.0||u>=1.0) return 0.0;
     return ssrg_bend.x*1.299*sin(6.2831853*u)*sin(3.1415927*u);
 }
+// Curved highway (test): above 0, how sharply the road flares out toward the player (the
+// power of its width curve); 0 keeps the straight road. Mirrored by width_at() in highway_3d.gd.
+global uniform float ssrg_flare;
+const float SSRG_FLARE_FAR = .068;   // the road's width at the far end, against its width at the line
+// Width scale of the road at canvas height q (0 far end, 1 judgment line). Lanes and notes
+// sit at x times this; sizes keep q.
+float ssrg_width(float q){
+    if(ssrg_flare<=0.0) return q;
+    if(q>=1.0) return 1.0+(q-1.0)*(1.0-SSRG_FLARE_FAR)*ssrg_flare;
+    return SSRG_FLARE_FAR+(1.0-SSRG_FLARE_FAR)*pow(max(q,0.0),ssrg_flare);
+}
 float ssrg_progress(float z){ return max(1.0+z/ssrg_warp.w,0.0); }
 // Height on the canvas for a chart progress p.
 float ssrg_depth_of(float p){ return ssrg_even>0.0?mix(ssrg_even,1.0,p):pow(p,ssrg_warp.y); }
@@ -30,7 +41,7 @@ float ssrg_scale(float z){ return ssrg_depth_of(ssrg_progress(z)); }
 // and moved with the bending road.
 float ssrg_canvas_x(float x, float z){
     float q=ssrg_scale(z);
-    return x*q+ssrg_bend_at(q);
+    return x*ssrg_width(q)+ssrg_bend_at(q);
 }
 float ssrg_warp_z(float z){
     if(ssrg_warp.x<0.5) return z;
@@ -46,7 +57,7 @@ vec3 ssrg_warp_rigid(vec3 vertex, mat4 model){
     vec3 centre=model[3].xyz;
     float q=ssrg_scale(centre.z);
     vec3 point=(model*vec4(vertex,1.0)).xyz;
-    vec3 target=vec3(centre.x*q+ssrg_bend_at(q),centre.y,ssrg_warp_z(centre.z));
+    vec3 target=vec3(centre.x*ssrg_width(q)+ssrg_bend_at(q),centre.y,ssrg_warp_z(centre.z));
     return vertex+inverse(mat3(model))*(target-centre+(point-centre)*(q-1.0));
 }
 // A connector is straight between projected cross-sections, with the same
@@ -56,7 +67,7 @@ vec3 ssrg_warp_section(vec3 vertex, float section_z, mat4 model){
     vec3 point=(model*vec4(vertex,1.0)).xyz;
     float centre=(model*vec4(vertex.x,vertex.y,section_z,1.0)).z;
     float q=ssrg_scale(centre);
-    vec3 target=vec3(point.x*q+ssrg_bend_at(q),point.y,ssrg_warp_z(centre)+(point.z-centre)*q);
+    vec3 target=vec3(point.x*ssrg_width(q)+ssrg_bend_at(q),point.y,ssrg_warp_z(centre)+(point.z-centre)*q);
     return vertex+inverse(mat3(model))*(target-point);
 }
 
@@ -65,6 +76,6 @@ vec3 ssrg_warp_canvas(vec3 vertex, mat4 model){
     if(ssrg_warp.x<0.5) return vertex;
     vec3 point=(model*vec4(vertex,1.0)).xyz;
     float q=ssrg_scale(point.z);
-    vec3 target=vec3(point.x*q+ssrg_bend_at(q),point.y,ssrg_warp_z(point.z));
+    vec3 target=vec3(point.x*ssrg_width(q)+ssrg_bend_at(q),point.y,ssrg_warp_z(point.z));
     return inverse(mat3(model))*(target-model[3].xyz);
 }

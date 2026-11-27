@@ -263,6 +263,7 @@ const SYNK_RAIL_DESIGNS = {"kerb":"Kerb","hairline":"Hairline","dashes":"Dashes"
 var synk_rail_design = "kerb"
 # Prototypes to try in play (Settings > Visual effects > Highway).
 var road_bends = false
+var curved_road = false
 func synk_note_shape_index() -> int: return maxi(0, SYNK_NOTE_SHAPES.find(synk_note_shape))
 var resume_grace = 0.0
 var overdub = false
@@ -533,6 +534,7 @@ func _ready() -> void:
 	synk_rail_design=str(prefs.get_value("gameplay","synk_rail_design","kerb"))
 	if not SYNK_RAIL_DESIGNS.has(synk_rail_design): synk_rail_design="kerb"
 	road_bends=bool(prefs.get_value("gameplay","road_bends",false))
+	curved_road=bool(prefs.get_value("gameplay","curved_road",false))
 	if trail_style not in ["neon","solid"]: trail_style="neon"
 	hold_trail_width=1.0
 	features=load("res://scripts/workbench.gd").new(); features.game=self; add_child(features)
@@ -1396,6 +1398,7 @@ func change_synk_note_shape(kind: String) -> void:
 
 func change_prototype(key: String, on: bool) -> void:
 	if key=="road_bends": road_bends=on
+	elif key=="curved_road": curved_road=on
 	prefs.set_value("gameplay",key,on); prefs.save("user://preferences.cfg")
 	if settings_panel: settings_panel.refresh()
 
