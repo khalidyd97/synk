@@ -27,6 +27,9 @@ void vertex(){
 void fragment(){
     vec2 uv=along_rail ? vec2(1.0-UV.y,UV.x) : UV;
     if(!along_rail && ssrg_bend.x!=0.0) uv.x+=rail_side*(ssrg_bend_at(canvas_q)-ssrg_bend_at(1.0))/STAGE_QUAD_WIDTH;
+    // Curved highway (test): the rail slides outward to where the flared road's edge is at this
+    // height (9.75 times ssrg_width instead of times q), keeping its own art and thickness.
+    if(!along_rail && ssrg_flare>0.0) uv.x+=9.75*(ssrg_width(canvas_q)-canvas_q)/STAGE_QUAD_WIDTH;
     vec4 art=texture(artwork,uv);
     // Slid past the picture's outer edge there is nothing; past its inner edge, more road.
     if(uv.x<0.0) art.a=0.0;

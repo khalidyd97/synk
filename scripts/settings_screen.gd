@@ -506,7 +506,7 @@ func build_highway(items: VBoxContainer) -> void:
     var bends_row=row(items,"Bending road (test)","The road swings sideways in an S every 16 beats and the lanes move with it.",112)
     road_bends_switch=Switch.new();add_control(bends_row,road_bends_switch,152)
     connect_switch(road_bends_switch,func(on:bool): game.change_prototype("road_bends",on))
-    var curved_row=row(items,"Curved highway (test)","Purple road whose edges flare out toward you and meet the judgment bar in rounded corners.",112)
+    var curved_row=row(items,"Curved highway (test)","The road's edges rise almost straight far away and flare out toward you.",112)
     curved_road_switch=Switch.new();add_control(curved_row,curved_road_switch,152)
     connect_switch(curved_road_switch,func(on:bool): game.change_prototype("curved_road",on))
     old_ssrg_ui_row=row(items,"Old SSRG look","STAYC note sprites, guide rings, judgment bar and thin edge rails.",112)

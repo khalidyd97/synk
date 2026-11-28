@@ -243,7 +243,6 @@ var bend = Vector4(0,0,1,1)
 const FLARE = 1.85
 const FLARE_FAR = .068
 var road_flare = 0.0
-var curved_road: Node3D
 func curved_road_on() -> bool:
 	return game != null and game.curved_road and game.uses_skd_stage() and not game.old_ssrg_ui() \
 		and not game.uses_skd_recorder_surface() and uses_projected_highway() and not even_view()
@@ -362,7 +361,6 @@ func _ready() -> void:
 		note_meshes.append(make_note_mesh(color))
 	build_track()
 	ssrg_theme=preload("res://scripts/ssrg_highway.gd").new(); ssrg_theme.world=self; add_child(ssrg_theme)
-	curved_road=preload("res://scripts/curved_road.gd").new(); curved_road.world=self; add_child(curved_road)
 	build_effects()
 	laser_streaks=preload("res://scripts/laser_streaks.gd").new(); add_child(laser_streaks); laser_streaks.build(self)
 	build_play_aids()
@@ -1196,7 +1194,6 @@ func animate_effects(delta: float) -> void:
 	# Every highway shader reads this one global clock (project setting shader_globals/synk_time).
 	RenderingServer.global_shader_parameter_set("synk_time",animation_time)
 	update_ssrg_warp()
-	if curved_road: curved_road.draw()
 
 func artwork(parent: Node3D, name: String, palette: int, position_value: Vector3, dimensions: Vector2, region = Vector4(0,0,1,1), opacity = 1.0) -> MeshInstance3D:
 	var quad = QuadMesh.new(); quad.size = dimensions
