@@ -32,7 +32,7 @@ const FLICK_SPARK_COUNT = 26
 const FLICK_SPARK_SHADER = preload("res://scripts/flick_spark.gdshader")
 const FLICK_RISE_SHADER = preload("res://scripts/flick_rise.gdshader")
 # SYNK mode draws its hit flash this much larger than SSRG's.
-const SYNK_HIT_SCALE = 1.08
+const SYNK_HIT_SCALE = 1.5
 var active = false
 var countdown_sweep_number = -1
 var countdown_sweep_step = -1
