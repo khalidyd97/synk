@@ -112,7 +112,7 @@ func spawn(lane: float, kind: String, sustain_entry: Dictionary, pointer_id: int
 	if kind!="special" and world.game.synk_mode() and not synk_frames.is_empty(): frames=synk_frames
 	h.frames=frames
 	if not frames.is_empty(): h.material.set_shader_parameter("atlas", frames[0])
-	h.age = 0.0; h.sustain_entry = sustain_entry; h.pointer_id = pointer_id; h.kind = kind
+	h.age = 0.0; h.looping = false; h.sustain_entry = sustain_entry; h.pointer_id = pointer_id; h.kind = kind
 	# Sustains follow their owned physical contact across the judgment line.
 	var x=world.note_x(lane)
 	if world.game.ssrg_playable_run and not sustain_entry.is_empty():x=sustain_finger_x(sustain_entry,world.game.pointers,x)
@@ -557,6 +557,15 @@ func _process(delta: float) -> void:
 		world.ssrg_finger_beam_material.set_shader_parameter("tint",world.element_color("beams",presentation.beam_color))
 	advance_hits(delta,hit_playing)
 
+# Time into the flash shown while a sustain loops it: forward to the .3 point, then back and
+# forth between there and the second frame (the first is almost empty, so it would blink).
+func loop_age(age: float) -> float:
+	if age <= HOLD_RETRIGGER: return age
+	var low = 1.0/HIT_FPS
+	var span = HOLD_RETRIGGER-low
+	var u = fmod(age-HOLD_RETRIGGER, span*2.0)
+	return HOLD_RETRIGGER-u if u <= span else low+(u-span)
+
 # Source RenderLongCoolbombTouch rewinds after normalized time > .3.
 # Independent tap instances intentionally preserve SYNK's uninterrupted dense-hit flow.
 func advance_hits(delta: float, playing: bool) -> void:
@@ -575,10 +584,16 @@ func advance_hits(delta: float, playing: bool) -> void:
 			if absf(end_x-float(h.x)) > .001:
 				finishing = true; h.glide_left = float(h.glide_left)-delta
 				h.x = move_toward(float(h.x), end_x, maxf(glide_speed(), absf(end_x-float(h.x))/maxf(float(h.glide_left),.016))*delta)
-				h.node.position = flash_point(h.x); h.age = fmod(h.age, HOLD_RETRIGGER)
+				h.node.position = flash_point(h.x)
 		held = held or finishing
 		if playing: h.age += delta
-		if playing and held and h.age > HOLD_RETRIGGER: h.age = fmod(h.age,HOLD_RETRIGGER)
+		# While a hold or slide is held, the flash plays to its .3 point and then reverses, over
+		# and over (like SSRG), instead of snapping back to its first frame.
+		if held:
+			h.looping = true
+		elif h.get("looping",false):
+			# Let go: carry on forward from the frame on screen.
+			h.looping = false; h.age = loop_age(h.age)
 		if (not held and h.age >= HIT_LIFE) or (game.mode not in ["play", "paused"] and not game.highway_preview):
 			hits.remove_at(i); release(h); continue
 		if held:
@@ -593,7 +608,7 @@ func advance_hits(delta: float, playing: bool) -> void:
 				h.placed = true
 				h.node.position = flash_point(h.x)
 		var frames: Array=h.get("frames",imported_frames)
-		var frame_index = int(h.age*HIT_FPS)
+		var frame_index = int((loop_age(h.age) if h.get("looping",false) else h.age)*HIT_FPS)
 		if h.style == "lumen":
 			h.material.set_shader_parameter("frame", float(mini(10, frame_index)))
 			h.material.set_shader_parameter("particles", game.features.effect("Particles"))
